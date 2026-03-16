@@ -1,6 +1,6 @@
 import prisma from "@/utils/prisma";
 import type { Logger } from "@/utils/logger";
-import { sendReconnectionEmail } from "@inboxzero/resend";
+import { sendReconnectionEmail } from "@inbox/resend";
 import { env } from "@/env";
 import { addUserErrorMessage, ErrorType } from "@/utils/error-messages";
 import { createUnsubscribeToken } from "@/utils/unsubscribe";
@@ -77,7 +77,7 @@ export async function cleanupInvalidTokens({
         });
 
         await sendReconnectionEmail({
-          from: env.RESEND_FROM_EMAIL,
+          from: env.SMTP_FROM_EMAIL || env.RESEND_FROM_EMAIL,
           to: emailAccount.email,
           emailProps: {
             baseUrl: env.NEXT_PUBLIC_BASE_URL,

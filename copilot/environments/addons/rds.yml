@@ -1,4 +1,4 @@
-# RDS PostgreSQL Database for Inbox Zero
+# RDS PostgreSQL Database for Inbox
 #
 # This addon creates a PostgreSQL RDS instance with sensible production defaults.
 # The database password is auto-generated and stored in AWS Secrets Manager.
@@ -14,7 +14,7 @@
 #   - db.t3.large  (~$96/mo) - 2 vCPU, 8GB RAM - good for 100+ users
 
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'RDS PostgreSQL database for Inbox Zero'
+Description: 'RDS PostgreSQL database for Inbox'
 
 Parameters:
   # Required by Copilot for environment addons

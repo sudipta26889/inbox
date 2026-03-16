@@ -22,8 +22,8 @@ export default function NewLanding() {
     return (
       <BasicLayout>
         <Hero
-          title={`${BRAND_NAME} for self-hosted teams`}
-          subtitle={`Deploy ${BRAND_NAME} on your own infrastructure and automate your inbox with full data control.`}
+          title={`Your AI Email Assistant`}
+          subtitle="Organize your inbox, auto-draft replies, bulk unsubscribe, and reach inbox zero — powered by your own AI, running on your own hardware."
         />
       </BasicLayout>
     );

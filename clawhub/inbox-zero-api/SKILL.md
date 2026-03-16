@@ -1,13 +1,13 @@
 ---
 name: inbox-zero-api
-description: Use the Inbox Zero API CLI to inspect the live API schema, list and manage automation rules, and read inbox analytics through the public API. Use this when a task involves Inbox Zero rules, stats, or API-driven automation and can be solved through the CLI instead of browser interaction.
-homepage: https://www.getinboxzero.com/api-reference/cli
-metadata: { "openclaw": { "skillKey": "inboxZeroApi", "requires": { "bins": ["inbox-zero-api"], "env": ["INBOX_ZERO_API_KEY"] }, "primaryEnv": "INBOX_ZERO_API_KEY", "install": [ { "id": "node", "kind": "node", "package": "@inbox-zero/api", "bins": ["inbox-zero-api"], "label": "Install Inbox Zero API CLI (npm)" } ] } }
+description: Use the Inbox API CLI to inspect the live API schema, list and manage automation rules, and read inbox analytics through the public API. Use this when a task involves Inbox rules, stats, or API-driven automation and can be solved through the CLI instead of browser interaction.
+homepage: https://www.inbox.sudiptadhara.in/api-reference/cli
+metadata: { "openclaw": { "skillKey": "inboxZeroApi", "requires": { "bins": ["inbox-zero-api"], "env": ["INBOX_ZERO_API_KEY"] }, "primaryEnv": "INBOX_ZERO_API_KEY", "install": [ { "id": "node", "kind": "node", "package": "@inbox-zero/api", "bins": ["inbox-zero-api"], "label": "Install Inbox API CLI (npm)" } ] } }
 ---
 
-# Inbox Zero API CLI
+# Inbox API CLI
 
-Use this skill when the task is to inspect or change Inbox Zero state through the public API.
+Use this skill when the task is to inspect or change Inbox state through the public API.
 
 ## Workflow
 

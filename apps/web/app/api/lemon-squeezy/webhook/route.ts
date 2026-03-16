@@ -1,5 +1,10 @@
-import crypto from "node:crypto";
+// PAYMENTS DISABLED - all features are free
 import { NextResponse } from "next/server";
+export const POST = () => NextResponse.json({ disabled: true });
+/* eslint-disable */
+/* ORIGINAL PAYMENT CODE BELOW - DISABLED
+import crypto from "node:crypto";
+import { NextResponse as _NextResponse } from "next/server";
 import prisma from "@/utils/prisma";
 import { withError } from "@/utils/middleware";
 import { env } from "@/env";
@@ -17,7 +22,7 @@ import {
   upgradeToPremiumLemon,
 } from "@/utils/premium/server";
 import type { Payload } from "@/app/api/lemon-squeezy/webhook/types";
-import { switchedPremiumPlan, startedTrial } from "@inboxzero/loops";
+import { switchedPremiumPlan, startedTrial } from "@inbox/loops";
 import { SafeError } from "@/utils/error";
 import { getLemonSubscriptionTier } from "@/app/(app)/premium/config";
 import type { Logger } from "@/utils/logger";
@@ -385,3 +390,4 @@ function getEmailFromPremium(premium: {
 }) {
   return premium.users?.[0]?.email;
 }
+*/

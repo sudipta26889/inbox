@@ -1,6 +1,11 @@
+// PAYMENTS DISABLED - all features are free
+import { NextResponse } from "next/server";
+export const POST = () => NextResponse.json({ disabled: true });
+/* eslint-disable */
+/* ORIGINAL PAYMENT CODE BELOW - DISABLED
 import type Stripe from "stripe";
 import { headers } from "next/headers";
-import { after, NextResponse } from "next/server";
+import { after, NextResponse as _NextResponse } from "next/server";
 import { getStripe } from "@/ee/billing/stripe";
 import { withError } from "@/utils/middleware";
 import type { Logger } from "@/utils/logger";
@@ -213,3 +218,4 @@ async function getCustomerEmail(customerId: string) {
 
   return premium?.users[0]?.email;
 }
+*/

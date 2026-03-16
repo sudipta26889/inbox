@@ -15,19 +15,8 @@ interface FooterProps {
 
 // Simple footer for self-hosted deployments
 const selfHostedFooter = {
-  resources: [
-    {
-      name: "Documentation",
-      href: "https://docs.getinboxzero.com",
-      target: "_blank",
-    },
-    { name: "GitHub", href: "/github", target: "_blank" },
-    { name: "Discord", href: "/discord", target: "_blank" },
-  ],
-  legal: [
-    { name: "Terms", href: "/terms" },
-    { name: "Privacy", href: "/privacy" },
-  ],
+  resources: [] as { name: string; href: string; target?: string }[],
+  legal: [] as { name: string; href: string; target?: string }[],
 };
 
 export function Footer({ className, variant = "default" }: FooterProps) {
@@ -61,15 +50,7 @@ export function Footer({ className, variant = "default" }: FooterProps) {
             ))}
           </div>
           <p className="mt-6 text-center text-xs leading-5 text-gray-500">
-            Powered by{" "}
-            <Link
-              href="https://getinboxzero.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover:text-gray-900"
-            >
-              Inbox Zero
-            </Link>
+            Self-hosted AI Email Assistant
           </p>
         </div>
       </footer>

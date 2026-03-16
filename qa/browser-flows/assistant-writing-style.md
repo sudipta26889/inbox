@@ -11,7 +11,7 @@ Ensure writing style changes are saved and persist across a page refresh.
 
 ## Preconditions
 
-- Signed into Inbox Zero as a test account.
+- Signed into Inbox as a test account.
 - Assistant settings page is accessible.
 
 ## Steps

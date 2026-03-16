@@ -457,7 +457,7 @@ function registerMessagingHandlers({
           channelId,
           threadTs,
           SLACK_ASSISTANT_SUGGESTED_PROMPTS,
-          "Try asking Inbox Zero",
+          "Try asking Inbox",
         );
       } catch (error) {
         logger.warn("Failed to set Slack assistant suggested prompts", {
@@ -1440,7 +1440,7 @@ async function handleMessagingLinkCommand({
 
   if (!linkedCode) {
     await thread.post(
-      "That connect code is invalid or expired. Generate a new code in Inbox Zero settings and try again.",
+      "That connect code is invalid or expired. Generate a new code in Inbox settings and try again.",
     );
     return true;
   }
@@ -1452,7 +1452,7 @@ async function handleMessagingLinkCommand({
 
   if (!emailAccount) {
     await thread.post(
-      "This connect code is no longer valid. Generate a new code in Inbox Zero settings and try again.",
+      "This connect code is no longer valid. Generate a new code in Inbox settings and try again.",
     );
     return true;
   }
@@ -1481,7 +1481,7 @@ async function handleMessagingLinkCommand({
   });
 
   await thread.post(
-    `Connected successfully. You can now chat with your Inbox Zero assistant in this ${provider} DM.`,
+    `Connected successfully. You can now chat with your Inbox assistant in this ${provider} DM.`,
   );
 
   return true;
@@ -2149,7 +2149,7 @@ async function sendUnauthorizedMessage({
     thread,
     logger,
     message:
-      "To use this bot, connect your Inbox Zero account to this workspace from your settings page.",
+      "To use this bot, connect your Inbox account to this workspace from your settings page.",
     errorLogMessage: "Failed to send unauthorized messaging message",
     logMeta: { teamId },
   });
@@ -2171,7 +2171,7 @@ async function sendLinkRequiredMessage({
   await postMessagingThreadMessage({
     thread,
     logger,
-    message: `Your ${providerName} account is not linked yet. In Inbox Zero settings, generate a ${providerName} connect code and send \`/connect <code>\` in this DM.`,
+    message: `Your ${providerName} account is not linked yet. In Inbox settings, generate a ${providerName} connect code and send \`/connect <code>\` in this DM.`,
     errorLogMessage: "Failed to send link-required message",
     logMeta: { provider },
   });
@@ -2208,7 +2208,7 @@ async function sendUnlinkedChannelMessage({
     thread,
     logger,
     message:
-      "This channel isn't linked to an email account. Set one up in your Inbox Zero settings.",
+      "This channel isn't linked to an email account. Set one up in your Inbox settings.",
     errorLogMessage: "Failed to send unlinked channel message",
   });
 }

@@ -141,7 +141,7 @@ describe("isFilebotNotificationMessage", () => {
       userEmail: "john@example.com",
       from: "John <john@example.com>",
       to: "john@example.com",
-      replyTo: "Inbox Zero Assistant <john+ai@example.com>",
+      replyTo: "Inbox Assistant <john+ai@example.com>",
     });
 
     expect(result).toBe(true);
@@ -150,7 +150,7 @@ describe("isFilebotNotificationMessage", () => {
   it("should return true for assistant-formatted self-email without reply-to", () => {
     const result = isFilebotNotificationMessage({
       userEmail: "john@example.com",
-      from: "Inbox Zero Assistant <john@example.com>",
+      from: "Inbox Assistant <john@example.com>",
       to: "john@example.com",
     });
 

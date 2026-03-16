@@ -1,4 +1,4 @@
-import { sendColdEmailNotification as sendColdEmailNotificationViaResend } from "@inboxzero/resend";
+import { sendColdEmailNotification as sendColdEmailNotificationViaResend } from "@inbox/resend";
 import { env } from "@/env";
 import type { Logger } from "@/utils/logger";
 import { formatReplySubject } from "@/utils/email/subject";
@@ -25,7 +25,7 @@ export async function sendColdEmailNotification({
 
   try {
     const result = await sendColdEmailNotificationViaResend({
-      from: env.RESEND_FROM_EMAIL,
+      from: env.SMTP_FROM_EMAIL || env.RESEND_FROM_EMAIL,
       to: senderEmail,
       replyTo: recipientEmail,
       subject,

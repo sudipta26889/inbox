@@ -1,6 +1,6 @@
 # @inbox-zero/cli
 
-CLI tool for running [Inbox Zero](https://www.getinboxzero.com) - an open-source AI email assistant.
+CLI tool for running [Inbox](https://www.inbox.sudiptadhara.in) - an open-source AI email assistant.
 
 ## Installation
 
@@ -17,10 +17,10 @@ Download the binary for your platform from [releases](https://github.com/elie222
 ## Quick Start
 
 ```bash
-# Configure Inbox Zero (interactive)
+# Configure Inbox (interactive)
 inbox-zero setup
 
-# Start Inbox Zero
+# Start Inbox
 inbox-zero start
 
 # Open http://localhost:3000
@@ -58,7 +58,7 @@ service URL after `terraform apply`.
 Pulls the latest Docker image and starts all containers:
 - PostgreSQL database
 - Redis cache
-- Inbox Zero web app
+- Inbox web app
 - Cron job for email sync
 
 ```bash
@@ -90,7 +90,7 @@ Show status of running containers.
 
 ### `inbox-zero update`
 
-Pull the latest Inbox Zero image and optionally restart.
+Pull the latest Inbox image and optionally restart.
 
 ```bash
 inbox-zero update

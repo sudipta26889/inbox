@@ -39,7 +39,7 @@ export function buildDocumentFiledBlocks({
       elements: [
         {
           type: "mrkdwn",
-          text: `_${driveName} \u2022 Auto-filed by Inbox Zero_`,
+          text: `_${driveName} \u2022 Auto-filed by Inbox_`,
         },
       ],
     },

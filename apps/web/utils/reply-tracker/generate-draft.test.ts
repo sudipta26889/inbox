@@ -39,7 +39,7 @@ vi.mock("@/utils/referral/referral-code", () => ({
 vi.mock("@/utils/referral/referral-link", () => ({
   generateReferralLink: vi
     .fn()
-    .mockReturnValue("https://getinboxzero.com/?ref=TEST123"),
+    .mockReturnValue("https://inbox.sudiptadhara.in/?ref=TEST123"),
 }));
 
 vi.mock("@/utils/ai/knowledge/extract", () => ({
@@ -177,7 +177,7 @@ describe("fetchMessagesAndGenerateDraft - AI content escaping", () => {
 
     // Referral signature HTML should NOT be escaped - link should work
     expect(result).toContain(
-      '<a href="https://getinboxzero.com/?ref=TEST123">Inbox Zero</a>',
+      '<a href="https://inbox.sudiptadhara.in/?ref=TEST123">Inbox</a>',
     );
 
     // User signature HTML should NOT be escaped

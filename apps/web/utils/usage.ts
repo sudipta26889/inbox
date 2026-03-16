@@ -10,7 +10,7 @@ import {
   getOpenRouterProviderPrefix,
   stripOnlineModelSuffix,
 } from "@/utils/llms/model-id";
-import { publishAiCall } from "@inboxzero/tinybird-ai-analytics";
+import { publishAiCall } from "@inbox/tinybird-ai-analytics";
 import { createScopedLogger } from "@/utils/logger";
 
 const logger = createScopedLogger("usage");

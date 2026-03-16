@@ -1,8 +1,8 @@
-# Homebrew Formula for Inbox Zero CLI
+# Homebrew Formula for Inbox CLI
 
 class InboxZero < Formula
-  desc "CLI tool for setting up Inbox Zero - AI email assistant"
-  homepage "https://www.getinboxzero.com"
+  desc "CLI tool for setting up Inbox - AI email assistant"
+  homepage "https://www.inbox.sudiptadhara.in"
   version "2.29.1"
   license "AGPL-3.0-only"
 

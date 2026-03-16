@@ -1,5 +1,5 @@
 import type { OutlookClient } from "@/utils/outlook/client";
-import { publishDelete, type TinybirdEmailAction } from "@inboxzero/tinybird";
+import { publishDelete, type TinybirdEmailAction } from "@inbox/tinybird";
 import type { Logger } from "@/utils/logger";
 import { withOutlookRetry } from "@/utils/outlook/retry";
 import { processThreadMessagesFallback } from "@/utils/outlook/thread-helpers";

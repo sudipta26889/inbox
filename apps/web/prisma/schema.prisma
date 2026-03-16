@@ -79,7 +79,7 @@ model User {
   surveyRole         String? // single choice: user's role. Now using `EmailAccount.role` instead
   surveyGoal         String? // single choice: what user wants to achieve
   surveyCompanySize  Int? // numeric company size: 1 (solo), 5 (2-10), 50 (11-100), 500 (101-1000), 1000 (1000+)
-  surveySource       String? // single choice: how user heard about Inbox Zero
+  surveySource       String? // single choice: how user heard about Inbox
   surveyImprovements String? // open text: what user wants to improve
 
   // settings
@@ -105,6 +105,10 @@ model User {
   // Referral relationships
   referralsMade    Referral[] @relation("ReferrerUser")
   referralReceived Referral?  @relation("ReferredUser")
+
+  // MCP Server OAuth
+  mcpServerAuthCodes    McpServerAuthorizationCode[]
+  mcpServerAccessTokens McpServerAccessToken[]
 }
 
 enum ApiKeyScope {
@@ -192,10 +196,12 @@ model EmailAccount {
   invitations         Invitation[]
   ssoproviders        SsoProvider[]
   calendarConnections CalendarConnection[]
-  mcpConnections      McpConnection[]
-  meetingBriefings    MeetingBriefing[]
-  driveConnections    DriveConnection[]
-  messagingChannels   MessagingChannel[]
+  mcpConnections           McpConnection[]
+  mcpServerAuthCodes       McpServerAuthorizationCode[]
+  mcpServerAccessTokens    McpServerAccessToken[]
+  meetingBriefings         MeetingBriefing[]
+  driveConnections         DriveConnection[]
+  messagingChannels        MessagingChannel[]
   documentFilings     DocumentFiling[]
   filingFolders       FilingFolder[]
   apiKeys             ApiKey[]
@@ -1288,6 +1294,106 @@ model McpTool {
   @@unique([connectionId, name])
 }
 
+// MCP Server OAuth 2.1 Models
+// For when Inbox acts as an MCP Server (not client)
+
+model McpServerClient {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Dynamic Client Registration (RFC 7591)
+  clientId     String   @unique
+  clientSecret String? // Public clients don't need secrets with PKCE
+  clientName   String // e.g. "Claude Desktop", "VS Code"
+  redirectUris String[] // Array of allowed redirect URIs
+
+  // OAuth metadata
+  grantTypes                  String[] @default(["authorization_code", "refresh_token"])
+  responseTypes               String[] @default(["code"])
+  tokenEndpointAuthMethod     String   @default("none") // Public client with PKCE
+  scope                       String? // Space-separated scopes
+  logoUri                     String?
+  tosUri                      String?
+  policyUri                   String?
+
+  // Relations
+  authorizationCodes McpServerAuthorizationCode[]
+  accessTokens       McpServerAccessToken[]
+
+  @@index([clientId])
+}
+
+model McpServerAuthorizationCode {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  expiresAt DateTime // 10 minute TTL
+
+  code         String   @unique
+  redirectUri  String
+  scope        String? // Space-separated scopes requested
+  state        String? // CSRF protection
+
+  // PKCE (RFC 7636) - Mandatory in OAuth 2.1
+  codeChallenge       String
+  codeChallengeMethod String @default("S256")
+
+  // User context
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emailAccountId String
+  emailAccount   EmailAccount @relation(fields: [emailAccountId], references: [id], onDelete: Cascade)
+
+  // Client context
+  clientId     String
+  client       McpServerClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  // Tracking
+  used      Boolean  @default(false) // One-time use only
+  usedAt    DateTime?
+
+  @@index([code])
+  @@index([expiresAt])
+  @@index([userId])
+  @@index([emailAccountId])
+  @@index([clientId])
+}
+
+model McpServerAccessToken {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  expiresAt DateTime // 1 hour TTL for access tokens
+
+  accessToken  String   @unique
+  refreshToken String?  @unique // Optional refresh token for long-lived access
+  tokenType    String   @default("Bearer")
+  scope        String? // Space-separated scopes granted
+
+  // User context
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emailAccountId String
+  emailAccount   EmailAccount @relation(fields: [emailAccountId], references: [id], onDelete: Cascade)
+
+  // Client context
+  clientId     String
+  client       McpServerClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  // Tracking
+  revoked   Boolean  @default(false)
+  revokedAt DateTime?
+  lastUsedAt DateTime?
+
+  @@index([accessToken])
+  @@index([refreshToken])
+  @@index([expiresAt])
+  @@index([userId])
+  @@index([emailAccountId])
+  @@index([clientId])
+}
+
 enum ActionType {
   ARCHIVE
   LABEL
@@ -1301,7 +1407,7 @@ enum ActionType {
   // TRACK_THREAD // @deprecated - No longer used. We rely on rule SystemType instead to run this.
   DIGEST
   MOVE_FOLDER
-  NOTIFY_SENDER // Sends notification from Inbox Zero (not user's email). Only for cold email rules.
+  NOTIFY_SENDER // Sends notification from Inbox (not user's email). Only for cold email rules.
   // SUMMARIZE
   // SNOOZE
   // ADD_TO_DO

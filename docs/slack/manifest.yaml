@@ -1,10 +1,10 @@
-# Inbox Zero Slack App Manifest
+# Inbox Slack App Manifest
 #
 # Use this to create a Slack app via: Create New App > From a manifest
 # Replace YOUR_DOMAIN with your actual domain (e.g. app.inboxzero.com or your-ngrok-domain.ngrok-free.app)
 
 display_information:
-  name: Inbox Zero
+  name: Inbox
   description: AI executive assistant
   background_color: "#1a1a2e"
 
@@ -13,7 +13,7 @@ features:
     messages_tab_enabled: true
     messages_tab_read_only_enabled: false
   bot_user:
-    display_name: Inbox Zero
+    display_name: Inbox
     always_online: true
 
 oauth_config:

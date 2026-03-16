@@ -11,7 +11,7 @@ export const PROMPT_COMMANDS: Record<string, string> = {
 };
 
 const COMMAND_LINES = [
-  "/connect <code> - Link your Inbox Zero account",
+  "/connect <code> - Link your Inbox account",
   "/switch - List linked accounts",
   "/switch <number> - Switch active account",
   "/cleanup - Help me clean up my inbox today",

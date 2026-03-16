@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { format } from "date-fns/format";
-import { zodPeriod } from "@inboxzero/tinybird";
+import { zodPeriod } from "@inbox/tinybird";
 import { withEmailAccount } from "@/utils/middleware";
 import prisma from "@/utils/prisma";
 import { Prisma } from "@/generated/prisma/client";

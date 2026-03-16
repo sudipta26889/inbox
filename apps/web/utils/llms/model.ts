@@ -192,8 +192,8 @@ function selectModel(
       const openrouter = createOpenRouter({
         apiKey: resolveApiKey(aiApiKey, env.OPENROUTER_API_KEY),
         headers: {
-          "HTTP-Referer": "https://www.getinboxzero.com",
-          "X-Title": "Inbox Zero",
+          "HTTP-Referer": "https://www.inbox.sudiptadhara.in",
+          "X-Title": "Inbox",
         },
       });
       const chatModel = openrouter.chat(modelName);

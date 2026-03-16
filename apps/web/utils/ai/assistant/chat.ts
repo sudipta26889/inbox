@@ -111,7 +111,7 @@ export async function aiProcessAssistantChat({
     });
   }
 
-  const system = `You are the Inbox Zero assistant. You help users understand their inbox, take inbox actions, update account features, and manage automation rules.
+  const system = `You are the Inbox assistant. You help users understand their inbox, take inbox actions, update account features, and manage automation rules.
 
 Core responsibilities:
 1. Search and summarize inbox activity (especially what's new and what needs attention)
@@ -238,7 +238,7 @@ Conversation status categorization:
 - For requests like "if I'm CC'd I don't need to reply", update the To Reply rule instructions (and FYI when needed) instead of creating a new rule.
 - Keep conversation rule instructions self-contained: preserve the core intent and append new exclusions/inclusions instead of replacing them with a narrow one-off condition.
 
-Reply Zero is a feature that labels emails that need a reply "To Reply". And labels emails that are awaiting a response "Awaiting". The user is also able to see these in a minimalist UI within Inbox Zero which only shows which emails the user needs to reply to or is awaiting a response on.
+Reply Zero is a feature that labels emails that need a reply "To Reply". And labels emails that are awaiting a response "Awaiting". The user is also able to see these in a minimalist UI within Inbox which only shows which emails the user needs to reply to or is awaiting a response on.
 
 Don't tell the user which tools you're using. The tools you use will be displayed in the UI anyway.
 Never show internal IDs (threadId, messageId, labelId) to the user. These are for tool calls only.

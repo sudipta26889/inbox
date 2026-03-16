@@ -2,22 +2,22 @@
 title: "Introduction"
 ---
 
-Use the Inbox Zero API to manage emails and automation rules programmatically.
+Use the Inbox API to manage emails and automation rules programmatically.
 
 If you prefer a CLI wrapper for scripts or bots, see the [API CLI](/api-reference/cli).
 
 ## Supported Email Providers
 
-Inbox Zero supports integration with:
+Inbox supports integration with:
 - **Gmail** (Google Workspace and personal accounts)
 - **Outlook** (Microsoft 365 and personal accounts)
 
 ## Getting Started
 
-To begin using the Inbox Zero API, you'll need to obtain an API key. Here's how:
+To begin using the Inbox API, you'll need to obtain an API key. Here's how:
 
-1. Log in to your Inbox Zero account
-2. Navigate to the [Settings](https://www.getinboxzero.com/settings) page and scroll down to the `API Keys` section
+1. Log in to your Inbox account
+2. Navigate to the [Settings](https://www.inbox.sudiptadhara.in/settings) page and scroll down to the `API Keys` section
 3. Click on the `Create New Secret Key` button
 4. Select the permissions (scopes) you need for your key
 5. Choose an expiry period
@@ -28,14 +28,14 @@ API keys are scoped to a specific inbox account and only grant access to the per
 
 ### Self-Hosting
 
-If you are self-hosting Inbox Zero, set the `NEXT_PUBLIC_EXTERNAL_API_ENABLED=true` environment variable and rebuild the app to enable the API. Use your deployment URL as the base URL for requests (for example, `https://your-domain.com/api/v1`).
+If you are self-hosting Inbox, set the `NEXT_PUBLIC_EXTERNAL_API_ENABLED=true` environment variable and rebuild the app to enable the API. Use your deployment URL as the base URL for requests (for example, `https://your-domain.com/api/v1`).
 
 ## Base URL
 
 All API requests should be made to the following base URL:
 
 ```
-https://www.getinboxzero.com/api/v1
+https://www.inbox.sudiptadhara.in/api/v1
 ```
 
 ## Authentication

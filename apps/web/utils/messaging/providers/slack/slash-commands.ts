@@ -55,7 +55,7 @@ export async function processSlackSlashCommand({
   if (!channel) {
     await postToSlackResponseUrl(responseUrl, {
       response_type: "ephemeral",
-      text: "Your Slack account isn't connected to Inbox Zero. Connect it from your Inbox Zero settings page.",
+      text: "Your Slack account isn't connected to Inbox. Connect it from your Inbox settings page.",
     });
     return;
   }

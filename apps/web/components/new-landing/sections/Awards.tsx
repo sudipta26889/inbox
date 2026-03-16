@@ -58,7 +58,7 @@ export function Awards() {
       <SectionHeading>Privacy first and open source</SectionHeading>
       <SectionSubtitle>
         Your data stays private — no AI training, no funny business. We’re fully
-        certified for top-tier security, and you can even self-host Inbox Zero
+        certified for top-tier security, and you can even self-host Inbox
         if you want total control.
       </SectionSubtitle>
       <SectionContent

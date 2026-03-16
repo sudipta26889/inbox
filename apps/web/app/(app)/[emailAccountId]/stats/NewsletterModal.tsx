@@ -15,7 +15,7 @@ import type {
   SenderEmailsQuery,
   SenderEmailsResponse,
 } from "@/app/api/user/stats/sender-emails/route";
-import type { ZodPeriod } from "@inboxzero/tinybird";
+import type { ZodPeriod } from "@inbox/tinybird";
 import { LoadingContent } from "@/components/LoadingContent";
 import { SectionHeader } from "@/components/Typography";
 import { EmailList } from "@/components/email-list/EmailList";

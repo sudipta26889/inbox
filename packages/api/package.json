@@ -1,13 +1,13 @@
 {
-  "name": "@inbox-zero/api",
+  "name": "@inbox/api",
   "version": "2.29.2",
-  "description": "CLI tool for managing Inbox Zero through the external API",
+  "description": "CLI tool for managing Inbox through the external API",
   "type": "module",
   "bin": {
-    "inbox-zero-api": "bin/inbox-zero-api.js"
+    "inbox-api": "bin/inbox-api.js"
   },
   "scripts": {
-    "build": "bun build src/main.ts --outfile bin/inbox-zero-api.js --target node",
+    "build": "bun build src/main.ts --outfile bin/inbox-api.js --target node",
     "prepublishOnly": "bun run build",
     "dev": "bun run src/main.ts",
     "test": "vitest run",
@@ -32,11 +32,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/elie222/inbox-zero.git",
+    "url": "git+https://github.com/elie222/inbox.git",
     "directory": "packages/api"
   },
   "keywords": [
-    "inbox-zero",
+    "inbox",
     "api",
     "cli",
     "automation"

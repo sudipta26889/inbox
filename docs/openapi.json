@@ -1,12 +1,12 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "Inbox Zero API",
+    "title": "Inbox API",
     "version": "1.0.0"
   },
   "servers": [
     {
-      "url": "https://www.getinboxzero.com/api/v1",
+      "url": "https://www.inbox.sudiptadhara.in/api/v1",
       "description": "Production server"
     },
     {
@@ -137,10 +137,10 @@
           {
             "schema": {
               "type": "string",
-              "description": "You can find the group id by going to `https://www.getinboxzero.com/automation?tab=groups`, clicking `Matching Emails`, and then copying the id from the URL."
+              "description": "You can find the group id by going to `https://www.inbox.sudiptadhara.in/automation?tab=groups`, clicking `Matching Emails`, and then copying the id from the URL."
             },
             "required": true,
-            "description": "You can find the group id by going to `https://www.getinboxzero.com/automation?tab=groups`, clicking `Matching Emails`, and then copying the id from the URL.",
+            "description": "You can find the group id by going to `https://www.inbox.sudiptadhara.in/automation?tab=groups`, clicking `Matching Emails`, and then copying the id from the URL.",
             "name": "groupId",
             "in": "path"
           },

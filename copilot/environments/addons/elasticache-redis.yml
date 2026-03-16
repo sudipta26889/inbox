@@ -1,4 +1,4 @@
-# ElastiCache Redis Replication Group for Inbox Zero ECS
+# ElastiCache Redis Replication Group for Inbox ECS
 #
 # This addon creates a provisioned ElastiCache Redis cluster for use with the
 # ECS deployment. It provides a standard Redis connection for the ioredis
@@ -16,7 +16,7 @@
 #   copilot env deploy --name <environment>
 
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'ElastiCache Redis for Inbox Zero ECS'
+Description: 'ElastiCache Redis for Inbox ECS'
 
 Parameters:
   # Required by Copilot for environment addons

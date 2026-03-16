@@ -9,7 +9,7 @@ import {
 // In prod: hello+ai@example.com
 // In dev: hello+ai-test@example.com
 const FILEBOT_SUFFIX = `ai${env.NODE_ENV === "development" ? "-test" : ""}`;
-const FILEBOT_DISPLAY_NAME = "Inbox Zero Assistant";
+const FILEBOT_DISPLAY_NAME = "Inbox Assistant";
 
 /**
  * Check if any recipient in the email is a filebot reply address.

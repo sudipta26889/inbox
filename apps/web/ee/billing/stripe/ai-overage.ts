@@ -1,6 +1,6 @@
 import type Stripe from "stripe";
 import { z } from "zod";
-import { getAiGenerationCountByEmailAccounts } from "@inboxzero/tinybird-ai-analytics";
+import { getAiGenerationCountByEmailAccounts } from "@inbox/tinybird-ai-analytics";
 import { env } from "@/env";
 import type { PremiumTier } from "@/generated/prisma/enums";
 import { getStripe } from "@/ee/billing/stripe";

@@ -4,7 +4,7 @@ set -e
 # This script runs at container startup.
 # It replaces the build-time placeholders with runtime environment variables.
 
-echo "🚀 Starting Inbox Zero..."
+echo "🚀 Starting Inbox..."
 
 # Install AWS RDS CA certificates for SSL database connections.
 # Only runs when any database URL points to an RDS instance. Managed databases
@@ -80,4 +80,4 @@ fi
 
 # Start the Next.js application
 echo "✅ Configuration complete. Starting server..."
-exec node apps/web/server.js
+HOSTNAME=0.0.0.0 PORT=5500 exec node apps/web/server.js

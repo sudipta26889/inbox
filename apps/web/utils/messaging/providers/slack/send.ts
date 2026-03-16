@@ -52,7 +52,7 @@ export async function sendChannelConfirmation({
   const client = createSlackClient(accessToken);
 
   await postMessageWithJoin(client, channelId, {
-    text: "Inbox Zero connected! You can @mention me here to chat about your emails. If you enable meeting briefs or attachment filing notifications, I can send those in this channel too.",
+    text: "Inbox connected! You can @mention me here to chat about your emails. If you enable meeting briefs or attachment filing notifications, I can send those in this channel too.",
   });
 }
 
@@ -67,7 +67,7 @@ export async function sendConnectionOnboardingDirectMessage({
 
   await client.chat.postMessage({
     channel: userId,
-    text: "Inbox Zero connected. Next, choose a private channel in Inbox Zero Settings for meeting brief and attachment notifications, then invite @InboxZero there. You can also DM me anytime to chat about your emails.",
+    text: "Inbox connected. Next, choose a private channel in Inbox Settings for meeting brief and attachment notifications, then invite @InboxZero there. You can also DM me anytime to chat about your emails.",
   });
 }
 

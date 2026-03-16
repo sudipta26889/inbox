@@ -1,6 +1,5 @@
 "use client";
 
-import { useWindowSize } from "usehooks-ts";
 import { useOnboarding } from "@/components/OnboardingModal";
 import {
   Dialog,
@@ -12,19 +11,12 @@ import {
 import { CardBasic } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ListChecksIcon, ReplyIcon, SlidersIcon } from "lucide-react";
-import { YouTubeVideo } from "@/components/YouTubeVideo";
-
 export function AssistantOnboarding({
   onComplete,
 }: {
   onComplete?: () => void;
 }) {
   const { isOpen, setIsOpen, onClose } = useOnboarding("Automation");
-
-  const { width } = useWindowSize();
-
-  const videoWidth = Math.min(width * 0.75, 800);
-  const videoHeight = videoWidth * (675 / 1200);
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -36,15 +28,6 @@ export function AssistantOnboarding({
             instructions and automating routine tasks.
           </DialogDescription>
         </DialogHeader>
-
-        <YouTubeVideo
-          videoId="AQtB0j6Zmt0"
-          iframeClassName="mx-auto"
-          opts={{
-            height: `${videoHeight}`,
-            width: `${videoWidth}`,
-          }}
-        />
 
         <div className="grid gap-2 text-sm">
           <CardBasic className="flex items-center">

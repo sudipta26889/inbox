@@ -1,5 +1,6 @@
 /** biome-ignore-all lint/suspicious/noConsole: we use console.log for development logs */
-import { log } from "next-axiom";
+// AXIOM DISABLED FOR PRIVACY
+// import { log } from "next-axiom";
 import { env } from "@/env";
 
 /**
@@ -8,7 +9,8 @@ import { env } from "@/env";
  * and falls back to console otherwise.
  */
 export function createClientLogger(scope: string) {
-  const hasAxiom = !!env.NEXT_PUBLIC_AXIOM_TOKEN;
+  // AXIOM DISABLED FOR PRIVACY
+  const hasAxiom = false;
 
   if (hasAxiom) {
     return {

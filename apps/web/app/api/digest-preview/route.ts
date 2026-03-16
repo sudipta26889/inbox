@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { render } from "@react-email/render";
 import DigestEmail, {
   type DigestEmailProps,
-} from "@inboxzero/resend/emails/digest";
+} from "@inbox/resend/emails/digest";
 import { digestPreviewBody } from "@/app/api/digest-preview/validation";
 
 // http://localhost:3000/api/digest-preview?categories=["Newsletter","Receipt","Marketing","Cold Emails"]
@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
 
 function createMockDigestData(categories: string[]): DigestEmailProps {
   const digestData: DigestEmailProps = {
-    baseUrl: "https://www.getinboxzero.com",
+    baseUrl: "https://www.inbox.sudiptadhara.in",
     unsubscribeToken: "preview-token",
     emailAccountId: "preview-account",
     date: new Date(),

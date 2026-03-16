@@ -13,14 +13,14 @@ Verify that when you reply from Outlook with an unedited auto-generated draft, t
 
 ## Preconditions
 
-- Signed into Inbox Zero as a test account.
+- Signed into Inbox as a test account.
 - Signed into Outlook test account in another tab.
 - Signed into Gmail test account in another tab.
-- Inbox Zero is connected to both Gmail and Outlook.
+- Inbox is connected to both Gmail and Outlook.
 
 ## Steps
 
-1. In Inbox Zero (getinboxzero.com), assign the Outlook test account in the upper-left user selector.
+1. In Inbox (inbox.sudiptadhara.in), assign the Outlook test account in the upper-left user selector.
 2. Open the Assistant page.
 3. Find the "To Reply" rule and verify it is enabled; if not, toggle it on and save.
 4. In Gmail (mail.google.com), compose a new email to the Outlook test account.

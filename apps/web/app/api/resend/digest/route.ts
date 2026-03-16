@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { sendDigestEmail } from "@inboxzero/resend";
+import { sendDigestEmail } from "@inbox/resend";
 import { withEmailAccount, withError } from "@/utils/middleware";
 import { env } from "@/env";
 import { captureException, SafeError } from "@/utils/error";
@@ -322,7 +322,7 @@ async function sendEmail({
 
     // First, send the digest email and wait for it to complete
     await sendDigestEmail({
-      from: env.RESEND_FROM_EMAIL,
+      from: env.SMTP_FROM_EMAIL || env.RESEND_FROM_EMAIL,
       to: emailAccount.email,
       emailProps: {
         baseUrl: env.NEXT_PUBLIC_BASE_URL,

@@ -1,7 +1,7 @@
 import prisma from "@/utils/prisma";
 import type { Logger } from "@/utils/logger";
 import { captureException } from "@/utils/error";
-import { sendActionRequiredEmail } from "@inboxzero/resend";
+import { sendActionRequiredEmail } from "@inbox/resend";
 import { env } from "@/env";
 import { createUnsubscribeToken } from "@/utils/unsubscribe";
 
@@ -218,7 +218,7 @@ export async function addUserErrorMessageWithNotification({
         });
 
         await sendActionRequiredEmail({
-          from: env.RESEND_FROM_EMAIL,
+          from: env.SMTP_FROM_EMAIL || env.RESEND_FROM_EMAIL,
           to: userEmail,
           emailProps: {
             baseUrl: env.NEXT_PUBLIC_BASE_URL,

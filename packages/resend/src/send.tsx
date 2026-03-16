@@ -1,6 +1,6 @@
 import { render } from "@react-email/render";
 import { nanoid } from "nanoid";
-import { resend } from "./client";
+import { transporter } from "./client";
 import type { ReactElement } from "react";
 import SummaryEmail, { type SummaryEmailProps } from "../emails/summary";
 import DigestEmail, {
@@ -24,8 +24,8 @@ import ColdEmailNotification, {
   type ColdEmailNotificationProps,
 } from "../emails/cold-email-notification";
 
-const RESEND_NOT_CONFIGURED_MESSAGE =
-  "Resend is not configured. You need to add a RESEND_API_KEY in your .env file for emails to work.";
+const SMTP_NOT_CONFIGURED_MESSAGE =
+  "SMTP is not configured. You need to add SMTP_HOST, SMTP_PORT, SMTP_USER, and SMTP_PASSWORD in your .env file for emails to work.";
 
 const sendEmail = async ({
   from,
@@ -47,35 +47,43 @@ const sendEmail = async ({
   unsubscribeToken: string;
   baseUrl: string;
 }) => {
-  if (!resend) {
-    console.log(RESEND_NOT_CONFIGURED_MESSAGE);
-    return Promise.resolve();
+  if (!transporter) {
+    console.log(SMTP_NOT_CONFIGURED_MESSAGE);
+    return Promise.resolve({ data: null, error: null });
   }
 
   const text = await render(react, { plainText: true });
+  const html = await render(react);
 
-  const result = await resend.emails.send({
-    from,
-    to: test ? "delivered@resend.dev" : to,
-    subject,
-    react,
-    text,
-    headers: {
-      "List-Unsubscribe": `<${baseUrl}/api/unsubscribe?token=${unsubscribeToken}>`,
-      // From Feb 2024 Google requires this for bulk senders
-      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
-      // Prevent threading on Gmail
-      "X-Entity-Ref-ID": nanoid(),
-    },
-    tags,
-  });
+  try {
+    const result = await transporter.sendMail({
+      from,
+      to: test ? "test@example.com" : to,
+      subject,
+      text,
+      html,
+      headers: {
+        "List-Unsubscribe": `<${baseUrl}/api/unsubscribe?token=${unsubscribeToken}>`,
+        // From Feb 2024 Google requires this for bulk senders
+        "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+        // Prevent threading on Gmail
+        "X-Entity-Ref-ID": nanoid(),
+        // Add tags as custom headers (some SMTP servers support this)
+        ...(tags && tags.length > 0
+          ? {
+              "X-Tags": tags.map((t) => `${t.name}:${t.value}`).join(", "),
+            }
+          : {}),
+      },
+    });
 
-  if (result.error) {
-    console.error("Error sending email", result.error);
-    throw new Error(`Error sending email: ${result.error.message}`);
+    return { data: { id: result.messageId }, error: null };
+  } catch (error) {
+    console.error("Error sending email", error);
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
+    throw new Error(`Error sending email: ${errorMessage}`);
   }
-
-  return result;
 };
 
 // export const sendStatsEmail = async ({
@@ -173,7 +181,7 @@ export const sendInvitationEmail = async ({
   return sendEmail({
     from,
     to,
-    subject: `You're invited to join ${emailProps.organizationName} on Inbox Zero`,
+    subject: `You're invited to join ${emailProps.organizationName} on Inbox`,
     react: <InvitationEmail {...emailProps} />,
     test,
     unsubscribeToken: emailProps.unsubscribeToken,
@@ -291,39 +299,39 @@ export const sendColdEmailNotification = async ({
   inReplyTo?: string; // Message-ID of original email for threading
   emailProps: ColdEmailNotificationProps;
 }) => {
-  if (!resend) {
-    console.log(RESEND_NOT_CONFIGURED_MESSAGE);
+  if (!transporter) {
+    console.log(SMTP_NOT_CONFIGURED_MESSAGE);
     return { data: null, error: null };
   }
 
   const react = <ColdEmailNotification {...emailProps} />;
   const text = await render(react, { plainText: true });
+  const html = await render(react);
 
-  const result = await resend.emails.send({
-    from,
-    to,
-    replyTo,
-    subject,
-    react,
-    text,
-    // Threading headers - In-Reply-To and References make the reply appear in the same thread
-    headers: inReplyTo
-      ? { "In-Reply-To": inReplyTo, References: inReplyTo }
-      : undefined,
-    tags: [
-      {
-        name: "category",
-        value: "cold-email-notification",
+  try {
+    const result = await transporter.sendMail({
+      from,
+      to,
+      replyTo,
+      subject,
+      text,
+      html,
+      // Threading headers - In-Reply-To and References make the reply appear in the same thread
+      headers: {
+        ...(inReplyTo
+          ? { "In-Reply-To": inReplyTo, References: inReplyTo }
+          : {}),
+        "X-Tags": "category:cold-email-notification",
       },
-    ],
-  });
+    });
 
-  if (result.error) {
-    console.error("Error sending cold email notification", result.error);
+    return { data: { id: result.messageId }, error: null };
+  } catch (error) {
+    console.error("Error sending cold email notification", error);
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
     throw new Error(
-      `Error sending cold email notification: ${result.error.message}`,
+      `Error sending cold email notification: ${errorMessage}`,
     );
   }
-
-  return result;
 };

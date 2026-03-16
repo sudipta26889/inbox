@@ -13,14 +13,14 @@ Verify that emails are correctly marked as follow-up and that follow-up drafts a
 
 ## Preconditions
 
-- Signed into Inbox Zero as a test account.
+- Signed into Inbox as a test account.
 - Signed into Gmail test account in another tab.
 - Signed into Outlook test account in another tab.
-- Inbox Zero is connected to both Gmail and Outlook.
+- Inbox is connected to both Gmail and Outlook.
 
 ## Steps
 
-1. In Inbox Zero, assign the Gmail test account in the upper-left user selector. 
+1. In Inbox, assign the Gmail test account in the upper-left user selector. 
 2. Open the Assistant page.
 3. Navigate to the Settings tab. 
 4. Find "Follow-up reminders" and verify if it's enabled. If not, toggle it on. 
@@ -44,8 +44,8 @@ Verify that emails are correctly marked as follow-up and that follow-up drafts a
 
 ## Expected results
 
-- The "Follow Up" rule is enabled and configured in Inbox Zero.
-- The "Follow-up" rule is applied to both sent and received emails within the time frame configured in Inbox Zero.
+- The "Follow Up" rule is enabled and configured in Inbox.
+- The "Follow-up" rule is applied to both sent and received emails within the time frame configured in Inbox.
 - A follow-up draft is generated for sent emails. 
 - A follow-up draft is not generated for received emails. 
 
@@ -58,5 +58,5 @@ Verify that emails are correctly marked as follow-up and that follow-up drafts a
 
 ## Cleanup
 
-- Undo all changes made to the InboxZero account after the test is completed. 
+- Undo all changes made to the Inbox account after the test is completed. 
 - close all tabs used for the test.

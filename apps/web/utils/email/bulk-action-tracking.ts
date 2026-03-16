@@ -1,4 +1,4 @@
-import { publishArchive, publishDelete } from "@inboxzero/tinybird";
+import { publishArchive, publishDelete } from "@inbox/tinybird";
 import { createScopedLogger } from "@/utils/logger";
 import prisma from "@/utils/prisma";
 import { runWithBoundedConcurrency } from "@/utils/async";

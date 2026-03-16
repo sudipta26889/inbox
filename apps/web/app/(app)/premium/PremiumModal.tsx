@@ -25,7 +25,7 @@ function EnterpriseFooter() {
         </p>
       </div>
       <Button variant="outline" asChild>
-        <Link href="https://go.getinboxzero.com/sales">Speak to Sales</Link>
+        <Link href="#">Contact Admin</Link>
       </Button>
     </div>
   );

@@ -1,13 +1,13 @@
 import { render } from "@react-email/render";
 import { env } from "@/env";
 import { createEmailProvider } from "@/utils/email/provider";
-import { sendMeetingBriefingEmail } from "@inboxzero/resend";
+import { sendMeetingBriefingEmail } from "@inbox/resend";
 import MeetingBriefingEmail, {
   generateMeetingBriefingSubject,
   type MeetingBriefingEmailProps,
   type BriefingContent,
   type InternalTeamMember,
-} from "@inboxzero/resend/emails/meeting-briefing";
+} from "@inbox/resend/emails/meeting-briefing";
 import { MessagingProvider } from "@/generated/prisma/enums";
 import type { CalendarEvent } from "@/utils/calendar/event-types";
 import type { Logger } from "@/utils/logger";
@@ -164,7 +164,7 @@ async function sendBriefingViaEmail({
     logger.info("Sending briefing via Resend");
     try {
       await sendMeetingBriefingEmail({
-        from: env.RESEND_FROM_EMAIL,
+        from: env.SMTP_FROM_EMAIL || env.RESEND_FROM_EMAIL,
         to: userEmail,
         emailProps,
       });

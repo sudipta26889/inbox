@@ -27,7 +27,7 @@ Process:
 3. Determine run mode (`all`, `only`, or default high-priority). Apply `--group` filter if present. Fail fast if any requested ids are missing.
 4. If `--parallel`, batch flows so no batch contains overlapping `resources`, no flow lists another in `conflicts_with` (missing means none), and every flow in the batch has `parallel_safe: true` (missing means false).
    If batching is not possible, run sequentially.
-5. Execute each flow exactly as written. Use deliberate waits when moving between Gmail, Outlook, and Inbox Zero.
+5. Execute each flow exactly as written. Use deliberate waits when moving between Gmail, Outlook, and Inbox.
 6. Record evidence. Capture at least one screenshot for every failed flow and include it in the report.
 7. Write the JSON report to `qa/browser-flows/results/<run-id>.json` and save screenshots under
    `qa/browser-flows/results/<run-id>/`.

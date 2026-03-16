@@ -105,18 +105,13 @@ export const env = createEnv({
 
     OPENAI_ZERO_DATA_RETENTION: booleanString.optional().default(false),
 
-    UPSTASH_REDIS_URL: z
-      .string()
-      .optional()
-      .transform((value) => value || process.env.KV_REST_API_URL),
-    UPSTASH_REDIS_TOKEN: z
-      .string()
-      .optional()
-      .transform((value) => value || process.env.KV_REST_API_TOKEN),
+    // Upstash HTTP client removed — using ioredis directly
+    UPSTASH_REDIS_URL: z.string().optional(),
+    UPSTASH_REDIS_TOKEN: z.string().optional(),
     REDIS_URL: z
       .string()
       .optional()
-      .transform((value) => value || process.env.KV_URL), // used for subscriptions
+      .transform((value) => value || process.env.KV_URL),
 
     QSTASH_TOKEN: z.string().optional(),
     QSTASH_CURRENT_SIGNING_KEY: z.string().optional(),
@@ -159,12 +154,24 @@ export const env = createEnv({
     POSTHOG_PROJECT_ID: z.string().optional(),
     POSTHOG_LLM_EVALS_APPROVED_EMAILS: z.string().optional(),
 
+    // Email sending via SMTP
+    SMTP_HOST: z.string().optional(),
+    SMTP_PORT: z.string().optional(),
+    SMTP_USER: z.string().optional(),
+    SMTP_PASSWORD: z.string().optional(),
+    SMTP_SECURE: z.string().optional().default("true"), // true for 465, false for 587
+    SMTP_FROM_EMAIL: z
+      .string()
+      .optional()
+      .default("Inbox <updates@transactional.inbox.sudiptadhara.in>"),
+
+    // Legacy Resend variables (deprecated, use SMTP instead)
     RESEND_API_KEY: z.string().optional(),
     RESEND_AUDIENCE_ID: z.string().optional(),
     RESEND_FROM_EMAIL: z
       .string()
       .optional()
-      .default("Inbox Zero <updates@transactional.getinboxzero.com>"),
+      .default("Inbox <updates@transactional.inbox.sudiptadhara.in>"),
     CRON_SECRET: z.string().optional(),
     LOOPS_API_SECRET: z.string().optional(),
     FB_CONVERSION_API_ACCESS_TOKEN: z.string().optional(),
@@ -248,7 +255,7 @@ export const env = createEnv({
     NEXT_PUBLIC_POSTHOG_HERO_AB: z.string().optional(),
     NEXT_PUBLIC_POSTHOG_ONBOARDING_SURVEY_ID: z.string().optional(),
     NEXT_PUBLIC_BASE_URL: z.string(),
-    NEXT_PUBLIC_BRAND_NAME: z.string().trim().min(1).default("Inbox Zero"),
+    NEXT_PUBLIC_BRAND_NAME: z.string().trim().min(1).default("Inbox"),
     NEXT_PUBLIC_BRAND_LOGO_URL: z.string().optional(),
     NEXT_PUBLIC_BRAND_ICON_URL: z.string().optional().default("/icon.png"),
     NEXT_PUBLIC_CONTACTS_ENABLED: booleanString.optional().default(false),
@@ -257,7 +264,7 @@ export const env = createEnv({
     NEXT_PUBLIC_SUPPORT_EMAIL: z
       .string()
       .optional()
-      .default("elie@getinboxzero.com"),
+      .default("elie@inbox.sudiptadhara.in"),
     NEXT_PUBLIC_GTM_ID: z.string().optional(),
     NEXT_PUBLIC_CRISP_WEBSITE_ID: z.string().optional(),
     NEXT_PUBLIC_WELCOME_UPGRADE_ENABLED: booleanString
@@ -285,6 +292,7 @@ export const env = createEnv({
     NEXT_PUBLIC_SMART_FILING_ENABLED: booleanString.optional(),
     NEXT_PUBLIC_CLEANER_ENABLED: booleanString.optional(),
     NEXT_PUBLIC_EXTERNAL_API_ENABLED: booleanString.optional().default(false),
+    NEXT_PUBLIC_MCP_SERVER_ENABLED: booleanString.optional().default(false),
     NEXT_PUBLIC_AUTO_DRAFT_DISABLED: booleanString.optional(),
     NEXT_PUBLIC_IS_RESEND_CONFIGURED: booleanString.optional(),
     NEXT_PUBLIC_TABS_EXTENSION_ID: z
@@ -366,6 +374,8 @@ export const env = createEnv({
     NEXT_PUBLIC_CLEANER_ENABLED: process.env.NEXT_PUBLIC_CLEANER_ENABLED,
     NEXT_PUBLIC_EXTERNAL_API_ENABLED:
       process.env.NEXT_PUBLIC_EXTERNAL_API_ENABLED,
+    NEXT_PUBLIC_MCP_SERVER_ENABLED:
+      process.env.NEXT_PUBLIC_MCP_SERVER_ENABLED,
     NEXT_PUBLIC_AUTO_DRAFT_DISABLED:
       process.env.NEXT_PUBLIC_AUTO_DRAFT_DISABLED,
     NEXT_PUBLIC_IS_RESEND_CONFIGURED:

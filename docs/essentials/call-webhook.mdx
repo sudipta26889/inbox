@@ -4,13 +4,13 @@ description: 'Integrate email processing with external services via webhooks.'
 icon: 'webhook'
 ---
 
-The Call Webhook action lets you integrate email processing with other services. When a rule triggers, Inbox Zero sends the email data to your specified endpoint.
+The Call Webhook action lets you integrate email processing with other services. When a rule triggers, Inbox sends the email data to your specified endpoint.
 
 ## Configuration
 
 - **Method:** POST
 - **Content-Type:** application/json
-- **Headers:** Always includes `X-Webhook-Secret` (empty string if no secret is configured in [settings](https://www.getinboxzero.com/settings))
+- **Headers:** Always includes `X-Webhook-Secret` (empty string if no secret is configured in [settings](https://www.inbox.sudiptadhara.in/settings))
 
 ## Payload
 
@@ -35,4 +35,4 @@ The Call Webhook action lets you integrate email processing with other services.
 }
 ```
 
-Set up a webhook secret in [settings](https://www.getinboxzero.com/settings) to secure your endpoints. The secret is included in the `X-Webhook-Secret` header of every request.
+Set up a webhook secret in [settings](https://www.inbox.sudiptadhara.in/settings) to secure your endpoints. The secret is included in the `X-Webhook-Secret` header of every request.

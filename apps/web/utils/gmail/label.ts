@@ -1,5 +1,5 @@
 import type { gmail_v1 } from "@googleapis/gmail";
-import { publishArchive, type TinybirdEmailAction } from "@inboxzero/tinybird";
+import { publishArchive, type TinybirdEmailAction } from "@inbox/tinybird";
 import {
   getLabelColor,
   inboxZeroLabels,

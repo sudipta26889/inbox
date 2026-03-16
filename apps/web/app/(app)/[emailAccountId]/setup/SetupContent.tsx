@@ -10,7 +10,6 @@ import {
   CheckIcon,
   BotIcon,
   type LucideIcon,
-  ChromeIcon,
   CalendarIcon,
   UsersIcon,
   MessageSquareIcon,
@@ -26,7 +25,6 @@ import { Card } from "@/components/ui/card";
 import { prefixPath } from "@/utils/path";
 import { useSetupProgress } from "@/hooks/useSetupProgress";
 import { LoadingContent } from "@/components/LoadingContent";
-import { EXTENSION_URL } from "@/utils/config";
 import { isGoogleProvider } from "@/utils/email/provider-types";
 import { useAccount } from "@/providers/EmailAccountProvider";
 import {
@@ -406,22 +404,6 @@ function Checklist({
           open={isInviteModalOpen}
           onOpenChange={setIsInviteModalOpen}
           trigger={null}
-        />
-      )}
-
-      {isGoogleProvider(provider) && (
-        <StepItem
-          href={EXTENSION_URL}
-          linkProps={{ target: "_blank", rel: "noopener noreferrer" }}
-          icon={<ChromeIcon size={18} />}
-          title={`Optional: Install the ${BRAND_NAME} Tabs extension`}
-          timeEstimate="1 minute"
-          completed={isTabsExtensionCompleted}
-          actionText="Install"
-          onMarkDone={() => handleMarkStepDone("tabsExtension")}
-          markDoneDisabled={isDismissingStep}
-          markDonePending={pendingStep === "tabsExtension"}
-          showMarkDone={true}
         />
       )}
     </Card>

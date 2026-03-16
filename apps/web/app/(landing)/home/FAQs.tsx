@@ -20,15 +20,8 @@ const faqs = [
   },
   {
     question: "How can I request a feature?",
-    answer: (
-      <span>
-        Email us or post an issue on{" "}
-        <Anchor href="/github" newTab>
-          GitHub
-        </Anchor>
-        . We're happy to hear how we can improve your email experience.
-      </span>
-    ),
+    answer:
+      "Contact your administrator. We're happy to hear how we can improve your email experience.",
   },
   {
     question: `Will ${BRAND_NAME} replace my current email client?`,
@@ -36,15 +29,7 @@ const faqs = [
   },
   {
     question: "Is the code open-source?",
-    answer: (
-      <span>
-        Yes! You can see the entire source code for the inbox zero app in our{" "}
-        <Anchor href="/github" newTab>
-          GitHub repo
-        </Anchor>
-        .
-      </span>
-    ),
+    answer: "Yes! This is a self-hosted open-source email assistant.",
   },
   {
     question: "Do you offer refunds?",

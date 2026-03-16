@@ -1,0 +1,359 @@
+---
+title: "MCP Server Setup"
+description: "Connect AI assistants like Claude Desktop to your Inbox account"
+---
+
+# MCP Server Setup
+
+The Inbox MCP (Model Context Protocol) Server allows AI assistants like Claude Desktop, VS Code Copilot, and other MCP clients to securely access your email account through OAuth 2.1 authentication.
+
+## What is MCP?
+
+Model Context Protocol (MCP) is an open protocol that enables AI assistants to securely connect to external data sources and tools. With Inbox's MCP server, you can:
+
+- Search your emails using natural language
+- Get email details and content
+- Send emails via AI assistant
+- Check calendar availability
+- View email statistics
+- Manage automation rules
+
+All through natural conversation with your AI assistant!
+
+## Prerequisites
+
+- An Inbox account with Gmail or Outlook connected
+- Claude Desktop, VS Code, or another MCP-compatible client
+- Inbox MCP Server enabled (see Configuration below)
+
+## Configuration
+
+### For Self-Hosted Installations
+
+Add to your `.env` file:
+
+```bash
+NEXT_PUBLIC_MCP_SERVER_ENABLED=true
+```
+
+Then restart your Inbox server and run the database migration:
+
+```bash
+cd apps/web
+npx prisma migrate deploy
+pnpm dev
+```
+
+### For inbox.sudiptadhara.in Users
+
+The MCP server is already enabled! You can connect directly.
+
+## Connecting Claude Desktop
+
+### Step 1: Open Claude Desktop Configuration
+
+On macOS:
+```bash
+code ~/Library/Application\ Support/Claude/claude_desktop_config.json
+```
+
+On Windows:
+```bash
+code %APPDATA%\Claude\claude_desktop_config.json
+```
+
+On Linux:
+```bash
+code ~/.config/Claude/claude_desktop_config.json
+```
+
+### Step 2: Add Inbox MCP Server
+
+Add the following to your configuration:
+
+```json
+{
+  "mcpServers": {
+    "inbox": {
+      "type": "http",
+      "url": "https://inbox.sudiptadhara.in/mcp-server"
+    }
+  }
+}
+```
+
+For self-hosted installations, replace the URL with your own:
+
+```json
+{
+  "mcpServers": {
+    "inbox": {
+      "type": "http",
+      "url": "https://your-domain.com/mcp-server"
+    }
+  }
+}
+```
+
+### Step 3: Restart Claude Desktop
+
+Quit and restart Claude Desktop. It will automatically:
+
+1. Discover the OAuth endpoints
+2. Register as a client
+3. Open your browser for authorization
+4. Prompt you to log in (if needed)
+5. Show a consent screen
+
+### Step 4: Authorize Access
+
+In the browser window:
+
+1. Log in to your Inbox account (if not already logged in)
+2. Review the requested permissions
+3. Click **"Authorize"**
+
+Claude Desktop will now have access to your Inbox account!
+
+## Available Tools
+
+Once connected, you can use these commands with Claude:
+
+### Email Tools
+
+**Search Emails**
+```
+"Search my emails for invoices from last month"
+"Find all emails from john@example.com about the project"
+"Show me unread emails with attachments"
+```
+
+**Get Email Details**
+```
+"Show me the full content of email ID 12345"
+"What attachments are in that email?"
+```
+
+**Send Emails**
+```
+"Send an email to team@example.com with subject 'Meeting Notes'"
+"Draft an email to john@example.com thanking him for his help"
+```
+
+### Calendar Tools
+
+**Search Calendar**
+```
+"What meetings do I have tomorrow?"
+"Show me my calendar for next week"
+"Find all meetings with 'standup' in the title"
+```
+
+**Check Availability**
+```
+"Am I free tomorrow afternoon?"
+"What's my availability this week?"
+"When is my next free slot?"
+```
+
+### Stats Tools
+
+**Get Email Statistics**
+```
+"How many emails did I receive this week?"
+"Show me my email stats for last month"
+"What's my email volume trend?"
+```
+
+### Rules Tools
+
+**List Rules**
+```
+"What automation rules do I have?"
+"Show me my email filters"
+```
+
+**Create Rules**
+```
+"Create a rule to archive all newsletters"
+"Set up a filter to label emails from support@example.com"
+```
+
+## Permissions (OAuth Scopes)
+
+When you authorize Claude Desktop, you grant these permissions:
+
+| Scope | Description |
+|-------|-------------|
+| `email:read` | Read your emails and search inbox |
+| `email:write` | Send emails on your behalf |
+| `calendar:read` | View calendar events and availability |
+| `stats:read` | Access email analytics |
+| `rules:read` | View automation rules |
+| `rules:write` | Create and modify automation rules |
+
+You can revoke access at any time in your Inbox Settings.
+
+## Security
+
+### How OAuth 2.1 Works
+
+1. **No passwords shared** - Claude Desktop never sees your Inbox password
+2. **PKCE protected** - Prevents authorization code interception attacks
+3. **Short-lived tokens** - Access tokens expire after 1 hour
+4. **Refresh tokens** - Long-lived tokens for seamless renewal
+5. **Scope-based** - Fine-grained permissions control
+6. **Revocable** - You can revoke access anytime
+
+### What Claude Can Access
+
+Claude Desktop can only:
+- Access data within the granted scopes
+- Perform actions you've explicitly authorized
+- Access YOUR email account (not other users)
+
+Claude Desktop cannot:
+- Access your Inbox password
+- Access other users' emails
+- Modify your account settings
+- Access data beyond granted scopes
+
+### Revoking Access
+
+To revoke Claude Desktop's access:
+
+1. Go to Inbox Settings
+2. Navigate to "Connected Apps" or "API Keys"
+3. Find "Claude Desktop" in the list
+4. Click "Revoke Access"
+
+## Troubleshooting
+
+### "MCP Server is not enabled"
+
+**Solution:** Set `NEXT_PUBLIC_MCP_SERVER_ENABLED=true` in your `.env` file and restart the server.
+
+### "No email account connected"
+
+**Solution:** Connect your Gmail or Outlook account first at [https://inbox.sudiptadhara.in/settings](https://inbox.sudiptadhara.in/settings)
+
+### "Authorization failed"
+
+**Solutions:**
+- Make sure you're logged in to Inbox
+- Try clearing your browser cache
+- Check that you have an email account connected
+- Verify the MCP server URL is correct
+
+### "Invalid or expired access token"
+
+**Solution:** This usually resolves automatically through token refresh. If not, revoke access and re-authorize.
+
+### "Insufficient permissions"
+
+**Solution:** The requested action requires a scope you haven't granted. Re-authorize and grant the necessary permissions.
+
+## Other MCP Clients
+
+### VS Code with GitHub Copilot
+
+Add to your VS Code `settings.json`:
+
+```json
+{
+  "github.copilot.mcp.servers": {
+    "inbox": {
+      "url": "https://inbox.sudiptadhara.in/mcp-server"
+    }
+  }
+}
+```
+
+### Custom MCP Clients
+
+Use the MCP SDK:
+
+```typescript
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+
+const client = new Client({
+  name: "my-app",
+  version: "1.0.0",
+});
+
+// Connect to Inbox MCP server
+await client.connect({
+  url: "https://inbox.sudiptadhara.in/mcp-server",
+  oauth: {
+    discoveryUrl: "https://inbox.sudiptadhara.in/.well-known/oauth-protected-resource",
+  },
+});
+
+// List available tools
+const tools = await client.listTools();
+
+// Call a tool
+const result = await client.callTool({
+  name: "search_emails",
+  arguments: {
+    query: "subject:invoice",
+    maxResults: 10,
+  },
+});
+```
+
+## API Reference
+
+### Discovery Endpoints
+
+- **Protected Resource Metadata (RFC 9728)**
+  `GET /.well-known/oauth-protected-resource`
+
+- **Authorization Server Metadata (RFC 8414)**
+  `GET /.well-known/oauth-authorization-server`
+
+### OAuth Endpoints
+
+- **Client Registration (RFC 7591)**
+  `POST /mcp-server/register`
+
+- **Authorization**
+  `GET /mcp-server/authorize`
+
+- **Token Exchange**
+  `POST /mcp-server/token`
+
+### MCP Protocol
+
+- **Server Info**
+  `GET /mcp-server`
+
+- **MCP Requests**
+  `POST /mcp-server`
+
+## Support
+
+For issues or questions:
+
+- [GitHub Issues](https://github.com/elie222/inbox-zero/issues)
+- [Discord Community](https://discord.gg/UnBwsydrug)
+- [Documentation](https://docs.inbox.sudiptadhara.in)
+
+## Privacy
+
+- Your email data never leaves your control
+- MCP server runs on your Inbox instance
+- OAuth tokens are stored securely in your database
+- Claude Desktop doesn't have direct database access
+- All requests go through authenticated API endpoints
+
+## Next Steps
+
+Once connected, try these commands:
+
+1. `"Search my emails for receipts from this month"`
+2. `"What's on my calendar tomorrow?"`
+3. `"Show me my email stats for last week"`
+4. `"Create a rule to archive all promotional emails"`
+
+Enjoy using AI to manage your inbox! 🎉

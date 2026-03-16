@@ -149,7 +149,7 @@ export function Pricing() {
               </div>
               <Button variant="secondary-two" size="lg" asChild>
                 <Link
-                  href="https://go.getinboxzero.com/sales"
+                  href="#"
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={() =>

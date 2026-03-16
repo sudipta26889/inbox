@@ -13,14 +13,14 @@ Verify that enabling the Awaiting Reply rule results in an Outlook category for 
 
 ## Preconditions
 
-- Signed into Inbox Zero as a test account.
+- Signed into Inbox as a test account.
 - Signed into Outlook test account in another tab.
 - Signed into Gmail test account in another tab.
-- Inbox Zero is connected to both Gmail and Outlook.
+- Inbox is connected to both Gmail and Outlook.
 
 ## Steps
 
-1. In Inbox Zero, assign the Outlook test account in the upper-left user selector.
+1. In Inbox, assign the Outlook test account in the upper-left user selector.
 2. Open the Assistant page.
 3. Find the "Awaiting Reply" rule and verify it is enabled; if not, toggle it on and save.
 4. In Outlook (outlook.com), compose a new email to the Gmail test account (type the gmail address directly in the "To" field. Do not click the "TO" text).
@@ -31,7 +31,7 @@ Verify that enabling the Awaiting Reply rule results in an Outlook category for 
 
 ## Expected results
 
-- The Awaiting Reply rule is enabled in Inbox Zero.
+- The Awaiting Reply rule is enabled in Inbox.
 - The Outlook email is sent and in the "Sent" folder.
 - The message is categorized as "Awaiting Reply".
 

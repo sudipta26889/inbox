@@ -1,15 +1,15 @@
 ---
 title: "Microsoft Teams Integration Setup"
-description: "Set up the Teams bot for Inbox Zero assistant chat."
+description: "Set up the Teams bot for Inbox assistant chat."
 ---
 
 # Microsoft Teams Integration Setup
 
-This guide is for self-hosted deployments that want to enable Teams chat with the Inbox Zero assistant.
+This guide is for self-hosted deployments that want to enable Teams chat with the Inbox assistant.
 
 ## What Teams currently supports
 
-- AI assistant chat in **direct messages** with the Inbox Zero bot
+- AI assistant chat in **direct messages** with the Inbox bot
 - Account linking with one-time `/connect <code>` commands
 
 Currently not supported on Teams:
@@ -82,12 +82,12 @@ Create a `manifest.json` file with your bot details:
     "termsOfUseUrl": "https://your-domain.com/terms"
   },
   "name": {
-    "short": "Inbox Zero",
-    "full": "Inbox Zero Assistant"
+    "short": "Inbox",
+    "full": "Inbox Assistant"
   },
   "description": {
     "short": "AI email assistant",
-    "full": "Chat with your Inbox Zero AI assistant directly from Teams."
+    "full": "Chat with your Inbox AI assistant directly from Teams."
   },
   "icons": {
     "outline": "outline.png",
@@ -137,14 +137,14 @@ TEAMS_BOT_APP_TYPE=MultiTenant # optional: MultiTenant or SingleTenant
 
 If `TEAMS_BOT_APP_ID` or `TEAMS_BOT_APP_PASSWORD` is missing, the Teams connect option is hidden in the UI and `/api/teams/events` returns `503`.
 
-## 7. Connect a user account from Inbox Zero
+## 7. Connect a user account from Inbox
 
-Each Inbox Zero email account links to a Teams user via a connect code:
+Each Inbox email account links to a Teams user via a connect code:
 
-1. In Inbox Zero, go to **Settings** → **Connected Apps**
+1. In Inbox, go to **Settings** → **Connected Apps**
 2. Click **Connect Teams**
 3. Copy the generated command: `/connect <code>`
-4. Open a DM with the Inbox Zero bot in Teams
+4. Open a DM with the Inbox bot in Teams
 5. Send the command
 
 After linking, the user can chat with the assistant in that DM.

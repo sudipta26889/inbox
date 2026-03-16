@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { zodPeriod } from "@inboxzero/tinybird";
+import { zodPeriod } from "@inbox/tinybird";
 
 export const statsByPeriodQuerySchema = z.object({
   period: zodPeriod,

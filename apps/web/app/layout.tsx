@@ -1,19 +1,21 @@
-import { Suspense } from "react";
 import type { Metadata } from "next";
 import Script from "next/script";
-import { Analytics } from "@vercel/analytics/react";
-import { SpeedInsights } from "@vercel/speed-insights/next";
-import { AxiomWebVitals } from "next-axiom";
-import { GoogleTagManager } from "@next/third-parties/google";
-import { Analytics as DubAnalytics } from "@dub/analytics/react";
+// ANALYTICS DISABLED FOR PRIVACY
+// import { Analytics } from "@vercel/analytics/react";
+// import { SpeedInsights } from "@vercel/speed-insights/next";
+// import { AxiomWebVitals } from "next-axiom";
+// import { GoogleTagManager } from "@next/third-parties/google";
+// import { Analytics as DubAnalytics } from "@dub/analytics/react";
 import { Geist } from "next/font/google";
 import localFont from "next/font/local";
 import type { WebApplication, WithContext } from "schema-dts";
 import "../styles/globals.css";
-import { PostHogPageview, PostHogProvider } from "@/providers/PostHogProvider";
+// ANALYTICS DISABLED FOR PRIVACY
+// import { PostHogPageview, PostHogProvider } from "@/providers/PostHogProvider";
 import { env } from "@/env";
 import { GlobalProviders } from "@/providers/GlobalProviders";
-import { UTM } from "@/app/utm";
+// ANALYTICS DISABLED FOR PRIVACY
+// import { UTM } from "@/app/utm";
 import { startupImage } from "@/app/startup-image";
 import { Toaster } from "@/components/Toast";
 import { BRAND_ICON_URL, BRAND_NAME, toAbsoluteUrl } from "@/utils/branding";
@@ -46,14 +48,8 @@ const jsonLd: WithContext<WebApplication> = {
   operatingSystem: "Web Browser",
   offers: {
     "@type": "Offer",
-    price: "20.00",
+    price: "0",
     priceCurrency: "USD",
-    priceSpecification: {
-      "@type": "UnitPriceSpecification",
-      price: 20,
-      priceCurrency: "USD",
-      billingDuration: "P1M",
-    },
     availability: "https://schema.org/InStock",
   },
   featureList: [
@@ -72,10 +68,6 @@ const jsonLd: WithContext<WebApplication> = {
       "@type": "ImageObject",
       url: toAbsoluteUrl(BRAND_ICON_URL),
     },
-    sameAs: [
-      "https://x.com/inboxzero_ai",
-      "https://github.com/elie222/inbox-zero",
-    ],
   },
 };
 
@@ -93,7 +85,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title,
     description,
-    creator: "@inboxzero_ai",
+    creator: "@inbox",
   },
   metadataBase: new URL(env.NEXT_PUBLIC_BASE_URL),
   // issues with robots.txt: https://github.com/vercel/next.js/issues/58615#issuecomment-1852457285
@@ -143,29 +135,11 @@ export default async function RootLayout({
             __html: JSON.stringify(jsonLd),
           }}
         />
-        <PostHogProvider>
-          <Suspense>
-            <PostHogPageview />
-          </Suspense>
-          <GlobalProviders>
-            {children}
-            <Toaster closeButton richColors theme="light" visibleToasts={9} />
-          </GlobalProviders>
-        </PostHogProvider>
-        <Analytics />
-        <AxiomWebVitals />
-        <UTM />
-        <SpeedInsights />
-        {env.NEXT_PUBLIC_DUB_REFER_DOMAIN && (
-          <DubAnalytics
-            apiHost="/_proxy/dub"
-            scriptProps={{ src: "/_proxy/dub/script.js" }}
-            domainsConfig={{ refer: env.NEXT_PUBLIC_DUB_REFER_DOMAIN }}
-          />
-        )}
-        {env.NEXT_PUBLIC_GTM_ID ? (
-          <GoogleTagManager gtmId={env.NEXT_PUBLIC_GTM_ID} />
-        ) : null}
+        {/* ANALYTICS DISABLED FOR PRIVACY */}
+        <GlobalProviders>
+          {children}
+          <Toaster closeButton richColors theme="light" visibleToasts={9} />
+        </GlobalProviders>
       </body>
     </html>
   );

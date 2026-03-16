@@ -1,5 +1,5 @@
 {
-  "name": "inbox-zero-ai",
+  "name": "inbox-ai",
   "version": "1.0.0",
   "private": true,
   "scripts": {
@@ -57,10 +57,10 @@
     "@googleapis/people": "7.0.1",
     "@headlessui/react": "2.2.9",
     "@hookform/resolvers": "5.2.2",
-    "@inboxzero/loops": "workspace:*",
-    "@inboxzero/resend": "workspace:*",
-    "@inboxzero/tinybird": "workspace:*",
-    "@inboxzero/tinybird-ai-analytics": "workspace:*",
+    "@inbox/loops": "workspace:*",
+    "@inbox/resend": "workspace:*",
+    "@inbox/tinybird": "workspace:*",
+    "@inbox/tinybird-ai-analytics": "workspace:*",
     "@lemonsqueezy/lemonsqueezy.js": "4.0.0",
     "@mdx-js/loader": "3.1.1",
     "@mdx-js/react": "3.1.1",

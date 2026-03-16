@@ -60,7 +60,7 @@ const pricingFaqs = [
     question: "Need a custom plan for your enterprise?",
     answer: (
       <span>
-        <Anchor href="https://go.getinboxzero.com/sales" newTab>
+        <Anchor href="#" newTab>
           Contact our sales team
         </Anchor>{" "}
         for custom pricing, SSO, on-premise deployment, and dedicated support.

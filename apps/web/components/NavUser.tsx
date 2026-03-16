@@ -1,18 +1,12 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import {
-  CircleHelpIcon,
   ChevronsUpDownIcon,
-  LightbulbIcon,
   MessageCircleReplyIcon,
   ShieldCheckIcon,
   LogOutIcon,
-  ChromeIcon,
   Building2Icon,
-  CrownIcon,
-  GiftIcon,
   SettingsIcon,
 } from "lucide-react";
 import {
@@ -23,24 +17,18 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { useAccount } from "@/providers/EmailAccountProvider";
 import { prefixPath } from "@/utils/path";
 import { logOut } from "@/utils/user";
 import { isGoogleProvider } from "@/utils/email/provider-types";
 import { SidebarMenuButton, useSidebar } from "@/components/ui/sidebar";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { EXTENSION_URL } from "@/utils/config";
 import { useUser } from "@/hooks/useUser";
-import { env } from "@/env";
-import { Referrals } from "@/components/ReferralDialog";
 
 export function NavUser() {
   const { emailAccountId, emailAccount, provider } = useAccount();
   const { closeMobileSidebar, isMobile, state } = useSidebar();
   const { data: user } = useUser();
-  const [isReferralDialogOpen, setIsReferralDialogOpen] = useState(false);
-
   const currentEmailAccountId = emailAccount?.id || emailAccountId;
   const currentEmailAccountMembers =
     user?.members?.filter(
@@ -125,19 +113,6 @@ export function NavUser() {
                 </Link>
               </DropdownMenuItem>
             )}
-            {isGoogleProvider(provider) && (
-              <DropdownMenuItem asChild>
-                <Link
-                  href={EXTENSION_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={() => closeMobileSidebar("left-sidebar")}
-                >
-                  <ChromeIcon className="mr-2 size-4" />
-                  Install extension
-                </Link>
-              </DropdownMenuItem>
-            )}
           </DropdownMenuGroup>
 
           <DropdownMenuSeparator />
@@ -171,55 +146,6 @@ export function NavUser() {
           </DropdownMenuGroup>
 
           <DropdownMenuSeparator />
-
-          <DropdownMenuGroup>
-            {!env.NEXT_PUBLIC_BYPASS_PREMIUM_CHECKS && (
-              <DropdownMenuItem asChild>
-                <Link
-                  href="/premium"
-                  onClick={() => closeMobileSidebar("left-sidebar")}
-                >
-                  <CrownIcon className="mr-2 size-4" />
-                  Premium
-                </Link>
-              </DropdownMenuItem>
-            )}
-            <DropdownMenuItem asChild>
-              <Link
-                href="https://docs.getinboxzero.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => closeMobileSidebar("left-sidebar")}
-              >
-                <CircleHelpIcon className="mr-2 size-4" />
-                Help Center
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link
-                href="/feature-requests"
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => closeMobileSidebar("left-sidebar")}
-              >
-                <LightbulbIcon className="mr-2 size-4" />
-                Feature Requests
-              </Link>
-            </DropdownMenuItem>
-            {!env.NEXT_PUBLIC_BYPASS_PREMIUM_CHECKS && (
-              <DropdownMenuItem
-                onSelect={() => {
-                  closeMobileSidebar("left-sidebar");
-                  setIsReferralDialogOpen(true);
-                }}
-              >
-                <GiftIcon className="mr-2 size-4" />
-                Refer a Friend
-              </DropdownMenuItem>
-            )}
-          </DropdownMenuGroup>
-
-          <DropdownMenuSeparator />
           <DropdownMenuItem
             onSelect={() => {
               closeMobileSidebar("left-sidebar");
@@ -231,15 +157,6 @@ export function NavUser() {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-
-      <Dialog
-        open={isReferralDialogOpen}
-        onOpenChange={setIsReferralDialogOpen}
-      >
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-4xl">
-          <Referrals />
-        </DialogContent>
-      </Dialog>
     </>
   );
 }

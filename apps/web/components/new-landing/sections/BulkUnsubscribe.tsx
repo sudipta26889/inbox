@@ -13,7 +13,7 @@ export function BulkUnsubscribe() {
   return (
     <Section>
       <SectionHeading>
-        Get to Inbox Zero fast.
+        Get to Inbox fast.
         <br />
         Bulk unsubscribe from emails you never read.
       </SectionHeading>

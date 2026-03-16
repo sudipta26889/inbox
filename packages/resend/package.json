@@ -1,5 +1,5 @@
 {
-  "name": "@inboxzero/resend",
+  "name": "@inbox/resend",
   "version": "0.0.0",
   "main": "src/index.ts",
   "scripts": {
@@ -9,14 +9,15 @@
     "@react-email/components": "1.0.8",
     "@react-email/render": "2.0.4",
     "nanoid": "5.1.6",
+    "nodemailer": "^6.9.8",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "react-email": "5.2.9",
-    "resend": "6.9.3"
+    "react-email": "5.2.9"
   },
   "devDependencies": {
     "@react-email/preview-server": "5.2.9",
     "@types/node": "24.10.1",
+    "@types/nodemailer": "^6.4.14",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "tsconfig": "workspace:*",

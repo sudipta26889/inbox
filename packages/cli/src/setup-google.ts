@@ -29,7 +29,7 @@ export interface GoogleSetupOptions {
 // ═══════════════════════════════════════════════════════════════════════════
 
 export async function runGoogleSetup(options: GoogleSetupOptions) {
-  p.intro("Google Cloud Setup for Inbox Zero");
+  p.intro("Google Cloud Setup for Inbox");
 
   // Step 1: Check prerequisites
   const spinner = p.spinner();
@@ -139,7 +139,7 @@ Steps:
    - "Internal" — Google Workspace only, all org members can sign in
    - "External" — any Google account (including personal Gmail)
      You'll need to add yourself as a test user (step 6)
-2. App name: "Inbox Zero" (or your preferred name)
+2. App name: "Inbox" (or your preferred name)
 3. User support email: Your email
 4. Developer contact: Your email
 5. Click "Save and Continue" through the scopes section
@@ -186,7 +186,7 @@ The console will open in your browser.`,
       `Now create OAuth 2.0 credentials:
 
 1. Select "Web application" as the application type
-2. Name: "Inbox Zero" (or your preferred name)
+2. Name: "Inbox" (or your preferred name)
 3. Add Authorized redirect URIs:
 ${redirectUris}
 4. Click "Create"

@@ -1,4 +1,4 @@
-# Inbox Zero API CLI Reference
+# Inbox API CLI Reference
 
 ## Install
 

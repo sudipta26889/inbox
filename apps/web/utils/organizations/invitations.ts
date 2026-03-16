@@ -1,4 +1,4 @@
-import { sendInvitationEmail } from "@inboxzero/resend";
+import { sendInvitationEmail } from "@inbox/resend";
 import { generateSecureToken } from "@/utils/api-key";
 import { env } from "@/env";
 
@@ -16,7 +16,7 @@ export async function sendOrganizationInvitation({
   const unsubscribeToken = generateSecureToken();
 
   await sendInvitationEmail({
-    from: env.RESEND_FROM_EMAIL,
+    from: env.SMTP_FROM_EMAIL || env.RESEND_FROM_EMAIL,
     to: email,
     emailProps: {
       baseUrl: env.NEXT_PUBLIC_BASE_URL,

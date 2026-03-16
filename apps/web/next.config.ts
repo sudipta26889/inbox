@@ -1,5 +1,6 @@
-import { withSentryConfig } from "@sentry/nextjs";
-import { withAxiom } from "next-axiom";
+// ANALYTICS/MONITORING DISABLED FOR PRIVACY
+// import { withSentryConfig } from "@sentry/nextjs";
+// import { withAxiom } from "next-axiom";
 import nextMdx from "@next/mdx";
 import withSerwistInit from "@serwist/next";
 import { env } from "./env";
@@ -30,14 +31,7 @@ const nextConfig: NextConfig = {
   pageExtensions: ["js", "jsx", "mdx", "ts", "tsx"],
   images: {
     remotePatterns: [
-      {
-        protocol: "https",
-        hostname: "img.youtube.com",
-      },
-      {
-        protocol: "https",
-        hostname: "image.mux.com",
-      },
+      // YouTube and Mux video domains removed
       {
         protocol: "https",
         hostname: "ph-avatars.imgix.net",
@@ -52,7 +46,7 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: "https",
-        hostname: "images.getinboxzero.com",
+        hostname: "images.inbox.sudiptadhara.in",
       },
       {
         protocol: "https",
@@ -88,70 +82,11 @@ const nextConfig: NextConfig = {
         ],
         permanent: false,
       },
-      {
-        source: "/feature-requests",
-        destination: "https://go.getinboxzero.com/feature-requests",
-        permanent: true,
-      },
-      {
-        source: "/feedback",
-        destination: "https://go.getinboxzero.com/feedback",
-        permanent: true,
-      },
-      {
-        source: "/changelog",
-        destination: "https://go.getinboxzero.com/changelog",
-        permanent: true,
-      },
-      {
-        source: "/twitter",
-        destination: "https://go.getinboxzero.com/x",
-        permanent: true,
-      },
-      {
-        source: "/github",
-        destination: "https://go.getinboxzero.com/github",
-        permanent: true,
-      },
-      {
-        source: "/discord",
-        destination: "https://go.getinboxzero.com/discord",
-        permanent: true,
-      },
-      {
-        source: "/linkedin",
-        destination: "https://go.getinboxzero.com/linkedin",
-        permanent: true,
-      },
-      {
-        source: "/waitlist",
-        destination: "https://go.getinboxzero.com/waitlist",
-        permanent: true,
-      },
-      {
-        source: "/waitlist-other",
-        destination: "https://go.getinboxzero.com/waitlist-other",
-        permanent: false,
-      },
-      {
-        source: "/affiliates",
-        destination: "https://go.getinboxzero.com/affiliate",
-        permanent: true,
-      },
+      // Internal redirects only - all external go.inbox / docs.inbox links removed
       {
         source: "/newsletters",
         destination: "/bulk-unsubscribe",
         permanent: false,
-      },
-      {
-        source: "/docs",
-        destination: "https://docs.getinboxzero.com",
-        permanent: true,
-      },
-      {
-        source: "/docs/:path*",
-        destination: "https://docs.getinboxzero.com/:path*",
-        permanent: true,
       },
       {
         source: "/request-access",
@@ -163,40 +98,20 @@ const nextConfig: NextConfig = {
         destination: "/reply-zero",
         permanent: false,
       },
-      {
-        source: "/game",
-        destination: "https://go.getinboxzero.com/game",
-        permanent: false,
-      },
-      {
-        source: "/soc2",
-        destination: "https://go.getinboxzero.com/soc2",
-        permanent: true,
-      },
-      {
-        source: "/sales",
-        destination: "https://go.getinboxzero.com/sales",
-        permanent: false,
-      },
     ];
   },
+  // ANALYTICS & PAYMENT PROXIES DISABLED FOR PRIVACY
   async rewrites() {
     return [
+      // MCP OAuth 2.1 Discovery Endpoints (RFC 8414 / RFC 9728)
+      // Rewrite .well-known paths to regular API routes (dots cause routing issues)
       {
-        source: "/ingest/:path*",
-        destination: "https://app.posthog.com/:path*",
+        source: "/.well-known/oauth-authorization-server",
+        destination: "/api/well-known-oauth/authorization-server",
       },
       {
-        source: "/vendor/lemon/affiliate.js",
-        destination: "https://lmsqueezy.com/affiliate.js",
-      },
-      {
-        source: "/_proxy/dub/track/:path",
-        destination: "https://api.dub.co/track/:path",
-      },
-      {
-        source: "/_proxy/dub/script.js",
-        destination: "https://www.dubcdn.com/analytics/script.js",
+        source: "/.well-known/oauth-protected-resource",
+        destination: "/api/well-known-oauth/protected-resource",
       },
     ];
   },
@@ -291,52 +206,9 @@ const nextConfig: NextConfig = {
   },
 };
 
-const sentryOptions = {
-  // For all available options, see:
-  // https://github.com/getsentry/sentry-webpack-plugin#options
-
-  // Suppresses source map uploading logs during build
-  silent: !process.env.CI,
-  org: process.env.SENTRY_ORGANIZATION,
-  project: process.env.SENTRY_PROJECT,
-};
-
-const sentryConfig = {
-  // For all available options, see:
-  // https://docs.sentry.io/platforms/javascript/guides/nextjs/manual-setup/
-
-  // Upload a larger set of source maps for prettier stack traces (increases build time)
-  widenClientFileUpload: true,
-
-  // Transpiles SDK to be compatible with IE11 (increases bundle size)
-  transpileClientSDK: true,
-
-  // Routes browser requests to Sentry through a Next.js rewrite to circumvent ad-blockers (increases server load)
-  tunnelRoute: "/monitoring",
-
-  // Hides source maps from generated client bundles
-  hideSourceMaps: true,
-
-  // Automatically tree-shake Sentry logger statements to reduce bundle size
-  disableLogger: true,
-
-  // Enables automatic instrumentation of Vercel Cron Monitors.
-  // See the following for more information:
-  // https://docs.sentry.io/product/crons/
-  // https://vercel.com/docs/cron-jobs
-  automaticVercelMonitors: true,
-};
-
+// SENTRY DISABLED FOR PRIVACY
 const mdxConfig = withMDX(nextConfig);
-
-const useSentry =
-  process.env.NEXT_PUBLIC_SENTRY_DSN &&
-  process.env.SENTRY_ORGANIZATION &&
-  process.env.SENTRY_PROJECT;
-
-const exportConfig = useSentry
-  ? withSentryConfig(mdxConfig, { ...sentryOptions, ...sentryConfig })
-  : mdxConfig;
+const exportConfig = mdxConfig;
 
 // NEXTAUTH_SECRET is deprecated but kept as an option to not break the build. At least one must be set.
 if (!env.AUTH_SECRET && !env.NEXTAUTH_SECRET) {
@@ -358,4 +230,5 @@ const withSerwist = withSerwistInit({
   maximumFileSizeToCacheInBytes: 3 * 1024 * 1024, // 3MB
 });
 
-export default withAxiom(withSerwist(exportConfig));
+// AXIOM DISABLED FOR PRIVACY
+export default withSerwist(exportConfig);

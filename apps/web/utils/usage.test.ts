@@ -2,10 +2,10 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import type { LanguageModelUsage } from "ai";
 import { OPENROUTER_MODEL_PRICING } from "@/utils/llms/pricing.generated";
 import { calculateUsageCost, saveAiUsage } from "./usage";
-import { publishAiCall } from "@inboxzero/tinybird-ai-analytics";
+import { publishAiCall } from "@inbox/tinybird-ai-analytics";
 import { saveUsage } from "@/utils/redis/usage";
 
-vi.mock("@inboxzero/tinybird-ai-analytics", () => ({
+vi.mock("@inbox/tinybird-ai-analytics", () => ({
   publishAiCall: vi.fn().mockResolvedValue(undefined),
 }));
 

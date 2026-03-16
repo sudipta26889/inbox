@@ -31,7 +31,7 @@ export const POST = withError(
       }
 
       // Don't summarize Digest emails (this will actually block all emails that we send, but that's okay)
-      if (message.from === env.RESEND_FROM_EMAIL) {
+      if (message.from === env.SMTP_FROM_EMAIL || env.RESEND_FROM_EMAIL) {
         logger.info("Skipping digest item because it is from us");
         return new NextResponse("OK", { status: 200 });
       }

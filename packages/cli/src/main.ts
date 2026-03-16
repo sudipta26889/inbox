@@ -135,12 +135,12 @@ async function main() {
   program
     .name("inbox-zero")
     .description(
-      "CLI tool for self-hosting Inbox Zero — AI email assistant.\n\n" +
+      "CLI tool for self-hosting Inbox — AI email assistant.\n\n" +
         "Quick start:\n" +
         "  inbox-zero setup      Configure OAuth providers, AI provider, and Docker\n" +
-        "  inbox-zero start      Start Inbox Zero\n" +
+        "  inbox-zero start      Start Inbox\n" +
         "  inbox-zero config     View and update settings\n\n" +
-        "Docs: https://docs.getinboxzero.com/self-hosting",
+        "Docs: https://docs.inbox.sudiptadhara.in/self-hosting",
     )
     .version(packageJson.version, "-v, --version");
 
@@ -152,11 +152,11 @@ async function main() {
 
   program
     .command("start")
-    .description("Start Inbox Zero")
+    .description("Start Inbox")
     .option("--no-detach", "Run in foreground (default: background)")
     .action(runStart);
 
-  program.command("stop").description("Stop Inbox Zero").action(runStop);
+  program.command("stop").description("Stop Inbox").action(runStop);
 
   program
     .command("logs")
@@ -214,7 +214,7 @@ async function main() {
 
   program
     .command("setup-aws")
-    .description("Deploy Inbox Zero to AWS using Copilot (ECS/Fargate)")
+    .description("Deploy Inbox to AWS using Copilot (ECS/Fargate)")
     .option("--profile <profile>", "AWS CLI profile to use")
     .option("--region <region>", "AWS region")
     .option("--environment <env>", "Environment name (e.g., production)")
@@ -286,7 +286,7 @@ function stripSetupAwsDoubleDash(argv: string[]) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 async function runSetup(options: { name?: string }) {
-  p.intro("Inbox Zero Setup");
+  p.intro("Inbox Setup");
   p.note(
     "Quick setup uses production defaults with Docker Compose infrastructure\n" +
       "(Postgres + Redis) and runs the web app in Docker.",
@@ -386,7 +386,7 @@ async function runSetupQuick(options: { name?: string }) {
         "11. Copy the Client ID and Client Secret\n\n" +
         "If External: you'll see a \"This app isn't verified\" warning when\n" +
         'signing in. Click "Advanced" then "Go to [app name]" to proceed.\n\n' +
-        "Full guide: https://docs.getinboxzero.com/hosting/setup-guides",
+        "Full guide: https://docs.inbox.sudiptadhara.in/hosting/setup-guides",
       "Google OAuth",
     );
 
@@ -433,7 +433,7 @@ async function runSetupQuick(options: { name?: string }) {
         'Tenant ID tip: use "common" for most setups.\n' +
         "Use a specific tenant ID only if your organization requires\n" +
         "single-tenant sign-in.\n\n" +
-        "Full guide: https://docs.getinboxzero.com/hosting/setup-guides#microsoft-oauth-setup",
+        "Full guide: https://docs.inbox.sudiptadhara.in/hosting/setup-guides#microsoft-oauth-setup",
       "Microsoft OAuth",
     );
 
@@ -499,7 +499,7 @@ async function runSetupQuick(options: { name?: string }) {
         "4. Create a push subscription using this endpoint:\n" +
         `   https://yourdomain.com/api/google/webhook?token=${pubsubVerificationToken}\n` +
         "5. Paste the topic name below (or press Enter to skip for now)\n\n" +
-        "Full guide: https://docs.getinboxzero.com/hosting/setup-guides#google-pubsub-setup",
+        "Full guide: https://docs.inbox.sudiptadhara.in/hosting/setup-guides#google-pubsub-setup",
       "Google Pub/Sub (optional)",
     );
 
@@ -651,7 +651,7 @@ async function runSetupQuick(options: { name?: string }) {
   );
 
   const shouldStart = await p.confirm({
-    message: "Start Inbox Zero now?",
+    message: "Start Inbox now?",
     initialValue: true,
   });
 
@@ -670,12 +670,12 @@ async function runSetupQuick(options: { name?: string }) {
 
   if (checkContainersRunning(composeArgs)) {
     const restart = await p.confirm({
-      message: "Inbox Zero is already running. Restart?",
+      message: "Inbox is already running. Restart?",
       initialValue: true,
     });
     if (p.isCancel(restart) || !restart) {
       p.note(
-        `Inbox Zero is still running at http://localhost:${webPort}`,
+        `Inbox is still running at http://localhost:${webPort}`,
         "Already running",
       );
       p.outro("Setup complete!");
@@ -703,7 +703,7 @@ async function runSetupQuick(options: { name?: string }) {
   pullSpinner.stop("Images pulled");
 
   const startSpinner = p.spinner();
-  startSpinner.start("Starting Inbox Zero...");
+  startSpinner.start("Starting Inbox...");
 
   const upResult = await runDockerCommand([
     ...composeArgs,
@@ -729,7 +729,7 @@ async function runSetupQuick(options: { name?: string }) {
     process.exit(1);
   }
 
-  startSpinner.stop("Inbox Zero is running!");
+  startSpinner.stop("Inbox is running!");
 
   p.note(
     `Open http://localhost:${webPort} to get started.\n\n` +
@@ -741,7 +741,7 @@ async function runSetupQuick(options: { name?: string }) {
     "You're all set!",
   );
 
-  p.outro("Inbox Zero is ready!");
+  p.outro("Inbox is ready!");
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -750,7 +750,7 @@ async function runSetupQuick(options: { name?: string }) {
 
 async function runSetupAdvanced(options: { name?: string }) {
   const configName = options.name;
-  p.intro(`🚀 Inbox Zero Setup${configName ? ` (${configName})` : ""}`);
+  p.intro(`🚀 Inbox Setup${configName ? ` (${configName})` : ""}`);
 
   // Ask about environment mode
   const envMode = await p.select({
@@ -915,7 +915,7 @@ async function runSetupAdvanced(options: { name?: string }) {
    - http://localhost:${webPort}/api/google/linking/callback
 4. Copy Client ID and Client Secret
 
-Full guide: https://docs.getinboxzero.com/self-hosting/google-oauth`,
+Full guide: https://docs.inbox.sudiptadhara.in/self-hosting/google-oauth`,
       "Google OAuth Setup",
     );
 
@@ -958,7 +958,7 @@ Full guide: https://docs.getinboxzero.com/self-hosting/google-oauth`,
    - Endpoint: https://yourdomain.com/api/google/webhook
 5. Copy the full topic name (e.g., projects/my-project-123/topics/inbox-zero-emails)
 
-Full guide: https://docs.getinboxzero.com/self-hosting/google-pubsub`,
+Full guide: https://docs.inbox.sudiptadhara.in/self-hosting/google-pubsub`,
       "Google Pub/Sub Setup (Required for Gmail)",
     );
 
@@ -999,7 +999,7 @@ Full guide: https://docs.getinboxzero.com/self-hosting/google-pubsub`,
 5. Go to Certificates & secrets → New client secret
 6. Copy Application (client) ID and the secret Value
 
-Full guide: https://docs.getinboxzero.com/self-hosting/microsoft-oauth`,
+Full guide: https://docs.inbox.sudiptadhara.in/self-hosting/microsoft-oauth`,
       "Microsoft OAuth Setup",
     );
 
@@ -1256,23 +1256,23 @@ async function runStart(options: { detach: boolean }) {
 
   if (!existsSync(STANDALONE_COMPOSE_FILE)) {
     p.log.error(
-      "Inbox Zero is not configured for production mode.\n" +
+      "Inbox is not configured for production mode.\n" +
         "Run 'inbox-zero setup' and choose Production (Docker) first.",
     );
     process.exit(1);
   }
 
-  p.intro("🚀 Starting Inbox Zero");
+  p.intro("🚀 Starting Inbox");
 
   const composeArgs = ["compose", "-f", STANDALONE_COMPOSE_FILE];
 
   if (checkContainersRunning(composeArgs)) {
     const restart = await p.confirm({
-      message: "Inbox Zero is already running. Restart?",
+      message: "Inbox is already running. Restart?",
       initialValue: true,
     });
     if (p.isCancel(restart) || !restart) {
-      p.outro("Inbox Zero is already running.");
+      p.outro("Inbox is already running.");
       return;
     }
     const stopSpinner = p.spinner();
@@ -1332,11 +1332,11 @@ async function runStart(options: { detach: boolean }) {
     }
 
     p.note(
-      `Inbox Zero is running at:\nhttp://localhost:${webPort}\n\nView logs: inbox-zero logs\nStop: inbox-zero stop`,
+      `Inbox is running at:\nhttp://localhost:${webPort}\n\nView logs: inbox-zero logs\nStop: inbox-zero stop`,
       "Running",
     );
 
-    p.outro("Inbox Zero started! 🎉");
+    p.outro("Inbox started! 🎉");
   } else {
     p.log.info("Starting containers in foreground...");
 
@@ -1360,11 +1360,11 @@ async function runStop() {
   requireDocker();
 
   if (!existsSync(STANDALONE_COMPOSE_FILE)) {
-    p.log.error("Inbox Zero is not configured.");
+    p.log.error("Inbox is not configured.");
     process.exit(1);
   }
 
-  p.intro("Stopping Inbox Zero");
+  p.intro("Stopping Inbox");
 
   const spinner = p.spinner();
   spinner.start("Stopping containers...");
@@ -1383,7 +1383,7 @@ async function runStop() {
   }
 
   spinner.stop("Containers stopped");
-  p.outro("Inbox Zero stopped");
+  p.outro("Inbox stopped");
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1394,7 +1394,7 @@ async function runLogs(options: { follow: boolean; tail: string }) {
   requireDocker();
 
   if (!existsSync(STANDALONE_COMPOSE_FILE)) {
-    p.log.error("Inbox Zero is not configured.");
+    p.log.error("Inbox is not configured.");
     process.exit(1);
   }
 
@@ -1432,7 +1432,7 @@ async function runStatus() {
   requireDocker();
 
   if (!existsSync(STANDALONE_COMPOSE_FILE)) {
-    p.log.error("Inbox Zero is not configured.\nRun 'inbox-zero setup' first.");
+    p.log.error("Inbox is not configured.\nRun 'inbox-zero setup' first.");
     process.exit(1);
   }
 
@@ -1449,11 +1449,11 @@ async function runUpdate() {
   requireDocker();
 
   if (!existsSync(STANDALONE_COMPOSE_FILE)) {
-    p.log.error("Inbox Zero is not configured.");
+    p.log.error("Inbox is not configured.");
     process.exit(1);
   }
 
-  p.intro("Updating Inbox Zero");
+  p.intro("Updating Inbox");
 
   const spinner = p.spinner();
   spinner.start("Pulling latest image...");
@@ -1583,7 +1583,7 @@ function requireEnvFile(name?: string): { envFile: string; content: string } {
 }
 
 async function runConfigInteractive(name?: string) {
-  p.intro("Inbox Zero Configuration");
+  p.intro("Inbox Configuration");
 
   const { envFile, content } = requireEnvFile(name);
   const env = parseEnvFile(content);

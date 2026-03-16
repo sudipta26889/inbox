@@ -92,7 +92,7 @@ const SERVICE_NAME = "inbox-zero-ecs";
 // ═══════════════════════════════════════════════════════════════════════════
 
 export async function runAwsSetup(options: AwsSetupOptions) {
-  p.intro("AWS Copilot Setup for Inbox Zero");
+  p.intro("AWS Copilot Setup for Inbox");
 
   const nonInteractive = options.yes === true;
   if (nonInteractive) {
@@ -1435,7 +1435,7 @@ function resetServiceManifestVariables(): void {
   let content = readFileSync(manifestPath, "utf-8");
   content = content.replace(
     /^\s*NEXT_PUBLIC_BASE_URL:.*$/m,
-    "  NEXT_PUBLIC_BASE_URL: # YOUR_DOMAIN, e.g. https://www.getinboxzero.com (with http or https)",
+    "  NEXT_PUBLIC_BASE_URL: # YOUR_DOMAIN, e.g. https://www.inbox.sudiptadhara.in (with http or https)",
   );
   content = content.replace(
     /^\s*DEFAULT_LLM_PROVIDER:.*$/m,

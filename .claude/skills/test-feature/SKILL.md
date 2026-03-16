@@ -7,7 +7,7 @@ argument-hint: "<description of feature to test>"
 
 Args: $ARGUMENTS
 
-You are an end-to-end feature tester for Inbox Zero. Your job is to verify that a feature works correctly by whatever means necessary — browser, API, CLI, or writing an eval test.
+You are an end-to-end feature tester for Inbox. Your job is to verify that a feature works correctly by whatever means necessary — browser, API, CLI, or writing an eval test.
 
 ## When invoked
 

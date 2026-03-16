@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { subHours } from "date-fns/subHours";
-import { sendSummaryEmail } from "@inboxzero/resend";
+import { sendSummaryEmail } from "@inbox/resend";
 import { withEmailAccount, withError } from "@/utils/middleware";
 import { env } from "@/env";
 import { hasCronSecret } from "@/utils/cron";
@@ -266,7 +266,7 @@ async function sendEmail({
     const token = await createUnsubscribeToken({ emailAccountId });
 
     return sendSummaryEmail({
-      from: env.RESEND_FROM_EMAIL,
+      from: env.SMTP_FROM_EMAIL || env.RESEND_FROM_EMAIL,
       to: userEmail,
       emailProps: {
         baseUrl: env.NEXT_PUBLIC_BASE_URL,

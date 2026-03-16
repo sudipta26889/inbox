@@ -41,6 +41,7 @@ COPY . .
 # === Build environment ===
 ENV NODE_ENV=production
 ENV DOCKER_BUILD=true
+ENV SKIP_TYPE_CHECK=true
 
 # Standalone output for Docker deployment
 ENV NEXT_PRIVATE_STANDALONE=true
@@ -55,6 +56,8 @@ ARG NEXT_PUBLIC_BYPASS_PREMIUM_CHECKS="NEXT_PUBLIC_BYPASS_PREMIUM_CHECKS_PLACEHO
 ENV NEXT_PUBLIC_BYPASS_PREMIUM_CHECKS=${NEXT_PUBLIC_BYPASS_PREMIUM_CHECKS}
 ARG NEXT_PUBLIC_EMAIL_SEND_ENABLED="NEXT_PUBLIC_EMAIL_SEND_ENABLED_PLACEHOLDER"
 ENV NEXT_PUBLIC_EMAIL_SEND_ENABLED=${NEXT_PUBLIC_EMAIL_SEND_ENABLED}
+ARG NEXT_PUBLIC_BRAND_NAME="Inbox"
+ENV NEXT_PUBLIC_BRAND_NAME=${NEXT_PUBLIC_BRAND_NAME}
 
 # Dummy envs for build (real values injected at runtime)
 ENV DATABASE_URL="postgresql://dummy:dummy@dummy:5432/dummy?schema=public"
@@ -110,9 +113,9 @@ RUN npm install -g prisma@7.3.0
 # Set NODE_PATH so prisma/config imports resolve correctly
 ENV NODE_PATH=/usr/local/lib/node_modules
 
-EXPOSE 3000
+EXPOSE 5500
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1
+  CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:5500/ || exit 1
 
 CMD ["/app/docker/scripts/start.sh"]

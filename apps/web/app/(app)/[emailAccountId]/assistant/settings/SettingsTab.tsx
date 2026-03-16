@@ -8,7 +8,6 @@ import { ReferralSignatureSetting } from "@/app/(app)/[emailAccountId]/assistant
 import { LearnedPatternsSetting } from "@/app/(app)/[emailAccountId]/assistant/settings/LearnedPatternsSetting";
 import { PersonalSignatureSetting } from "@/app/(app)/[emailAccountId]/assistant/settings/PersonalSignatureSetting";
 import { MultiRuleSetting } from "@/app/(app)/[emailAccountId]/assistant/settings/MultiRuleSetting";
-import { SyncToExtensionSetting } from "@/app/(app)/[emailAccountId]/assistant/settings/SyncToExtensionSetting";
 import { WritingStyleSetting } from "@/app/(app)/[emailAccountId]/assistant/settings/WritingStyleSetting";
 import { SectionHeader } from "@/components/Typography";
 import { env } from "@/env";
@@ -48,7 +47,6 @@ export function SettingsTab() {
 
       <div className="space-y-2">
         <SectionHeader>Advanced</SectionHeader>
-        <SyncToExtensionSetting />
         <MultiRuleSetting />
         <ReferralSignatureSetting />
       </div>

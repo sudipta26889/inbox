@@ -33,7 +33,7 @@ vi.mock("@/ee/billing/stripe", () => ({
   }),
 }));
 
-vi.mock("@inboxzero/tinybird-ai-analytics", () => ({
+vi.mock("@inbox/tinybird-ai-analytics", () => ({
   getAiGenerationCountByEmailAccounts: mockGetAiGenerationCountByEmailAccounts,
 }));
 

@@ -3,14 +3,14 @@ import { buildApiUrl, normalizeBaseUrl } from "./client";
 
 describe("normalizeBaseUrl", () => {
   it("appends the API path when given a site origin", () => {
-    expect(normalizeBaseUrl("https://www.getinboxzero.com")).toBe(
-      "https://www.getinboxzero.com/api/v1",
+    expect(normalizeBaseUrl("https://www.inbox.sudiptadhara.in")).toBe(
+      "https://www.inbox.sudiptadhara.in/api/v1",
     );
   });
 
   it("keeps an existing api/v1 base URL unchanged", () => {
-    expect(normalizeBaseUrl("https://www.getinboxzero.com/api/v1")).toBe(
-      "https://www.getinboxzero.com/api/v1",
+    expect(normalizeBaseUrl("https://www.inbox.sudiptadhara.in/api/v1")).toBe(
+      "https://www.inbox.sudiptadhara.in/api/v1",
     );
   });
 
@@ -30,20 +30,20 @@ describe("normalizeBaseUrl", () => {
 describe("buildApiUrl", () => {
   it("joins the base URL, path, and query params", () => {
     expect(
-      buildApiUrl("https://www.getinboxzero.com", "/stats/by-period", {
+      buildApiUrl("https://www.inbox.sudiptadhara.in", "/stats/by-period", {
         period: "week",
         email: "user@example.com",
       }),
     ).toBe(
-      "https://www.getinboxzero.com/api/v1/stats/by-period?period=week&email=user%40example.com",
+      "https://www.inbox.sudiptadhara.in/api/v1/stats/by-period?period=week&email=user%40example.com",
     );
   });
 
   it("keeps empty-string query values", () => {
     expect(
-      buildApiUrl("https://www.getinboxzero.com", "/stats/by-period", {
+      buildApiUrl("https://www.inbox.sudiptadhara.in", "/stats/by-period", {
         email: "",
       }),
-    ).toBe("https://www.getinboxzero.com/api/v1/stats/by-period?email=");
+    ).toBe("https://www.inbox.sudiptadhara.in/api/v1/stats/by-period?email=");
   });
 });
