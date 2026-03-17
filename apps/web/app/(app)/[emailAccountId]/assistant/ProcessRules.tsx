@@ -242,22 +242,23 @@ export function ProcessRulesContent({ testMode }: { testMode: boolean }) {
     <div>
       <div className="flex items-center justify-between gap-2 pb-6">
         <div className="flex items-center gap-2">
-          {isRunningAll ? (
+          {!isRunningAll && (
+            <Button onClick={() => handleRunAll(false)} size="sm">
+              <BookOpenCheckIcon className="mr-2 size-4" />
+              {testMode ? "Test All" : "Run on All"}
+            </Button>
+          )}
+          {!isRunningAll && (
+            <Button onClick={() => handleRunAll(true)} variant="outline" size="sm">
+              <SparklesIcon className="mr-2 size-4" />
+              Unanalyzed Only
+            </Button>
+          )}
+          {isRunningAll && (
             <Button onClick={handleStop} variant="outline" size="sm">
               <PauseIcon className="mr-2 size-4" />
               Stop
             </Button>
-          ) : (
-            <>
-              <Button onClick={() => handleRunAll(false)} size="sm">
-                <BookOpenCheckIcon className="mr-2 size-4" />
-                {testMode ? "Test All" : "Run on All"}
-              </Button>
-              <Button onClick={() => handleRunAll(true)} variant="outline" size="sm">
-                <SparklesIcon className="mr-2 size-4" />
-                Unanalyzed Only
-              </Button>
-            </>
           )}
         </div>
 
