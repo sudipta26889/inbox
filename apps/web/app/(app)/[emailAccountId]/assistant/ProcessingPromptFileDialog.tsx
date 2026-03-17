@@ -125,12 +125,12 @@ function IntroStep({ next }: StepProps) {
 function Step1({ back, next }: StepProps) {
   return (
     <Step back={back} next={next} title="What's happening now?">
-      <p>
+      <div>
         We're turning your instructions into clear rules.
         <br />
         This makes your assistant more reliable and gives you better control
         over how each rule is applied.
-      </p>
+      </div>
 
       <Image
         src="/images/assistant/rules.png"
@@ -146,7 +146,7 @@ function Step1({ back, next }: StepProps) {
 function Step2({ back, next }: StepProps) {
   return (
     <Step back={back} next={next} title="Customize Your Rules">
-      <p>Once created, you can fine-tune each rule to your needs.</p>
+      <div>Once created, you can fine-tune each rule to your needs.</div>
       <Image
         src="/images/assistant/rule-edit.png"
         alt="Editing a rule"
@@ -161,10 +161,10 @@ function Step2({ back, next }: StepProps) {
 function Step3({ back, next }: StepProps) {
   return (
     <Step back={back} next={next} title="Test Your Rules">
-      <p>
+      <div>
         Shortly, you'll be taken to the "Test" tab. Here you can check the
         assistant is working as expected.
-      </p>
+      </div>
 
       <Image
         src="/images/assistant/process.png"

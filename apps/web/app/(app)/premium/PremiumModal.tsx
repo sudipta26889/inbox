@@ -1,9 +1,10 @@
 import { useCallback, useState } from "react";
 import Link from "next/link";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import Pricing from "@/app/(app)/premium/Pricing";
 import { tiers } from "@/app/(app)/premium/config";
+import { VisuallyHidden } from "@/components/ui/visually-hidden";
 
 const modalTiers = tiers.filter((tier) => tier.name !== "Enterprise");
 
@@ -41,6 +42,9 @@ export function usePremiumModal() {
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
         {/* premium upgrade doesn't support dark mode yet as it appears on homepage */}
         <DialogContent className="max-w-4xl bg-white">
+          <VisuallyHidden>
+            <DialogTitle>Upgrade to Premium</DialogTitle>
+          </VisuallyHidden>
           <Pricing
             header={<PricingDialogHeader />}
             displayTiers={modalTiers}
