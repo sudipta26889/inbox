@@ -165,7 +165,7 @@ export function ProcessRulesContent({ testMode }: { testMode: boolean }) {
     [testMode, emailAccountId],
   );
 
-  const handleRunAll = async () => {
+  const handleRunAll = async (unanalyzedOnly = false) => {
     handleStart();
 
     // Create a queue with concurrency of 3 to maintain constant flow
@@ -186,8 +186,12 @@ export function ProcessRulesContent({ testMode }: { testMode: boolean }) {
 
       // Filter messages that should be processed
       const messagesToProcess = currentBatch.filter((message) => {
-        if (allResults[message.id]) return false;
+        // If unanalyzedOnly mode, only process emails without existing results
+        if (unanalyzedOnly && allResults[message.id]) return false;
+        // Always skip if already handled in this run
         if (handledThreadsRef.current.has(message.threadId)) return false;
+        // In normal mode, also skip if already has results
+        if (!unanalyzedOnly && allResults[message.id]) return false;
         return true;
       });
 
@@ -244,10 +248,16 @@ export function ProcessRulesContent({ testMode }: { testMode: boolean }) {
               Stop
             </Button>
           ) : (
-            <Button onClick={handleRunAll} size="sm">
-              <BookOpenCheckIcon className="mr-2 size-4" />
-              {testMode ? "Test All" : "Run on All"}
-            </Button>
+            <>
+              <Button onClick={() => handleRunAll(false)} size="sm">
+                <BookOpenCheckIcon className="mr-2 size-4" />
+                {testMode ? "Test All" : "Run on All"}
+              </Button>
+              <Button onClick={() => handleRunAll(true)} variant="outline" size="sm">
+                <SparklesIcon className="mr-2 size-4" />
+                Unanalyzed Only
+              </Button>
+            </>
           )}
         </div>
 
