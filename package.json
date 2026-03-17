@@ -17,7 +17,12 @@
     "start:cli": "tsx packages/cli/src/main.ts start",
     "docker:local:build": "./docker/scripts/publish-ghcr.sh --local",
     "docker:local:push": "./docker/scripts/publish-ghcr.sh",
-    "docker:local:run": "./docker/scripts/run-local.sh"
+    "docker:local:run": "./docker/scripts/run-local.sh",
+    "docker:prod:build": "docker compose -f docker-compose.prod.yml build",
+    "docker:prod:up": "docker compose -f docker-compose.prod.yml up -d",
+    "docker:prod:down": "docker compose -f docker-compose.prod.yml down",
+    "docker:prod:logs": "docker compose -f docker-compose.prod.yml logs -f web",
+    "docker:prod:rebuild": "docker compose -f docker-compose.prod.yml down && docker compose -f docker-compose.prod.yml build && docker compose -f docker-compose.prod.yml up -d"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.7",
