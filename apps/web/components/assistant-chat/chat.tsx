@@ -369,11 +369,17 @@ function NewChatView({
   inputArea: React.ReactNode;
   onSuggestionClick: (text: string) => void;
 }) {
+  const [greeting, setGreeting] = useState<string>("");
+
+  useEffect(() => {
+    setGreeting(getGreeting(firstName));
+  }, [firstName]);
+
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-[var(--chat-px)]">
       <div className="w-full max-w-[var(--chat-max-w)]">
         <h1 className="mb-6 text-center text-2xl sm:text-3xl md:text-4xl font-extralight tracking-tight">
-          {getGreeting(firstName)}
+          {greeting}
         </h1>
         {inputArea}
         <div className="mt-3 flex flex-wrap justify-center gap-2">

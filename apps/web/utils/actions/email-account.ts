@@ -8,7 +8,7 @@ import { createEmailProvider } from "@/utils/email/provider";
 import { getEmailAccountWithAiAndTokens } from "@/utils/user/get";
 import { SafeError } from "@/utils/error";
 import { getEmailForLLM } from "@/utils/get-email-from-message";
-import { updateContactRole } from "@inboxzero/loops";
+import { updateContactRole } from "@inbox/loops";
 import {
   updateHiddenAiDraftLinksBody,
   updateReferralSignatureBody,
