@@ -1,11 +1,25 @@
 "use client";
 
 import { useSearchParams, useRouter } from "next/navigation";
-import { useState, Suspense } from "react";
+import { useState, Suspense, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { MCP_SCOPES } from "@/utils/mcp-server/constants";
+
+function decodeBase64Url(input: string): string {
+  // Convert base64url to standard base64
+  let base64 = input.replace(/-/g, "+").replace(/_/g, "/");
+  // Add padding
+  const pad = base64.length % 4;
+  if (pad === 2) base64 += "==";
+  else if (pad === 3) base64 += "=";
+  // Decode
+  if (typeof globalThis.atob === "function") {
+    return atob(base64);
+  }
+  return Buffer.from(input, "base64url").toString("utf-8");
+}
 
 /**
  * OAuth 2.1 Consent Screen Content
@@ -17,19 +31,18 @@ function ConsentContent() {
   const [isLoading, setIsLoading] = useState(false);
 
   // Decode oauth_state if present (base64-encoded to avoid WAF issues)
-  const oauthState = searchParams.get("oauth_state");
-  let params: URLSearchParams;
-
-  if (oauthState) {
-    try {
-      const decoded = Buffer.from(oauthState, "base64url").toString("utf-8");
-      params = new URLSearchParams(decoded);
-    } catch (error) {
-      params = searchParams;
+  const params = useMemo(() => {
+    const oauthState = searchParams.get("oauth_state");
+    if (oauthState) {
+      try {
+        const decoded = decodeBase64Url(oauthState);
+        return new URLSearchParams(decoded);
+      } catch {
+        return searchParams;
+      }
     }
-  } else {
-    params = searchParams;
-  }
+    return searchParams;
+  }, [searchParams]);
 
   const clientName = params.get("client_name") || "Unknown Application";
   const scopeString = params.get("scope") || "";
@@ -70,8 +83,8 @@ function ConsentContent() {
 
   const handleDeny = () => {
     // Redirect back to client with error
-    const redirectUri = searchParams.get("redirect_uri");
-    const state = searchParams.get("state");
+    const redirectUri = params.get("redirect_uri");
+    const state = params.get("state");
 
     if (redirectUri) {
       const redirectUrl = new URL(redirectUri);
@@ -85,8 +98,8 @@ function ConsentContent() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-      <Card className="max-w-md w-full p-6 space-y-6">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4" suppressHydrationWarning>
+      <Card className="max-w-md w-full p-6 space-y-6" suppressHydrationWarning>
         <div className="text-center space-y-2">
           <h1 className="text-2xl font-bold">Authorize Access</h1>
           <p className="text-gray-600">

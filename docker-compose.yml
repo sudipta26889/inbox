@@ -3,12 +3,7 @@ services:
   web:
     build:
       context: .
-      dockerfile: docker/Dockerfile.local
-      args:
-        NEXT_PUBLIC_BASE_URL: "https://inbox.sudiptadhara.in"
-        NEXT_PUBLIC_BYPASS_PREMIUM_CHECKS: "true"
-        NEXT_PUBLIC_EMAIL_SEND_ENABLED: "true"
-        NEXT_PUBLIC_BRAND_NAME: "Inbox"
+      dockerfile: docker/Dockerfile.dev
     env_file:
       - ./apps/web/.env
     ports:
@@ -16,12 +11,20 @@ services:
     environment:
       NEXT_PUBLIC_BASE_URL: "https://inbox.sudiptadhara.in"
       NEXT_PUBLIC_BYPASS_PREMIUM_CHECKS: "true"
+      NEXT_PUBLIC_MCP_SERVER_ENABLED: "true"
       DATABASE_URL: "postgresql://inbox_zero_user:fdJ5GJ6IYEwdar9gd94jAoFY@192.168.11.118:5432/inbox_zero_db?schema=public"
       DIRECT_URL: "postgresql://inbox_zero_user:fdJ5GJ6IYEwdar9gd94jAoFY@192.168.11.118:5432/inbox_zero_db?schema=public"
       REDIS_URL: "redis://:YyD0Tp54vIhmH9gyrbtDu7vDtv8zc5gL@192.168.11.118:6379/3"
       INTERNAL_API_URL: "http://web:5500"
-    # Note: Hot reload not enabled for production builds
-    # To make changes: modify code, then run: docker compose up -d --build web
+    volumes:
+      # Mount source code for hot reload - code changes reflect immediately
+      - ./apps/web:/app/apps/web:cached
+      - ./packages:/app/packages:cached
+      # Prevent node_modules from being overwritten by host mount
+      - /app/node_modules
+      - /app/apps/web/node_modules
+      # Persist .next build cache across restarts
+      - inbox-next-cache:/app/apps/web/.next
     restart: always
     networks:
       - inbox-network
@@ -76,6 +79,9 @@ services:
     restart: always
     networks:
       - inbox-network
+
+volumes:
+  inbox-next-cache:
 
 networks:
   inbox-network:

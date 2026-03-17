@@ -68,7 +68,7 @@ export function withMcpAuth<T>(
       const accessToken = parts[1];
 
       // Validate access token
-      const jwtSecret = env.NEXTAUTH_SECRET || "fallback-secret-for-development";
+      const jwtSecret = env.AUTH_SECRET || env.NEXTAUTH_SECRET || "";
       const tokenPayload = await validateAccessToken(accessToken, jwtSecret);
 
       if (!tokenPayload) {

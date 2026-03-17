@@ -1347,7 +1347,7 @@ model McpServerAuthorizationCode {
 
   // Client context
   clientId     String
-  client       McpServerClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  client       McpServerClient @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
 
   // Tracking
   used      Boolean  @default(false) // One-time use only
@@ -1379,7 +1379,7 @@ model McpServerAccessToken {
 
   // Client context
   clientId     String
-  client       McpServerClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  client       McpServerClient @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
 
   // Tracking
   revoked   Boolean  @default(false)

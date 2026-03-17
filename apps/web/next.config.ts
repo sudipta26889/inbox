@@ -166,8 +166,31 @@ const nextConfig: NextConfig = {
 
     return [
       {
+        // MCP server: allow any origin (MCP clients like claude.ai)
+        source: "/mcp-server/:path*",
+        headers: [
+          ...securityHeaders,
+          {
+            key: "Access-Control-Allow-Origin",
+            value: "*",
+          },
+          {
+            key: "Access-Control-Allow-Methods",
+            value: "GET, POST, PUT, DELETE, OPTIONS",
+          },
+          {
+            key: "Access-Control-Allow-Headers",
+            value: "Content-Type, Authorization",
+          },
+          {
+            key: "Access-Control-Expose-Headers",
+            value: "WWW-Authenticate",
+          },
+        ],
+      },
+      {
         // Apply all security headers + static CORS to non-auth routes
-        source: "/((?!api/auth).*)",
+        source: "/((?!api/auth|mcp-server).*)",
         headers: [
           ...securityHeaders,
           {

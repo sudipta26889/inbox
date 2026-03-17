@@ -11,6 +11,16 @@ import { validateScopes } from "@/utils/mcp-server/tokens";
 import prisma from "@/utils/prisma";
 import { auth } from "@/utils/auth";
 
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+};
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: CORS_HEADERS });
+}
+
 /**
  * OAuth 2.1 Authorization Endpoint
  * https://datatracker.ietf.org/doc/html/rfc6749#section-3.1
@@ -110,9 +120,17 @@ export const GET = withError("mcp-server/authorize", async (request: NextRequest
     throw new SafeError("Unknown client");
   }
 
-  if (!client.redirectUris.includes(redirectUri)) {
-    logger.warn("Invalid redirect_uri for client", { clientId, redirectUri });
-    throw new SafeError("Invalid redirect_uri");
+  // Validate redirect_uri format (like MeetEcho)
+  // Don't do strict database match - Claude may use different callback URLs
+  try {
+    const parsedRedirect = new URL(redirectUri);
+    const isLocalhost = ["localhost", "127.0.0.1"].includes(parsedRedirect.hostname);
+    if (!isLocalhost && parsedRedirect.protocol !== "https:" && parsedRedirect.protocol !== "claude:") {
+      throw new SafeError("redirect_uri must use HTTPS (except localhost)");
+    }
+  } catch (error) {
+    if (error instanceof SafeError) throw error;
+    throw new SafeError("Invalid redirect_uri format");
   }
 
   // Check if user is authenticated
@@ -144,7 +162,6 @@ export const GET = withError("mcp-server/authorize", async (request: NextRequest
     where: { id: session.user.id },
     include: {
       emailAccounts: {
-        where: { accountId: { not: null } }, // Only connected accounts
         select: { id: true, email: true },
       },
     },

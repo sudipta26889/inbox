@@ -16,22 +16,19 @@ import prisma from "@/utils/prisma";
 
 const logger = createScopedLogger("mcp-server");
 
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  "Access-Control-Expose-Headers": "WWW-Authenticate",
+};
+
 /**
- * MCP Server Protocol Handler
- *
- * This is the main endpoint that MCP clients (like Claude Desktop) will call.
- * It implements the Model Context Protocol JSON-RPC interface.
- *
- * Methods requiring authentication:
- * - tools/list: List all available tools
- * - tools/call: Execute a specific tool
- *
- * Methods without authentication (for discovery):
- * - initialize: Protocol handshake and capability negotiation
- * - ping: Health check
- *
- * Authentication: Bearer token (JWT) in Authorization header
+ * OPTIONS /mcp-server - CORS preflight
  */
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: CORS_HEADERS });
+}
 
 /**
  * POST /mcp-server - Handle MCP protocol requests
@@ -40,7 +37,6 @@ export const POST = withError("mcp-server", async (request: NextRequest) => {
   const reqLogger = request.logger || logger;
 
   try {
-    // Parse JSON-RPC message
     const message = await request.json();
 
     reqLogger.info("MCP request received", {
@@ -48,25 +44,13 @@ export const POST = withError("mcp-server", async (request: NextRequest) => {
       id: message.id,
     });
 
-    // Validate JSON-RPC format
     if (message.jsonrpc !== "2.0") {
-      return createErrorResponse(
-        message.id,
-        -32600,
-        "Invalid Request: jsonrpc must be '2.0'"
-      );
+      return createErrorResponse(message.id, -32600, "Invalid Request: jsonrpc must be '2.0'");
     }
 
     if (!message.method || typeof message.method !== "string") {
-      return createErrorResponse(
-        message.id,
-        -32600,
-        "Invalid Request: missing or invalid method"
-      );
+      return createErrorResponse(message.id, -32600, "Invalid Request: missing or invalid method");
     }
-
-    // Authentication: Support BOTH Bearer tokens (OAuth) AND session cookies (browser-based)
-    // This matches MeetEcho's pattern where it works seamlessly in Claude Desktop
 
     let userId: string;
     let emailAccountId: string;
@@ -78,30 +62,18 @@ export const POST = withError("mcp-server", async (request: NextRequest) => {
 
     if (authHeader && authHeader.startsWith("Bearer ")) {
       const token = authHeader.substring(7);
-      const jwtSecret = env.NEXTAUTH_SECRET;
+      const jwtSecret = env.AUTH_SECRET || env.NEXTAUTH_SECRET || "";
       const tokenPayload = await validateAccessToken(token, jwtSecret);
 
       if (!tokenPayload) {
         reqLogger.warn("Invalid or expired access token");
-
-        // Use Bearer scheme like MeetEcho
-        const wwwAuth = `Bearer resource_metadata="${env.NEXT_PUBLIC_BASE_URL}/.well-known/oauth-protected-resource", ` +
-          `error="invalid_token", ` +
-          `error_description="Invalid or expired access token"`;
-
         return NextResponse.json(
-          {
-            jsonrpc: "2.0",
-            id: message.id,
-            error: {
-              code: -32001,
-              message: "Unauthorized: Invalid or expired access token",
-            },
-          },
+          { detail: "Invalid or expired access token" },
           {
             status: 401,
             headers: {
-              "WWW-Authenticate": wwwAuth,
+              ...CORS_HEADERS,
+              "WWW-Authenticate": `Bearer resource_metadata="${env.NEXT_PUBLIC_BASE_URL}/.well-known/oauth-protected-resource", error="invalid_token"`,
             },
           }
         );
@@ -118,29 +90,18 @@ export const POST = withError("mcp-server", async (request: NextRequest) => {
         clientId,
       });
     } else {
-      // Try session-based authentication (for browser/Claude Desktop with cookies)
+      // Try session-based authentication
       const session = await auth();
 
       if (!session?.user?.id) {
         reqLogger.warn("No Bearer token or valid session found");
-
-        // Return 401 with Bearer WWW-Authenticate header for OAuth discovery
-        // MeetEcho uses Bearer, not MCP scheme
-        const wwwAuth = `Bearer resource_metadata="${env.NEXT_PUBLIC_BASE_URL}/.well-known/oauth-protected-resource"`;
-
         return NextResponse.json(
-          {
-            jsonrpc: "2.0",
-            id: message.id,
-            error: {
-              code: -32001,
-              message: "Unauthorized: Missing Bearer token or session cookie",
-            },
-          },
+          { detail: "Authorization required" },
           {
             status: 401,
             headers: {
-              "WWW-Authenticate": wwwAuth,
+              ...CORS_HEADERS,
+              "WWW-Authenticate": `Bearer resource_metadata="${env.NEXT_PUBLIC_BASE_URL}/.well-known/oauth-protected-resource"`,
             },
           }
         );
@@ -148,35 +109,20 @@ export const POST = withError("mcp-server", async (request: NextRequest) => {
 
       userId = session.user.id;
 
-      // Get user's primary email account
       const primaryEmailAccount = await prisma.emailAccount.findFirst({
-        where: {
-          userId,
-        },
-        orderBy: {
-          createdAt: "asc",
-        },
+        where: { userId },
+        orderBy: { createdAt: "asc" },
       });
 
       if (!primaryEmailAccount) {
         reqLogger.warn("User has no email account", { userId });
-
         return NextResponse.json(
-          {
-            jsonrpc: "2.0",
-            id: message.id,
-            error: {
-              code: -32001,
-              message: "User has no email account configured",
-            },
-          },
-          { status: 401 }
+          { detail: "User has no email account configured" },
+          { status: 400, headers: CORS_HEADERS }
         );
       }
 
       emailAccountId = primaryEmailAccount.id;
-
-      // Session-based auth gets full access (all scopes)
       scopes = ["mcp:read", "mcp:write", "email:read", "email:write", "calendar:read", "stats:read", "rules:read", "rules:write"];
 
       reqLogger.info("Authenticated MCP request via session", {
@@ -186,202 +132,96 @@ export const POST = withError("mcp-server", async (request: NextRequest) => {
       });
     }
 
-    // Handle initialize method (REQUIRES AUTH like MeetEcho)
+    // Handle initialize
     if (message.method === "initialize") {
-      reqLogger.info("MCP initialize request (authenticated)", {
-        params: message.params,
-        userId,
-      });
-
       return NextResponse.json({
         jsonrpc: "2.0",
         id: message.id,
         result: {
           protocolVersion: "2024-11-05",
           capabilities: {
-            tools: {
-              listChanged: false,
-            },
+            tools: { listChanged: false },
           },
           serverInfo: {
             name: "Inbox MCP Server",
             version: "1.0.0",
           },
         },
-      });
+      }, { headers: CORS_HEADERS });
     }
 
-    // Handle notifications/initialized (authenticated)
+    // Handle notifications/initialized - return 202 Accepted per MCP spec
     if (message.method === "notifications/initialized") {
-      reqLogger.info("MCP notifications/initialized", { userId });
-      // Notifications don't need a response
-      return new NextResponse(null, { status: 204 });
+      return new NextResponse(null, { status: 202, headers: CORS_HEADERS });
     }
 
-    // Handle ping method
+    // Handle ping
     if (message.method === "ping" || message.method === "notifications/ping") {
       return NextResponse.json({
         jsonrpc: "2.0",
         id: message.id,
-        result: {
-          timestamp: new Date().toISOString(),
-        },
-      });
+        result: { timestamp: new Date().toISOString() },
+      }, { headers: CORS_HEADERS });
     }
 
-    // Handle tools/list method
+    // Handle tools/list
     if (message.method === "tools/list") {
       const tools = getAllTools();
-
-      reqLogger.info("Listing MCP tools", {
-        toolCount: tools.length,
-        userId,
-      });
-
       return NextResponse.json({
         jsonrpc: "2.0",
         id: message.id,
-        result: {
-          tools,
-        },
-      });
+        result: { tools },
+      }, { headers: CORS_HEADERS });
     }
 
-    // Handle tools/call method
+    // Handle tools/call
     if (message.method === "tools/call") {
       const toolName = message.params?.name;
-
       if (!toolName) {
-        return createErrorResponse(
-          message.id,
-          -32602,
-          "Invalid params: missing tool name"
-        );
+        return createErrorResponse(message.id, -32602, "Invalid params: missing tool name");
       }
 
       const tool = getTool(toolName);
-
       if (!tool) {
-        return createErrorResponse(
-          message.id,
-          -32601,
-          `Method not found: unknown tool '${toolName}'`
-        );
+        return createErrorResponse(message.id, -32601, `Method not found: unknown tool '${toolName}'`);
       }
 
-      // Check if user has required scope
       if (!hasRequiredScope(tool, scopes)) {
-        reqLogger.warn("Insufficient scope for tool", {
-          tool: toolName,
-          requiredScope: tool.requiredScope,
-          userScopes: scopes,
-        });
-
-        return createErrorResponse(
-          message.id,
-          -32003,
-          `Insufficient permissions. Required scope: ${tool.requiredScope}`
-        );
+        return createErrorResponse(message.id, -32003, `Insufficient permissions. Required scope: ${tool.requiredScope}`);
       }
 
-      // Execute tool
       try {
-        reqLogger.info("Executing MCP tool", {
-          tool: toolName,
-          userId,
-          emailAccountId,
-        });
-
         const result = await tool.handler(
-          {
-            userId,
-            emailAccountId,
-            clientId,
-            scopes,
-          },
+          { userId, emailAccountId, clientId, scopes },
           message.params?.arguments || {}
         );
-
-        reqLogger.info("MCP tool executed successfully", {
-          tool: toolName,
-          userId,
-        });
 
         return NextResponse.json({
           jsonrpc: "2.0",
           id: message.id,
           result: {
-            content: [
-              {
-                type: "text",
-                text: JSON.stringify(result, null, 2),
-              },
-            ],
+            content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
           },
-        });
+        }, { headers: CORS_HEADERS });
       } catch (error: any) {
-        reqLogger.error("MCP tool execution failed", {
-          tool: toolName,
-          error: error.message,
-          stack: error.stack,
-        });
-
-        return createErrorResponse(
-          message.id,
-          -32603,
-          `Tool execution failed: ${error.message || "Unknown error"}`
-        );
+        reqLogger.error("MCP tool execution failed", { tool: toolName, error: error.message });
+        return createErrorResponse(message.id, -32603, `Tool execution failed: ${error.message || "Unknown error"}`);
       }
     }
 
-    // Unknown method
-    reqLogger.warn("Unknown MCP method", { method: message.method });
-    return createErrorResponse(
-      message.id,
-      -32601,
-      `Method not found: ${message.method}`
-    );
+    return createErrorResponse(message.id, -32601, `Method not found: ${message.method}`);
   } catch (error: any) {
-    reqLogger.error("MCP protocol error", {
-      error: error.message,
-      stack: error.stack,
-    });
-
+    reqLogger.error("MCP protocol error", { error: error.message });
     return NextResponse.json(
-      {
-        jsonrpc: "2.0",
-        id: null,
-        error: {
-          code: -32700,
-          message: "Parse error: " + (error.message || "Invalid JSON"),
-        },
-      },
-      { status: 400 }
+      { jsonrpc: "2.0", id: null, error: { code: -32700, message: "Parse error: " + (error.message || "Invalid JSON") } },
+      { status: 400, headers: CORS_HEADERS }
     );
   }
 });
 
-// Note: No GET endpoint - MeetEcho pattern
-// Claude Desktop uses POST only for MCP JSON-RPC
-// GET requests will return 404 (Next.js default)
-
-/**
- * Helper: Create JSON-RPC error response
- */
-function createErrorResponse(
-  id: any,
-  code: number,
-  message: string
-): NextResponse {
+function createErrorResponse(id: any, code: number, message: string): NextResponse {
   return NextResponse.json(
-    {
-      jsonrpc: "2.0",
-      id,
-      error: {
-        code,
-        message,
-      },
-    },
-    { status: code === -32700 ? 400 : 200 } // 400 for parse errors, 200 for application errors
+    { jsonrpc: "2.0", id, error: { code, message } },
+    { status: code === -32700 ? 400 : 200, headers: CORS_HEADERS }
   );
 }

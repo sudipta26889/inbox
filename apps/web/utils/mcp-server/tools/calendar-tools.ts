@@ -1,5 +1,5 @@
 import prisma from "@/utils/prisma";
-import { getCalendarClient } from "@/utils/calendar/client";
+import { getCalendarClientWithRefresh } from "@/utils/calendar/client";
 import { createScopedLogger } from "@/utils/logger";
 import type { McpToolContext } from "./registry";
 
@@ -19,7 +19,7 @@ export async function searchCalendar(
     endDate: params.endDate,
   });
 
-  const calendarClient = await getCalendarClient(context.emailAccountId);
+  const calendarClient = await getCalendarClientWithRefresh(context.emailAccountId);
 
   if (!calendarClient) {
     throw new Error("No calendar connection found for this email account");
@@ -81,7 +81,7 @@ export async function getCalendarAvailability(
     endDate: params.endDate,
   });
 
-  const calendarClient = await getCalendarClient(context.emailAccountId);
+  const calendarClient = await getCalendarClientWithRefresh(context.emailAccountId);
 
   if (!calendarClient) {
     throw new Error("No calendar connection found for this email account");

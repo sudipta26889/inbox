@@ -1,11 +1,11 @@
 import prisma from "@/utils/prisma";
-import { getGmailClient } from "@/utils/gmail/client";
+import { getGmailClientWithRefresh } from "@/utils/gmail/client";
 import { createOutlookClient } from "@/utils/outlook/client";
 import { isGoogleProvider, isMicrosoftProvider } from "@/utils/email/provider-types";
 import { createScopedLogger } from "@/utils/logger";
 import type { McpToolContext } from "./registry";
-import { sendEmail as gmailSendEmail } from "@/utils/gmail/mail";
-import { sendEmail as outlookSendEmail } from "@/utils/outlook/mail";
+import { sendEmailWithHtml as gmailSendEmail } from "@/utils/gmail/mail";
+import { sendEmailWithHtml as outlookSendEmail } from "@/utils/outlook/mail";
 import { getMessage as getGmailMessage } from "@/utils/gmail/message";
 import { getMessage as getOutlookMessage } from "@/utils/outlook/message";
 
@@ -38,7 +38,7 @@ export async function searchEmails(
   const isGmail = isGoogleProvider(emailAccount.account?.provider);
 
   if (isGmail) {
-    const gmail = await getGmailClient(emailAccount);
+    const gmail = await getGmailClientWithRefresh(emailAccount);
 
     const response = await gmail.users.messages.list({
       userId: "me",
@@ -135,7 +135,7 @@ export async function getEmail(
   const isGmail = isGoogleProvider(emailAccount.account?.provider);
 
   if (isGmail) {
-    const gmail = await getGmailClient(emailAccount);
+    const gmail = await getGmailClientWithRefresh(emailAccount);
     const message = await getGmailMessage(params.emailId, gmail);
 
     return {
@@ -216,7 +216,7 @@ export async function sendEmail(
     : params.body.replace(/\n/g, "<br>");
 
   if (isGmail) {
-    const gmail = await getGmailClient(emailAccount);
+    const gmail = await getGmailClientWithRefresh(emailAccount);
 
     const result = await gmailSendEmail({
       gmail,

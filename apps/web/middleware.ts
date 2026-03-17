@@ -40,6 +40,7 @@ export function middleware(request: NextRequest) {
       headers: {
         "Content-Type": "application/json",
         "Cache-Control": "public, max-age=3600",
+        "Access-Control-Allow-Origin": "*",
       },
     });
   }
@@ -97,6 +98,7 @@ export function middleware(request: NextRequest) {
       headers: {
         "Content-Type": "application/json",
         "Cache-Control": "public, max-age=3600",
+        "Access-Control-Allow-Origin": "*",
       },
     });
   }
