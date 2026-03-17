@@ -294,7 +294,7 @@ async function onRun(
   ) => void,
 ) {
   let nextPageToken = "";
-  const LIMIT = 25;
+  const LIMIT = 50;
   let totalProcessed = 0;
 
   let aborted = false;
@@ -304,7 +304,7 @@ async function onRun(
   }
 
   async function run() {
-    for (let i = 0; i < 100; i++) {
+    for (let i = 0; i < 1000; i++) {
       const query: ThreadsQuery = {
         type: "inbox",
         limit: LIMIT,
@@ -366,7 +366,7 @@ async function onRun(
 
       // avoid gmail api rate limits
       // ai takes longer anyway
-      await sleep(threadsWithoutPlan.length ? 5000 : 2000);
+      await sleep(threadsWithoutPlan.length ? 3000 : 1000);
     }
 
     onComplete("success", totalProcessed);
