@@ -13,6 +13,7 @@ import { env } from "@/env";
 import { createScopedLogger } from "@/utils/logger";
 import { auth } from "@/utils/auth";
 import prisma from "@/utils/prisma";
+import { formatToolResponse } from "@/utils/mcp-server/format-response";
 
 const logger = createScopedLogger("mcp-server");
 
@@ -196,11 +197,14 @@ export const POST = withError("mcp-server", async (request: NextRequest) => {
           message.params?.arguments || {}
         );
 
+        // Format response as Markdown for better readability
+        const formattedText = formatToolResponse(toolName, result);
+
         return NextResponse.json({
           jsonrpc: "2.0",
           id: message.id,
           result: {
-            content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+            content: [{ type: "text", text: formattedText }],
           },
         }, { headers: CORS_HEADERS });
       } catch (error: any) {

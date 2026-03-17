@@ -6,10 +6,24 @@ import { createScopedLogger } from "@/utils/logger";
 import type { McpToolContext } from "./registry";
 import { sendEmailWithHtml as gmailSendEmail } from "@/utils/gmail/mail";
 import { sendEmailWithHtml as outlookSendEmail } from "@/utils/outlook/mail";
-import { getMessage as getGmailMessage } from "@/utils/gmail/message";
+import { getMessage as getGmailMessage, parseMessage } from "@/utils/gmail/message";
 import { getMessage as getOutlookMessage } from "@/utils/outlook/message";
 
 const logger = createScopedLogger("mcp-email-tools");
+
+/**
+ * Decode HTML entities in a string
+ */
+function decodeHtmlEntities(text: string): string {
+  return text
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&#(\d+);/g, (match, dec) => String.fromCharCode(dec))
+    .replace(/&#x([0-9a-fA-F]+);/g, (match, hex) => String.fromCharCode(parseInt(hex, 16)));
+}
 
 /**
  * Search emails using Gmail or Outlook API
@@ -38,7 +52,13 @@ export async function searchEmails(
   const isGmail = isGoogleProvider(emailAccount.account?.provider);
 
   if (isGmail) {
-    const gmail = await getGmailClientWithRefresh(emailAccount);
+    const gmail = await getGmailClientWithRefresh({
+      accessToken: emailAccount.account?.access_token,
+      refreshToken: emailAccount.account?.refresh_token,
+      expiresAt: emailAccount.account?.expires_at ? new Date(emailAccount.account.expires_at).getTime() : null,
+      emailAccountId: emailAccount.id,
+      logger,
+    });
 
     const response = await gmail.users.messages.list({
       userId: "me",
@@ -70,7 +90,7 @@ export async function searchEmails(
             to: getHeader("To"),
             subject: getHeader("Subject"),
             date: getHeader("Date"),
-            snippet: details.data.snippet || "",
+            snippet: decodeHtmlEntities(details.data.snippet || ""),
           };
         } catch (error) {
           logger.error("Failed to fetch message details", { error, msgId: msg.id });
@@ -102,7 +122,7 @@ export async function searchEmails(
         from: msg.from?.emailAddress?.address || "",
         subject: msg.subject || "",
         date: msg.receivedDateTime || "",
-        snippet: msg.bodyPreview || "",
+        snippet: decodeHtmlEntities(msg.bodyPreview || ""),
       })),
       count: messages.length,
       hasMore: messages.length === maxResults,
@@ -135,17 +155,24 @@ export async function getEmail(
   const isGmail = isGoogleProvider(emailAccount.account?.provider);
 
   if (isGmail) {
-    const gmail = await getGmailClientWithRefresh(emailAccount);
-    const message = await getGmailMessage(params.emailId, gmail);
+    const gmail = await getGmailClientWithRefresh({
+      accessToken: emailAccount.account?.access_token,
+      refreshToken: emailAccount.account?.refresh_token,
+      expiresAt: emailAccount.account?.expires_at ? new Date(emailAccount.account.expires_at).getTime() : null,
+      emailAccountId: emailAccount.id,
+      logger,
+    });
+    const rawMessage = await getGmailMessage(params.emailId, gmail, "full");
+    const message = parseMessage(rawMessage);
 
     return {
-      id: message.id,
-      threadId: message.threadId,
-      from: message.headers.from,
-      to: message.headers.to,
-      cc: message.headers.cc,
-      subject: message.headers.subject,
-      date: message.headers.date,
+      id: message.id || "",
+      threadId: message.threadId || "",
+      from: message.headers?.from || "",
+      to: message.headers?.to || "",
+      cc: message.headers?.cc || "",
+      subject: message.headers?.subject || "",
+      date: message.headers?.date || "",
       textPlain: message.textPlain || "",
       textHtml: message.textHtml || "",
       snippet: message.snippet || "",
@@ -180,6 +207,42 @@ export async function getEmail(
 }
 
 /**
+ * List all email accounts for the authenticated user
+ */
+export async function listEmailAccounts(
+  context: McpToolContext,
+  params: Record<string, never>
+) {
+  logger.info("MCP tool: list_email_accounts", {
+    userId: context.userId,
+  });
+
+  const emailAccounts = await prisma.emailAccount.findMany({
+    where: { userId: context.userId },
+    select: {
+      id: true,
+      email: true,
+      account: {
+        select: {
+          provider: true,
+        },
+      },
+    },
+    orderBy: { createdAt: "asc" },
+  });
+
+  return {
+    accounts: emailAccounts.map((account) => ({
+      id: account.id,
+      email: account.email,
+      provider: account.account?.provider || "unknown",
+      isDefault: account.id === context.emailAccountId,
+    })),
+    count: emailAccounts.length,
+  };
+}
+
+/**
  * Send a new email
  */
 export async function sendEmail(
@@ -188,6 +251,7 @@ export async function sendEmail(
     to: string[];
     subject: string;
     body: string;
+    from?: string;
     cc?: string[];
     bcc?: string[];
   }
@@ -197,10 +261,34 @@ export async function sendEmail(
     emailAccountId: context.emailAccountId,
     to: params.to,
     subject: params.subject,
+    from: params.from,
   });
 
+  // If 'from' is specified, look up the email account by email address
+  let emailAccountId = context.emailAccountId;
+
+  if (params.from) {
+    const fromAccount = await prisma.emailAccount.findFirst({
+      where: {
+        userId: context.userId,
+        email: params.from,
+      },
+      select: { id: true },
+    });
+
+    if (!fromAccount) {
+      throw new Error(`Email account '${params.from}' not found or you don't have access to it`);
+    }
+
+    emailAccountId = fromAccount.id;
+    logger.info("Using specified email account", {
+      from: params.from,
+      emailAccountId: fromAccount.id,
+    });
+  }
+
   const emailAccount = await prisma.emailAccount.findUnique({
-    where: { id: context.emailAccountId },
+    where: { id: emailAccountId },
     include: { account: true },
   });
 
@@ -216,39 +304,37 @@ export async function sendEmail(
     : params.body.replace(/\n/g, "<br>");
 
   if (isGmail) {
-    const gmail = await getGmailClientWithRefresh(emailAccount);
+    const gmail = await getGmailClientWithRefresh({
+      accessToken: emailAccount.account?.access_token,
+      refreshToken: emailAccount.account?.refresh_token,
+      expiresAt: emailAccount.account?.expires_at ? new Date(emailAccount.account.expires_at).getTime() : null,
+      emailAccountId: emailAccount.id,
+      logger,
+    });
 
-    const result = await gmailSendEmail({
-      gmail,
-      body: {
-        to: params.to.join(", "),
-        subject: params.subject,
-        messageHtml,
-        cc: params.cc?.join(", "),
-        bcc: params.bcc?.join(", "),
-      },
-      emailAccountId: context.emailAccountId,
+    const result = await gmailSendEmail(gmail, {
+      to: params.to.join(", "),
+      subject: params.subject,
+      messageHtml,
+      cc: params.cc?.join(", "),
+      bcc: params.bcc?.join(", "),
     });
 
     return {
       success: true,
-      messageId: result.id,
-      threadId: result.threadId,
+      messageId: result.data.id || "",
+      threadId: result.data.threadId || "",
     };
   } else {
     const outlook = await createOutlookClient(emailAccount);
 
-    const result = await outlookSendEmail({
-      outlook,
-      body: {
-        to: params.to.join(", "),
-        subject: params.subject,
-        messageHtml,
-        cc: params.cc?.join(", "),
-        bcc: params.bcc?.join(", "),
-      },
-      emailAccountId: context.emailAccountId,
-    });
+    const result = await outlookSendEmail(outlook, {
+      to: params.to.join(", "),
+      subject: params.subject,
+      messageHtml,
+      cc: params.cc?.join(", "),
+      bcc: params.bcc?.join(", "),
+    }, logger);
 
     return {
       success: true,

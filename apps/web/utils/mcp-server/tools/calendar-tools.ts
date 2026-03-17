@@ -1,7 +1,7 @@
 import prisma from "@/utils/prisma";
-import { getCalendarClientWithRefresh } from "@/utils/calendar/client";
 import { createScopedLogger } from "@/utils/logger";
 import type { McpToolContext } from "./registry";
+import { createCalendarEventProviders } from "@/utils/calendar/event-provider";
 
 const logger = createScopedLogger("mcp-calendar-tools");
 
@@ -19,17 +19,25 @@ export async function searchCalendar(
     endDate: params.endDate,
   });
 
-  const calendarClient = await getCalendarClientWithRefresh(context.emailAccountId);
+  const providers = await createCalendarEventProviders(context.emailAccountId, logger);
 
-  if (!calendarClient) {
+  if (providers.length === 0) {
     throw new Error("No calendar connection found for this email account");
   }
 
-  const events = await calendarClient.listEvents({
-    timeMin: new Date(params.startDate),
-    timeMax: new Date(params.endDate),
-    maxResults: 50,
-  });
+  // Fetch events from all providers
+  const allEvents = await Promise.all(
+    providers.map((provider) =>
+      provider.fetchEvents({
+        timeMin: new Date(params.startDate),
+        timeMax: new Date(params.endDate),
+        maxResults: 50,
+      })
+    )
+  );
+
+  // Flatten and deduplicate events
+  const events = allEvents.flat();
 
   // Filter by query if provided
   let filteredEvents = events;
@@ -37,7 +45,7 @@ export async function searchCalendar(
     const queryLower = params.query.toLowerCase();
     filteredEvents = events.filter(
       (event) =>
-        event.summary?.toLowerCase().includes(queryLower) ||
+        event.title?.toLowerCase().includes(queryLower) ||
         event.description?.toLowerCase().includes(queryLower) ||
         event.location?.toLowerCase().includes(queryLower)
     );
@@ -46,22 +54,16 @@ export async function searchCalendar(
   return {
     events: filteredEvents.map((event) => ({
       id: event.id,
-      summary: event.summary || "Untitled Event",
+      summary: event.title,
       description: event.description || "",
-      start: event.start,
-      end: event.end,
+      start: event.startTime.toISOString(),
+      end: event.endTime.toISOString(),
       location: event.location || "",
       attendees: event.attendees?.map((a) => ({
         email: a.email,
-        name: a.name,
-        responseStatus: a.responseStatus,
+        name: a.name || "",
       })) || [],
-      organizer: event.organizer ? {
-        email: event.organizer.email,
-        name: event.organizer.name,
-      } : null,
-      status: event.status,
-      htmlLink: event.htmlLink,
+      htmlLink: event.eventUrl || "",
     })),
     count: filteredEvents.length,
   };
@@ -81,38 +83,34 @@ export async function getCalendarAvailability(
     endDate: params.endDate,
   });
 
-  const calendarClient = await getCalendarClientWithRefresh(context.emailAccountId);
+  const providers = await createCalendarEventProviders(context.emailAccountId, logger);
 
-  if (!calendarClient) {
+  if (providers.length === 0) {
     throw new Error("No calendar connection found for this email account");
   }
 
-  // Get all events in the time range
-  const events = await calendarClient.listEvents({
-    timeMin: new Date(params.startDate),
-    timeMax: new Date(params.endDate),
-    maxResults: 100,
-  });
+  // Fetch events from all providers
+  const allEvents = await Promise.all(
+    providers.map((provider) =>
+      provider.fetchEvents({
+        timeMin: new Date(params.startDate),
+        timeMax: new Date(params.endDate),
+        maxResults: 100,
+      })
+    )
+  );
 
-  // Calculate busy periods
+  // Flatten events
+  const events = allEvents.flat();
+
+  // Calculate busy periods (all events block time by default)
   const busyPeriods = events
-    .filter((event) => {
-      // Only include events that actually block time
-      return (
-        event.status !== "cancelled" &&
-        event.transparency !== "transparent" // transparent = doesn't block time
-      );
-    })
     .map((event) => ({
-      start: event.start,
-      end: event.end,
-      summary: event.summary || "Busy",
+      start: event.startTime,
+      end: event.endTime,
+      summary: event.title || "Busy",
     }))
-    .sort((a, b) => {
-      const aStart = typeof a.start === "string" ? new Date(a.start) : a.start.dateTime ? new Date(a.start.dateTime) : new Date(a.start.date!);
-      const bStart = typeof b.start === "string" ? new Date(b.start) : b.start.dateTime ? new Date(b.start.dateTime) : new Date(b.start.date!);
-      return aStart.getTime() - bStart.getTime();
-    });
+    .sort((a, b) => a.start.getTime() - b.start.getTime());
 
   // Calculate free periods
   const freePeriods = [];
@@ -122,11 +120,7 @@ export async function getCalendarAvailability(
   let currentTime = startTime;
 
   for (const busyPeriod of busyPeriods) {
-    const busyStart = typeof busyPeriod.start === "string"
-      ? new Date(busyPeriod.start)
-      : busyPeriod.start.dateTime
-        ? new Date(busyPeriod.start.dateTime)
-        : new Date(busyPeriod.start.date!);
+    const busyStart = busyPeriod.start;
 
     if (currentTime < busyStart) {
       freePeriods.push({
@@ -135,12 +129,7 @@ export async function getCalendarAvailability(
       });
     }
 
-    const busyEnd = typeof busyPeriod.end === "string"
-      ? new Date(busyPeriod.end)
-      : busyPeriod.end.dateTime
-        ? new Date(busyPeriod.end.dateTime)
-        : new Date(busyPeriod.end.date!);
-
+    const busyEnd = busyPeriod.end;
     currentTime = busyEnd > currentTime ? busyEnd : currentTime;
   }
 
@@ -158,27 +147,13 @@ export async function getCalendarAvailability(
       end: params.endDate,
     },
     busy: busyPeriods.map((period) => ({
-      start: typeof period.start === "string"
-        ? period.start
-        : period.start.dateTime || period.start.date,
-      end: typeof period.end === "string"
-        ? period.end
-        : period.end.dateTime || period.end.date,
+      start: period.start.toISOString(),
+      end: period.end.toISOString(),
       summary: period.summary,
     })),
     free: freePeriods,
     totalBusyMinutes: busyPeriods.reduce((total, period) => {
-      const start = typeof period.start === "string"
-        ? new Date(period.start)
-        : period.start.dateTime
-          ? new Date(period.start.dateTime)
-          : new Date(period.start.date!);
-      const end = typeof period.end === "string"
-        ? new Date(period.end)
-        : period.end.dateTime
-          ? new Date(period.end.dateTime)
-          : new Date(period.end.date!);
-      return total + (end.getTime() - start.getTime()) / (1000 * 60);
+      return total + (period.end.getTime() - period.start.getTime()) / (1000 * 60);
     }, 0),
   };
 }

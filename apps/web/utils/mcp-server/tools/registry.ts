@@ -75,7 +75,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
 
   send_email: {
     name: "send_email",
-    description: "Send a new email. Supports plain text and HTML content.",
+    description: "Send a new email. Supports plain text and HTML content. If you have multiple email accounts, you can specify which one to send from using the 'from' parameter.",
     inputSchema: {
       type: "object",
       properties: {
@@ -91,6 +91,10 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
         body: {
           type: "string",
           description: "Email body (plain text or HTML)",
+        },
+        from: {
+          type: "string",
+          description: "Sender email address (optional). Use this to send from a specific account if you have multiple accounts configured. If not provided, uses your default account.",
         },
         cc: {
           type: "array",
@@ -199,32 +203,18 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     requiredScope: "rules:read",
   },
 
-  create_rule: {
-    name: "create_rule",
-    description: "Create a new email automation rule.",
+  list_email_accounts: {
+    name: "list_email_accounts",
+    description: "List all email accounts you have configured. Use this to see which email addresses you can send from.",
     inputSchema: {
       type: "object",
-      properties: {
-        name: {
-          type: "string",
-          description: "Rule name",
-        },
-        conditions: {
-          type: "object",
-          description: "Rule conditions (from, subject, etc.)",
-        },
-        actions: {
-          type: "array",
-          description: "Actions to perform (archive, label, etc.)",
-        },
-      },
-      required: ["name", "conditions", "actions"],
+      properties: {},
     },
     handler: async (context, params) => {
-      const { createRule } = await import("./rules-tools");
-      return createRule(context, params);
+      const { listEmailAccounts } = await import("./email-tools");
+      return listEmailAccounts(context, params);
     },
-    requiredScope: "rules:write",
+    requiredScope: "email:read",
   },
 };
 

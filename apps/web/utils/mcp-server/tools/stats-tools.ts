@@ -18,7 +18,7 @@ export async function getEmailStats(
   });
 
   // Use existing stats controller
-  const stats = await getStatsByPeriod({
+  const statsData = await getStatsByPeriod({
     emailAccountId: context.emailAccountId,
     period: params.period,
     fromDate: params.fromDate,
@@ -27,21 +27,20 @@ export async function getEmailStats(
 
   return {
     period: params.period,
-    stats: stats.map((stat) => ({
+    stats: statsData.result.map((stat) => ({
       date: stat.startOfPeriod,
-      total: stat.totalCount,
-      inbox: stat.inboxCount,
-      notInbox: stat.notInbox,
-      read: stat.readCount,
-      sent: stat.sentCount,
-      unread: stat.unread,
+      total: stat.All,
+      inbox: stat.Unarchived,
+      sent: stat.Sent,
+      read: stat.Read,
+      unread: stat.Unread,
     })),
     summary: {
-      totalEmails: stats.reduce((sum, stat) => sum + Number(stat.totalCount), 0),
-      totalInbox: stats.reduce((sum, stat) => sum + Number(stat.inboxCount), 0),
-      totalSent: stats.reduce((sum, stat) => sum + Number(stat.sentCount), 0),
-      totalRead: stats.reduce((sum, stat) => sum + Number(stat.readCount), 0),
-      totalUnread: stats.reduce((sum, stat) => sum + Number(stat.unread), 0),
+      totalEmails: statsData.allCount,
+      totalInbox: statsData.inboxCount,
+      totalSent: statsData.sentCount,
+      totalRead: statsData.readCount,
+      totalUnread: statsData.allCount - statsData.readCount,
     },
   };
 }
