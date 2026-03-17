@@ -1,6 +1,5 @@
 /** biome-ignore-all lint/suspicious/noConsole: we use console.log for development logs */
-// AXIOM DISABLED FOR PRIVACY
-// import { log } from "next-axiom";
+import { log } from "next-axiom";
 import { serializeError } from "serialize-error";
 import { env } from "@/env";
 
@@ -17,8 +16,8 @@ const colors = {
 } as const;
 
 export function createScopedLogger(scope: string) {
-  // AXIOM DISABLED FOR PRIVACY
-  // if (env.NEXT_PUBLIC_AXIOM_TOKEN) return createAxiomLogger(scope);
+  if (typeof window === "undefined" && env.AXIOM_TOKEN)
+    return createAxiomLogger(scope);
   if (env.NEXT_PUBLIC_LOG_SCOPES && !env.NEXT_PUBLIC_LOG_SCOPES.includes(scope))
     return createNullLogger();
 

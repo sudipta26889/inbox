@@ -7,7 +7,6 @@ import type { ParsedMessage } from "@/utils/types";
 import { env } from "@/env";
 import type { EmailAccountWithAI } from "@/utils/llms/types";
 import { toolCallAgentStream } from "@/utils/llms";
-import type { RecordingSessionHandle } from "@/utils/replay/recorder";
 import { isConversationStatusType } from "@/utils/reply-tracker/conversation-status-config";
 import prisma from "@/utils/prisma";
 import type { SystemType } from "@/generated/prisma/enums";
@@ -76,6 +75,10 @@ export type {
 } from "./chat-inbox-tools";
 export type { SaveMemoryTool, SearchMemoriesTool } from "./chat-memory-tools";
 
+type AssistantChatOnStepFinish = NonNullable<
+  Parameters<typeof toolCallAgentStream>[0]["onStepFinish"]
+>;
+
 export async function aiProcessAssistantChat({
   messages,
   emailAccountId,
@@ -86,7 +89,7 @@ export async function aiProcessAssistantChat({
   inboxStats,
   responseSurface = "web",
   messagingPlatform,
-  recordingSession,
+  onStepFinish,
   logger,
 }: {
   messages: ModelMessage[];
@@ -98,20 +101,13 @@ export async function aiProcessAssistantChat({
   inboxStats?: { total: number; unread: number } | null;
   responseSurface?: "web" | "messaging";
   messagingPlatform?: MessagingPlatform;
-  recordingSession?: RecordingSessionHandle | null;
+  onStepFinish?: AssistantChatOnStepFinish;
   logger: Logger;
 }) {
   const emailSendToolsEnabled = env.NEXT_PUBLIC_EMAIL_SEND_ENABLED;
   let ruleReadState: RuleReadState | null = null;
 
-  if (recordingSession) {
-    await recordingSession.record("llm-request", {
-      label: "assistant-chat",
-      request: { messageCount: messages.length, context },
-    });
-  }
-
-  const system = `You are the Inbox assistant. You help users understand their inbox, take inbox actions, update account features, and manage automation rules.
+  const system = `You are the Inbox Zero assistant. You help users understand their inbox, take inbox actions, update account features, and manage automation rules.
 
 Core responsibilities:
 1. Search and summarize inbox activity (especially what's new and what needs attention)
@@ -215,6 +211,8 @@ Rule matching logic:
 
 Best practices:
 - Use static conditions for exact deterministic matching, but keep them short and specific.
+- If the rule is only matching exact sender addresses or domains, put those in static.from instead of aiInstructions.
+- Never store a pure sender or domain list in aiInstructions.
 - Prefer learned patterns over static sender lists when updating an existing categorization rule for recurring senders.
 - Do not turn a static from/to field into a long catch-all sender list.
 - IMPORTANT: if the user names many senders that clearly belong to one of the existing fetched rules, update the best matching existing rule from that list instead of creating a new overlapping rule.
@@ -238,7 +236,7 @@ Conversation status categorization:
 - For requests like "if I'm CC'd I don't need to reply", update the To Reply rule instructions (and FYI when needed) instead of creating a new rule.
 - Keep conversation rule instructions self-contained: preserve the core intent and append new exclusions/inclusions instead of replacing them with a narrow one-off condition.
 
-Reply Zero is a feature that labels emails that need a reply "To Reply". And labels emails that are awaiting a response "Awaiting". The user is also able to see these in a minimalist UI within Inbox which only shows which emails the user needs to reply to or is awaiting a response on.
+Reply Zero is a feature that labels emails that need a reply "To Reply". And labels emails that are awaiting a response "Awaiting". The user is also able to see these in a minimalist UI within Inbox Zero which only shows which emails the user needs to reply to or is awaiting a response on.
 
 Don't tell the user which tools you're using. The tools you use will be displayed in the UI anyway.
 Never show internal IDs (threadId, messageId, labelId) to the user. These are for tool calls only.
@@ -275,6 +273,7 @@ Behavior anchors (minimal examples):
 - For "Turn off meeting briefs and enable auto-file attachments", call updateInboxFeatures with meetingBriefsEnabled=false and filingEnabled=true.
 - For "If I'm CC'd on an email it shouldn't be marked To Reply", update the "To Reply" rule instructions with updateRuleConditions.
 - For "Archive emails older than 30 days", this is not possible as an automated rule, but you can do it as a one-time action: use searchInbox with a before: date filter, then archive the results with archive_threads.
+- Rules support static file attachments from connected cloud storage (Google Drive or OneDrive). If the user wants to always attach specific files when a rule triggers (e.g. always send a PDF contract), create the rule with the appropriate email action, then inform the user that they can select files to attach by opening the rule in their assistant settings and using the Attachments section.
 - For "what does that email say?" or "tell me about this email", use readEmail with the messageId from a prior searchInbox result to get the full body.
 - For "clean up my inbox" or retroactive bulk cleanup:
   1. Check the inbox stats in your context to understand the scale and read/unread ratio.
@@ -389,14 +388,12 @@ Behavior anchors (minimal examples):
     usageLabel: "assistant-chat",
     providerOptions: getChatProviderOptionsForCaching({ chatId }),
     messages: messagesWithCacheControl,
-    onStepFinish: async ({ text, toolCalls }) => {
-      logger.trace("Step finished", { text, toolCalls });
-      if (recordingSession) {
-        await recordingSession.record("chat-step", {
-          request: { toolCalls },
-          response: { text },
-        });
-      }
+    onStepFinish: async (step) => {
+      logger.trace("Step finished", {
+        text: step.text,
+        toolCalls: step.toolCalls,
+      });
+      await onStepFinish?.(step);
     },
     maxSteps: 10,
     tools: {

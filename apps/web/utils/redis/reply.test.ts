@@ -21,6 +21,11 @@ describe("saveReply", () => {
       messageId: "message-1",
       reply: "Draft reply",
       confidence: DraftReplyConfidence.STANDARD,
+      attribution: {
+        provider: "openai",
+        modelName: "gpt-5.1",
+        pipelineVersion: 1,
+      },
     });
 
     expect(redis.set).toHaveBeenCalledWith(
@@ -28,9 +33,43 @@ describe("saveReply", () => {
       JSON.stringify({
         reply: "Draft reply",
         confidence: DraftReplyConfidence.STANDARD,
+        attribution: {
+          provider: "openai",
+          modelName: "gpt-5.1",
+          pipelineVersion: 1,
+        },
       }),
       { ex: 60 * 60 * 24 },
     );
+  });
+
+  it("returns cached attribution metadata when present", async () => {
+    vi.mocked(redis.get).mockResolvedValue(
+      JSON.stringify({
+        reply: "Draft reply",
+        confidence: DraftReplyConfidence.HIGH_CONFIDENCE,
+        attribution: {
+          provider: "openai",
+          modelName: "gpt-5.1",
+          pipelineVersion: 1,
+        },
+      }),
+    );
+
+    const result = await getReplyWithConfidence({
+      emailAccountId: "account-1",
+      messageId: "message-1",
+    });
+
+    expect(result).toEqual({
+      reply: "Draft reply",
+      confidence: DraftReplyConfidence.HIGH_CONFIDENCE,
+      attribution: {
+        provider: "openai",
+        modelName: "gpt-5.1",
+        pipelineVersion: 1,
+      },
+    });
   });
 
   it("returns null for unsupported confidence values", async () => {
@@ -58,5 +97,42 @@ describe("saveReply", () => {
     });
 
     expect(result).toBeNull();
+  });
+
+  it("stores rule-scoped attachment selections for delayed draft execution", async () => {
+    await saveReply({
+      emailAccountId: "account-1",
+      messageId: "message-1",
+      ruleId: "rule-1",
+      reply: "Draft reply",
+      confidence: DraftReplyConfidence.HIGH_CONFIDENCE,
+      attachments: [
+        {
+          driveConnectionId: "drive-1",
+          fileId: "file-1",
+          filename: "lease.pdf",
+          mimeType: "application/pdf",
+          reason: "Matched the property request",
+        },
+      ],
+    });
+
+    expect(redis.set).toHaveBeenCalledWith(
+      "reply:account-1:message-1:rule-1",
+      JSON.stringify({
+        reply: "Draft reply",
+        confidence: DraftReplyConfidence.HIGH_CONFIDENCE,
+        attachments: [
+          {
+            driveConnectionId: "drive-1",
+            fileId: "file-1",
+            filename: "lease.pdf",
+            mimeType: "application/pdf",
+            reason: "Matched the property request",
+          },
+        ],
+      }),
+      { ex: 60 * 60 * 24 * 90 },
+    );
   });
 });

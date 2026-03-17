@@ -67,6 +67,13 @@ vi.mock("@/utils/meeting-briefs/recipient-context", () => ({
   formatMeetingContextForPrompt: vi.fn().mockReturnValue(null),
 }));
 
+vi.mock("@/utils/attachments/draft-attachments", () => ({
+  selectDraftAttachmentsForRule: vi.fn().mockResolvedValue({
+    selectedAttachments: [],
+    attachmentContext: null,
+  }),
+}));
+
 vi.mock("@/utils/ai/knowledge/extract-from-email-history", () => ({
   aiExtractFromEmailHistory: vi.fn().mockResolvedValue(null),
 }));
@@ -78,12 +85,14 @@ vi.mock("@/env", () => ({
 }));
 
 import { aiDraftReplyWithConfidence } from "@/utils/ai/reply/draft-reply";
+import { selectDraftAttachmentsForRule } from "@/utils/attachments/draft-attachments";
 import prisma from "@/utils/prisma";
 import { getReplyWithConfidence, saveReply } from "@/utils/redis/reply";
 
 const logger = createScopedLogger("reply-tracker/generate-draft-test");
 
 type EmailAccountSignatureSettings = {
+  allowHiddenAiDraftLinks: boolean;
   includeReferralSignature: boolean;
   signature: string | null;
 };
@@ -132,6 +141,7 @@ const createMockClient = (): EmailProvider =>
 const createMockEmailAccountSettings = (
   overrides: Partial<EmailAccountSignatureSettings> = {},
 ): EmailAccountSignatureSettings => ({
+  allowHiddenAiDraftLinks: false,
   includeReferralSignature: false,
   signature: null,
   ...overrides,
@@ -286,7 +296,7 @@ describe("fetchMessagesAndGenerateDraft - AI content escaping", () => {
       confidence: DraftReplyConfidence.HIGH_CONFIDENCE,
     });
     vi.mocked(prisma.emailAccount.findUnique).mockResolvedValue(
-      createMockEmailAccountSettings(),
+      createMockEmailAccountSettings({ allowHiddenAiDraftLinks: true }),
     );
 
     const result = await fetchMessagesAndGenerateDraft(
@@ -307,6 +317,30 @@ describe("fetchMessagesAndGenerateDraft - AI content escaping", () => {
     expect(result).toContain(
       '\n\nUse <a href="https://example.com/login">the login page</a>',
     );
+  });
+
+  it("shows visible destinations when hidden AI draft links are disabled", async () => {
+    vi.mocked(aiDraftReplyWithConfidence).mockResolvedValue({
+      reply:
+        "Thanks for reaching out.\n\nUse [the login page](https://example.com/login) or email [support](mailto:help@example.com).",
+      confidence: DraftReplyConfidence.HIGH_CONFIDENCE,
+    });
+    vi.mocked(prisma.emailAccount.findUnique).mockResolvedValue(
+      createMockEmailAccountSettings({ allowHiddenAiDraftLinks: false }),
+    );
+
+    const result = await fetchMessagesAndGenerateDraft(
+      createMockEmailAccount(),
+      "thread-1",
+      createMockClient(),
+      createMockMessage(),
+      logger,
+    );
+
+    expect(result).toContain("https://example.com/login");
+    expect(result).toContain("help@example.com");
+    expect(result).not.toContain('<a href="https://example.com/login">');
+    expect(result).not.toContain('<a href="mailto:help@example.com">');
   });
 });
 
@@ -368,12 +402,22 @@ describe("fetchMessagesAndGenerateDraft - thread ordering", () => {
 describe("fetchMessagesAndGenerateDraftWithConfidenceThreshold", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(getReplyWithConfidence).mockResolvedValue(null);
+    vi.mocked(selectDraftAttachmentsForRule).mockResolvedValue({
+      selectedAttachments: [],
+      attachmentContext: null,
+    });
   });
 
   it("uses cached drafts when cached confidence meets the threshold", async () => {
     vi.mocked(getReplyWithConfidence).mockResolvedValue({
       reply: "Cached draft reply",
       confidence: DraftReplyConfidence.STANDARD,
+      attribution: {
+        provider: "openai",
+        modelName: "gpt-5.1",
+        pipelineVersion: 1,
+      },
     });
 
     const result = await fetchMessagesAndGenerateDraftWithConfidenceThreshold(
@@ -388,6 +432,11 @@ describe("fetchMessagesAndGenerateDraftWithConfidenceThreshold", () => {
     expect(result).toEqual({
       draft: "Cached draft reply",
       confidence: DraftReplyConfidence.STANDARD,
+      attribution: {
+        provider: "openai",
+        modelName: "gpt-5.1",
+        pipelineVersion: 1,
+      },
     });
     expect(aiDraftReplyWithConfidence).not.toHaveBeenCalled();
   });
@@ -400,6 +449,11 @@ describe("fetchMessagesAndGenerateDraftWithConfidenceThreshold", () => {
     vi.mocked(aiDraftReplyWithConfidence).mockResolvedValue({
       reply: "Fresh draft",
       confidence: DraftReplyConfidence.HIGH_CONFIDENCE,
+      attribution: {
+        provider: "anthropic",
+        modelName: "claude-sonnet-4-5",
+        pipelineVersion: 1,
+      },
     });
     vi.mocked(prisma.emailAccount.findUnique).mockResolvedValue(
       createMockEmailAccountSettings(),
@@ -417,12 +471,22 @@ describe("fetchMessagesAndGenerateDraftWithConfidenceThreshold", () => {
     expect(result).toEqual({
       draft: "Fresh draft",
       confidence: DraftReplyConfidence.HIGH_CONFIDENCE,
+      attribution: {
+        provider: "anthropic",
+        modelName: "claude-sonnet-4-5",
+        pipelineVersion: 1,
+      },
     });
     expect(saveReply).toHaveBeenCalledWith({
       emailAccountId: "test-account-id",
       messageId: "msg-1",
       reply: "Fresh draft",
       confidence: DraftReplyConfidence.HIGH_CONFIDENCE,
+      attribution: {
+        provider: "anthropic",
+        modelName: "claude-sonnet-4-5",
+        pipelineVersion: 1,
+      },
     });
   });
 
@@ -430,6 +494,11 @@ describe("fetchMessagesAndGenerateDraftWithConfidenceThreshold", () => {
     vi.mocked(aiDraftReplyWithConfidence).mockResolvedValue({
       reply: "Draft that should be skipped",
       confidence: DraftReplyConfidence.ALL_EMAILS,
+      attribution: {
+        provider: "openai",
+        modelName: "gpt-5.1",
+        pipelineVersion: 1,
+      },
     });
 
     const result = await fetchMessagesAndGenerateDraftWithConfidenceThreshold(
@@ -444,12 +513,127 @@ describe("fetchMessagesAndGenerateDraftWithConfidenceThreshold", () => {
     expect(result).toEqual({
       draft: null,
       confidence: DraftReplyConfidence.ALL_EMAILS,
+      attribution: {
+        provider: "openai",
+        modelName: "gpt-5.1",
+        pipelineVersion: 1,
+      },
     });
     expect(saveReply).toHaveBeenCalledWith({
       emailAccountId: "test-account-id",
       messageId: "msg-1",
       reply: "Draft that should be skipped",
       confidence: DraftReplyConfidence.ALL_EMAILS,
+      attribution: {
+        provider: "openai",
+        modelName: "gpt-5.1",
+        pipelineVersion: 1,
+      },
+    });
+  });
+
+  it("returns a generated draft even when caching it fails", async () => {
+    vi.mocked(aiDraftReplyWithConfidence).mockResolvedValue({
+      reply: "Fresh draft",
+      confidence: DraftReplyConfidence.HIGH_CONFIDENCE,
+      attribution: {
+        provider: "anthropic",
+        modelName: "claude-sonnet-4-5",
+        pipelineVersion: 1,
+      },
+    });
+    vi.mocked(prisma.emailAccount.findUnique).mockResolvedValue(
+      createMockEmailAccountSettings(),
+    );
+    vi.mocked(saveReply).mockRejectedValueOnce(new Error("redis unavailable"));
+
+    const result = await fetchMessagesAndGenerateDraftWithConfidenceThreshold(
+      createMockEmailAccount(),
+      "thread-1",
+      createMockClient(),
+      createMockMessage(),
+      logger,
+      DraftReplyConfidence.STANDARD,
+    );
+
+    expect(result).toEqual({
+      draft: "Fresh draft",
+      confidence: DraftReplyConfidence.HIGH_CONFIDENCE,
+      attribution: {
+        provider: "anthropic",
+        modelName: "claude-sonnet-4-5",
+        pipelineVersion: 1,
+      },
+    });
+  });
+
+  it("passes selected attachment context into drafting and caches it per rule", async () => {
+    const selectedAttachments = [
+      {
+        driveConnectionId: "drive-1",
+        fileId: "file-1",
+        filename: "lease.pdf",
+        mimeType: "application/pdf",
+        reason: "Matched the requested property packet",
+      },
+    ];
+
+    vi.mocked(selectDraftAttachmentsForRule).mockResolvedValue({
+      selectedAttachments,
+      attachmentContext: `<attachment>
+filename: lease.pdf
+path: Properties/Lease.pdf
+reason: Matched the requested property packet
+</attachment>`,
+    });
+    vi.mocked(aiDraftReplyWithConfidence).mockResolvedValue({
+      reply: "Attached the lease packet for review.",
+      confidence: DraftReplyConfidence.HIGH_CONFIDENCE,
+      attribution: null,
+    });
+    vi.mocked(prisma.emailAccount.findUnique).mockResolvedValue({
+      includeReferralSignature: false,
+      signature: null,
+    } as any);
+
+    const result = await fetchMessagesAndGenerateDraftWithConfidenceThreshold(
+      createMockEmailAccount(),
+      "thread-1",
+      createMockClient(),
+      createMockMessage(),
+      logger,
+      DraftReplyConfidence.ALL_EMAILS,
+      "rule-1",
+    );
+
+    expect(selectDraftAttachmentsForRule).toHaveBeenCalledWith({
+      emailAccount: expect.objectContaining({ id: "test-account-id" }),
+      ruleId: "rule-1",
+      emailContent: expect.any(String),
+      logger,
+    });
+
+    expect(aiDraftReplyWithConfidence).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attachmentContext: expect.stringContaining("lease.pdf"),
+      }),
+    );
+
+    expect(saveReply).toHaveBeenCalledWith({
+      emailAccountId: "test-account-id",
+      messageId: "msg-1",
+      reply: "Attached the lease packet for review.",
+      confidence: DraftReplyConfidence.HIGH_CONFIDENCE,
+      attribution: null,
+      attachments: selectedAttachments,
+      ruleId: "rule-1",
+    });
+
+    expect(result).toEqual({
+      draft: "Attached the lease packet for review.",
+      confidence: DraftReplyConfidence.HIGH_CONFIDENCE,
+      attribution: null,
+      attachments: selectedAttachments,
     });
   });
 });

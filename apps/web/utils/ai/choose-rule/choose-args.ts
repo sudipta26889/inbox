@@ -17,11 +17,20 @@ import {
 } from "@/utils/ai/choose-rule/ai-choose-args";
 import type { Logger } from "@/utils/logger";
 import type { EmailProvider } from "@/utils/email/types";
+import type { DraftAttribution } from "@/utils/ai/reply/draft-attribution";
 
 const MODULE = "choose-args";
 export type EmailAccountForDrafting = EmailAccountWithAI & {
   draftReplyConfidence: DraftReplyConfidence;
 };
+
+type DraftAttributionFields = {
+  draftModelProvider?: string | null;
+  draftModelName?: string | null;
+  draftPipelineVersion?: number | null;
+};
+
+export type ActionWithDraftAttribution = Action & DraftAttributionFields;
 
 export async function getActionItemsWithAiArgs({
   message,
@@ -39,7 +48,7 @@ export async function getActionItemsWithAiArgs({
   modelType: ModelType;
   logger: Logger;
   isTest?: boolean;
-}): Promise<Action[]> {
+}): Promise<ActionWithDraftAttribution[]> {
   const log = logger.with({ module: MODULE });
   // Draft content is handled via its own AI call
   // We provide a lot more context to the AI to draft the content
@@ -49,6 +58,7 @@ export async function getActionItemsWithAiArgs({
 
   let draft: string | null = null;
   let draftConfidence: DraftReplyConfidence | null = null;
+  let draftAttribution: DraftAttribution | null = null;
 
   if (draftEmailActions.length) {
     try {
@@ -66,9 +76,11 @@ export async function getActionItemsWithAiArgs({
           isTest ? message : undefined,
           logger,
           emailAccount.draftReplyConfidence,
+          selectedRule.id,
         );
       draft = draftResult.draft;
       draftConfidence = draftResult.confidence;
+      draftAttribution = draftResult.attribution;
 
       log.info("Draft generated", {
         email: emailAccount.email,
@@ -94,7 +106,7 @@ export async function getActionItemsWithAiArgs({
     return filterIncompleteDraftActions(selectedRule.actions);
   }
 
-  const result = await aiGenerateArgs({
+  const { args, attribution: aiArgsAttribution } = await aiGenerateArgs({
     email: getEmailForLLM(message),
     emailAccount,
     selectedRule,
@@ -105,8 +117,10 @@ export async function getActionItemsWithAiArgs({
 
   const combinedActions = combineActionsWithAiArgs(
     selectedRule.actions,
-    result,
+    args,
     draft,
+    draftAttribution,
+    aiArgsAttribution,
   );
   const filteredActions = filterIncompleteDraftActions(combinedActions);
 
@@ -124,20 +138,37 @@ export function combineActionsWithAiArgs(
   actions: Action[],
   aiArgs: ActionArgResponse | undefined,
   draft: string | null = null,
-): Action[] {
-  if (!aiArgs && !draft) return actions;
+  draftAttribution: DraftAttribution | null = null,
+  aiArgsAttribution: DraftAttribution | null = null,
+): ActionWithDraftAttribution[] {
+  if (!aiArgs && !draft) return actions as ActionWithDraftAttribution[];
 
   return actions.map((action) => {
-    const updatedAction = { ...action };
+    const updatedAction: ActionWithDraftAttribution = { ...action };
 
     // Add draft content to DRAFT_EMAIL actions if available
     if (draft && action.type === ActionType.DRAFT_EMAIL) {
       updatedAction.content = draft;
+      updatedAction.draftModelProvider = draftAttribution?.provider ?? null;
+      updatedAction.draftModelName = draftAttribution?.modelName ?? null;
+      updatedAction.draftPipelineVersion =
+        draftAttribution?.pipelineVersion ?? null;
     }
 
     // Process AI args if available
     const aiAction = aiArgs?.[`${action.type}-${action.id}`];
     if (!aiAction) return updatedAction;
+
+    if (
+      action.type === ActionType.DRAFT_EMAIL &&
+      typeof action.content === "string" &&
+      aiAction.content
+    ) {
+      updatedAction.draftModelProvider = aiArgsAttribution?.provider ?? null;
+      updatedAction.draftModelName = aiArgsAttribution?.modelName ?? null;
+      updatedAction.draftPipelineVersion =
+        aiArgsAttribution?.pipelineVersion ?? null;
+    }
 
     // Merge variables for each field that has AI-generated content
     for (const [field, vars] of Object.entries(aiAction)) {
@@ -168,7 +199,9 @@ export function combineActionsWithAiArgs(
   });
 }
 
-export function filterIncompleteDraftActions(actions: Action[]): Action[] {
+export function filterIncompleteDraftActions<T extends Action>(
+  actions: T[],
+): T[] {
   return actions.filter((action) => {
     if (action.type !== ActionType.DRAFT_EMAIL) return true;
     return !!action.content?.trim();

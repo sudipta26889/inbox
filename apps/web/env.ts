@@ -125,6 +125,8 @@ export const env = createEnv({
     SENTRY_AUTH_TOKEN: z.string().optional(),
     SENTRY_ORGANIZATION: z.string().optional(),
     SENTRY_PROJECT: z.string().optional(),
+    AXIOM_DATASET: z.string().optional(),
+    AXIOM_TOKEN: z.string().optional(),
 
     DISABLE_LOG_ZOD_ERRORS: booleanString.optional(),
     ENABLE_DEBUG_LOGS: booleanString.default(false),
@@ -225,7 +227,6 @@ export const env = createEnv({
     TEAMS_BOT_APP_TYPE: z.enum(["MultiTenant", "SingleTenant"]).optional(),
     TELEGRAM_BOT_TOKEN: z.string().optional(),
     TELEGRAM_BOT_SECRET_TOKEN: z.string().optional(),
-    REPLAY_RECORDING_ENABLED: booleanString.optional().default(false),
   },
   client: {
     // stripe

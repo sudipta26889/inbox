@@ -4,6 +4,7 @@ import { DraftConfidenceSetting } from "@/app/(app)/[emailAccountId]/assistant/s
 import { DraftReplies } from "@/app/(app)/[emailAccountId]/assistant/settings/DraftReplies";
 import { DraftKnowledgeSetting } from "@/app/(app)/[emailAccountId]/assistant/settings/DraftKnowledgeSetting";
 import { FollowUpRemindersSetting } from "@/app/(app)/[emailAccountId]/assistant/settings/FollowUpRemindersSetting";
+import { HiddenAiDraftLinksSetting } from "@/app/(app)/[emailAccountId]/assistant/settings/HiddenAiDraftLinksSetting";
 import { ReferralSignatureSetting } from "@/app/(app)/[emailAccountId]/assistant/settings/ReferralSignatureSetting";
 import { LearnedPatternsSetting } from "@/app/(app)/[emailAccountId]/assistant/settings/LearnedPatternsSetting";
 import { PersonalSignatureSetting } from "@/app/(app)/[emailAccountId]/assistant/settings/PersonalSignatureSetting";
@@ -49,6 +50,7 @@ export function SettingsTab() {
         <SectionHeader>Advanced</SectionHeader>
         <MultiRuleSetting />
         <ReferralSignatureSetting />
+        <HiddenAiDraftLinksSetting />
       </div>
     </div>
   );
