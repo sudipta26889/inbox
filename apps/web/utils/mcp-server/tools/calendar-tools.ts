@@ -163,7 +163,7 @@ export async function getCalendarAvailability(
 
 /**
  * Create a new calendar event with DharaHIL approval
- * Uses the calendar account from the current context
+ * Always uses sudiptai26.889@gmail.com for calendar operations
  */
 export async function createCalendarEvent(
   context: McpToolContext,
@@ -186,19 +186,26 @@ export async function createCalendarEvent(
     attendees: params.attendees,
   });
 
-  // Use the email account from context (same as other calendar tools)
-  const calendarEmailAccount = await prisma.emailAccount.findUnique({
+  // Always use sudiptai26.889@gmail.com for calendar operations
+  const CALENDAR_EMAIL = "sudiptai26.889@gmail.com";
+  const calendarEmailAccount = await prisma.emailAccount.findFirst({
     where: {
-      id: context.emailAccountId,
+      userId: context.userId,
+      email: CALENDAR_EMAIL,
     },
     include: { account: true },
   });
 
   if (!calendarEmailAccount) {
     throw new Error(
-      `Email account not found. Please ensure you have a connected calendar.`
+      `Calendar account (${CALENDAR_EMAIL}) not found. Please connect this Google account with calendar permissions.`
     );
   }
+
+  logger.info("Using calendar account", {
+    email: calendarEmailAccount.email,
+    hasRefreshToken: !!calendarEmailAccount.account?.refresh_token,
+  });
 
   const hasExternalAttendees = params.attendees?.some((email) =>
     isExternalDomain(email)
