@@ -163,7 +163,7 @@ export async function getCalendarAvailability(
 
 /**
  * Create a new calendar event with DharaHIL approval
- * Default calendar: sudiptai26.889@gmail.com
+ * Uses the calendar account from the current context
  */
 export async function createCalendarEvent(
   context: McpToolContext,
@@ -179,25 +179,24 @@ export async function createCalendarEvent(
 ) {
   logger.info("MCP tool: create_calendar_event", {
     userId: context.userId,
+    emailAccountId: context.emailAccountId,
     title: params.title,
     startTime: params.startTime,
     endTime: params.endTime,
     attendees: params.attendees,
   });
 
-  // Default to sudiptai26.889@gmail.com
-  const defaultEmail = "sudiptai26.889@gmail.com";
-  const calendarEmailAccount = await prisma.emailAccount.findFirst({
+  // Use the email account from context (same as other calendar tools)
+  const calendarEmailAccount = await prisma.emailAccount.findUnique({
     where: {
-      userId: context.userId,
-      email: defaultEmail,
+      id: context.emailAccountId,
     },
     include: { account: true },
   });
 
   if (!calendarEmailAccount) {
     throw new Error(
-      `Default calendar account (${defaultEmail}) not found. Please connect this Google account first.`
+      `Email account not found. Please ensure you have a connected calendar.`
     );
   }
 
