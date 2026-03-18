@@ -11,6 +11,7 @@ export const MCP_SCOPES = {
   "email:read": "Read email data",
   "email:write": "Send and manage emails",
   "calendar:read": "Read calendar data",
+  "calendar:write": "Create and manage calendar events",
   "stats:read": "Read analytics and statistics",
   "rules:read": "Read automation rules",
   "rules:write": "Create and modify automation rules",

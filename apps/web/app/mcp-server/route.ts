@@ -124,7 +124,7 @@ export const POST = withError("mcp-server", async (request: RequestWithLogger) =
       }
 
       emailAccountId = primaryEmailAccount.id;
-      scopes = ["mcp:read", "mcp:write", "email:read", "email:write", "calendar:read", "stats:read", "rules:read", "rules:write"];
+      scopes = ["mcp:read", "mcp:write", "email:read", "email:write", "calendar:read", "calendar:write", "stats:read", "rules:read", "rules:write"];
 
       reqLogger.info("Authenticated MCP request via session", {
         method: message.method,
