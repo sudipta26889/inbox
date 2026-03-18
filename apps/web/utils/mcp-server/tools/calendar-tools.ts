@@ -2,6 +2,9 @@ import prisma from "@/utils/prisma";
 import { createScopedLogger } from "@/utils/logger";
 import type { McpToolContext } from "./registry";
 import { createCalendarEventProviders } from "@/utils/calendar/event-provider";
+import { getCalendarClientWithRefresh } from "@/utils/calendar/client";
+import { dharahilClient } from "@/utils/dharahil/client";
+import { env } from "@/env";
 
 const logger = createScopedLogger("mcp-calendar-tools");
 
@@ -156,4 +159,166 @@ export async function getCalendarAvailability(
       return total + (period.end.getTime() - period.start.getTime()) / (1000 * 60);
     }, 0),
   };
+}
+
+/**
+ * Create a new calendar event with DharaHIL approval
+ * Default calendar: sudiptai26.889@gmail.com
+ */
+export async function createCalendarEvent(
+  context: McpToolContext,
+  params: {
+    title: string;
+    startTime: string;
+    endTime: string;
+    attendees?: string[];
+    description?: string;
+    location?: string;
+    sendInvite?: boolean;
+  }
+) {
+  logger.info("MCP tool: create_calendar_event", {
+    userId: context.userId,
+    title: params.title,
+    startTime: params.startTime,
+    endTime: params.endTime,
+    attendees: params.attendees,
+  });
+
+  // Default to sudiptai26.889@gmail.com
+  const defaultEmail = "sudiptai26.889@gmail.com";
+  const calendarEmailAccount = await prisma.emailAccount.findFirst({
+    where: {
+      userId: context.userId,
+      email: defaultEmail,
+    },
+    include: { account: true },
+  });
+
+  if (!calendarEmailAccount) {
+    throw new Error(
+      `Default calendar account (${defaultEmail}) not found. Please connect this Google account first.`
+    );
+  }
+
+  const hasExternalAttendees = params.attendees?.some((email) =>
+    isExternalDomain(email)
+  );
+  const sendInvite = params.sendInvite ?? true;
+
+  // DharaHIL approval gate for ALL calendar event creates
+  if (env.NEXT_PUBLIC_DHARAHIL_ENABLED) {
+    logger.info("DharaHIL: Requesting approval for calendar event creation", {
+      title: params.title,
+      attendees: params.attendees,
+    });
+
+    const decision = await dharahilClient.runApprovalLoop({
+      toolName: "create_calendar_event",
+      toolArgs: {
+        title: params.title,
+        startTime: params.startTime,
+        endTime: params.endTime,
+        attendees: params.attendees || [],
+        description: params.description,
+        location: params.location,
+        sendInvite,
+      },
+      context: {
+        agentId: "inbox-calendar-provider",
+        runId: context.userId,
+        stepId: "create_event",
+        contextSummary: `Create calendar event: ${params.title} with ${params.attendees?.length || 0} attendees`,
+        riskLevel: hasExternalAttendees ? "HIGH" : "MEDIUM",
+        tags: [
+          "calendar",
+          "google",
+          hasExternalAttendees ? "external" : "internal",
+        ],
+        idempotencyKey: `calendar_${params.title}_${params.startTime}_${Date.now()}`,
+        metadata: {
+          provider: "google",
+          title: params.title,
+          attendee_count: String(params.attendees?.length || 0),
+          has_external_attendees: hasExternalAttendees ? "true" : "false",
+          send_invite: sendInvite ? "true" : "false",
+        },
+      },
+    });
+
+    if (dharahilClient.wasDenied(decision)) {
+      throw new Error(
+        `Calendar event creation denied by human reviewer: ${decision.action}${decision.reason ? ` - ${decision.reason}` : ""}`
+      );
+    }
+
+    if (dharahilClient.shouldRevise(decision)) {
+      throw new Error(
+        `Calendar event revision requested: ${decision.revise_input || "No specific instructions provided"}`
+      );
+    }
+
+    logger.info("DharaHIL: Calendar event creation approved", {
+      title: params.title,
+      action: decision.action,
+    });
+  }
+
+  // Get Google Calendar client
+  const calendar = await getCalendarClientWithRefresh({
+    accessToken: calendarEmailAccount.account?.access_token || null,
+    refreshToken: calendarEmailAccount.account?.refresh_token || null,
+    expiresAt: calendarEmailAccount.account?.expires_at
+      ? new Date(calendarEmailAccount.account.expires_at).getTime()
+      : null,
+    emailAccountId: calendarEmailAccount.id,
+    logger,
+  });
+
+  // Create the event
+  const eventResource = {
+    summary: params.title,
+    description: params.description,
+    location: params.location,
+    start: {
+      dateTime: params.startTime,
+      timeZone: "UTC",
+    },
+    end: {
+      dateTime: params.endTime,
+      timeZone: "UTC",
+    },
+    attendees: params.attendees?.map((email) => ({ email })),
+  };
+
+  const result = await calendar.events.insert({
+    calendarId: "primary",
+    sendNotifications: sendInvite,
+    requestBody: eventResource,
+  });
+
+  logger.info("Calendar event created successfully", {
+    eventId: result.data.id,
+    title: params.title,
+  });
+
+  return {
+    success: true,
+    eventId: result.data.id || "",
+    eventUrl: result.data.htmlLink || "",
+    summary: result.data.summary || "",
+    start: result.data.start?.dateTime || "",
+    end: result.data.end?.dateTime || "",
+    attendees: result.data.attendees?.map((a) => ({
+      email: a.email,
+      responseStatus: a.responseStatus,
+    })),
+  };
+}
+
+// Helper to determine if email domain is external
+function isExternalDomain(email: string): boolean {
+  const internalDomains = ["sudiptadhara.in", "localhost"];
+  const domain = email.split("@")[1]?.toLowerCase();
+  return !internalDomains.some((internal) => domain?.includes(internal));
 }

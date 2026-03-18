@@ -227,6 +227,13 @@ export const env = createEnv({
     TEAMS_BOT_APP_TYPE: z.enum(["MultiTenant", "SingleTenant"]).optional(),
     TELEGRAM_BOT_TOKEN: z.string().optional(),
     TELEGRAM_BOT_SECRET_TOKEN: z.string().optional(),
+
+    // DharaHIL - Human-in-the-Loop Approval Gateway
+    DHARAHIL_BASE_URL: z.string().url().optional(),
+    DHARAHIL_API_KEY: z.string().optional(),
+    DHARAHIL_TENANT_ID: z.string().uuid().optional(),
+    DHARAHIL_APP_ID: z.string().uuid().optional(),
+    DHARAHIL_ENVIRONMENT: z.enum(["production", "development"]).optional(),
   },
   client: {
     // stripe
@@ -290,6 +297,7 @@ export const env = createEnv({
     NEXT_PUBLIC_MEETING_BRIEFS_ENABLED: booleanString.optional(),
     NEXT_PUBLIC_FOLLOW_UP_REMINDERS_ENABLED: booleanString.optional(),
     NEXT_PUBLIC_INTEGRATIONS_ENABLED: booleanString.optional(),
+    NEXT_PUBLIC_DHARAHIL_ENABLED: booleanString.optional().default(false),
     NEXT_PUBLIC_SMART_FILING_ENABLED: booleanString.optional(),
     NEXT_PUBLIC_CLEANER_ENABLED: booleanString.optional(),
     NEXT_PUBLIC_EXTERNAL_API_ENABLED: booleanString.optional().default(false),

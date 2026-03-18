@@ -172,6 +172,51 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     requiredScope: "calendar:read",
   },
 
+  create_calendar_event: {
+    name: "create_calendar_event",
+    description: "Create a new calendar event with attendees. REQUIRES HUMAN APPROVAL via WhatsApp/Telegram before the event is created. Default calendar: sudiptai26.889@gmail.com",
+    inputSchema: {
+      type: "object",
+      properties: {
+        title: {
+          type: "string",
+          description: "Event title/summary",
+        },
+        startTime: {
+          type: "string",
+          description: "Start date/time (ISO 8601 format, e.g., '2026-03-20T14:00:00Z')",
+        },
+        endTime: {
+          type: "string",
+          description: "End date/time (ISO 8601 format, e.g., '2026-03-20T15:00:00Z')",
+        },
+        attendees: {
+          type: "array",
+          items: { type: "string" },
+          description: "List of attendee email addresses",
+        },
+        description: {
+          type: "string",
+          description: "Event description/notes (optional)",
+        },
+        location: {
+          type: "string",
+          description: "Event location (optional, e.g., 'Zoom', 'Conference Room A')",
+        },
+        sendInvite: {
+          type: "boolean",
+          description: "Whether to send calendar invites to attendees (default: true)",
+        },
+      },
+      required: ["title", "startTime", "endTime"],
+    },
+    handler: async (context, params) => {
+      const { createCalendarEvent } = await import("./calendar-tools");
+      return createCalendarEvent(context, params);
+    },
+    requiredScope: "calendar:write",
+  },
+
   get_email_stats: {
     name: "get_email_stats",
     description: "Get email statistics and analytics for a time period.",
