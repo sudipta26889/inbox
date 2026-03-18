@@ -37,6 +37,7 @@ export async function GET() {
       "email:read", // Read email data
       "email:write", // Send and manage emails
       "calendar:read", // Read calendar data
+      "calendar:write", // Create and manage calendar events
       "stats:read", // Read analytics
       "rules:read", // Read automation rules
       "rules:write", // Modify automation rules
