@@ -121,17 +121,26 @@ async function handleAuthorizationCodeGrant(formData: FormData, client: any) {
   });
 
   const jwtSecret = env.AUTH_SECRET || env.NEXTAUTH_SECRET || "";
+
+  // Auto-add calendar:write if calendar:read is present
+  // This works around MCP clients that don't request calendar:write yet
+  let finalScope = authCode.scope || "";
+  if (finalScope.includes("calendar:read") && !finalScope.includes("calendar:write")) {
+    finalScope = finalScope + " calendar:write";
+  }
+
   const tokens = await generateAccessToken({
     userId: authCode.userId,
     emailAccountId: authCode.emailAccountId,
     clientId: client.clientId,
-    scope: authCode.scope || "",
+    scope: finalScope,
     jwtSecret,
   });
 
   logger.info("Issued MCP access token via authorization code", {
     userId: authCode.userId,
     clientId: client.clientId,
+    scope: finalScope,
   });
 
   return NextResponse.json(
@@ -140,7 +149,7 @@ async function handleAuthorizationCodeGrant(formData: FormData, client: any) {
       token_type: tokens.tokenType,
       expires_in: tokens.expiresIn,
       refresh_token: tokens.refreshToken,
-      scope: authCode.scope,
+      scope: finalScope,
     },
     { headers: { ...CORS_HEADERS, "Cache-Control": "no-store", Pragma: "no-cache" } },
   );
