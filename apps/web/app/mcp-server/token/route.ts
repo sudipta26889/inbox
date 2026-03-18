@@ -125,7 +125,7 @@ async function handleAuthorizationCodeGrant(formData: FormData, client: any) {
     userId: authCode.userId,
     emailAccountId: authCode.emailAccountId,
     clientId: client.clientId,
-    scope: authCode.scope,
+    scope: authCode.scope || "",
     jwtSecret,
   });
 

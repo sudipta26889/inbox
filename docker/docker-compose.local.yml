@@ -17,7 +17,7 @@ services:
   app:
     image: ${FULL_IMAGE:-ghcr.io/your-username/inbox-zero}:latest
     ports:
-      - "3000:3000"
+      - "5500:5500"
     env_file:
       - ../apps/web/.env
     environment:

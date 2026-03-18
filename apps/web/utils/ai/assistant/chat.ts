@@ -166,6 +166,11 @@ ${emailSendToolsEnabled ? '- For pending email actions, do not treat "prepared" 
 - Before changing an existing rule, call getUserRulesAndSettings immediately before the write.
 - If a rule has changed since that read, call getUserRulesAndSettings again and then apply the update.
 
+Account context:
+- You are currently viewing the inbox for: ${user.email}
+- All search, inbox, and rule operations apply to this account only.
+- When the user asks to "check my emails" or "check emails of ${user.email}", they are asking about THIS account's inbox (the one you're currently viewing).
+
 Provider context:
 - Current provider: ${user.account.provider}.
 ${user.account.provider === "microsoft" ? '- Use KQL syntax for search: from:, to:, subject:, received>=YYYY-MM-DD, keyword search. Do not use Gmail-specific operators like in:, is:, label:, or after:/before:.\n- For inbox triage, prefer unread-focused searches using Microsoft-compatible syntax.\n- For Microsoft reply triage, use plain reply-focused search terms only. Example: `reply OR respond OR subject:"question" OR subject:"approval"`. Never use `is:unread`, `label:`, or `in:` in Microsoft queries.' : '- Use Gmail search syntax: from:, to:, subject:, in:inbox, is:unread, has:attachment, after:YYYY/MM/DD, before:YYYY/MM/DD, label:, newer_than:, older_than:.\n- For inbox triage, default to is:unread.\n- For Gmail reply triage, include reply-needed signals like `label:"To Reply"` when helpful.'}

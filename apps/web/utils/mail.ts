@@ -130,9 +130,21 @@ export function convertEmailHtmlToText({
  * @throws {SafeError} If email sending is disabled
  */
 export function ensureEmailSendingEnabled(): void {
-  if (!env.NEXT_PUBLIC_EMAIL_SEND_ENABLED) {
+  // In standalone builds, runtime env vars need to be read from process.env
+  // The env object is validated at build time and may not reflect runtime values
+  const processEnvValue = process.env.NEXT_PUBLIC_EMAIL_SEND_ENABLED;
+  const envValue = env.NEXT_PUBLIC_EMAIL_SEND_ENABLED;
+  const isEnabled = processEnvValue === "true" || envValue === true;
+
+  console.log("[ensureEmailSendingEnabled] Debug:", {
+    processEnvValue,
+    envValue,
+    isEnabled,
+  });
+
+  if (!isEnabled) {
     throw new SafeError(
-      "Email sending is disabled. Set NEXT_PUBLIC_EMAIL_SEND_ENABLED=true to enable.",
+      `Email sending is disabled. Set NEXT_PUBLIC_EMAIL_SEND_ENABLED=true to enable. (process.env=${processEnvValue}, env=${envValue})`,
     );
   }
 }

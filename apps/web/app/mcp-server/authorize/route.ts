@@ -1,9 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
-import { withError } from "@/utils/middleware";
+import { NextResponse } from "next/server";
+import { withError, type RequestWithLogger } from "@/utils/middleware";
 import { SafeError } from "@/utils/error";
 import { env } from "@/env";
 import {
-  validateCodeChallenge,
   validateCodeChallengeMethod,
   generateSecureToken,
 } from "@/utils/mcp-server/pkce";
@@ -36,7 +35,7 @@ export async function OPTIONS() {
  * 4. User approves → redirect to client with authorization code
  * 5. User denies → redirect to client with error
  */
-export const GET = withError("mcp-server/authorize", async (request: NextRequest) => {
+export const GET = withError("mcp-server/authorize", async (request: RequestWithLogger) => {
   const logger = request.logger;
   const searchParams = request.nextUrl.searchParams;
 

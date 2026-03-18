@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
-import { withError } from "@/utils/middleware";
+import { NextResponse } from "next/server";
+import { withError, type RequestWithLogger } from "@/utils/middleware";
 import { SafeError } from "@/utils/error";
 import { generateSecureToken } from "@/utils/mcp-server/pkce";
 import prisma from "@/utils/prisma";
@@ -20,7 +20,7 @@ export async function OPTIONS() {
 /**
  * OAuth 2.0 Dynamic Client Registration (RFC 7591)
  */
-export const POST = withError("mcp-server/register", async (request: NextRequest) => {
+export const POST = withError("mcp-server/register", async (request: RequestWithLogger) => {
   const logger = request.logger;
   const body = await request.json();
 

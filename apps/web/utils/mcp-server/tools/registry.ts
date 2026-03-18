@@ -29,7 +29,7 @@ export interface McpToolDefinition extends Tool {
 export const MCP_TOOLS: Record<string, McpToolDefinition> = {
   search_emails: {
     name: "search_emails",
-    description: "Search through emails using query text. Returns a list of matching emails with subject, sender, date, and snippet.",
+    description: "Search through emails across all your connected email accounts, or filter to a specific account. Returns a list of matching emails with subject, sender, date, snippet, and which account each email belongs to.",
     inputSchema: {
       type: "object",
       properties: {
@@ -39,16 +39,20 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
         },
         maxResults: {
           type: "number",
-          description: "Maximum number of results to return (default: 10, max: 50)",
+          description: "Maximum number of results to return per account (default: 10, max: 50)",
           default: 10,
+        },
+        emailAccountId: {
+          type: "string",
+          description: "Optional: Filter results to a specific email account ID. Use list_email_accounts to get available account IDs and emails. If not provided, searches across all your linked email accounts. If the account ID is invalid or not linked to your user, an error message will be returned.",
         },
       },
       required: ["query"],
     },
     handler: async (context, params) => {
       // Import dynamically to avoid circular dependencies
-      const { searchEmails } = await import("./email-tools");
-      return searchEmails(context, params);
+      const { searchEmailsMultiAccount } = await import("./email-tools");
+      return searchEmailsMultiAccount(context, params);
     },
     requiredScope: "email:read",
   },
@@ -75,7 +79,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
 
   send_email: {
     name: "send_email",
-    description: "Send a new email. Supports plain text and HTML content. If you have multiple email accounts, you can specify which one to send from using the 'from' parameter.",
+    description: "Send a new email from one of your configured email accounts. Supports plain text and HTML content. IMPORTANT: You must use the exact email address from one of your linked accounts (check with list_email_accounts tool). The 'from' parameter must match exactly.",
     inputSchema: {
       type: "object",
       properties: {
@@ -94,7 +98,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
         },
         from: {
           type: "string",
-          description: "Sender email address (optional). Use this to send from a specific account if you have multiple accounts configured. If not provided, uses your default account.",
+          description: "Sender email address (REQUIRED when you have multiple accounts). MUST be one of your configured account emails. Use list_email_accounts tool to see available emails. Example: 'admin@sudiptadhara.in' or 'sudiptai26.889@gmail.com'. If the email doesn't match any configured account, the send will fail.",
         },
         cc: {
           type: "array",

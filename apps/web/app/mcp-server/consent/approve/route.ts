@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
-import { withAuth } from "@/utils/middleware";
+import { NextResponse } from "next/server";
+import { withAuth, type RequestWithAuth } from "@/utils/middleware";
 import { SafeError } from "@/utils/error";
 import { generateSecureToken } from "@/utils/mcp-server/pkce";
 import { validateScopes } from "@/utils/mcp-server/tokens";
@@ -22,7 +22,7 @@ export async function OPTIONS() {
  * This endpoint is called when the user clicks "Authorize" on the consent screen.
  * It generates an authorization code and returns the redirect URL.
  */
-export const POST = withAuth("mcp-server/consent/approve", async (request: NextRequest) => {
+export const POST = withAuth("mcp-server/consent/approve", async (request: RequestWithAuth) => {
   const logger = request.logger;
   const userId = request.auth.userId;
 

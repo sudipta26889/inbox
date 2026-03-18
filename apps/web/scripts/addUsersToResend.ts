@@ -17,9 +17,7 @@ async function main() {
     try {
       if (user.email) {
         console.log("Adding user", user.email);
-        const result = await createContact({ email: user.email });
-        const error = result && "error" in result ? result.error : undefined;
-        if (error) console.error(error);
+        await createContact({ email: user.email });
       }
     } catch (error) {
       console.error("Error creating contact for user: ", user.email, error);

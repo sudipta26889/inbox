@@ -15,6 +15,9 @@
 - Before writing or updating tests, review `.claude/skills/testing/SKILL.md`.
 - When adding a new workspace package, add its `package.json` COPY line to `docker/Dockerfile.prod` and `docker/Dockerfile.local`.
 
+## MCP
+To add this system in claude code user need to use `claude mcp add --transport http EmailCalendar https://inbox.sudiptadhara.in/mcp-server --scope user`
+
 ## Code Style
 - Install packages in `apps/web`, not root: `cd apps/web && pnpm add ...`
 - Lodash: import specific functions (`import groupBy from "lodash/groupBy"`)

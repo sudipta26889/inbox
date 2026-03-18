@@ -106,9 +106,9 @@ export async function searchEmails(
     };
   } else {
     // Outlook
-    const outlook = await createOutlookClient(emailAccount);
+    const outlook = createOutlookClient(emailAccount.account.access_token!, logger);
 
-    const response = await outlook.api("/me/messages")
+    const response = await outlook.getClient().api("/me/messages")
       .search(params.query)
       .top(maxResults)
       .select("id,subject,from,receivedDateTime,bodyPreview")
@@ -128,6 +128,103 @@ export async function searchEmails(
       hasMore: messages.length === maxResults,
     };
   }
+}
+
+/**
+ * Search emails across multiple accounts or a specific account
+ */
+export async function searchEmailsMultiAccount(
+  context: McpToolContext,
+  params: { query: string; maxResults?: number; emailAccountId?: string }
+) {
+  logger.info("MCP tool: search_emails_multi_account", {
+    userId: context.userId,
+    query: params.query,
+    emailAccountId: params.emailAccountId,
+  });
+
+  // Get email accounts - either specific one or all
+  const emailAccounts = await prisma.emailAccount.findMany({
+    where: {
+      userId: context.userId,
+      ...(params.emailAccountId ? { id: params.emailAccountId } : {}),
+    },
+    include: { account: true },
+  });
+
+  if (emailAccounts.length === 0) {
+    return {
+      results: [],
+      accountsSearched: 0,
+      totalCount: 0,
+      message: params.emailAccountId
+        ? `Email account not found or not linked to your user. Account ID: ${params.emailAccountId}`
+        : "No email accounts configured",
+    };
+  }
+
+  const maxResults = Math.min(params.maxResults || 10, 50);
+
+  // Search each account and combine results
+  const searchResults = await Promise.all(
+    emailAccounts.map(async (emailAccount) => {
+      try {
+        const accountContext = {
+          ...context,
+          emailAccountId: emailAccount.id,
+        };
+        const results = await searchEmails(accountContext, {
+          query: params.query,
+          maxResults,
+        });
+
+        return {
+          accountId: emailAccount.id,
+          accountEmail: emailAccount.email,
+          provider: emailAccount.account?.provider || "unknown",
+          ...results,
+        };
+      } catch (error) {
+        logger.error("Failed to search account", {
+          error,
+          accountEmail: emailAccount.email,
+        });
+        return {
+          accountId: emailAccount.id,
+          accountEmail: emailAccount.email,
+          provider: emailAccount.account?.provider || "unknown",
+          results: [],
+          count: 0,
+          hasMore: false,
+          error: "Failed to search this account",
+        };
+      }
+    })
+  );
+
+  // Flatten and combine all results
+  const allResults = searchResults.flatMap((result) =>
+    result.results.map((email: any) => ({
+      ...email,
+      accountId: result.accountId,
+      accountEmail: result.accountEmail,
+      provider: result.provider,
+    }))
+  );
+
+  return {
+    results: allResults,
+    accountsSearched: emailAccounts.length,
+    totalCount: allResults.length,
+    byAccount: searchResults.map((r) => ({
+      accountId: r.accountId,
+      accountEmail: r.accountEmail,
+      provider: r.provider,
+      count: r.count,
+      hasMore: r.hasMore,
+      error: r.error,
+    })),
+  };
 }
 
 /**
@@ -183,12 +280,12 @@ export async function getEmail(
       })) || [],
     };
   } else {
-    const outlook = await createOutlookClient(emailAccount);
-    const message = await getOutlookMessage(params.emailId, outlook);
+    const outlook = createOutlookClient(emailAccount.account.access_token!, logger);
+    const message = await getOutlookMessage(params.emailId, outlook, logger);
 
     return {
       id: message.id,
-      threadId: message.conversationId,
+      threadId: message.conversationIndex || "",
       from: message.headers.from,
       to: message.headers.to,
       cc: message.headers.cc,
@@ -264,20 +361,54 @@ export async function sendEmail(
     from: params.from,
   });
 
+  // Validate required parameters
+  if (!params.to || !Array.isArray(params.to) || params.to.length === 0) {
+    throw new Error(
+      "Missing required parameter 'to'. Must be a non-empty array of email addresses."
+    );
+  }
+  if (!params.subject || typeof params.subject !== "string") {
+    throw new Error("Missing required parameter 'subject'. Must be a non-empty string.");
+  }
+  if (!params.body || typeof params.body !== "string") {
+    throw new Error("Missing required parameter 'body'. Must be a non-empty string.");
+  }
+
   // If 'from' is specified, look up the email account by email address
   let emailAccountId = context.emailAccountId;
 
   if (params.from) {
+    // Validate that 'from' looks like an email address
+    if (!params.from.includes('@')) {
+      const allAccounts = await prisma.emailAccount.findMany({
+        where: { userId: context.userId },
+        select: { email: true },
+      });
+      const availableEmails = allAccounts.map(a => a.email).join(', ');
+      throw new Error(
+        `Invalid 'from' parameter: "${params.from}". The 'from' must be a valid email address. ` +
+        `Available accounts: ${availableEmails}`
+      );
+    }
+
     const fromAccount = await prisma.emailAccount.findFirst({
       where: {
         userId: context.userId,
         email: params.from,
       },
-      select: { id: true },
+      select: { id: true, email: true },
     });
 
     if (!fromAccount) {
-      throw new Error(`Email account '${params.from}' not found or you don't have access to it`);
+      const allAccounts = await prisma.emailAccount.findMany({
+        where: { userId: context.userId },
+        select: { email: true },
+      });
+      const availableEmails = allAccounts.map(a => a.email).join(', ');
+      throw new Error(
+        `Email account '${params.from}' not found. ` +
+        `You must use one of your configured accounts: ${availableEmails}`
+      );
     }
 
     emailAccountId = fromAccount.id;
@@ -326,7 +457,7 @@ export async function sendEmail(
       threadId: result.data.threadId || "",
     };
   } else {
-    const outlook = await createOutlookClient(emailAccount);
+    const outlook = createOutlookClient(emailAccount.account.access_token!, logger);
 
     const result = await outlookSendEmail(outlook, {
       to: params.to.join(", "),

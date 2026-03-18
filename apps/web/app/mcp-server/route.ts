@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
-import { withError } from "@/utils/middleware";
+import { NextResponse } from "next/server";
+import { withError, type RequestWithLogger } from "@/utils/middleware";
 import {
   validateAccessToken,
   type McpTokenPayload,
@@ -34,7 +34,7 @@ export async function OPTIONS() {
 /**
  * POST /mcp-server - Handle MCP protocol requests
  */
-export const POST = withError("mcp-server", async (request: NextRequest) => {
+export const POST = withError("mcp-server", async (request: RequestWithLogger) => {
   const reqLogger = request.logger || logger;
 
   try {
@@ -53,8 +53,8 @@ export const POST = withError("mcp-server", async (request: NextRequest) => {
       return createErrorResponse(message.id, -32600, "Invalid Request: missing or invalid method");
     }
 
-    let userId: string;
-    let emailAccountId: string;
+    let userId: string | undefined;
+    let emailAccountId: string | undefined;
     let clientId: string | undefined;
     let scopes: string[] = [];
 
@@ -135,6 +135,35 @@ export const POST = withError("mcp-server", async (request: NextRequest) => {
 
     // Handle initialize
     if (message.method === "initialize") {
+      // Fetch all email accounts for the user to provide context
+      const emailAccounts = userId ? await prisma.emailAccount.findMany({
+        where: { userId },
+        select: {
+          id: true,
+          email: true,
+          account: {
+            select: { provider: true },
+          },
+        },
+        orderBy: { createdAt: "asc" },
+      }) : [];
+
+      const accountsList = emailAccounts.map(a => `${a.email} (${a.account?.provider || 'unknown'})`).join(", ");
+      const emailsList = emailAccounts.map(a => a.email).join(", ");
+      const instructions = emailAccounts.length > 0
+        ? `IMPORTANT: You have access to ${emailAccounts.length} linked email account(s): ${accountsList}.\n\n` +
+          `Email Searching:\n` +
+          `- Use "list_email_accounts" to see all account IDs and details.\n` +
+          `- "search_emails" searches across ALL accounts by default.\n` +
+          `- To filter to one account, pass "emailAccountId" parameter.\n` +
+          `- Results include "accountEmail" and "accountId" showing which account each email came from.\n\n` +
+          `Sending Emails:\n` +
+          `- When sending with "send_email", you MUST specify the "from" parameter.\n` +
+          `- The "from" value MUST be one of these EXACT email addresses: ${emailsList}\n` +
+          `- Example: { "from": "${emailAccounts[0]?.email}", "to": ["user@example.com"], ... }\n` +
+          `- If "from" doesn't match a configured account exactly, the send will fail.`
+        : "No email accounts linked. Please connect an email account first.";
+
       return NextResponse.json({
         jsonrpc: "2.0",
         id: message.id,
@@ -146,6 +175,7 @@ export const POST = withError("mcp-server", async (request: NextRequest) => {
           serverInfo: {
             name: "Inbox MCP Server",
             version: "1.0.0",
+            instructions,
           },
         },
       }, { headers: CORS_HEADERS });
@@ -191,9 +221,19 @@ export const POST = withError("mcp-server", async (request: NextRequest) => {
         return createErrorResponse(message.id, -32003, `Insufficient permissions. Required scope: ${tool.requiredScope}`);
       }
 
+      // At this point, authentication has succeeded so these must be defined
+      if (!userId || !emailAccountId) {
+        return createErrorResponse(message.id, -32603, "Internal error: missing user context");
+      }
+
       try {
         const result = await tool.handler(
-          { userId, emailAccountId, clientId, scopes },
+          {
+            userId,
+            emailAccountId,
+            clientId: clientId || "",
+            scopes
+          },
           message.params?.arguments || {}
         );
 
