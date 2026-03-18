@@ -203,16 +203,30 @@ export class DharaHILClient {
         const data = (await response.json()) as any;
 
         // Check if we have a decision
-        if (data.action && data.action !== "PENDING") {
+        // Gateway returns: status (PENDING/APPROVED/REJECTED/etc) and last_decision (approve/reject/etc)
+        if (data.status && data.status !== "PENDING") {
           logger.info("DharaHIL: Decision received", {
             requestId,
-            action: data.action,
+            status: data.status,
+            last_decision: data.last_decision,
           });
 
+          // Map gateway status to our action enum
+          let action: DharaHILAction;
+          if (data.status === "APPROVED" || data.last_decision === "approve") {
+            action = "APPROVED";
+          } else if (data.status === "REJECTED" || data.last_decision === "reject") {
+            action = "DENIED";
+          } else if (data.last_decision === "revise") {
+            action = "REVISE_REQUESTED";
+          } else {
+            action = data.status as DharaHILAction;
+          }
+
           return {
-            action: data.action as DharaHILAction,
-            revise_input: data.revise_input,
-            reason: data.reason,
+            action,
+            revise_input: data.last_decision_revise_input,
+            reason: data.last_decision_note,
           };
         }
 
