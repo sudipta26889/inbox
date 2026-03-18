@@ -36,10 +36,10 @@ export function Privacy() {
             the highest security and privacy standards.
           </p>
           <p className="mt-2 text-lg leading-8 text-gray-600">
-            Inbox is SOC2 compliant and CASA Tier 2 approved. It has
-            undergone a thorough security process with Google to ensure the
-            protection of your emails. You can even self-host Inbox on your
-            own infrastructure.
+            Inbox is SOC2 compliant and CASA Tier 2 approved. It has undergone a
+            thorough security process with Google to ensure the protection of
+            your emails. You can even self-host Inbox on your own
+            infrastructure.
           </p>
         </div>
       </div>

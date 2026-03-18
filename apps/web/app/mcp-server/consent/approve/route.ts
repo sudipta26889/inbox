@@ -22,92 +22,95 @@ export async function OPTIONS() {
  * This endpoint is called when the user clicks "Authorize" on the consent screen.
  * It generates an authorization code and returns the redirect URL.
  */
-export const POST = withAuth("mcp-server/consent/approve", async (request: RequestWithAuth) => {
-  const logger = request.logger;
-  const userId = request.auth.userId;
+export const POST = withAuth(
+  "mcp-server/consent/approve",
+  async (request: RequestWithAuth) => {
+    const logger = request.logger;
+    const userId = request.auth.userId;
 
-  const body = await request.json();
-  const {
-    client_id: clientId,
-    redirect_uri: redirectUri,
-    scope,
-    state,
-    code_challenge: codeChallenge,
-    code_challenge_method: codeChallengeMethod,
-    email_account_id: emailAccountId,
-  } = body;
+    const body = await request.json();
+    const {
+      client_id: clientId,
+      redirect_uri: redirectUri,
+      scope,
+      state,
+      code_challenge: codeChallenge,
+      code_challenge_method: codeChallengeMethod,
+      email_account_id: emailAccountId,
+    } = body;
 
-  // Validate required fields
-  if (!clientId || !redirectUri || !codeChallenge || !emailAccountId) {
-    throw new SafeError("Missing required parameters");
-  }
+    // Validate required fields
+    if (!clientId || !redirectUri || !codeChallenge || !emailAccountId) {
+      throw new SafeError("Missing required parameters");
+    }
 
-  // Validate scopes
-  if (!validateScopes(scope)) {
-    throw new SafeError("Invalid scope");
-  }
+    // Validate scopes
+    if (!validateScopes(scope)) {
+      throw new SafeError("Invalid scope");
+    }
 
-  // Verify client exists
-  const client = await prisma.mcpServerClient.findUnique({
-    where: { clientId },
-  });
+    // Verify client exists
+    const client = await prisma.mcpServerClient.findUnique({
+      where: { clientId },
+    });
 
-  if (!client) {
-    throw new SafeError("Unknown client");
-  }
+    if (!client) {
+      throw new SafeError("Unknown client");
+    }
 
-  // Verify redirect URI is registered
-  if (!client.redirectUris.includes(redirectUri)) {
-    throw new SafeError("Invalid redirect_uri");
-  }
+    // Verify redirect URI is registered
+    if (!client.redirectUris.includes(redirectUri)) {
+      throw new SafeError("Invalid redirect_uri");
+    }
 
-  // Verify email account belongs to user
-  const emailAccount = await prisma.emailAccount.findFirst({
-    where: {
-      id: emailAccountId,
-      userId,
-    },
-  });
+    // Verify email account belongs to user
+    const emailAccount = await prisma.emailAccount.findFirst({
+      where: {
+        id: emailAccountId,
+        userId,
+      },
+    });
 
-  if (!emailAccount) {
-    throw new SafeError("Invalid email account");
-  }
+    if (!emailAccount) {
+      throw new SafeError("Invalid email account");
+    }
 
-  // Generate authorization code
-  const code = generateSecureToken(32);
-  const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    // Generate authorization code
+    const code = generateSecureToken(32);
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
-  // Store authorization code
-  await prisma.mcpServerAuthorizationCode.create({
-    data: {
-      code,
-      redirectUri,
-      scope: scope || "",
-      state: state || "",
-      codeChallenge,
-      codeChallengeMethod: codeChallengeMethod || "S256",
+    // Store authorization code
+    await prisma.mcpServerAuthorizationCode.create({
+      data: {
+        code,
+        redirectUri,
+        scope: scope || "",
+        state: state || "",
+        codeChallenge,
+        codeChallengeMethod: codeChallengeMethod || "S256",
+        userId,
+        emailAccountId,
+        clientId,
+        expiresAt,
+      },
+    });
+
+    logger.info("User approved MCP client consent", {
       userId,
       emailAccountId,
       clientId,
-      expiresAt,
-    },
-  });
+      scope,
+    });
 
-  logger.info("User approved MCP client consent", {
-    userId,
-    emailAccountId,
-    clientId,
-    scope,
-  });
+    // Build redirect URL with authorization code
+    const redirectUrl = new URL(redirectUri);
+    redirectUrl.searchParams.set("code", code);
+    if (state) {
+      redirectUrl.searchParams.set("state", state);
+    }
 
-  // Build redirect URL with authorization code
-  const redirectUrl = new URL(redirectUri);
-  redirectUrl.searchParams.set("code", code);
-  if (state) {
-    redirectUrl.searchParams.set("state", state);
-  }
-
-  return NextResponse.json({
-    redirectUrl: redirectUrl.toString(),
-  });
-});
+    return NextResponse.json({
+      redirectUrl: redirectUrl.toString(),
+    });
+  },
+);

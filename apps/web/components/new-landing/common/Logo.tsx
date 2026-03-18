@@ -43,18 +43,12 @@ function GlassLogo() {
 }
 
 function DefaultLogo() {
-  return (
-    <span className="text-xl font-bold text-gray-900 tracking-tight">
-      {BRAND_NAME}
-    </span>
-  );
+  return <CustomLogo logoUrl="/images/logos/email-agent-logo.png" />;
 }
 
 function MobileLogo() {
   return (
-    <span className="text-lg font-bold text-gray-900 tracking-tight">
-      {BRAND_NAME}
-    </span>
+    <CustomLogo logoUrl="/images/logos/email-agent-logo.png" variant="mobile" />
   );
 }
 

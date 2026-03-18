@@ -556,7 +556,9 @@ function ActionCard({
     actionType === ActionType.SEND_EMAIL;
   const supportsAiSelectedSources = actionType === ActionType.DRAFT_EMAIL;
   const canConfigureStaticAttachments =
-    actionType === ActionType.DRAFT_EMAIL ? contentSetManually : supportsAttachments;
+    actionType === ActionType.DRAFT_EMAIL
+      ? contentSetManually
+      : supportsAttachments;
 
   const staticAttachments = useWatch({
     control,
@@ -586,8 +588,8 @@ function ActionCard({
       ) : isDraftEmailWithoutManualContent ? (
         <Card className="p-4 space-y-4">
           <MutedText className="px-1 h-full flex items-center">
-            Our AI generates a draft reply from your email history and
-            knowledge base.
+            Our AI generates a draft reply from your email history and knowledge
+            base.
           </MutedText>
           {delayControls}
           {attachmentsField}

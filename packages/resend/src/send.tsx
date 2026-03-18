@@ -330,8 +330,6 @@ export const sendColdEmailNotification = async ({
     console.error("Error sending cold email notification", error);
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error";
-    throw new Error(
-      `Error sending cold email notification: ${errorMessage}`,
-    );
+    throw new Error(`Error sending cold email notification: ${errorMessage}`);
   }
 };

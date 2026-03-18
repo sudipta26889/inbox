@@ -22,7 +22,7 @@ export default function NewLanding() {
     return (
       <BasicLayout>
         <Hero
-          title={`Your AI Email Assistant`}
+          title={"Your AI Email Assistant"}
           subtitle="Organize your inbox, auto-draft replies, bulk unsubscribe, and reach inbox zero — powered by your own AI, running on your own hardware."
         />
       </BasicLayout>

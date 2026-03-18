@@ -23,6 +23,7 @@ export type CoreConditionType = Extract<ConditionType, "AI" | "STATIC">;
 
 export const WELCOME_PATH = "/welcome-redirect";
 
-export const EXTENSION_URL = "https://chromewebstore.google.com/detail/inbox-tabs/apfndijdhgplidobbecjlknakhohjggc";
+export const EXTENSION_URL =
+  "https://chromewebstore.google.com/detail/inbox-tabs/apfndijdhgplidobbecjlknakhohjggc";
 
 export const ONBOARDING_PROCESS_EMAILS_COUNT = 20;

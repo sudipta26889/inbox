@@ -1,8 +1,6 @@
 "use client";
 
 import Image from "next/image";
-import { Gmail } from "@/components/new-landing/icons/Gmail";
-import { Outlook } from "@/components/new-landing/icons/Outlook";
 import {
   Section,
   SectionContent,

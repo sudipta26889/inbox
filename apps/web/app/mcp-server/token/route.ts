@@ -1,6 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { env } from "@/env";
-import { verifyCodeChallenge, validateCodeVerifier } from "@/utils/mcp-server/pkce";
+import {
+  verifyCodeChallenge,
+  validateCodeVerifier,
+} from "@/utils/mcp-server/pkce";
 import {
   generateAccessToken,
   refreshAccessToken,
@@ -29,7 +32,14 @@ export async function OPTIONS() {
 function oauthError(error: string, errorDescription: string, status = 400) {
   return NextResponse.json(
     { error, error_description: errorDescription },
-    { status, headers: { ...CORS_HEADERS, "Cache-Control": "no-store", Pragma: "no-cache" } }
+    {
+      status,
+      headers: {
+        ...CORS_HEADERS,
+        "Cache-Control": "no-store",
+        Pragma: "no-cache",
+      },
+    },
   );
 }
 
@@ -43,11 +53,17 @@ export async function POST(request: NextRequest) {
     const clientId = formData.get("client_id")?.toString();
 
     if (!grantType) {
-      return oauthError("invalid_request", "Missing required parameter: grant_type");
+      return oauthError(
+        "invalid_request",
+        "Missing required parameter: grant_type",
+      );
     }
 
     if (!clientId) {
-      return oauthError("invalid_request", "Missing required parameter: client_id");
+      return oauthError(
+        "invalid_request",
+        "Missing required parameter: client_id",
+      );
     }
 
     const client = await prisma.mcpServerClient.findUnique({
@@ -63,11 +79,20 @@ export async function POST(request: NextRequest) {
     } else if (grantType === "refresh_token") {
       return await handleRefreshTokenGrant(formData, client);
     } else {
-      return oauthError("unsupported_grant_type", `Unsupported grant_type: ${grantType}`);
+      return oauthError(
+        "unsupported_grant_type",
+        `Unsupported grant_type: ${grantType}`,
+      );
     }
-  } catch (error: any) {
-    logger.error("Token endpoint error", { error: error.message });
-    return oauthError("server_error", error.message || "Internal server error", 500);
+  } catch (error) {
+    logger.error("Token endpoint error", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return oauthError(
+      "server_error",
+      error instanceof Error ? error.message : "Internal server error",
+      500,
+    );
   }
 }
 
@@ -80,10 +105,16 @@ async function handleAuthorizationCodeGrant(formData: FormData, client: any) {
     return oauthError("invalid_request", "Missing required parameter: code");
   }
   if (!redirectUri) {
-    return oauthError("invalid_request", "Missing required parameter: redirect_uri");
+    return oauthError(
+      "invalid_request",
+      "Missing required parameter: redirect_uri",
+    );
   }
   if (!codeVerifier) {
-    return oauthError("invalid_request", "Missing required parameter: code_verifier");
+    return oauthError(
+      "invalid_request",
+      "Missing required parameter: code_verifier",
+    );
   }
   if (!validateCodeVerifier(codeVerifier)) {
     return oauthError("invalid_request", "Invalid code_verifier format");
@@ -125,7 +156,10 @@ async function handleAuthorizationCodeGrant(formData: FormData, client: any) {
   // Auto-add calendar:write if calendar:read is present
   // This works around MCP clients that don't request calendar:write yet
   let finalScope = authCode.scope || "";
-  if (finalScope.includes("calendar:read") && !finalScope.includes("calendar:write")) {
+  if (
+    finalScope.includes("calendar:read") &&
+    !finalScope.includes("calendar:write")
+  ) {
     finalScope = finalScope + " calendar:write";
   }
 
@@ -151,7 +185,13 @@ async function handleAuthorizationCodeGrant(formData: FormData, client: any) {
       refresh_token: tokens.refreshToken,
       scope: finalScope,
     },
-    { headers: { ...CORS_HEADERS, "Cache-Control": "no-store", Pragma: "no-cache" } },
+    {
+      headers: {
+        ...CORS_HEADERS,
+        "Cache-Control": "no-store",
+        Pragma: "no-cache",
+      },
+    },
   );
 }
 
@@ -159,7 +199,10 @@ async function handleRefreshTokenGrant(formData: FormData, client: any) {
   const refreshToken = formData.get("refresh_token")?.toString();
 
   if (!refreshToken) {
-    return oauthError("invalid_request", "Missing required parameter: refresh_token");
+    return oauthError(
+      "invalid_request",
+      "Missing required parameter: refresh_token",
+    );
   }
 
   const jwtSecret = env.AUTH_SECRET || env.NEXTAUTH_SECRET || "";
@@ -178,6 +221,12 @@ async function handleRefreshTokenGrant(formData: FormData, client: any) {
       expires_in: tokens.expiresIn,
       refresh_token: tokens.refreshToken,
     },
-    { headers: { ...CORS_HEADERS, "Cache-Control": "no-store", Pragma: "no-cache" } },
+    {
+      headers: {
+        ...CORS_HEADERS,
+        "Cache-Control": "no-store",
+        Pragma: "no-cache",
+      },
+    },
   );
 }

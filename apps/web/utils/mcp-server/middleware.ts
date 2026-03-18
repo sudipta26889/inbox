@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { env } from "@/env";
 import {
   validateAccessToken,
@@ -15,6 +15,7 @@ const logger = createScopedLogger("mcp-auth-middleware");
  * Extended NextRequest with MCP auth context
  */
 export interface McpAuthenticatedRequest extends NextRequest {
+  logger: ReturnType<typeof createScopedLogger>;
   mcpAuth: {
     token: McpTokenPayload;
     userId: string;
@@ -22,7 +23,6 @@ export interface McpAuthenticatedRequest extends NextRequest {
     clientId: string;
     scopes: string[];
   };
-  logger: ReturnType<typeof createScopedLogger>;
 }
 
 /**

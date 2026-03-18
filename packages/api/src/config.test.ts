@@ -102,7 +102,11 @@ describe("updateConfig", () => {
 
   it("throws when the API key is missing", () => {
     expect(() =>
-      resolveRuntimeConfig({ baseUrl: "https://www.inbox.sudiptadhara.in" }, {}, {}),
+      resolveRuntimeConfig(
+        { baseUrl: "https://www.inbox.sudiptadhara.in" },
+        {},
+        {},
+      ),
     ).toThrow("Missing API key");
   });
 

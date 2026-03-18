@@ -59,9 +59,7 @@ const ActionRequiredEmail: ActionRequiredEmailComponent = ({
               </Link>
 
               <Text className="mx-0 mb-8 mt-4 p-0 text-center text-2xl font-normal">
-                <span className="font-semibold tracking-tighter">
-                  Inbox
-                </span>
+                <span className="font-semibold tracking-tighter">Inbox</span>
               </Text>
 
               <Text className="mx-0 mb-8 mt-0 p-0 text-center text-2xl font-normal text-gray-900">

@@ -13,14 +13,14 @@ export { MCP_SCOPES, type McpScope };
  * JWT token payload structure
  */
 export interface McpTokenPayload {
-  sub: string; // Subject (user ID)
+  client_id: string; // Client ID
   email: string; // User email
   email_account_id: string; // Email account ID
-  scope: string; // Space-separated scopes
-  client_id: string; // Client ID
   exp: number; // Expiration timestamp
   iat: number; // Issued at timestamp
   jti: string; // JWT ID (token ID)
+  scope: string; // Space-separated scopes
+  sub: string; // Subject (user ID)
   token_type: "access" | "refresh";
 }
 
@@ -29,7 +29,10 @@ export interface McpTokenPayload {
  * This is a simplified JWT implementation - in production you might want to use
  * the 'jose' library for full JWT/JWS support
  */
-export function createJwtToken(payload: McpTokenPayload, secret: string): string {
+export function createJwtToken(
+  payload: McpTokenPayload,
+  secret: string,
+): string {
   // JWT Header
   const header = {
     alg: "HS256",
@@ -80,7 +83,9 @@ export function verifyJwtToken(
     }
 
     // Decode and parse payload
-    const payloadJson = Buffer.from(encodedPayload, "base64url").toString("utf8");
+    const payloadJson = Buffer.from(encodedPayload, "base64url").toString(
+      "utf8",
+    );
     const payload = JSON.parse(payloadJson) as McpTokenPayload;
 
     // Verify expiration
@@ -320,7 +325,10 @@ export function validateScopes(scopeString: string): boolean {
 /**
  * Check if a token has a specific scope
  */
-export function hasScope(payload: McpTokenPayload, requiredScope: McpScope): boolean {
+export function hasScope(
+  payload: McpTokenPayload,
+  requiredScope: McpScope,
+): boolean {
   const scopes = payload.scope.split(" ");
   return scopes.includes(requiredScope);
 }

@@ -35,7 +35,8 @@ export const redis = {
     value: unknown,
     opts?: { ex?: number; nx?: boolean },
   ): Promise<string | null> {
-    const serialized = typeof value === "string" ? value : JSON.stringify(value);
+    const serialized =
+      typeof value === "string" ? value : JSON.stringify(value);
     const args: string[] = [];
     if (opts?.ex) {
       args.push("EX", opts.ex.toString());
@@ -84,10 +85,14 @@ export const redis = {
     }
   },
 
-  async hset(key: string, fieldValues: Record<string, unknown>): Promise<number> {
+  async hset(
+    key: string,
+    fieldValues: Record<string, unknown>,
+  ): Promise<number> {
     const serialized: Record<string, string> = {};
     for (const [field, value] of Object.entries(fieldValues)) {
-      serialized[field] = typeof value === "string" ? value : JSON.stringify(value);
+      serialized[field] =
+        typeof value === "string" ? value : JSON.stringify(value);
     }
     return ioRedisClient.hset(key, serialized);
   },
@@ -111,11 +116,19 @@ export const redis = {
     return result as T;
   },
 
-  async hincrby(key: string, field: string, increment: number): Promise<number> {
+  async hincrby(
+    key: string,
+    field: string,
+    increment: number,
+  ): Promise<number> {
     return ioRedisClient.hincrby(key, field, increment);
   },
 
-  async hincrbyfloat(key: string, field: string, increment: number): Promise<string> {
+  async hincrbyfloat(
+    key: string,
+    field: string,
+    increment: number,
+  ): Promise<string> {
     return ioRedisClient.hincrbyfloat(key, field, increment);
   },
 

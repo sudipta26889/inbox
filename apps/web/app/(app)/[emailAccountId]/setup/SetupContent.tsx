@@ -25,7 +25,6 @@ import { Card } from "@/components/ui/card";
 import { prefixPath } from "@/utils/path";
 import { useSetupProgress } from "@/hooks/useSetupProgress";
 import { LoadingContent } from "@/components/LoadingContent";
-import { isGoogleProvider } from "@/utils/email/provider-types";
 import { useAccount } from "@/providers/EmailAccountProvider";
 import {
   STEP_KEYS,

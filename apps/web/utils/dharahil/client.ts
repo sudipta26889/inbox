@@ -18,32 +18,32 @@ export type DharaHILAction =
 
 export interface DharaHILContext {
   agentId: string;
-  runId: string;
-  stepId?: string;
   contextSummary: string;
-  riskLevel: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
-  tags?: string[];
   idempotencyKey?: string;
   metadata?: Record<string, string>;
+  riskLevel: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+  runId: string;
+  stepId?: string;
+  tags?: string[];
 }
 
 export interface DharaHILRequest {
-  toolName: string;
-  toolArgs: Record<string, any>;
   context: DharaHILContext;
+  toolArgs: Record<string, any>;
+  toolName: string;
 }
 
 export interface DharaHILResponse {
-  request_id: string;
-  expires_at: string; // ISO 8601 timestamp
-  status: string;
   action?: DharaHILAction;
+  expires_at: string; // ISO 8601 timestamp
+  request_id: string;
+  status: string;
 }
 
 export interface DharaHILDecision {
   action: DharaHILAction;
-  revise_input?: string;
   reason?: string;
+  revise_input?: string;
 }
 
 export class DharaHILClient {
@@ -130,7 +130,7 @@ export class DharaHILClient {
           error: errorText,
         });
         throw new SafeError(
-          `DharaHIL request failed: ${response.status} ${errorText}`
+          `DharaHIL request failed: ${response.status} ${errorText}`,
         );
       }
 
@@ -145,7 +145,7 @@ export class DharaHILClient {
       logger.error("DharaHIL: Failed to submit request", { error });
       // Fail-safe: Return DENY on any error
       throw new SafeError(
-        "DharaHIL gateway unreachable - action denied for safety"
+        "DharaHIL gateway unreachable - action denied for safety",
       );
     }
   }
@@ -156,7 +156,7 @@ export class DharaHILClient {
   async pollForDecision(
     requestId: string,
     expiresAt: string,
-    pollIntervalMs = 3000
+    pollIntervalMs = 3000,
   ): Promise<DharaHILDecision> {
     const expiresAtTime = new Date(expiresAt).getTime();
     const now = Date.now();
@@ -187,7 +187,7 @@ export class DharaHILClient {
             headers: {
               "X-DHARA-API-KEY": this.apiKey,
             },
-          }
+          },
         );
 
         if (!response.ok) {
@@ -215,7 +215,10 @@ export class DharaHILClient {
           let action: DharaHILAction;
           if (data.status === "APPROVED" || data.last_decision === "approve") {
             action = "APPROVED";
-          } else if (data.status === "REJECTED" || data.last_decision === "reject") {
+          } else if (
+            data.status === "REJECTED" ||
+            data.last_decision === "reject"
+          ) {
             action = "DENIED";
           } else if (data.last_decision === "revise") {
             action = "REVISE_REQUESTED";
@@ -261,7 +264,7 @@ export class DharaHILClient {
       // Poll for decision using the TTL from gateway
       const decision = await this.pollForDecision(
         response.request_id,
-        response.expires_at
+        response.expires_at,
       );
 
       return decision;

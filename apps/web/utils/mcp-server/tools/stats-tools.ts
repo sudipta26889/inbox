@@ -9,7 +9,11 @@ const logger = createScopedLogger("mcp-stats-tools");
  */
 export async function getEmailStats(
   context: McpToolContext,
-  params: { period: "day" | "week" | "month" | "year"; fromDate?: string; toDate?: string }
+  params: {
+    period: "day" | "week" | "month" | "year";
+    fromDate?: string;
+    toDate?: string;
+  },
 ) {
   logger.info("MCP tool: get_email_stats", {
     userId: context.userId,

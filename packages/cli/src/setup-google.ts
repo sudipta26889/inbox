@@ -7,19 +7,19 @@ import { generateSecret } from "./utils";
 // ═══════════════════════════════════════════════════════════════════════════
 
 interface GcloudPrerequisites {
-  installed: boolean;
   authenticated: boolean;
+  installed: boolean;
   projectId: string | null;
 }
 
 interface SetupResult {
-  success: boolean;
   error?: string;
+  success: boolean;
 }
 
 export interface GoogleSetupOptions {
-  projectId?: string;
   domain?: string;
+  projectId?: string;
   skipOauth?: boolean;
   skipPubsub?: boolean;
 }

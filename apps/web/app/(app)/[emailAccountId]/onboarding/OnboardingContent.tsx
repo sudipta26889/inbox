@@ -76,12 +76,12 @@ export function OnboardingContent({ step }: OnboardingContentProps) {
     [STEP_KEYS.DRAFT]: env.NEXT_PUBLIC_AUTO_DRAFT_DISABLED
       ? undefined
       : () => (
-      <StepDraft
-        provider={provider}
-        emailAccountId={emailAccountId}
-        onNext={onNext}
-      />
-    ),
+          <StepDraft
+            provider={provider}
+            emailAccountId={emailAccountId}
+            onNext={onNext}
+          />
+        ),
     [STEP_KEYS.CUSTOM_RULES]: () => (
       <StepCustomRules provider={provider} onNext={onNext} />
     ),

@@ -2,10 +2,12 @@
 
 import { useSearchParams } from "next/navigation";
 import { useState, useMemo } from "react";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { MCP_SCOPES } from "@/utils/mcp-server/constants";
+import { BRAND_NAME } from "@/utils/branding";
 
 function decodeBase64Url(input: string): string {
   let base64 = input.replace(/-/g, "+").replace(/_/g, "/");
@@ -33,6 +35,7 @@ export default function ConsentContent() {
   }, [searchParams]);
 
   const clientName = params.get("client_name") || "Unknown Application";
+  const clientLogoUri = params.get("client_logo_uri") || null;
   const scopeString = params.get("scope") || "";
   const scopes = scopeString.split(" ").filter(Boolean);
 
@@ -89,10 +92,30 @@ export default function ConsentContent() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
       <Card className="max-w-md w-full p-6 space-y-6">
-        <div className="text-center space-y-2">
+        <div className="text-center space-y-4">
+          <div className="flex justify-center">
+            {clientLogoUri ? (
+              <Image
+                src={clientLogoUri}
+                alt={`${clientName} logo`}
+                width={142}
+                height={38}
+                className="h-10 w-auto"
+              />
+            ) : (
+              <Image
+                src="/images/logos/email-agent-logo.png"
+                alt={`${BRAND_NAME} logo`}
+                width={142}
+                height={38}
+                className="h-10 w-auto"
+              />
+            )}
+          </div>
           <h1 className="text-2xl font-bold">Authorize Access</h1>
           <p className="text-gray-600">
-            <strong>{clientName}</strong> wants to access your Inbox account
+            <strong>{clientName}</strong> wants to access your {BRAND_NAME}{" "}
+            account
           </p>
         </div>
 

@@ -159,7 +159,11 @@ export async function sendEmailWithHtml(
         stepId: "send_email",
         contextSummary: `Send email to ${body.to} - Subject: ${body.subject}`,
         riskLevel: isExternalDomain(body.to) ? "HIGH" : "MEDIUM",
-        tags: ["email", "gmail", isExternalDomain(body.to) ? "external" : "internal"],
+        tags: [
+          "email",
+          "gmail",
+          isExternalDomain(body.to) ? "external" : "internal",
+        ],
         idempotencyKey: `gmail_${body.to}_${body.subject}_${Date.now()}`,
         metadata: {
           provider: "gmail",
@@ -172,13 +176,13 @@ export async function sendEmailWithHtml(
 
     if (dharahilClient.wasDenied(decision)) {
       throw new Error(
-        `Email sending denied by human reviewer: ${decision.action}${decision.reason ? ` - ${decision.reason}` : ""}`
+        `Email sending denied by human reviewer: ${decision.action}${decision.reason ? ` - ${decision.reason}` : ""}`,
       );
     }
 
     if (dharahilClient.shouldRevise(decision)) {
       throw new Error(
-        `Email revision requested: ${decision.revise_input || "No specific instructions provided"}`
+        `Email revision requested: ${decision.revise_input || "No specific instructions provided"}`,
       );
     }
 

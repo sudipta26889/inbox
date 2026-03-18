@@ -11,7 +11,9 @@ export async function createContact(options: {
   audienceId?: string;
 }) {
   // SMTP doesn't have audience management - this is Resend-specific
-  console.warn("Contact management not available with SMTP. This feature requires Resend.");
+  console.warn(
+    "Contact management not available with SMTP. This feature requires Resend.",
+  );
   return;
 }
 
@@ -20,6 +22,8 @@ export async function deleteContact(options: {
   audienceId?: string;
 }) {
   // SMTP doesn't have audience management - this is Resend-specific
-  console.warn("Contact management not available with SMTP. This feature requires Resend.");
+  console.warn(
+    "Contact management not available with SMTP. This feature requires Resend.",
+  );
   return;
 }

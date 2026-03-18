@@ -22,15 +22,15 @@ type EmailItem = {
 };
 
 export interface SummaryEmailProps {
+  awaitingReply?: EmailItem[];
+  awaitingReplyCount?: number;
   baseUrl: string;
   coldEmailers: EmailItem[];
-  // Reply tracker stats
-  needsReplyCount?: number;
-  awaitingReplyCount?: number;
+  needsAction?: EmailItem[];
   needsActionCount?: number;
   needsReply?: EmailItem[];
-  awaitingReply?: EmailItem[];
-  needsAction?: EmailItem[];
+  // Reply tracker stats
+  needsReplyCount?: number;
   unsubscribeToken: string;
 }
 
@@ -68,9 +68,7 @@ export default function SummaryEmail(props: SummaryEmailProps) {
               </Link>
 
               <Text className="mx-0 mb-8 mt-4 p-0 text-center text-2xl font-normal">
-                <span className="font-semibold tracking-tighter">
-                  Inbox
-                </span>
+                <span className="font-semibold tracking-tighter">Inbox</span>
               </Text>
 
               <Heading className="my-4 text-4xl font-medium leading-tight">
@@ -300,8 +298,8 @@ function Footer({
   return (
     <Section>
       <Text>
-        You're receiving this email because you're subscribed to Inbox
-        stats updates. You can change this in your{" "}
+        You're receiving this email because you're subscribed to Inbox stats
+        updates. You can change this in your{" "}
         <Link
           href={`${baseUrl}/settings#email-updates`}
           className="text-[15px]"

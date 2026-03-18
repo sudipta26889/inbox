@@ -130,7 +130,15 @@ export function StepInviteTeam({
 
     captureInviteSubmitted(successCount, errorCount);
     onNext();
-  }, [emails, emailAccountId, organizationId, userName, onNext, posthog, captureInviteSubmitted]);
+  }, [
+    emails,
+    emailAccountId,
+    organizationId,
+    userName,
+    onNext,
+    posthog,
+    captureInviteSubmitted,
+  ]);
 
   return (
     <OnboardingWrapper className="py-0">

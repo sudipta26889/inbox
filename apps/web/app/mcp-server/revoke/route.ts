@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { revokeAccessToken } from "@/utils/mcp-server/tokens";
 import { env } from "@/env";
 import { createScopedLogger } from "@/utils/logger";
@@ -26,21 +26,33 @@ export async function POST(request: NextRequest) {
 
     if (!token) {
       return NextResponse.json(
-        { error: "invalid_request", error_description: "Missing required parameter: token" },
+        {
+          error: "invalid_request",
+          error_description: "Missing required parameter: token",
+        },
         { status: 400, headers: CORS_HEADERS },
       );
     }
 
-    await revokeAccessToken(token, env.AUTH_SECRET || env.NEXTAUTH_SECRET || "");
+    await revokeAccessToken(
+      token,
+      env.AUTH_SECRET || env.NEXTAUTH_SECRET || "",
+    );
 
     logger.info("MCP token revoked");
-  } catch (error: any) {
-    logger.error("Token revocation error", { error: error.message });
+  } catch (error) {
+    logger.error("Token revocation error", {
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 
   // RFC 7009: always return 200 regardless of whether token was found
   return new NextResponse(null, {
     status: 200,
-    headers: { ...CORS_HEADERS, "Cache-Control": "no-store", Pragma: "no-cache" },
+    headers: {
+      ...CORS_HEADERS,
+      "Cache-Control": "no-store",
+      Pragma: "no-cache",
+    },
   });
 }

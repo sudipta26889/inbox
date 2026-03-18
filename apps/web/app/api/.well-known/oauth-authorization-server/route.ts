@@ -30,6 +30,9 @@ export async function GET() {
     // Optional: Token revocation endpoint (RFC 7009)
     revocation_endpoint: `${baseUrl}/mcp-server/revoke`,
 
+    // Logo URI for branding in OAuth clients
+    logo_uri: `${baseUrl}/images/logos/email-agent-logo.png`,
+
     // Scopes supported by this authorization server
     scopes_supported: [
       "mcp:read", // Read-only MCP access

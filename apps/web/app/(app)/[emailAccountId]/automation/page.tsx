@@ -1,5 +1,4 @@
 import { Suspense } from "react";
-import { SparklesIcon } from "lucide-react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import prisma from "@/utils/prisma";

@@ -125,7 +125,7 @@ function timingSafeEqual(a: string, b: string): boolean {
  * Generate a secure random string for authorization codes and tokens
  * Returns a base64url-encoded random string
  */
-export function generateSecureToken(bytes: number = 32): string {
+export function generateSecureToken(bytes = 32): string {
   const buffer = crypto.randomBytes(bytes);
   return base64UrlEncode(buffer);
 }

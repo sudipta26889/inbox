@@ -56,7 +56,6 @@ import { useWindowSize } from "usehooks-ts";
 import { LoadStatsButton } from "@/app/(app)/[emailAccountId]/stats/LoadStatsButton";
 import { PageWrapper } from "@/components/PageWrapper";
 import { PageHeader } from "@/components/PageHeader";
-import { TextLink } from "@/components/Typography";
 import { ActionBar } from "@/app/(app)/[emailAccountId]/stats/ActionBar";
 import { DatePickerWithRange } from "@/components/DatePickerWithRange";
 import { Button } from "@/components/ui/button";

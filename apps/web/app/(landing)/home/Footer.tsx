@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { env } from "@/env";
 import { BRAND_NAME } from "@/utils/branding";
 
 // Minimal footer navigation for self-hosted deployment
@@ -15,7 +14,12 @@ export const footerNavigation = {
     { name: "Terms", href: "/terms" },
     { name: "Privacy", href: "/privacy" },
   ],
-  social: [] as { name: string; href: string; target?: string; icon: React.FC<React.SVGProps<SVGSVGElement>> }[],
+  social: [] as {
+    name: string;
+    href: string;
+    target?: string;
+    icon: React.FC<React.SVGProps<SVGSVGElement>>;
+  }[],
 };
 
 export function Footer() {

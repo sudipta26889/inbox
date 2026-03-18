@@ -62,60 +62,60 @@ const LLM_PROVIDER_OPTIONS = [
 ];
 
 interface TerraformSetupOptions {
-  outputDir?: string;
-  environment?: string;
-  region?: string;
-  baseUrl?: string;
-  domainName?: string;
   acmCertificateArn?: string;
-  route53ZoneId?: string;
-  rdsInstanceClass?: string;
+  baseUrl?: string;
+  bedrockAccessKey?: string;
+  bedrockRegion?: string;
+  bedrockSecretKey?: string;
+  domainName?: string;
   enableRedis?: boolean;
-  redisInstanceClass?: string;
-  llmProvider?: string;
-  llmModel?: string;
-  llmApiKey?: string;
+  environment?: string;
   googleClientId?: string;
   googleClientSecret?: string;
   googlePubsubTopicName?: string;
-  bedrockAccessKey?: string;
-  bedrockSecretKey?: string;
-  bedrockRegion?: string;
+  llmApiKey?: string;
+  llmModel?: string;
+  llmProvider?: string;
+  microsoftClientId?: string;
+  microsoftClientSecret?: string;
   ollamaBaseUrl?: string;
   ollamaModel?: string;
   openaiCompatibleBaseUrl?: string;
   openaiCompatibleModel?: string;
-  microsoftClientId?: string;
-  microsoftClientSecret?: string;
+  outputDir?: string;
+  rdsInstanceClass?: string;
+  redisInstanceClass?: string;
+  region?: string;
+  route53ZoneId?: string;
   yes?: boolean;
 }
 
 interface TerraformVarsConfig {
-  appName: string;
-  environment: string;
-  region: string;
-  baseUrl: string;
-  domainName: string;
-  route53ZoneId: string;
   acmCertificateArn: string;
-  rdsInstanceClass: string;
+  appName: string;
+  baseUrl: string;
+  bedrockAccessKey?: string;
+  bedrockRegion?: string;
+  bedrockSecretKey?: string;
+  defaultLlmModel: string;
+  defaultLlmProvider: string;
+  domainName: string;
   enableRedis: boolean;
-  redisInstanceClass: string;
+  environment: string;
   googleClientId: string;
   googleClientSecret: string;
   googlePubsubTopicName: string;
-  defaultLlmProvider: string;
-  defaultLlmModel: string;
   llmApiKey?: string;
-  bedrockAccessKey?: string;
-  bedrockSecretKey?: string;
-  bedrockRegion?: string;
+  microsoftClientId?: string;
+  microsoftClientSecret?: string;
   ollamaBaseUrl?: string;
   ollamaModel?: string;
   openaiCompatibleBaseUrl?: string;
   openaiCompatibleModel?: string;
-  microsoftClientId?: string;
-  microsoftClientSecret?: string;
+  rdsInstanceClass: string;
+  redisInstanceClass: string;
+  region: string;
+  route53ZoneId: string;
 }
 
 export async function runTerraformSetup(options: TerraformSetupOptions) {

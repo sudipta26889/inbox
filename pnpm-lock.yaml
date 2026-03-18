@@ -135,16 +135,16 @@ importers:
       '@hookform/resolvers':
         specifier: 5.2.2
         version: 5.2.2(react-hook-form@7.71.2(react@19.2.4))
-      '@inboxzero/loops':
+      '@inbox/loops':
         specifier: workspace:*
         version: link:../../packages/loops
-      '@inboxzero/resend':
+      '@inbox/resend':
         specifier: workspace:*
         version: link:../../packages/resend
-      '@inboxzero/tinybird':
+      '@inbox/tinybird':
         specifier: workspace:*
         version: link:../../packages/tinybird
-      '@inboxzero/tinybird-ai-analytics':
+      '@inbox/tinybird-ai-analytics':
         specifier: workspace:*
         version: link:../../packages/tinybird-ai-analytics
       '@lemonsqueezy/lemonsqueezy.js':

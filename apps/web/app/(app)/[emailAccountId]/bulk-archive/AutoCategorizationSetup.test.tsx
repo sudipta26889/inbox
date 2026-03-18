@@ -21,9 +21,12 @@ vi.mock("@/providers/EmailAccountProvider", () => ({
   useAccount: () => mockUseAccount(),
 }));
 
-vi.mock("@/app/(app)/[emailAccountId]/smart-categories/CategorizeProgress", () => ({
-  useCategorizeProgress: () => mockUseCategorizeProgress(),
-}));
+vi.mock(
+  "@/app/(app)/[emailAccountId]/smart-categories/CategorizeProgress",
+  () => ({
+    useCategorizeProgress: () => mockUseCategorizeProgress(),
+  }),
+);
 
 vi.mock("@/utils/actions/categorize", () => ({
   bulkCategorizeSendersAction: vi.fn(),
@@ -59,9 +62,7 @@ describe("AutoCategorizationSetup", () => {
     expect(setupDialogProps.dialogContentProps.hideCloseButton).toBe(true);
 
     const interactOutsideEvent = { preventDefault: vi.fn() };
-    setupDialogProps.dialogContentProps.onInteractOutside(
-      interactOutsideEvent,
-    );
+    setupDialogProps.dialogContentProps.onInteractOutside(interactOutsideEvent);
     expect(interactOutsideEvent.preventDefault).toHaveBeenCalledTimes(1);
 
     const escapeKeyEvent = { preventDefault: vi.fn() };

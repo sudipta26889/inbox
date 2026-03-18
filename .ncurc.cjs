@@ -1,3 +1,4 @@
+"use strict";
 module.exports = {
   reject: [
     // >=27.4.0 has ESM/CJS incompatibility that breaks Vercel runtime

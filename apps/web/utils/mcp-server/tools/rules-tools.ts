@@ -68,7 +68,7 @@ export async function createRule(
     }>;
     enabled?: boolean;
     runOnThreads?: boolean;
-  }
+  },
 ) {
   logger.info("MCP tool: create_rule", {
     userId: context.userId,
@@ -81,7 +81,7 @@ export async function createRule(
   for (const action of params.actions) {
     if (!validActionTypes.includes(action.type as ActionType)) {
       throw new Error(
-        `Invalid action type: ${action.type}. Valid types: ${validActionTypes.join(", ")}`
+        `Invalid action type: ${action.type}. Valid types: ${validActionTypes.join(", ")}`,
       );
     }
   }

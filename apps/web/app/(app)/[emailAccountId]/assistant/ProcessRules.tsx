@@ -249,7 +249,11 @@ export function ProcessRulesContent({ testMode }: { testMode: boolean }) {
             </Button>
           )}
           {!isRunningAll && (
-            <Button onClick={() => handleRunAll(true)} variant="outline" size="sm">
+            <Button
+              onClick={() => handleRunAll(true)}
+              variant="outline"
+              size="sm"
+            >
               <SparklesIcon className="mr-2 size-4" />
               Unanalyzed Only
             </Button>

@@ -13,7 +13,7 @@ const logger = createScopedLogger("mcp-calendar-tools");
  */
 export async function searchCalendar(
   context: McpToolContext,
-  params: { startDate: string; endDate: string; query?: string }
+  params: { startDate: string; endDate: string; query?: string },
 ) {
   logger.info("MCP tool: search_calendar", {
     userId: context.userId,
@@ -22,7 +22,10 @@ export async function searchCalendar(
     endDate: params.endDate,
   });
 
-  const providers = await createCalendarEventProviders(context.emailAccountId, logger);
+  const providers = await createCalendarEventProviders(
+    context.emailAccountId,
+    logger,
+  );
 
   if (providers.length === 0) {
     throw new Error("No calendar connection found for this email account");
@@ -35,8 +38,8 @@ export async function searchCalendar(
         timeMin: new Date(params.startDate),
         timeMax: new Date(params.endDate),
         maxResults: 50,
-      })
-    )
+      }),
+    ),
   );
 
   // Flatten and deduplicate events
@@ -50,7 +53,7 @@ export async function searchCalendar(
       (event) =>
         event.title?.toLowerCase().includes(queryLower) ||
         event.description?.toLowerCase().includes(queryLower) ||
-        event.location?.toLowerCase().includes(queryLower)
+        event.location?.toLowerCase().includes(queryLower),
     );
   }
 
@@ -62,10 +65,11 @@ export async function searchCalendar(
       start: event.startTime.toISOString(),
       end: event.endTime.toISOString(),
       location: event.location || "",
-      attendees: event.attendees?.map((a) => ({
-        email: a.email,
-        name: a.name || "",
-      })) || [],
+      attendees:
+        event.attendees?.map((a) => ({
+          email: a.email,
+          name: a.name || "",
+        })) || [],
       htmlLink: event.eventUrl || "",
     })),
     count: filteredEvents.length,
@@ -77,7 +81,7 @@ export async function searchCalendar(
  */
 export async function getCalendarAvailability(
   context: McpToolContext,
-  params: { startDate: string; endDate: string }
+  params: { startDate: string; endDate: string },
 ) {
   logger.info("MCP tool: get_calendar_availability", {
     userId: context.userId,
@@ -86,7 +90,10 @@ export async function getCalendarAvailability(
     endDate: params.endDate,
   });
 
-  const providers = await createCalendarEventProviders(context.emailAccountId, logger);
+  const providers = await createCalendarEventProviders(
+    context.emailAccountId,
+    logger,
+  );
 
   if (providers.length === 0) {
     throw new Error("No calendar connection found for this email account");
@@ -99,8 +106,8 @@ export async function getCalendarAvailability(
         timeMin: new Date(params.startDate),
         timeMax: new Date(params.endDate),
         maxResults: 100,
-      })
-    )
+      }),
+    ),
   );
 
   // Flatten events
@@ -156,7 +163,9 @@ export async function getCalendarAvailability(
     })),
     free: freePeriods,
     totalBusyMinutes: busyPeriods.reduce((total, period) => {
-      return total + (period.end.getTime() - period.start.getTime()) / (1000 * 60);
+      return (
+        total + (period.end.getTime() - period.start.getTime()) / (1000 * 60)
+      );
     }, 0),
   };
 }
@@ -175,7 +184,7 @@ export async function createCalendarEvent(
     description?: string;
     location?: string;
     sendInvite?: boolean;
-  }
+  },
 ) {
   logger.info("MCP tool: create_calendar_event", {
     userId: context.userId,
@@ -198,7 +207,7 @@ export async function createCalendarEvent(
 
   if (!calendarEmailAccount) {
     throw new Error(
-      `Calendar account (${CALENDAR_EMAIL}) not found. Please connect this Google account with calendar permissions.`
+      `Calendar account (${CALENDAR_EMAIL}) not found. Please connect this Google account with calendar permissions.`,
     );
   }
 
@@ -208,7 +217,7 @@ export async function createCalendarEvent(
   });
 
   const hasExternalAttendees = params.attendees?.some((email) =>
-    isExternalDomain(email)
+    isExternalDomain(email),
   );
   const sendInvite = params.sendInvite ?? true;
 
@@ -254,13 +263,13 @@ export async function createCalendarEvent(
 
     if (dharahilClient.wasDenied(decision)) {
       throw new Error(
-        `Calendar event creation denied by human reviewer: ${decision.action}${decision.reason ? ` - ${decision.reason}` : ""}`
+        `Calendar event creation denied by human reviewer: ${decision.action}${decision.reason ? ` - ${decision.reason}` : ""}`,
       );
     }
 
     if (dharahilClient.shouldRevise(decision)) {
       throw new Error(
-        `Calendar event revision requested: ${decision.revise_input || "No specific instructions provided"}`
+        `Calendar event revision requested: ${decision.revise_input || "No specific instructions provided"}`,
       );
     }
 

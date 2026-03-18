@@ -15,6 +15,7 @@ import {
   WebhookIcon,
 } from "lucide-react";
 import { ApiKeysSection } from "@/app/(app)/[emailAccountId]/settings/ApiKeysSection";
+import { McpClientsSection } from "@/app/(app)/[emailAccountId]/settings/McpClientsSection";
 import { ProactiveUpdatesSetting } from "@/app/(app)/[emailAccountId]/assistant/settings/ProactiveUpdatesSetting";
 import { AppearanceSection } from "@/app/(app)/settings/AppearanceSection";
 import { BillingSection } from "@/app/(app)/[emailAccountId]/settings/BillingSection";
@@ -158,6 +159,8 @@ export default function SettingsPage() {
                 <ApiKeysSection />
               </>
             )}
+            <ItemSeparator />
+            <McpClientsSection />
           </ItemCard>
         </SettingsGroup>
 
