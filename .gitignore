@@ -102,3 +102,5 @@ qa/browser-flows/results/*
 
 # eval reports
 eval-results/
+
+secret/*
