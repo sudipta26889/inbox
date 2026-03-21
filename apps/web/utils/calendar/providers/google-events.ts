@@ -92,6 +92,48 @@ export class GoogleCalendarEventProvider implements CalendarEventProvider {
     return events.map((event) => this.parseEvent(event));
   }
 
+  async fetchEventById(eventId: string): Promise<CalendarEvent | null> {
+    try {
+      const client = await this.getClient();
+
+      this.logger.info("Fetching event from Google Calendar API", {
+        eventId,
+        calendarId: "primary",
+      });
+
+      const response = await client.events.get({
+        calendarId: "primary",
+        eventId,
+      });
+
+      if (!response.data) {
+        this.logger.warn("Google Calendar API returned no data", { eventId });
+        return null;
+      }
+
+      this.logger.info("Event fetched successfully from Google Calendar", {
+        eventId,
+        title: response.data.summary,
+      });
+
+      return this.parseEvent(response.data);
+    } catch (error) {
+      this.logger.error("Failed to fetch event from Google Calendar", {
+        eventId,
+        error:
+          error instanceof Error
+            ? {
+                message: error.message,
+                stack: error.stack,
+                name: error.name,
+              }
+            : error,
+        fullError: JSON.stringify(error),
+      });
+      return null;
+    }
+  }
+
   private parseEvent(event: calendar_v3.Schema$Event) {
     const startTime = new Date(
       event.start?.dateTime || event.start?.date || Date.now(),
@@ -121,6 +163,7 @@ export class GoogleCalendarEventProvider implements CalendarEventProvider {
         event.attendees?.map((attendee) => ({
           email: attendee.email || "",
           name: attendee.displayName ?? undefined,
+          responseStatus: attendee.responseStatus ?? undefined,
         })) || [],
     };
   }

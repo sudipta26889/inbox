@@ -11,6 +11,12 @@ import {
   parseMessage,
 } from "@/utils/gmail/message";
 import { getMessage as getOutlookMessage } from "@/utils/outlook/message";
+import { extractEmailId, parseGmailUrl } from "./url-parser";
+import { getThread } from "@/utils/gmail/thread";
+import {
+  downloadAndParseAttachments,
+  type GmailAttachment,
+} from "@/utils/gmail/attachment";
 
 const logger = createScopedLogger("mcp-email-tools");
 
@@ -249,6 +255,70 @@ export async function getEmail(
   context: McpToolContext,
   params: { emailId: string; emailAccountId?: string },
 ) {
+  // Check if this is a Gmail search URL - automatically search instead
+  if (
+    params.emailId.includes("mail.google.com") &&
+    params.emailId.includes("#search/")
+  ) {
+    // Extract search query from URL
+    const searchMatch = params.emailId.match(/#search\/([^/]+)\//);
+    const searchQuery = searchMatch?.[1]?.replace(/\+/g, " ") || "";
+
+    if (!searchQuery) {
+      throw new Error(
+        `Unable to extract search query from Gmail URL: ${params.emailId}`,
+      );
+    }
+
+    // Automatically search for the emails
+    logger.info("Gmail search URL detected, searching for emails", {
+      query: searchQuery,
+      originalUrl: params.emailId,
+    });
+
+    try {
+      const searchResults = await searchEmailsMultiAccount(context, {
+        query: searchQuery,
+        maxResults: 10,
+        emailAccountId: params.emailAccountId,
+      });
+
+      logger.info("Search results for Gmail URL", {
+        resultKeys: Object.keys(searchResults),
+        resultsCount: searchResults.results?.length || 0,
+        sampleResult: searchResults.results?.[0],
+      });
+
+      // Return search results with helpful message
+      return {
+        _note:
+          "Gmail search URL provided. Showing search results instead. Use get_email with a specific email ID from below to fetch full details.",
+        searchQuery,
+        originalUrl: params.emailId,
+        ...searchResults,
+      };
+    } catch (error) {
+      logger.error("Error searching emails from Gmail URL", {
+        error,
+        query: searchQuery,
+      });
+      throw error;
+    }
+  }
+
+  // Check if this is a Gmail inbox/label URL with base64url ID (UI format)
+  // These IDs might work with the threads.get API instead of messages.get
+  const isLikelyThreadId =
+    params.emailId.includes("mail.google.com") &&
+    (params.emailId.includes("#inbox/") ||
+      params.emailId.includes("#label/") ||
+      params.emailId.includes("#starred/") ||
+      params.emailId.includes("#sent/")) &&
+    /[A-Z]/.test(params.emailId); // Base64url IDs contain uppercase letters
+
+  // Extract email ID from Gmail URL if provided
+  const emailId = extractEmailId(params.emailId);
+
   const targetAccountId = params.emailAccountId || context.emailAccountId;
 
   logger.info("MCP tool: get_email", {
@@ -256,7 +326,8 @@ export async function getEmail(
     requestedAccountId: params.emailAccountId,
     defaultAccountId: context.emailAccountId,
     targetAccountId,
-    emailId: params.emailId,
+    emailId,
+    originalInput: params.emailId !== emailId ? params.emailId : undefined,
   });
 
   // Helper function to fetch email from a specific account
@@ -282,8 +353,95 @@ export async function getEmail(
         emailAccountId: emailAccount.id,
         logger,
       });
-      const rawMessage = await getGmailMessage(params.emailId, gmail, "full");
+
+      // Try to fetch as a thread first if it looks like a UI thread ID
+      if (isLikelyThreadId) {
+        try {
+          logger.trace("Attempting to fetch as thread (UI ID format)", {
+            emailId,
+          });
+          const thread = await getThread(emailId, gmail);
+
+          // Get the first (most recent) message from the thread
+          const firstMessage = thread.messages?.[0];
+          if (firstMessage) {
+            const message = parseMessage(firstMessage);
+
+            // Download and parse attachments
+            const gmailAttachments: GmailAttachment[] =
+              message.attachments?.map((a) => ({
+                attachmentId: a.attachmentId, // ParsedMessage.Attachment uses 'attachmentId'
+                filename: a.filename,
+                mimeType: a.mimeType,
+                size: a.size,
+              })) || [];
+
+            const parsedAttachments = await downloadAndParseAttachments(
+              message.id || emailId,
+              gmailAttachments,
+              gmail,
+              {
+                maxSizeBytes: 10 * 1024 * 1024, // 10MB limit for non-PDF files
+                parsePdf: true,
+                parseImages: false,
+                parseDocuments: false,
+                maxPdfPages: 50, // Parse up to 50 pages for large PDFs
+                streamLargePdfs: true, // Enable streaming for PDFs >10MB
+              },
+              logger,
+            );
+
+            return {
+              id: message.id || "",
+              threadId: thread.id || "",
+              from: message.headers?.from || "",
+              to: message.headers?.to || "",
+              cc: message.headers?.cc || "",
+              subject: message.headers?.subject || "",
+              date: message.headers?.date || "",
+              textPlain: message.textPlain || "",
+              textHtml: message.textHtml || "",
+              snippet: message.snippet || "",
+              attachments: parsedAttachments,
+              accountId: emailAccount.id,
+              accountEmail: emailAccount.email,
+            };
+          }
+        } catch (threadError) {
+          logger.trace("Thread fetch failed, trying message fetch", {
+            error: threadError,
+          });
+          // Fall through to regular message fetch
+        }
+      }
+
+      // Regular message fetch
+      const rawMessage = await getGmailMessage(emailId, gmail, "full");
       const message = parseMessage(rawMessage);
+
+      // Download and parse attachments
+      const gmailAttachments: GmailAttachment[] =
+        message.attachments?.map((a) => ({
+          attachmentId: a.attachmentId, // ParsedMessage.Attachment uses 'attachmentId'
+          filename: a.filename,
+          mimeType: a.mimeType,
+          size: a.size,
+        })) || [];
+
+      const parsedAttachments = await downloadAndParseAttachments(
+        message.id || emailId,
+        gmailAttachments,
+        gmail,
+        {
+          maxSizeBytes: 10 * 1024 * 1024, // 10MB limit for non-PDF files
+          parsePdf: true,
+          parseImages: false,
+          parseDocuments: false,
+          maxPdfPages: 50, // Parse up to 50 pages for large PDFs
+          streamLargePdfs: true, // Enable streaming for PDFs >10MB
+        },
+        logger,
+      );
 
       return {
         id: message.id || "",
@@ -296,12 +454,7 @@ export async function getEmail(
         textPlain: message.textPlain || "",
         textHtml: message.textHtml || "",
         snippet: message.snippet || "",
-        attachments:
-          message.attachments?.map((a) => ({
-            filename: a.filename,
-            mimeType: a.mimeType,
-            size: a.size,
-          })) || [],
+        attachments: parsedAttachments,
         accountId: emailAccount.id,
         accountEmail: emailAccount.email,
       };
@@ -310,7 +463,7 @@ export async function getEmail(
         emailAccount.account.access_token!,
         logger,
       );
-      const message = await getOutlookMessage(params.emailId, outlook, logger);
+      const message = await getOutlookMessage(emailId, outlook, logger);
 
       return {
         id: message.id,
@@ -368,7 +521,7 @@ export async function getEmail(
 
     // If we get here, email wasn't found in any account
     throw new Error(
-      `Email ID "${params.emailId}" not found in any of your ${allAccounts.length + 1} linked email accounts.`,
+      `Email ID "${emailId}" not found in any of your ${allAccounts.length + 1} linked email accounts.`,
     );
   }
 }

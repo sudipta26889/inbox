@@ -1,6 +1,7 @@
 export interface CalendarEventAttendee {
   email: string;
   name?: string;
+  responseStatus?: string;
 }
 
 export interface CalendarEvent {
@@ -27,4 +28,5 @@ export interface CalendarEventProvider {
     timeMax: Date;
     maxResults: number;
   }): Promise<CalendarEvent[]>;
+  fetchEventById(eventId: string): Promise<CalendarEvent | null>;
 }

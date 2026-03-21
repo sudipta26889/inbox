@@ -65,13 +65,13 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
   get_email: {
     name: "get_email",
     description:
-      "Get full details of a specific email by ID, including body content, attachments, and metadata. IMPORTANT: Email IDs are account-specific. If you get an error fetching an email, the email might belong to a different email account. Use list_email_accounts to see all accounts, then specify the correct emailAccountId parameter.",
+      "Get full details of a specific email by ID or Gmail URL, including body content, attachments, and metadata. Supports direct Gmail URLs (e.g., https://mail.google.com/mail/u/0/?ik=...&view=pt&search=all&permthid=thread-f:...) and raw email IDs. IMPORTANT: Email IDs are account-specific. If you get an error fetching an email, the email might belong to a different email account. Use list_email_accounts to see all accounts, then specify the correct emailAccountId parameter.",
     inputSchema: {
       type: "object",
       properties: {
         emailId: {
           type: "string",
-          description: "The email ID or thread ID",
+          description: "The email ID, thread ID, or full Gmail URL (e.g., https://mail.google.com/mail/u/0/?ik=54c0f4487e&view=pt&search=all&permthid=thread-f:1857728267523417974)",
         },
         emailAccountId: {
           type: "string",
@@ -157,6 +157,28 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     handler: async (context, params) => {
       const { searchCalendar } = await import("./calendar-tools");
       return searchCalendar(context, params);
+    },
+    requiredScope: "calendar:read",
+  },
+
+  get_calendar_event: {
+    name: "get_calendar_event",
+    description:
+      "Get full details of a specific calendar event by ID or Google Calendar URL. Supports direct Google Calendar URLs (e.g., https://calendar.google.com/calendar/event?eid=...) and raw event IDs.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        eventId: {
+          type: "string",
+          description:
+            "The event ID or full Google Calendar URL (e.g., https://calendar.google.com/calendar/event?eid=ABC123xyz)",
+        },
+      },
+      required: ["eventId"],
+    },
+    handler: async (context, params) => {
+      const { getCalendarEvent } = await import("./calendar-tools");
+      return getCalendarEvent(context, params);
     },
     requiredScope: "calendar:read",
   },

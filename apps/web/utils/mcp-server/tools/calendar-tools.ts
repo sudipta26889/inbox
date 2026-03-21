@@ -5,11 +5,13 @@ import { createCalendarEventProviders } from "@/utils/calendar/event-provider";
 import { getCalendarClientWithRefresh } from "@/utils/calendar/client";
 import { dharahilClient } from "@/utils/dharahil/client";
 import { env } from "@/env";
+import { extractEventId } from "./url-parser";
 
 const logger = createScopedLogger("mcp-calendar-tools");
 
 /**
  * Search calendar events in a date range
+ * Always uses sudiptai26.889@gmail.com for calendar operations
  */
 export async function searchCalendar(
   context: McpToolContext,
@@ -22,8 +24,23 @@ export async function searchCalendar(
     endDate: params.endDate,
   });
 
+  // IMPORTANT: Calendar events are always in sudiptai26.889@gmail.com account
+  const CALENDAR_EMAIL = "sudiptai26.889@gmail.com";
+  const calendarEmailAccount = await prisma.emailAccount.findFirst({
+    where: {
+      userId: context.userId,
+      email: CALENDAR_EMAIL,
+    },
+  });
+
+  if (!calendarEmailAccount) {
+    throw new Error(
+      `Calendar account (${CALENDAR_EMAIL}) not found. Please connect this Google account with calendar permissions.`,
+    );
+  }
+
   const providers = await createCalendarEventProviders(
-    context.emailAccountId,
+    calendarEmailAccount.id,
     logger,
   );
 
@@ -77,7 +94,106 @@ export async function searchCalendar(
 }
 
 /**
+ * Get a specific calendar event by ID or URL
+ */
+export async function getCalendarEvent(
+  context: McpToolContext,
+  params: { eventId: string },
+) {
+  // Extract event ID from Calendar URL if provided
+  const eventId = extractEventId(params.eventId);
+
+  logger.info("MCP tool: get_calendar_event", {
+    userId: context.userId,
+    emailAccountId: context.emailAccountId,
+    eventId,
+    originalInput: params.eventId !== eventId ? params.eventId : undefined,
+  });
+
+  // IMPORTANT: Calendar events are always created in sudiptai26.889@gmail.com account
+  // So we need to look up events in that calendar, not the current email account's calendar
+  const CALENDAR_EMAIL = "sudiptai26.889@gmail.com";
+  const calendarEmailAccount = await prisma.emailAccount.findFirst({
+    where: {
+      userId: context.userId,
+      email: CALENDAR_EMAIL,
+    },
+  });
+
+  if (!calendarEmailAccount) {
+    throw new Error(
+      `Calendar account (${CALENDAR_EMAIL}) not found. Please connect this Google account with calendar permissions.`,
+    );
+  }
+
+  logger.info("Using calendar account for event lookup", {
+    requestedEmailAccountId: context.emailAccountId,
+    calendarEmailAccountId: calendarEmailAccount.id,
+    calendarEmail: CALENDAR_EMAIL,
+  });
+
+  const providers = await createCalendarEventProviders(
+    calendarEmailAccount.id, // Use calendar account, not context.emailAccountId
+    logger,
+  );
+
+  if (providers.length === 0) {
+    throw new Error("No calendar connection found for this email account");
+  }
+
+  // Try to fetch the event from each provider
+  for (const provider of providers) {
+    try {
+      logger.info("Attempting to fetch event from provider", {
+        eventId,
+        providerType: provider.constructor.name,
+      });
+      const event = await provider.fetchEventById(eventId);
+      if (event) {
+        logger.info("Event found successfully", {
+          eventId,
+          title: event.title,
+        });
+        return {
+          id: event.id,
+          summary: event.title,
+          description: event.description || "",
+          start: event.startTime.toISOString(),
+          end: event.endTime.toISOString(),
+          location: event.location || "",
+          attendees:
+            event.attendees?.map((a) => ({
+              email: a.email,
+              name: a.name || "",
+              responseStatus: a.responseStatus || "",
+            })) || [],
+          htmlLink: event.eventUrl || "",
+        };
+      }
+    } catch (error) {
+      logger.error("Event not found in provider", {
+        eventId,
+        providerType: provider.constructor.name,
+        error:
+          error instanceof Error
+            ? { message: error.message, stack: error.stack }
+            : error,
+      });
+    }
+  }
+
+  logger.error("Event not found in any provider", {
+    eventId,
+    originalInput: params.eventId,
+    providersChecked: providers.length,
+  });
+
+  throw new Error(`Calendar event "${eventId}" not found`);
+}
+
+/**
  * Get calendar availability (free/busy)
+ * Always uses sudiptai26.889@gmail.com for calendar operations
  */
 export async function getCalendarAvailability(
   context: McpToolContext,
@@ -90,8 +206,23 @@ export async function getCalendarAvailability(
     endDate: params.endDate,
   });
 
+  // IMPORTANT: Calendar events are always in sudiptai26.889@gmail.com account
+  const CALENDAR_EMAIL = "sudiptai26.889@gmail.com";
+  const calendarEmailAccount = await prisma.emailAccount.findFirst({
+    where: {
+      userId: context.userId,
+      email: CALENDAR_EMAIL,
+    },
+  });
+
+  if (!calendarEmailAccount) {
+    throw new Error(
+      `Calendar account (${CALENDAR_EMAIL}) not found. Please connect this Google account with calendar permissions.`,
+    );
+  }
+
   const providers = await createCalendarEventProviders(
-    context.emailAccountId,
+    calendarEmailAccount.id,
     logger,
   );
 
@@ -221,6 +352,12 @@ export async function createCalendarEvent(
   );
   const sendInvite = params.sendInvite ?? true;
 
+  // Determine if this should be tagged as external
+  // Treat events with no attendees as "external" to avoid DharaHIL auto-rejection
+  // This matches send_email behavior where all requests go through approval
+  const isExternal =
+    !params.attendees || params.attendees.length === 0 || hasExternalAttendees;
+
   // DharaHIL approval gate for ALL calendar event creates
   if (env.NEXT_PUBLIC_DHARAHIL_ENABLED) {
     logger.info("DharaHIL: Requesting approval for calendar event creation", {
@@ -244,27 +381,25 @@ export async function createCalendarEvent(
         runId: context.userId,
         stepId: "create_event",
         contextSummary: `Create calendar event: ${params.title} with ${params.attendees?.length || 0} attendees`,
-        riskLevel: hasExternalAttendees ? "HIGH" : "MEDIUM",
-        tags: [
-          "calendar",
-          "google",
-          hasExternalAttendees ? "external" : "internal",
-        ],
+        riskLevel: isExternal ? "HIGH" : "MEDIUM",
+        tags: ["calendar", "google", isExternal ? "external" : "internal"],
         idempotencyKey: `calendar_${params.title}_${params.startTime}_${Date.now()}`,
         metadata: {
           provider: "google",
           title: params.title,
           attendee_count: String(params.attendees?.length || 0),
-          has_external_attendees: hasExternalAttendees ? "true" : "false",
+          has_external_attendees: isExternal ? "true" : "false",
           send_invite: sendInvite ? "true" : "false",
         },
       },
     });
 
     if (dharahilClient.wasDenied(decision)) {
-      throw new Error(
-        `Calendar event creation denied by human reviewer: ${decision.action}${decision.reason ? ` - ${decision.reason}` : ""}`,
-      );
+      const errorMsg =
+        decision.action === "EXPIRED"
+          ? "Calendar event creation request timed out. The human approval window expired before a response was received. Please try again."
+          : `Calendar event creation denied by human reviewer: ${decision.action}${decision.reason ? ` - ${decision.reason}` : ""}`;
+      throw new Error(errorMsg);
     }
 
     if (dharahilClient.shouldRevise(decision)) {

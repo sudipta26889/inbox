@@ -91,36 +91,71 @@ export class DharaHILClient {
       riskLevel: request.context.riskLevel,
     });
 
+    const payload = {
+      tenant_id: this.tenantId,
+      app_id: this.appId,
+      environment: this.environment,
+      tool_name: request.toolName,
+      tool_args: request.toolArgs,
+      tool_args_redacted: request.toolArgs, // TODO: Implement redaction
+      agent_id: request.context.agentId,
+      run_id: request.context.runId,
+      step_id: request.context.stepId || "step",
+      context_summary: request.context.contextSummary,
+      risk_level: request.context.riskLevel,
+      tags: request.context.tags || [],
+      idempotency_key:
+        request.context.idempotencyKey ||
+        `${request.toolName}_${Date.now()}`,
+      metadata: request.context.metadata || {},
+      webhook: {
+        url: "",
+        headers: {},
+        decision_url: `${this.baseUrl}/v1/requests/${request.context.idempotencyKey || `${request.toolName}_${Date.now()}`}`,
+      },
+    };
+
+    // Log the payload (logger may redact sensitive fields for display)
+    logger.info("DharaHIL: Submitting request", {
+      toolName: request.toolName,
+      agentId: request.context.agentId,
+    });
+
     try {
+      // Create fresh payload object to ensure no mutations from logger
+      const requestBody = {
+        tenant_id: this.tenantId,
+        app_id: this.appId,
+        environment: this.environment,
+        tool_name: request.toolName,
+        tool_args: request.toolArgs,
+        tool_args_redacted: request.toolArgs,
+        agent_id: request.context.agentId,
+        run_id: request.context.runId,
+        step_id: request.context.stepId || "step",
+        context_summary: request.context.contextSummary,
+        risk_level: request.context.riskLevel,
+        tags: request.context.tags || [],
+        idempotency_key:
+          request.context.idempotencyKey ||
+          `${request.toolName}_${Date.now()}`,
+        metadata: request.context.metadata || {},
+        webhook: {
+          url: "",
+          headers: {},
+          decision_url: `${this.baseUrl}/v1/requests/${request.context.idempotencyKey || `${request.toolName}_${Date.now()}`}`,
+        },
+      };
+
+      const bodyString = JSON.stringify(requestBody);
+
       const response = await fetch(`${this.baseUrl}/v1/requests`, {
         method: "POST",
         headers: {
           "X-DHARA-API-KEY": this.apiKey,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          tenant_id: this.tenantId,
-          app_id: this.appId,
-          environment: this.environment,
-          tool_name: request.toolName,
-          tool_args: request.toolArgs,
-          tool_args_redacted: request.toolArgs, // TODO: Implement redaction
-          agent_id: request.context.agentId,
-          run_id: request.context.runId,
-          step_id: request.context.stepId || "step",
-          context_summary: request.context.contextSummary,
-          risk_level: request.context.riskLevel,
-          tags: request.context.tags || [],
-          idempotency_key:
-            request.context.idempotencyKey ||
-            `${request.toolName}_${Date.now()}`,
-          metadata: request.context.metadata || {},
-          webhook: {
-            url: "",
-            headers: {},
-            decision_url: `${this.baseUrl}/v1/requests/${request.context.idempotencyKey || `${request.toolName}_${Date.now()}`}`,
-          },
-        }),
+        body: bodyString,
       });
 
       if (!response.ok) {
@@ -135,6 +170,43 @@ export class DharaHILClient {
       }
 
       const data = (await response.json()) as DharaHILResponse;
+
+      logger.info("DharaHIL: Response received", {
+        status: response.status,
+        statusText: response.statusText,
+        hasRequestId: !!data.request_id,
+        hasExpiresAt: !!data.expires_at,
+        action: (data as any).action,
+        fullResponse: JSON.stringify(data),
+      });
+
+      // Validate response
+      if (!data.request_id || !data.expires_at) {
+        // Check if this is an immediate rejection from the gateway
+        const anyData = data as any;
+        if (anyData.action === "DENY" || anyData.action === "REJECTED") {
+          logger.error("DharaHIL: Request immediately rejected by gateway", {
+            action: anyData.action,
+            reason: anyData.reason,
+            message: anyData.message,
+            error: anyData.error,
+            fullResponse: data,
+          });
+          throw new SafeError(
+            `DharaHIL gateway rejected request: ${anyData.reason || anyData.message || anyData.error || "No reason provided"}`,
+          );
+        }
+
+        logger.error("DharaHIL: Invalid response from gateway", {
+          requestId: data.request_id,
+          expiresAt: data.expires_at,
+          fullResponse: data,
+        });
+        throw new SafeError(
+          "DharaHIL gateway returned invalid response - missing request_id or expires_at",
+        );
+      }
+
       logger.info("DharaHIL: Request submitted successfully", {
         requestId: data.request_id,
         expiresAt: data.expires_at,

@@ -11,6 +11,17 @@ export function formatEmailAsMarkdown(email: {
   date: string;
   textPlain?: string;
   snippet?: string;
+  attachments?: Array<{
+    filename: string;
+    mimeType: string;
+    size: number;
+    content?: {
+      type: string;
+      text?: string;
+      pageCount?: number;
+      error?: string;
+    };
+  }>;
 }): string {
   let md = "## Email\n\n";
   md += `**From:** ${email.from}\n`;
@@ -24,6 +35,32 @@ export function formatEmailAsMarkdown(email: {
     md += `### Body\n\n${email.textPlain}\n`;
   } else if (email.snippet) {
     md += `### Snippet\n\n${email.snippet}\n`;
+  }
+
+  // Format attachments
+  if (email.attachments && email.attachments.length > 0) {
+    md += `\n---\n\n### 📎 Attachments (${email.attachments.length})\n\n`;
+
+    email.attachments.forEach((attachment, index) => {
+      md += `#### ${index + 1}. ${attachment.filename}\n\n`;
+      md += `- **Type:** ${attachment.mimeType}\n`;
+      md += `- **Size:** ${(attachment.size / 1024).toFixed(2)} KB\n`;
+
+      if (attachment.content) {
+        if (attachment.content.error) {
+          md += `- **Status:** ⚠️ ${attachment.content.error}\n`;
+        } else if (attachment.content.text) {
+          md += `- **Status:** ✅ Parsed successfully\n`;
+          if (attachment.content.pageCount) {
+            md += `- **Pages:** ${attachment.content.pageCount}\n`;
+          }
+          md += `\n**Content:**\n\n`;
+          md += `\`\`\`\n${attachment.content.text}\n\`\`\`\n`;
+        }
+      }
+
+      md += "\n";
+    });
   }
 
   return md;
@@ -169,6 +206,16 @@ export function formatToolResponse(toolName: string, result: any): string {
         break;
 
       case "get_email":
+        // Check if this is a search result (Gmail search URL was provided)
+        if (result._note && result.results && Array.isArray(result.results)) {
+          let md = `# Gmail Search Results\n\n`;
+          md += `> ${result._note}\n\n`;
+          md += `**Search Query:** "${result.searchQuery}"\n`;
+          md += `**Original URL:** ${result.originalUrl}\n\n`;
+          md += `---\n\n`;
+          md += formatEmailListAsMarkdown(result.results);
+          return md;
+        }
         return formatEmailAsMarkdown(result);
 
       case "send_email":

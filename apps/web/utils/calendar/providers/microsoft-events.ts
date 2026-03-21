@@ -21,6 +21,7 @@ type MicrosoftEvent = {
   end?: { dateTime?: string };
   attendees?: Array<{
     emailAddress?: { address?: string; name?: string };
+    status?: { response?: string };
   }>;
   location?: { displayName?: string };
   webLink?: string;
@@ -117,6 +118,26 @@ export class MicrosoftCalendarEventProvider implements CalendarEventProvider {
     return events.map((event) => this.parseEvent(event));
   }
 
+  async fetchEventById(eventId: string): Promise<CalendarEvent | null> {
+    try {
+      const client = await this.getClient();
+
+      const response = await client.api(`/me/events/${eventId}`).get();
+
+      if (!response) {
+        return null;
+      }
+
+      return this.parseEvent(response as MicrosoftEvent);
+    } catch (error) {
+      this.logger.trace("Event not found in Microsoft Calendar", {
+        eventId,
+        error,
+      });
+      return null;
+    }
+  }
+
   private parseEvent(event: MicrosoftEvent) {
     return {
       id: event.id || "",
@@ -132,6 +153,7 @@ export class MicrosoftCalendarEventProvider implements CalendarEventProvider {
         event.attendees?.map((attendee) => ({
           email: attendee.emailAddress?.address || "",
           name: attendee.emailAddress?.name ?? undefined,
+          responseStatus: attendee.status?.response ?? undefined,
         })) || [],
     };
   }
