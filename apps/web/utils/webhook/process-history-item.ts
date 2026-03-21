@@ -25,6 +25,7 @@ import type { Logger } from "@/utils/logger";
 import { runWithBackgroundLoggerFlush } from "@/utils/logger-flush";
 import { captureException } from "@/utils/error";
 import { logErrorWithDedupe } from "@/utils/log-error-with-dedupe";
+import { analyzeSenderPattern } from "@/app/api/ai/analyze-sender-pattern/call-analyze-pattern-api";
 
 export type SharedProcessHistoryOptions = {
   provider: EmailProvider;
@@ -34,7 +35,11 @@ export type SharedProcessHistoryOptions = {
   emailAccount: EmailAccountForDrafting &
     Pick<
       EmailAccount,
-      "autoCategorizeSenders" | "filingEnabled" | "filingPrompt" | "email"
+      | "autoCategorizeSenders"
+      | "autoLearnPatterns"
+      | "filingEnabled"
+      | "filingPrompt"
+      | "email"
     >;
   logger: Logger;
 };
@@ -183,6 +188,35 @@ export async function processHistoryItem(
           undefined,
           senderName !== sender ? senderName : undefined,
         );
+      }
+    }
+
+    // analyze sender patterns for learned rule matching
+    // this runs in the background and helps automatically categorize senders to rules
+    if (emailAccount.autoLearnPatterns && hasAiAccess) {
+      const sender = extractEmailAddress(parsedMessage.headers.from);
+      if (sender) {
+        const normalizedSender = sender.toLowerCase();
+        const existingSender = await prisma.newsletter.findUnique({
+          where: {
+            email_emailAccountId: { email: normalizedSender, emailAccountId },
+          },
+          select: { patternAnalyzed: true },
+        });
+
+        if (!existingSender?.patternAnalyzed) {
+          after(() =>
+            runWithBackgroundLoggerFlush({
+              logger,
+              task: () =>
+                analyzeSenderPattern(
+                  { emailAccountId, from: normalizedSender },
+                  logger,
+                ),
+              extra: { operation: "auto-learn-pattern" },
+            }),
+          );
+        }
       }
     }
 

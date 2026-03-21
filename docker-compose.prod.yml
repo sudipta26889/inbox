@@ -80,6 +80,12 @@ services:
             sleep 21600
           done
         ) &
+        (
+          while true; do
+            curl -s -X GET 'http://web:5500/api/cron/process-emails' -H \"Authorization: Bearer $${CRON_SECRET}\" || true
+            sleep 1800
+          done
+        ) &
         wait
       "
     env_file:

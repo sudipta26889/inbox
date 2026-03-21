@@ -152,6 +152,7 @@ model EmailAccount {
   coldEmailPrompt           String? // @deprecated
   rulesPrompt               String? // @deprecated
   autoCategorizeSenders     Boolean              @default(false)
+  autoLearnPatterns         Boolean              @default(false)
   multiRuleSelectionEnabled Boolean              @default(false)
   draftReplyConfidence      DraftReplyConfidence @default(ALL_EMAILS)
   allowHiddenAiDraftLinks   Boolean              @default(false)

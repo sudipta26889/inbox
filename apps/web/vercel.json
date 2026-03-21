@@ -47,6 +47,15 @@
           "retryAfterSeconds": 60
         }
       ]
+    },
+    "app/api/process-emails/queue/route.ts": {
+      "experimentalTriggers": [
+        {
+          "type": "queue/v2beta",
+          "topic": "process-emails-account",
+          "retryAfterSeconds": 60
+        }
+      ]
     }
   },
   "rewrites": [
@@ -83,6 +92,10 @@
     {
       "path": "/api/cron/automation-jobs",
       "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/process-emails",
+      "schedule": "*/30 * * * *"
     }
   ]
 }
