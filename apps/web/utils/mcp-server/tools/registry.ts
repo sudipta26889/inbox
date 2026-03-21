@@ -71,7 +71,8 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       properties: {
         emailId: {
           type: "string",
-          description: "The email ID, thread ID, or full Gmail URL (e.g., https://mail.google.com/mail/u/0/?ik=54c0f4487e&view=pt&search=all&permthid=thread-f:1857728267523417974)",
+          description:
+            "The email ID, thread ID, or full Gmail URL (e.g., https://mail.google.com/mail/u/0/?ik=54c0f4487e&view=pt&search=all&permthid=thread-f:1857728267523417974)",
         },
         emailAccountId: {
           type: "string",

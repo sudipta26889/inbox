@@ -50,11 +50,11 @@ export function formatEmailAsMarkdown(email: {
         if (attachment.content.error) {
           md += `- **Status:** ⚠️ ${attachment.content.error}\n`;
         } else if (attachment.content.text) {
-          md += `- **Status:** ✅ Parsed successfully\n`;
+          md += "- **Status:** ✅ Parsed successfully\n";
           if (attachment.content.pageCount) {
             md += `- **Pages:** ${attachment.content.pageCount}\n`;
           }
-          md += `\n**Content:**\n\n`;
+          md += "\n**Content:**\n\n";
           md += `\`\`\`\n${attachment.content.text}\n\`\`\`\n`;
         }
       }
@@ -208,11 +208,11 @@ export function formatToolResponse(toolName: string, result: any): string {
       case "get_email":
         // Check if this is a search result (Gmail search URL was provided)
         if (result._note && result.results && Array.isArray(result.results)) {
-          let md = `# Gmail Search Results\n\n`;
+          let md = "# Gmail Search Results\n\n";
           md += `> ${result._note}\n\n`;
           md += `**Search Query:** "${result.searchQuery}"\n`;
           md += `**Original URL:** ${result.originalUrl}\n\n`;
-          md += `---\n\n`;
+          md += "---\n\n";
           md += formatEmailListAsMarkdown(result.results);
           return md;
         }

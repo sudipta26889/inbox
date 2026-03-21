@@ -11,9 +11,6 @@ import type { Logger } from "@/utils/logger";
 import { extractText, getDocumentProxy } from "unpdf";
 
 export interface ParsedAttachment {
-  filename: string;
-  mimeType: string;
-  size: number;
   attachmentId?: string;
   content?: {
     type: "pdf" | "image" | "document" | "text" | "unsupported";
@@ -22,14 +19,17 @@ export interface ParsedAttachment {
     metadata?: Record<string, any>;
     error?: string;
   };
+  filename: string;
+  mimeType: string;
+  size: number;
 }
 
 export interface AttachmentParseOptions {
-  maxSizeBytes?: number; // Default: 10MB
-  parsePdf?: boolean; // Default: true
-  parseImages?: boolean; // Default: false (requires vision API)
-  parseDocuments?: boolean; // Default: false (requires mammoth/xlsx)
   maxPdfPages?: number; // Default: 50 - max pages to parse for large PDFs
+  maxSizeBytes?: number; // Default: 10MB
+  parseDocuments?: boolean; // Default: false (requires mammoth/xlsx)
+  parseImages?: boolean; // Default: false (requires vision API)
+  parsePdf?: boolean; // Default: true
   streamLargePdfs?: boolean; // Default: true - use streaming for files >10MB
 }
 
@@ -69,9 +69,7 @@ async function parsePdfStreaming(
     for (let pageNum = 1; pageNum <= pagesToParse; pageNum++) {
       const page = await doc.getPage(pageNum);
       const textContent = await page.getTextContent();
-      const pageText = textContent.items
-        .map((item: any) => item.str)
-        .join(" ");
+      const pageText = textContent.items.map((item: any) => item.str).join(" ");
       textParts.push(pageText);
 
       // Log progress for very large files
@@ -132,10 +130,7 @@ async function parsePdf(
     const LARGE_FILE_THRESHOLD = 10 * 1024 * 1024; // 10MB
 
     // Use streaming parser for large files
-    if (
-      options.streamLargePdfs &&
-      fileSizeBytes > LARGE_FILE_THRESHOLD
-    ) {
+    if (options.streamLargePdfs && fileSizeBytes > LARGE_FILE_THRESHOLD) {
       logger.info("Using streaming parser for large PDF", {
         filename,
         sizeMB: (fileSizeBytes / 1024 / 1024).toFixed(2),
@@ -175,7 +170,10 @@ async function parsePdf(
 /**
  * Parse plain text attachment
  */
-function parseText(buffer: Buffer, filename: string): ParsedAttachment["content"] {
+function parseText(
+  buffer: Buffer,
+  filename: string,
+): ParsedAttachment["content"] {
   try {
     const text = buffer.toString("utf-8");
     return {
@@ -272,7 +270,8 @@ export async function parseAttachment(
       ...attachment,
       content: {
         type: "image",
-        error: "Image parsing not yet implemented. Coming soon with vision API!",
+        error:
+          "Image parsing not yet implemented. Coming soon with vision API!",
       },
     };
   }

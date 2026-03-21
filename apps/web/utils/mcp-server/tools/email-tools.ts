@@ -11,7 +11,7 @@ import {
   parseMessage,
 } from "@/utils/gmail/message";
 import { getMessage as getOutlookMessage } from "@/utils/outlook/message";
-import { extractEmailId, parseGmailUrl } from "./url-parser";
+import { extractEmailId } from "./url-parser";
 import { getThread } from "@/utils/gmail/thread";
 import {
   downloadAndParseAttachments,

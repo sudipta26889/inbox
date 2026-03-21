@@ -105,8 +105,7 @@ export class DharaHILClient {
       risk_level: request.context.riskLevel,
       tags: request.context.tags || [],
       idempotency_key:
-        request.context.idempotencyKey ||
-        `${request.toolName}_${Date.now()}`,
+        request.context.idempotencyKey || `${request.toolName}_${Date.now()}`,
       metadata: request.context.metadata || {},
       webhook: {
         url: "",
@@ -137,8 +136,7 @@ export class DharaHILClient {
         risk_level: request.context.riskLevel,
         tags: request.context.tags || [],
         idempotency_key:
-          request.context.idempotencyKey ||
-          `${request.toolName}_${Date.now()}`,
+          request.context.idempotencyKey || `${request.toolName}_${Date.now()}`,
         metadata: request.context.metadata || {},
         webhook: {
           url: "",

@@ -17,6 +17,7 @@ export interface CalendarEvent {
 }
 
 export interface CalendarEventProvider {
+  fetchEventById(eventId: string): Promise<CalendarEvent | null>;
   fetchEvents(options: {
     timeMin?: Date;
     timeMax?: Date;
@@ -28,5 +29,4 @@ export interface CalendarEventProvider {
     timeMax: Date;
     maxResults: number;
   }): Promise<CalendarEvent[]>;
-  fetchEventById(eventId: string): Promise<CalendarEvent | null>;
 }
