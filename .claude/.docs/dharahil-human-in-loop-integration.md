@@ -2,7 +2,7 @@
 
 ## Overview
 
-DharaHIL is a **Human-in-the-Loop (HITL) approval gateway** integrated into the Inbox system to intercept sensitive AI agent actions and route them to a human (Sudipta) for approval via WhatsApp/Telegram before execution.
+DharaHIL is a **Human-in-the-Loop (HITL) approval gateway** integrated into the Inbox system to intercept sensitive AI agent actions and route them to a human (Sudipta) for approval via Slack/Telegram before execution.
 
 **Core Guarantee**: No calendar event with external attendees is created without explicit human approval.
 
@@ -11,7 +11,7 @@ DharaHIL is a **Human-in-the-Loop (HITL) approval gateway** integrated into the 
 DharaHIL acts as a safety gate between AI agents and critical actions. When an AI agent wants to perform a sensitive operation (like creating a calendar event with external attendees, sending emails, etc.), it must:
 
 1. **Submit** the proposed action to DharaHIL gateway
-2. **Wait** for human approval via messaging app (WhatsApp/Telegram)
+2. **Wait** for human approval via messaging app (Slack/Telegram)
 3. **Execute** only if approved, or handle rejection/revision requests
 
 ### Architecture Flow
@@ -35,10 +35,10 @@ DharaHIL acts as a safety gate between AI agents and critical actions. When an A
 │ DharaHIL Gateway (https://dharahil-gateway.sudiptadhara.in)    │
 │  - Validates request                                            │
 │  - Formats message for human                                    │
-│  - Sends to WhatsApp/Telegram                                   │
+│  - Sends to Slack/Telegram                                       │
 │  - Stores decision when human responds                          │
 └────────────────────────────┬────────────────────────────────────┘
-                             │ WhatsApp/Telegram Message
+                             │ Slack/Telegram Message
                              ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │ Human (Sudipta's Phone)                                         │
@@ -495,7 +495,7 @@ await dharahilClient.pollForDecision(
 
 ## Message Format (What Human Sees)
 
-When DharaHIL sends a message to WhatsApp/Telegram, it formats it for human readability:
+When DharaHIL sends a message to Slack/Telegram, it formats it for human readability:
 
 ### Example: Calendar Event Creation
 
@@ -597,7 +597,7 @@ const decision = await dharahilClient.runApprovalLoop({
 
 If the same `idempotencyKey` is submitted multiple times:
 - Gateway returns the existing request's status
-- No new WhatsApp message sent
+- No new Slack/Telegram message sent
 - Human sees only one approval request
 
 ### Metadata for Context
@@ -626,7 +626,7 @@ This metadata:
 - Appears in gateway logs
 - Can be used for analytics
 - Helps debug issues
-- Does NOT appear in WhatsApp message (keeps it concise)
+- Does NOT appear in Slack/Telegram message (keeps it concise)
 
 ### Tags for Filtering
 
@@ -735,7 +735,7 @@ if (env.NEXT_PUBLIC_DHARAHIL_ENABLED) {
 
 1. Set `NEXT_PUBLIC_DHARAHIL_ENABLED=true`
 2. Configure valid gateway credentials
-3. Ensure your phone has WhatsApp/Telegram set up
+3. Ensure your phone has Slack/Telegram set up
 4. Trigger an action (create calendar event)
 5. Check phone for approval message
 6. Respond with APPROVE/REJECT/REVISE
@@ -831,7 +831,7 @@ For actions that might be retried:
 idempotencyKey: `${toolName}_${uniqueIdentifier}_${timestamp}`
 ```
 
-Prevents duplicate WhatsApp messages if the client retries.
+Prevents duplicate Slack/Telegram messages if the client retries.
 
 ## Troubleshooting
 
@@ -976,6 +976,6 @@ DharaHIL provides a **robust, fail-safe human-in-the-loop approval mechanism** f
 ✅ **Dynamic TTL**: Gateway determines timeout based on risk
 ✅ **Idempotency**: Prevents duplicate approval requests
 ✅ **Comprehensive Logging**: Full audit trail
-✅ **WhatsApp/Telegram**: Approve from your phone anywhere
+✅ **Slack/Telegram**: Approve from your phone anywhere
 
 **Current Status**: Fully integrated for calendar event creation. Ready to expand to email sending, file operations, and other sensitive actions.
