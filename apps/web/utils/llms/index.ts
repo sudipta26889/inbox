@@ -265,8 +265,15 @@ export function createGenerateObject({
       const result = await generateObject(
         {
           experimental_repairText: async ({ text }) => {
-            logger.info("Repairing text", { label });
+            logger.info("Repairing text", {
+              label,
+              textPreview: text.substring(0, 500),
+            });
             const fixed = jsonrepair(text);
+            logger.info("Repaired text result", {
+              label,
+              fixedPreview: fixed.substring(0, 500),
+            });
             return fixed;
           },
           ...options,

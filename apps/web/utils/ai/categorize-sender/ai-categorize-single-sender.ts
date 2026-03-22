@@ -59,7 +59,10 @@ ${formatCategoriesForPrompt(categories)}
     system,
     prompt,
     schema: z.object({
-      rationale: z.string().describe("Keep it short. 1-2 sentences max."),
+      rationale: z
+        .string()
+        .describe("Keep it short. 1-2 sentences max.")
+        .optional(),
       category: z.string(),
     }),
   });

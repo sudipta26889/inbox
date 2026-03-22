@@ -243,10 +243,66 @@ function selectModel(
       const baseURL =
         env.OPENAI_COMPATIBLE_BASE_URL || "http://localhost:1234/v1";
       const openAiCompatibleApiKey = resolveApiKey(aiApiKey, undefined);
+
+      // Custom fetch to add format: "json" for Ollama models when using structured outputs
+      const customFetch = async (url: string, options?: RequestInit) => {
+        const isOllamaModel = modelName.startsWith("ollama/");
+
+        logger.info("Custom fetch interceptor called", {
+          model: modelName,
+          isOllamaModel,
+          hasBody: !!options?.body,
+          url,
+        });
+
+        if (isOllamaModel && options?.body) {
+          try {
+            const body = JSON.parse(options.body as string);
+
+            // Add format: "json" for JSON mode requests
+            // The AI SDK will handle parsing the JSON from the content field
+            if (!body.format) {
+              body.format = "json";
+              logger.info("Added format: json for Ollama", {
+                model: modelName,
+              });
+              options.body = JSON.stringify(body);
+            }
+          } catch (e) {
+            logger.error("Failed to parse request body in custom fetch", {
+              error: e,
+            });
+          }
+        }
+
+        const response = await fetch(url, options);
+
+        // Log response for debugging Ollama structured output issues
+        if (isOllamaModel && options?.body) {
+          try {
+            const clonedResponse = response.clone();
+            const responseText = await clonedResponse.text();
+            logger.info("Ollama response received", {
+              status: response.status,
+              responsePreview: responseText.substring(0, 500),
+            });
+          } catch (e) {
+            logger.error("Failed to log response", { error: e });
+          }
+        }
+
+        return response;
+      };
+
+      // Ollama models don't support structured outputs the same way as OpenAI
+      // They return JSON in the content field, not as a separate structured output
+      const supportsStructuredOutputs = !modelName.startsWith("ollama/");
+
       const openaiCompatible = createOpenAICompatible({
         name: "openai-compatible",
         baseURL,
-        supportsStructuredOutputs: true,
+        supportsStructuredOutputs,
+        fetch: customFetch,
         ...(openAiCompatibleApiKey ? { apiKey: openAiCompatibleApiKey } : {}),
       });
       return {
