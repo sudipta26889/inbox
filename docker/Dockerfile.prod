@@ -43,6 +43,10 @@ RUN find apps/web -type f \( -name "*.ts" -o -name "*.tsx" \) \
  -e 's|from "@/generated/prisma/enums"|from "@prisma/client"|g' \
  {} +
 
+ # Temporarily remove problematic a2a-explorer page that fails during prerender
+ # It will be deployed separately or fixed later
+RUN rm -rf apps/web/app/\(marketing\)/docs/a2a-explorer || true
+
  # Build app (Next.js standalone)
 ENV NODE_ENV=production
 # Increase V8 heap for Next build to avoid OOM in builder
