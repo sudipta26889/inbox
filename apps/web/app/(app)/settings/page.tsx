@@ -29,6 +29,7 @@ import { ModelSection } from "@/app/(app)/[emailAccountId]/settings/ModelSection
 import { OrgAnalyticsConsentSection } from "@/app/(app)/[emailAccountId]/settings/OrgAnalyticsConsentSection";
 import { ResetAnalyticsSection } from "@/app/(app)/[emailAccountId]/settings/ResetAnalyticsSection";
 import { WebhookSection } from "@/app/(app)/[emailAccountId]/settings/WebhookSection";
+import { HomeAssistantSection } from "@/app/(app)/[emailAccountId]/settings/HomeAssistantSection";
 import { CopyRulesSection } from "@/app/(app)/[emailAccountId]/settings/CopyRulesSection";
 import { RuleImportExportSetting } from "@/app/(app)/[emailAccountId]/assistant/settings/RuleImportExportSetting";
 import { ToggleAllRulesSection } from "@/app/(app)/[emailAccountId]/settings/ToggleAllRulesSection";
@@ -152,6 +153,8 @@ export default function SettingsPage() {
           title="Developer"
         >
           <ItemCard>
+            <HomeAssistantSection />
+            <ItemSeparator />
             <WebhookSection />
             {env.NEXT_PUBLIC_EXTERNAL_API_ENABLED && (
               <>

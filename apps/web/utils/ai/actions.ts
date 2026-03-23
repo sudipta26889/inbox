@@ -22,6 +22,10 @@ import {
   attachmentSourceInputSchema,
 } from "@/utils/attachments/source-schema";
 import { AttachmentSourceType } from "@/generated/prisma/enums";
+import {
+  executeHomeAssistantAction,
+  type HomeAssistantIntegrationType,
+} from "@/utils/home-assistant";
 
 const MODULE = "ai-actions";
 
@@ -90,6 +94,8 @@ export const runActionFunction = async (options: {
       return move_folder(opts);
     case ActionType.NOTIFY_SENDER:
       return notify_sender(opts);
+    case ActionType.HOME_ASSISTANT:
+      return home_assistant(opts);
     default:
       throw new Error(`Unknown action: ${action}`);
   }
@@ -480,6 +486,75 @@ const notify_sender: ActionFunction<Record<string, unknown>> = async ({
   }
 
   return { success: true };
+};
+
+const home_assistant: ActionFunction<{
+  haIntegrationType?: string | null;
+  haWebhookId?: string | null;
+  haMqttTopic?: string | null;
+  haServiceDomain?: string | null;
+  haServiceName?: string | null;
+  haServiceData?: Record<string, any> | null;
+  haEntityId?: string | null;
+}> = async ({ email, args, userId, executedRule, logger }) => {
+  if (!args.haIntegrationType) {
+    logger.error("Home Assistant integration type is required");
+    return { success: false, errorCode: "MISSING_INTEGRATION_TYPE" };
+  }
+
+  const config = {
+    type: args.haIntegrationType as HomeAssistantIntegrationType,
+    webhookId: args.haWebhookId || undefined,
+    mqttTopic: args.haMqttTopic || undefined,
+    serviceDomain: args.haServiceDomain || undefined,
+    serviceName: args.haServiceName || undefined,
+    serviceData: args.haServiceData || undefined,
+    entityId: args.haEntityId || undefined,
+  };
+
+  const emailData = {
+    threadId: email.threadId,
+    messageId: email.id,
+    subject: email.headers.subject,
+    from: email.headers.from,
+    cc: email.headers.cc,
+    bcc: email.headers.bcc,
+    headerMessageId: email.headers["message-id"] || "",
+    snippet: email.snippet,
+    labels: email.labelIds,
+    receivedAt: email.internalDate
+      ? new Date(Number(email.internalDate))
+      : undefined,
+  };
+
+  const ruleData = {
+    id: executedRule.id,
+    ruleId: executedRule.ruleId,
+    ruleName: undefined, // TODO: fetch rule name if needed
+  };
+
+  try {
+    await executeHomeAssistantAction(
+      userId,
+      emailData,
+      ruleData,
+      executedRule,
+      config,
+    );
+    return { success: true };
+  } catch (error) {
+    logger.error("Home Assistant action failed", { error });
+    captureException(
+      error instanceof Error
+        ? error
+        : new Error("Home Assistant action failed"),
+      {
+        extra: { actionType: ActionType.HOME_ASSISTANT },
+        sampleRate: 0.1,
+      },
+    );
+    return { success: false, errorCode: "EXECUTION_FAILED" };
+  }
 };
 
 async function lazyUpdateActionLabelId({

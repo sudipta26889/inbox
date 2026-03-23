@@ -29,4 +29,12 @@ export type ActionItem = {
   folderId?: ExecutedAction["folderId"];
   delayInMinutes?: number | null;
   staticAttachments?: ExecutedAction["staticAttachments"];
+  // Home Assistant fields
+  haIntegrationType?: string | null;
+  haWebhookId?: string | null;
+  haMqttTopic?: string | null;
+  haServiceDomain?: string | null;
+  haServiceName?: string | null;
+  haServiceData?: Record<string, any> | null;
+  haEntityId?: string | null;
 };

@@ -152,6 +152,9 @@ export const actionInputs: Record<
   [ActionType.NOTIFY_SENDER]: {
     fields: [],
   },
+  [ActionType.HOME_ASSISTANT]: {
+    fields: [], // Custom component will handle rendering
+  },
 };
 
 export function getActionFields(fields: Action | ExecutedAction | undefined) {
@@ -196,6 +199,13 @@ type ActionFieldsSelection = Pick<
   | "folderId"
   | "delayInMinutes"
   | "staticAttachments"
+  | "haIntegrationType"
+  | "haWebhookId"
+  | "haMqttTopic"
+  | "haServiceDomain"
+  | "haServiceName"
+  | "haServiceData"
+  | "haEntityId"
 >;
 
 type SanitizableActionFields = Partial<
@@ -229,6 +239,13 @@ export function sanitizeActionFields(
     staticAttachments: supportsStaticAttachments
       ? (action.staticAttachments ?? undefined)
       : undefined,
+    haIntegrationType: null,
+    haWebhookId: null,
+    haMqttTopic: null,
+    haServiceDomain: null,
+    haServiceName: null,
+    haServiceData: null,
+    haEntityId: null,
   };
 
   switch (action.type) {
@@ -296,6 +313,18 @@ export function sanitizeActionFields(
     }
     case ActionType.NOTIFY_SENDER: {
       return base;
+    }
+    case ActionType.HOME_ASSISTANT: {
+      return {
+        ...base,
+        haIntegrationType: action.haIntegrationType ?? null,
+        haWebhookId: action.haWebhookId ?? null,
+        haMqttTopic: action.haMqttTopic ?? null,
+        haServiceDomain: action.haServiceDomain ?? null,
+        haServiceName: action.haServiceName ?? null,
+        haServiceData: action.haServiceData ?? null,
+        haEntityId: action.haEntityId ?? null,
+      };
     }
     default:
       // biome-ignore lint/correctness/noSwitchDeclarations: intentional exhaustive check

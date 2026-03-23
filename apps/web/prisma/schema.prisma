@@ -88,6 +88,10 @@ model User {
   aiApiKey      String?
   webhookSecret String?
 
+  // Home Assistant integration settings
+  homeAssistantUrl   String? // e.g., "https://soul-ha.sudiptadhara.in"
+  homeAssistantToken String? // Long-lived access token
+
   // referral system
   referralCode String? @unique // User's own referral code
 
@@ -497,6 +501,15 @@ model Action {
   delayInMinutes Int?
   staticAttachments Json? // AttachmentSourceInput[] — explicit files to attach for email actions
 
+  // Home Assistant integration fields
+  haIntegrationType String? // "webhook", "mqtt", "service_call", "persistent_notification"
+  haWebhookId       String? // Webhook ID for Home Assistant webhook automation
+  haMqttTopic       String? // MQTT topic to publish to
+  haServiceDomain   String? // Service domain (e.g., "notify", "light", "switch")
+  haServiceName     String? // Service name (e.g., "mobile_app_phone", "turn_on")
+  haServiceData     Json?   // Additional service data as JSON
+  haEntityId        String? // Entity ID for service calls or notifications
+
   @@index([ruleId])
 }
 
@@ -580,6 +593,15 @@ model ExecutedAction {
   folderId   String?
   staticAttachments Json? // AttachmentSourceInput[] — explicit files to attach for email actions
 
+  // Home Assistant integration fields
+  haIntegrationType String? // "webhook", "mqtt", "service_call", "persistent_notification"
+  haWebhookId       String? // Webhook ID for Home Assistant webhook automation
+  haMqttTopic       String? // MQTT topic to publish to
+  haServiceDomain   String? // Service domain (e.g., "notify", "light", "switch")
+  haServiceName     String? // Service name (e.g., "mobile_app_phone", "turn_on")
+  haServiceData     Json?   // Additional service data as JSON
+  haEntityId        String? // Entity ID for service calls or notifications
+
   // additional fields as a result of the action
   draftId         String? // Gmail draft ID created by DRAFT_EMAIL action
   wasDraftSent    Boolean? // Tracks if the corresponding draft was sent (true) or ignored/superseded (false)
@@ -618,6 +640,15 @@ model ScheduledAction {
   folderId          String?
   scheduledId       String?
   staticAttachments Json? // AttachmentSourceInput[] — explicit files to attach for email actions
+
+  // Home Assistant integration fields
+  haIntegrationType String? // "webhook", "mqtt", "service_call", "persistent_notification"
+  haWebhookId       String? // Webhook ID for Home Assistant webhook automation
+  haMqttTopic       String? // MQTT topic to publish to
+  haServiceDomain   String? // Service domain (e.g., "notify", "light", "switch")
+  haServiceName     String? // Service name (e.g., "mobile_app_phone", "turn_on")
+  haServiceData     Json?   // Additional service data as JSON
+  haEntityId        String? // Entity ID for service calls or notifications
 
   executedAt       DateTime?
   executedActionId String?   @unique
@@ -1463,6 +1494,7 @@ enum ActionType {
   DIGEST
   MOVE_FOLDER
   NOTIFY_SENDER // Sends notification from Inbox (not user's email). Only for cold email rules.
+  HOME_ASSISTANT // Integrates with Home Assistant (webhook, MQTT, service calls)
   // SUMMARIZE
   // SNOOZE
   // ADD_TO_DO

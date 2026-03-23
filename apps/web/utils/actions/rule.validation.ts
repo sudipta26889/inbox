@@ -44,6 +44,7 @@ const zodActionType = z.enum([
   ActionType.REPLY,
   ActionType.SEND_EMAIL,
   ActionType.CALL_WEBHOOK,
+  ActionType.HOME_ASSISTANT,
   ActionType.MARK_READ,
   ActionType.DIGEST,
   ActionType.MOVE_FOLDER,
@@ -109,6 +110,14 @@ const zodAction = z
     folderId: zodField,
     delayInMinutes: delayInMinutesSchema,
     staticAttachments: z.array(attachmentSourceInputSchema).optional(),
+    // Home Assistant fields
+    haIntegrationType: z.string().nullish(),
+    haWebhookId: z.string().nullish(),
+    haMqttTopic: z.string().nullish(),
+    haServiceDomain: z.string().nullish(),
+    haServiceName: z.string().nullish(),
+    haServiceData: z.record(z.any()).nullish(),
+    haEntityId: z.string().nullish(),
   })
   .superRefine((data, ctx) => {
     if (data.type === ActionType.LABEL) {
@@ -151,6 +160,46 @@ const zodAction = z
         path: ["url"],
       });
     }
+
+    if (data.type === ActionType.HOME_ASSISTANT) {
+      const integrationType = data.haIntegrationType;
+
+      if (!integrationType) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Please select an integration type",
+          path: ["haIntegrationType"],
+        });
+      } else if (integrationType === "webhook" && !data.haWebhookId?.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Please enter a webhook ID",
+          path: ["haWebhookId"],
+        });
+      } else if (integrationType === "mqtt" && !data.haMqttTopic?.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Please enter an MQTT topic",
+          path: ["haMqttTopic"],
+        });
+      } else if (integrationType === "service_call") {
+        if (!data.haServiceDomain?.trim()) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Please enter a service domain",
+            path: ["haServiceDomain"],
+          });
+        }
+        if (!data.haServiceName?.trim()) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Please enter a service name",
+            path: ["haServiceName"],
+          });
+        }
+      }
+    }
+
     if (
       data.type === ActionType.MOVE_FOLDER &&
       (!data.folderName?.value?.trim() || !data.folderId?.value?.trim())

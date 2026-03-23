@@ -22,6 +22,8 @@ async function getUser({
       aiModel: true,
       aiApiKey: true,
       webhookSecret: true,
+      homeAssistantUrl: true,
+      homeAssistantToken: true,
       referralCode: true,
       announcementDismissedAt: true,
       dismissedHints: true,

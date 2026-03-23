@@ -779,6 +779,14 @@ function mapActionToSanitizedFields(action: {
   folderId?: { value?: string | null } | null;
   delayInMinutes?: number | null;
   staticAttachments?: AttachmentSourceInput[] | null;
+  // Home Assistant fields
+  haIntegrationType?: string | null;
+  haWebhookId?: string | null;
+  haMqttTopic?: string | null;
+  haServiceDomain?: string | null;
+  haServiceName?: string | null;
+  haServiceData?: Record<string, any> | null;
+  haEntityId?: string | null;
 }) {
   const sanitized = sanitizeActionFields({
     type: action.type,
@@ -796,6 +804,14 @@ function mapActionToSanitizedFields(action: {
     staticAttachments: action.staticAttachments?.length
       ? action.staticAttachments
       : undefined,
+    // Home Assistant fields
+    haIntegrationType: action.haIntegrationType,
+    haWebhookId: action.haWebhookId,
+    haMqttTopic: action.haMqttTopic,
+    haServiceDomain: action.haServiceDomain,
+    haServiceName: action.haServiceName,
+    haServiceData: action.haServiceData,
+    haEntityId: action.haEntityId,
   });
 
   return {
@@ -814,6 +830,14 @@ function mapActionToSanitizedFields(action: {
     folderId: sanitized.folderId ?? null,
     delayInMinutes: sanitized.delayInMinutes ?? null,
     staticAttachments: sanitized.staticAttachments ?? null,
+    // Home Assistant fields
+    haIntegrationType: sanitized.haIntegrationType ?? null,
+    haWebhookId: sanitized.haWebhookId ?? null,
+    haMqttTopic: sanitized.haMqttTopic ?? null,
+    haServiceDomain: sanitized.haServiceDomain ?? null,
+    haServiceName: sanitized.haServiceName ?? null,
+    haServiceData: sanitized.haServiceData ?? null,
+    haEntityId: sanitized.haEntityId ?? null,
   };
 }
 

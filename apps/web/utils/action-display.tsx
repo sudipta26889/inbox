@@ -13,6 +13,7 @@ import {
   FileTextIcon,
   MailIcon,
   NewspaperIcon,
+  HomeIcon,
 } from "lucide-react";
 import { truncate } from "@/utils/string";
 
@@ -77,6 +78,8 @@ export function getActionDisplay(
       return "Digest";
     case ActionType.CALL_WEBHOOK:
       return "Call Webhook";
+    case ActionType.HOME_ASSISTANT:
+      return "Home Assistant";
     case ActionType.NOTIFY_SENDER:
       return "Notify Sender";
     default: {
@@ -108,6 +111,8 @@ export function getActionIcon(actionType: ActionType) {
       return MailIcon;
     case ActionType.CALL_WEBHOOK:
       return WebhookIcon;
+    case ActionType.HOME_ASSISTANT:
+      return HomeIcon;
     case ActionType.DIGEST:
       return NewspaperIcon;
     case ActionType.NOTIFY_SENDER:

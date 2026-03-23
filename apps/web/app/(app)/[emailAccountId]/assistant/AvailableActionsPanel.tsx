@@ -20,6 +20,7 @@ const actionNames: Record<ActionType, string> = {
   [ActionType.MARK_SPAM]: "Mark as spam",
   [ActionType.SEND_EMAIL]: "Send email",
   [ActionType.CALL_WEBHOOK]: "Call webhook",
+  [ActionType.HOME_ASSISTANT]: "Home Assistant",
   [ActionType.DIGEST]: "Add to digest",
   [ActionType.NOTIFY_SENDER]: "Notify sender",
 };
@@ -27,6 +28,8 @@ const actionNames: Record<ActionType, string> = {
 const actionTooltips: Partial<Record<ActionType, string>> = {
   [ActionType.CALL_WEBHOOK]:
     "For developers: trigger external integrations by sending email data to a custom URL",
+  [ActionType.HOME_ASSISTANT]:
+    "Trigger Home Assistant automations, publish to MQTT, or control smart home devices",
   [ActionType.DIGEST]:
     "Group emails together and receive them as a daily summary",
 };

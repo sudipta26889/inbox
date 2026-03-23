@@ -13,7 +13,7 @@ services:
         NEXT_PUBLIC_AUTO_DRAFT_DISABLED: "false"
         NEXT_PUBLIC_MEETING_BRIEFS_ENABLED: "false"
         NEXT_PUBLIC_INTEGRATIONS_ENABLED: "false"
-        NEXT_PUBLIC_DIGEST_ENABLED: "false"
+        NEXT_PUBLIC_DIGEST_ENABLED: "true"
     image: inbox-prod:latest
     env_file:
       - ./apps/web/.env

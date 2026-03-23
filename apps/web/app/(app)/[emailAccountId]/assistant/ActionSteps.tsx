@@ -47,6 +47,7 @@ import { MutedText } from "@/components/Typography";
 import { BRAND_NAME } from "@/utils/branding";
 import { ActionAttachmentsField } from "@/app/(app)/[emailAccountId]/assistant/ActionAttachmentsField";
 import type { AttachmentSourceInput } from "@/utils/attachments/source-schema";
+import { HomeAssistantActionFields } from "@/app/(app)/[emailAccountId]/assistant/HomeAssistantActionFields";
 
 export function ActionSteps({
   actionFields,
@@ -581,7 +582,16 @@ function ActionCard({
 
   const rightContent = (
     <>
-      {isNotifySender ? (
+      {actionType === ActionType.HOME_ASSISTANT ? (
+        <Card className="p-4 space-y-4">
+          <HomeAssistantActionFields
+            index={index}
+            register={register}
+            watch={watch}
+            setValue={setValue}
+          />
+        </Card>
+      ) : isNotifySender ? (
         <MutedText className="px-1 h-full flex items-center">
           {`Sends an automated notification from ${BRAND_NAME} informing the sender their email was filtered as cold outreach.`}
         </MutedText>

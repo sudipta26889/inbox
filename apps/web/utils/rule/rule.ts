@@ -404,6 +404,14 @@ async function mapActionFields(
         staticAttachments:
           (a as { staticAttachments?: AttachmentSourceInput[] | null })
             .staticAttachments ?? undefined,
+        // Home Assistant fields
+        haIntegrationType: (a as any).haIntegrationType ?? null,
+        haWebhookId: (a as any).haWebhookId ?? null,
+        haMqttTopic: (a as any).haMqttTopic ?? null,
+        haServiceDomain: (a as any).haServiceDomain ?? null,
+        haServiceName: (a as any).haServiceName ?? null,
+        haServiceData: (a as any).haServiceData ?? null,
+        haEntityId: (a as any).haEntityId ?? null,
       };
     },
   );

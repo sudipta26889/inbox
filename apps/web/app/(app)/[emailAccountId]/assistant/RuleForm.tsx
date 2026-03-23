@@ -110,13 +110,11 @@ export function RuleForm({
               .filter((action) => action.type !== ActionType.DIGEST)
               .map((action) => ({
                 ...action,
-                delayInMinutes: action.delayInMinutes,
                 content: {
                   ...action.content,
                   setManually: !!action.content?.value,
                 },
-                folderName: action.folderName,
-                folderId: action.folderId,
+                // All other fields (including Home Assistant fields) are spread via ...action
               })),
           ],
         }
@@ -392,6 +390,20 @@ export function RuleForm({
         value: ActionType.CALL_WEBHOOK,
         icon: getActionIcon(ActionType.CALL_WEBHOOK),
       },
+      {
+        label: "Home Assistant",
+        value: ActionType.HOME_ASSISTANT,
+        icon: getActionIcon(ActionType.HOME_ASSISTANT),
+      },
+      ...(env.NEXT_PUBLIC_DIGEST_ENABLED
+        ? [
+            {
+              label: "Add to digest",
+              value: ActionType.DIGEST,
+              icon: getActionIcon(ActionType.DIGEST),
+            },
+          ]
+        : []),
       // NOTIFY_SENDER is only available for cold email rules
       ...(rule.systemType === SystemType.COLD_EMAIL &&
       env.NEXT_PUBLIC_IS_RESEND_CONFIGURED
