@@ -27,6 +27,22 @@ RUN pnpm install --no-frozen-lockfile --prefer-offline --shamefully-hoist
  # Copy the full repo
 COPY . .
 
+ # For production: Use default Prisma client generation (not custom TS output)
+ # Replace the custom generator config with standard one
+RUN cd apps/web/prisma \
+ && sed -i '/^generator client {/,/^}/d' schema.prisma \
+ && sed -i '/^datasource/i generator client {\n  provider = "prisma-client-js"\n}\n' schema.prisma \
+ && cd .. \
+ && npx prisma generate \
+ && cd ..
+
+ # Replace all custom Prisma imports with standard @prisma/client
+RUN find apps/web -type f \( -name "*.ts" -o -name "*.tsx" \) \
+ -exec sed -i \
+ -e 's|from "@/generated/prisma/client"|from "@prisma/client"|g' \
+ -e 's|from "@/generated/prisma/enums"|from "@prisma/client"|g' \
+ {} +
+
  # Build app (Next.js standalone)
 ENV NODE_ENV=production
 # Increase V8 heap for Next build to avoid OOM in builder
@@ -71,10 +87,9 @@ ENV QSTASH_NEXT_SIGNING_KEY="dummy_qstash_next_key_for_build"
 ENV DOCKER_BUILD="true"
 ENV SKIP_TYPE_CHECK="true"
 
-RUN npx prisma generate --schema=apps/web/prisma/schema.prisma \
- && cd apps/web \
+RUN cd apps/web \
  && pnpm exec next build \
- && cd ../.. \
+ && cd .. \
  && rm -rf apps/web/.next/cache
 
 FROM node:24-alpine AS runner
@@ -90,6 +105,8 @@ COPY --from=builder /app/apps/web/.next/standalone ./
 COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
 COPY --from=builder /app/apps/web/public ./apps/web/public
 COPY --from=builder /app/apps/web/prisma ./apps/web/prisma
+# Copy generated Prisma client (custom output path)
+COPY --from=builder /app/apps/web/generated ./apps/web/generated
 
 # Copy runtime scripts
 COPY docker/scripts /app/docker/scripts
