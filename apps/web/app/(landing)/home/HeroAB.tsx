@@ -17,7 +17,7 @@ const copy: {
 } = {
   control: {
     title: "Meet Your AI Email Assistant That Actually Works",
-    subtitle: `Cut your email time in half. ${BRAND_NAME} organizes your inbox, drafts responses, and helps you reach inbox zero fast. For Gmail and Outlook.`,
+    subtitle: `Cut your email time in half. ${BRAND_NAME} organizes your inbox, drafts responses, and helps you clear your inbox fast. For Gmail and Outlook.`,
   },
   "clean-up-in-minutes": {
     title: "Clean Up Your Inbox In Minutes",

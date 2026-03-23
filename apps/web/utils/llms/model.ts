@@ -212,7 +212,7 @@ function selectModel(
         apiKey: aiGatewayApiKey,
         headers: {
           "http-referer": "https://www.getinboxzero.com",
-          "x-title": "Inbox Zero",
+          "x-title": "Inbox",
         },
       });
       return {

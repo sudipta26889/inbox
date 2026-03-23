@@ -448,9 +448,7 @@ function ConnectedChannelRow({
                     ? "No channels found. "
                     : "Don't see your channel? "}
                   Invite the bot with{" "}
-                  <code className="rounded bg-muted px-1">
-                    /invite @InboxZero
-                  </code>
+                  <code className="rounded bg-muted px-1">/invite @Inbox</code>
                 </div>
               )}
               {hasTargetLoadError && (

@@ -31,7 +31,9 @@ export function HomeAssistantSection() {
   const [homeAssistantUrl, setHomeAssistantUrl] = useState("");
   const [homeAssistantToken, setHomeAssistantToken] = useState("");
 
-  const hasExistingConfig = !!(data?.homeAssistantUrl && data?.homeAssistantToken);
+  const hasExistingConfig = !!(
+    data?.homeAssistantUrl && data?.homeAssistantToken
+  );
 
   const handleOpen = (open: boolean) => {
     if (open && data) {
@@ -81,7 +83,9 @@ export function HomeAssistantSection() {
         throw new Error(error.error || "Failed to save settings");
       }
 
-      toastSuccess({ description: "Home Assistant settings saved successfully" });
+      toastSuccess({
+        description: "Home Assistant settings saved successfully",
+      });
       await mutate();
       setIsOpen(false);
     } catch (error) {
@@ -138,8 +142,8 @@ export function HomeAssistantSection() {
           Home Assistant
         </ItemTitle>
         <ItemDescription>
-          Connect your Home Assistant instance to trigger automations, publish to
-          MQTT, and control devices based on email rules.
+          Connect your Home Assistant instance to trigger automations, publish
+          to MQTT, and control devices based on email rules.
         </ItemDescription>
       </ItemContent>
       <ItemActions>
@@ -170,7 +174,8 @@ export function HomeAssistantSection() {
                     disabled={isSaving}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Your Home Assistant instance URL (including http:// or https://)
+                    Your Home Assistant instance URL (including http:// or
+                    https://)
                   </p>
                 </div>
 
@@ -185,8 +190,8 @@ export function HomeAssistantSection() {
                     disabled={isSaving}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Create this in Home Assistant: Profile → Long-Lived Access Tokens
-                    → Create Token
+                    Create this in Home Assistant: Profile → Long-Lived Access
+                    Tokens → Create Token
                   </p>
                 </div>
 

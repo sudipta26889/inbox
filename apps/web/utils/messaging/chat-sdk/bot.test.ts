@@ -60,7 +60,7 @@ describe("stripLeadingSlackMention", () => {
   });
 
   it("keeps compatibility with plain @mention text", () => {
-    expect(stripLeadingSlackMention("@InboxZero summarize my inbox")).toBe(
+    expect(stripLeadingSlackMention("@Inbox summarize my inbox")).toBe(
       "summarize my inbox",
     );
   });

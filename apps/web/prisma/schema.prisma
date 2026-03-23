@@ -113,6 +113,10 @@ model User {
   // MCP Server OAuth
   mcpServerAuthCodes    McpServerAuthorizationCode[]
   mcpServerAccessTokens McpServerAccessToken[]
+
+  // A2A Protocol
+  mcpServerClients McpServerClient[] @relation("McpServerClientToUser")
+  a2aTasks         A2aTask[]         @relation("A2aTaskToUser")
 }
 
 enum ApiKeyScope {
@@ -211,6 +215,9 @@ model EmailAccount {
   documentFilings     DocumentFiling[]
   filingFolders       FilingFolder[]
   apiKeys             ApiKey[]
+
+  // A2A Protocol
+  a2aTasks A2aTask[] @relation("A2aTaskToEmailAccount")
 
   @@index([userId])
   @@index([lastSummaryEmailAt])
@@ -1403,11 +1410,20 @@ model McpServerClient {
   tosUri                      String?
   policyUri                   String?
 
+  // A2A Protocol support
+  type              ClientType @default(MCP) // MCP or A2A client
+  userId            String? // For user-created A2A clients
+  description       String? // Description of the client
+  lastUsedAt        DateTime? // Track last usage
+
   // Relations
   authorizationCodes McpServerAuthorizationCode[]
   accessTokens       McpServerAccessToken[]
+  user               User? @relation("McpServerClientToUser", fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([clientId])
+  @@index([userId])
+  @@index([type])
 }
 
 model McpServerAuthorizationCode {
@@ -1672,4 +1688,388 @@ enum AutomationJobRunStatus {
   SENT
   SKIPPED
   FAILED
+}
+
+enum ClientType {
+  MCP // MCP Protocol clients
+  A2A // A2A Protocol clients
+}
+
+// ====================================================================
+// A2A PROTOCOL MODELS
+// Based on A2A Protocol v0.3 specification
+// ====================================================================
+
+/// A2A Task - Discrete unit of work with strict state machine
+/// Follows A2A Protocol specification for task lifecycle
+/// Terminal states are IMMUTABLE per spec
+model A2aTask {
+  id              String        @id @default(cuid())
+
+  // ============ Identity & Ownership ============
+  userId          String
+  emailAccountId  String?
+  clientId        String?       // OAuth client that created the task
+
+  // ============ Task Context ============
+  contextId       String        // Groups related tasks (conversation session)
+  taskId          String        @unique // Public task identifier (UUID)
+
+  // ============ Task Metadata ============
+  skill           String        // e.g., "email.search", "calendar.create_event"
+  input           Json          // Skill-specific input parameters
+
+  // ============ State Management ============
+  // States: submitted, working, input_required, auth_required,
+  //         completed, failed, canceled, rejected, unknown
+  state           A2aTaskState
+  stateReason     String?       // Why task is in current state
+
+  // ============ Results & Artifacts ============
+  result          Json?         // Final result (for completed tasks)
+  artifacts       Json?         // Intermediate data (for streaming)
+  error           Json?         // Error details (for failed tasks)
+
+  // ============ Retry Logic ============
+  retryCount      Int           @default(0) // Number of retry attempts
+  maxRetries      Int           @default(3) // Maximum retry attempts
+  lastRetryAt     DateTime?     // Last retry timestamp
+
+  // ============ Human-in-the-Loop ============
+  requiresApproval Boolean      @default(false)
+  approvalStatus   A2aApprovalStatus?
+  approvalData     Json?        // Data pending approval
+  approvalRequestedAt DateTime?
+
+  // ============ Push Notifications ============
+  pushNotificationUrl   String?
+  pushNotificationToken String?
+  pushNotificationAuth  Json?   // Authentication for webhook
+
+  // ============ Reference Tasks ============
+  referenceTaskIds String[]      // Tasks this one references
+
+  // ============ Timestamps ============
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  completedAt     DateTime?
+
+  // ============ Relations ============
+  user            User          @relation("A2aTaskToUser", fields: [userId], references: [id], onDelete: Cascade)
+  emailAccount    EmailAccount? @relation("A2aTaskToEmailAccount", fields: [emailAccountId], references: [id], onDelete: Cascade)
+  history         A2aTaskHistory[]
+  messages        A2aMessage[]
+
+  @@index([userId])
+  @@index([contextId])
+  @@index([state])
+  @@index([createdAt])
+  @@index([taskId])
+  @@index([clientId])
+  @@map("a2a_tasks")
+}
+
+/// Task State follows A2A Protocol specification
+/// Terminal states (completed, failed, canceled, rejected, unknown) are IMMUTABLE
+enum A2aTaskState {
+  // ============ Non-terminal States ============
+  submitted       // Initial state when task is created
+  working         // Task is being processed
+
+  // ============ Interrupted States ============
+  // These states pause processing, awaiting external action
+  input_required  // Needs additional input from client
+  auth_required   // Needs authorization/approval (HITL)
+
+  // ============ Terminal States (IMMUTABLE) ============
+  // Once reached, task CANNOT transition to any other state
+  completed       // Successfully finished
+  failed          // Error occurred during processing
+  canceled        // Client requested cancellation
+  rejected        // Server rejected the request
+  unknown         // Unexpected/undefined state
+
+  @@map("a2a_task_state")
+}
+
+/// Task History for state transition tracking
+/// Provides full audit trail per A2A best practices
+/// Required for compliance, debugging, and analytics
+model A2aTaskHistory {
+  id          String        @id @default(cuid())
+  taskId      String
+
+  // State transition
+  fromState   A2aTaskState
+  toState     A2aTaskState
+  reason      String?       // Why the transition occurred
+
+  // Context
+  timestamp   DateTime      @default(now())
+  metadata    Json?         // Additional context (error details, etc.)
+
+  // Performance tracking
+  durationMs  Int?          // Time in previous state (milliseconds)
+
+  // Relations
+  task        A2aTask       @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@index([timestamp])
+  @@index([toState])
+  @@map("a2a_task_history")
+}
+
+/// Messages within a conversation context
+/// Enables multi-turn interactions per A2A spec
+/// Groups messages by contextId for conversation continuity
+model A2aMessage {
+  id              String   @id @default(cuid())
+
+  // ============ Context ============
+  contextId       String   // Same as task's contextId
+  taskId          String?  // Optional: associated task
+
+  // ============ Message Data ============
+  role            A2aMessageRole
+  content         Json     // Text, structured data, or DataParts
+  contentType     String   @default("text") // text, structured_data, data_parts
+
+  // ============ References ============
+  // References to previous tasks in the conversation
+  referenceTaskIds String[] @default([])
+
+  // ============ Timestamps ============
+  createdAt       DateTime @default(now())
+
+  // ============ Relations ============
+  task            A2aTask? @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([contextId])
+  @@index([taskId])
+  @@index([createdAt])
+  @@map("a2a_messages")
+}
+
+enum A2aMessageRole {
+  user    // Message from external client
+  agent   // Message from this agent (Inbox)
+  system  // System-generated message
+
+  @@map("a2a_message_role")
+}
+
+/// Approval tracking for human-in-the-loop workflows
+/// Integrates with DharaHIL (Slack/Telegram) for approval requests
+model A2aApproval {
+  id              String            @id @default(cuid())
+  taskId          String            @unique
+
+  // ============ Approval Request ============
+  skill           String            // Which skill requires approval
+  requestData     Json              // Data to be approved
+  requestReason   String?           // Why approval is needed
+
+  // ============ Status ============
+  status          A2aApprovalStatus @default(pending)
+
+  // ============ Approver ============
+  approverId      String?           // User who approved/rejected
+  approverEmail   String?
+  approverChannel String?           // slack, telegram, etc.
+
+  // ============ Response ============
+  approved              Boolean?
+  rejectionReason       String?
+  responseData          Json?             // Additional data from approver
+  revisionRequested     Boolean?          @default(false) // True if human requested revisions
+  revisionInstructions  String?           // Instructions for revisions
+
+  // ============ DharaHIL Integration ============
+  dharahilRequestId String?         // DharaHIL request tracking
+  dharahilChannel   String?         // slack, telegram
+  dharahilMessageId String?         // Message ID for updates
+
+  // ============ Timestamps ============
+  requestedAt     DateTime          @default(now())
+  respondedAt     DateTime?
+  expiresAt       DateTime?         // Auto-reject after expiration
+
+  @@index([status])
+  @@index([requestedAt])
+  @@index([taskId])
+  @@map("a2a_approvals")
+}
+
+enum A2aApprovalStatus {
+  pending   // Awaiting approval
+  approved  // User approved
+  rejected  // User rejected
+  expired   // Timeout reached
+
+  @@map("a2a_approval_status")
+}
+
+/// Agent Card signatures for security
+/// Follows RFC 7515 (JSON Web Signature) per A2A spec
+/// Enables verification of AgentCard authenticity
+model A2aAgentCardSignature {
+  id          String   @id @default(cuid())
+
+  // ============ Signature Data ============
+  signature   String   @db.Text      // JWS compact serialization
+  keyId       String                 // Key identifier (kid)
+  algorithm   String                 // Signing algorithm (e.g., "RS256")
+
+  // ============ Key Management ============
+  publicKey   String?  @db.Text      // Optional: store public key
+
+  // ============ Metadata ============
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime?               // Key expiration
+  revokedAt   DateTime?               // Key revocation
+
+  @@index([createdAt])
+  @@index([keyId])
+  @@map("a2a_agent_card_signatures")
+}
+
+/// Webhook configuration for OAuth clients
+/// Stores webhook URLs and secrets for push notifications
+model A2aWebhookConfig {
+  id              String   @id @default(cuid())
+
+  // ============ Client Reference ============
+  clientId        String   @unique // OAuth client ID
+
+  // ============ Webhook Settings ============
+  url             String   // Webhook endpoint URL
+  secret          String   // HMAC signing secret
+  enabled         Boolean  @default(true)
+
+  // ============ Events ============
+  events          String[] // Which events to send (e.g., ["task.completed", "task.failed"])
+
+  // ============ Timestamps ============
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([clientId])
+  @@map("a2a_webhook_configs")
+}
+
+/// Webhook delivery tracking for push notifications
+/// Ensures reliable delivery with retry logic
+model A2aWebhookDelivery {
+  id              String   @id @default(cuid())
+
+  // ============ Task Reference ============
+  taskId          String
+
+  // ============ Client Reference ============
+  clientId        String   // OAuth client ID
+
+  // ============ Webhook Config ============
+  url             String
+  method          String   @default("POST")
+  event           String   // Event type (e.g., "task.completed")
+
+  // ============ Payload ============
+  payload         Json     // Task state update
+
+  // ============ Security ============
+  signature       String?  // HMAC-SHA256 signature
+
+  // ============ Delivery Status ============
+  status          A2aWebhookStatus
+  attempts        Int      @default(0)
+  maxAttempts     Int      @default(5)
+
+  // ============ Response ============
+  responseStatus  Int?     // HTTP status code
+  responseBody    String?  @db.Text
+  errorMessage    String?  @db.Text
+
+  // ============ Timestamps ============
+  createdAt       DateTime @default(now())
+  lastAttemptAt   DateTime @default(now())
+  nextAttemptAt   DateTime?
+  deliveredAt     DateTime?
+
+  @@index([taskId])
+  @@index([clientId])
+  @@index([status])
+  @@index([nextAttemptAt])
+  @@map("a2a_webhook_deliveries")
+}
+
+enum A2aWebhookStatus {
+  pending     // Awaiting delivery
+  delivered   // Successfully delivered
+  failed      // All retry attempts exhausted
+
+  @@map("a2a_webhook_status")
+}
+
+/// Rate limiting tracking for security
+/// Prevents abuse with per-client and per-user limits
+model A2aRateLimit {
+  id              String   @id @default(cuid())
+
+  // ============ Identity ============
+  clientId        String?  // OAuth client
+  userId          String?  // User
+  ipAddress       String?  // IP-based limiting
+
+  // ============ Limits ============
+  limitType       String   // "client", "user", "ip"
+  windowStart     DateTime
+  windowEnd       DateTime
+  requestCount    Int      @default(0)
+
+  // ============ Timestamps ============
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([limitType, clientId, userId, ipAddress, windowStart])
+  @@index([windowEnd])
+  @@map("a2a_rate_limits")
+}
+
+/// Audit log for all A2A operations
+/// Critical for security, compliance, and debugging
+model A2aAuditLog {
+  id              String   @id @default(cuid())
+
+  // ============ Request Context ============
+  userId          String?
+  clientId        String?
+  ipAddress       String?
+  userAgent       String?
+
+  // ============ Operation ============
+  operation       String   // e.g., "message.send", "task.cancel"
+  taskId          String?
+  contextId       String?
+  skill           String?
+
+  // ============ Result ============
+  success         Boolean
+  errorCode       String?
+  errorMessage    String?
+
+  // ============ Performance ============
+  durationMs      Int      // Request duration
+
+  // ============ Metadata ============
+  metadata        Json?    // Additional context
+
+  // ============ Timestamps ============
+  timestamp       DateTime @default(now())
+
+  @@index([userId])
+  @@index([clientId])
+  @@index([timestamp])
+  @@index([operation])
+  @@map("a2a_audit_logs")
 }

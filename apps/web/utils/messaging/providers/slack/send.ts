@@ -67,7 +67,7 @@ export async function sendConnectionOnboardingDirectMessage({
 
   await client.chat.postMessage({
     channel: userId,
-    text: "Inbox connected. Next, choose a private channel in Inbox Settings for meeting brief and attachment notifications, then invite @InboxZero there. You can also DM me anytime to chat about your emails.",
+    text: "Inbox connected. Next, choose a private channel in Inbox Settings for meeting brief and attachment notifications, then invite @Inbox there. You can also DM me anytime to chat about your emails.",
   });
 }
 

@@ -1,5 +1,8 @@
-import { useState } from "react";
-import type { UseFormRegister, UseFormSetValue, UseFormWatch } from "react-hook-form";
+import type {
+  UseFormRegister,
+  UseFormSetValue,
+  UseFormWatch,
+} from "react-hook-form";
 import type { CreateRuleBody } from "@/utils/actions/rule.validation";
 import { Input } from "@/components/Input";
 import { Label } from "@/components/ui/label";
@@ -13,9 +16,17 @@ import {
 import { MutedText } from "@/components/Typography";
 import { TooltipExplanation } from "@/components/TooltipExplanation";
 
-type HomeAssistantIntegrationType = "webhook" | "mqtt" | "service_call" | "persistent_notification";
+type HomeAssistantIntegrationType =
+  | "webhook"
+  | "mqtt"
+  | "service_call"
+  | "persistent_notification";
 
-const INTEGRATION_TYPES: { value: HomeAssistantIntegrationType; label: string; description: string }[] = [
+const INTEGRATION_TYPES: {
+  value: HomeAssistantIntegrationType;
+  label: string;
+  description: string;
+}[] = [
   {
     value: "webhook",
     label: "Webhook Trigger",
@@ -29,7 +40,8 @@ const INTEGRATION_TYPES: { value: HomeAssistantIntegrationType; label: string; d
   {
     value: "service_call",
     label: "Service Call",
-    description: "Call a Home Assistant service (lights, switches, notify, etc.)",
+    description:
+      "Call a Home Assistant service (lights, switches, notify, etc.)",
   },
   {
     value: "persistent_notification",
@@ -49,7 +61,9 @@ export function HomeAssistantActionFields({
   watch: UseFormWatch<CreateRuleBody>;
   setValue: UseFormSetValue<CreateRuleBody>;
 }) {
-  const integrationType = watch(`actions.${index}.haIntegrationType`) as HomeAssistantIntegrationType | undefined;
+  const integrationType = watch(`actions.${index}.haIntegrationType`) as
+    | HomeAssistantIntegrationType
+    | undefined;
 
   return (
     <div className="space-y-4">
@@ -91,9 +105,7 @@ export function HomeAssistantActionFields({
       {/* Webhook Fields */}
       {integrationType === "webhook" && (
         <div className="space-y-2">
-          <Label htmlFor={`actions.${index}.haWebhookId`}>
-            Webhook ID
-          </Label>
+          <Label htmlFor={`actions.${index}.haWebhookId`}>Webhook ID</Label>
           <Input
             type="text"
             name={`actions.${index}.haWebhookId`}
@@ -101,8 +113,8 @@ export function HomeAssistantActionFields({
             placeholder="my_automation_trigger"
           />
           <MutedText className="text-xs">
-            The webhook ID from your Home Assistant automation trigger. Create one
-            in HA: Automations → Add → Trigger → Webhook
+            The webhook ID from your Home Assistant automation trigger. Create
+            one in HA: Automations → Add → Trigger → Webhook
           </MutedText>
         </div>
       )}
@@ -110,9 +122,7 @@ export function HomeAssistantActionFields({
       {/* MQTT Fields */}
       {integrationType === "mqtt" && (
         <div className="space-y-2">
-          <Label htmlFor={`actions.${index}.haMqttTopic`}>
-            MQTT Topic
-          </Label>
+          <Label htmlFor={`actions.${index}.haMqttTopic`}>MQTT Topic</Label>
           <Input
             type="text"
             name={`actions.${index}.haMqttTopic`}
@@ -120,7 +130,8 @@ export function HomeAssistantActionFields({
             placeholder="inbox/notifications/ai-news"
           />
           <MutedText className="text-xs">
-            The MQTT topic to publish to. Email data will be sent as JSON payload.
+            The MQTT topic to publish to. Email data will be sent as JSON
+            payload.
           </MutedText>
         </div>
       )}
@@ -139,7 +150,8 @@ export function HomeAssistantActionFields({
               placeholder="notify"
             />
             <MutedText className="text-xs">
-              The domain of the service (e.g., notify, light, switch, automation)
+              The domain of the service (e.g., notify, light, switch,
+              automation)
             </MutedText>
           </div>
 
@@ -179,8 +191,8 @@ export function HomeAssistantActionFields({
       {integrationType === "persistent_notification" && (
         <div className="space-y-2">
           <MutedText className="text-sm">
-            A notification will be created in Home Assistant with the email subject
-            and preview. No additional configuration needed.
+            A notification will be created in Home Assistant with the email
+            subject and preview. No additional configuration needed.
           </MutedText>
         </div>
       )}

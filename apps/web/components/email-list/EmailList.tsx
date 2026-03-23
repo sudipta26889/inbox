@@ -131,7 +131,7 @@ export function List({
       ) : (
         <div className="mt-20">
           {type === "inbox" ? (
-            <Celebration message={"You made it to inbox zero!"} />
+            <Celebration message={"You cleared your inbox!"} />
           ) : (
             <div className="flex items-center justify-center font-title text-2xl text-primary">
               No emails to display

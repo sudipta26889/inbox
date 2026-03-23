@@ -1,0 +1,318 @@
+# Inbox A2A Protocol API
+
+> A2A (Agent-to-Agent) Protocol v0.3 implementation enabling AI agents to securely interact with email, calendar, and automation services through a standardized JSON-RPC 2.0 interface with OAuth 2.0 authentication.
+
+## Quick Start
+
+This API allows AI agents to:
+- Search and manage emails across multiple accounts
+- Create and manage calendar events
+- Access email statistics and automation rules
+- All operations are authenticated via OAuth 2.0 with PKCE
+- Real-time updates available via Server-Sent Events (SSE)
+- Webhook notifications for task state changes
+
+## Authentication
+
+OAuth 2.0 Authorization Code flow with PKCE is required:
+1. Discover capabilities: GET https://inbox.sudiptadhara.in/.well-known/agent-card.json
+2. Register OAuth client in Settings → A2A Clients
+3. Initiate authorization: GET https://inbox.sudiptadhara.in/mcp-server/authorize
+4. Exchange code for token: POST https://inbox.sudiptadhara.in/mcp-server/token
+5. Use Bearer token for all API requests
+
+## Core Endpoints
+
+### AgentCard Discovery
+- [Agent Capabilities](https://inbox.sudiptadhara.in/.well-known/agent-card.json): Discover available skills, OAuth endpoints, and protocol bindings
+
+### JSON-RPC API
+- [A2A Endpoint](https://inbox.sudiptadhara.in/a2a): POST requests with JSON-RPC 2.0 format
+  - method: message.send - Create a new task
+  - method: task.get - Get task status
+  - method: task.list - List tasks in a context
+  - method: task.cancel - Cancel a task
+  - method: context.get - Get context messages
+
+### Real-Time Updates
+- [SSE Stream](https://inbox.sudiptadhara.in/a2a/stream?taskId=TASK_ID): Subscribe to real-time task state changes
+
+## Available Skills
+
+### Email Operations
+- **email.search**: Search emails with query syntax (scope: email:read)
+- **email.get**: Get full email details including attachments (scope: email:read)
+- **email.send**: Send emails from connected accounts (scope: email:write)
+- **account.list**: List all connected email accounts (scope: email:read)
+
+### Calendar Operations
+- **calendar.search**: Search calendar events by date range (scope: calendar:read)
+- **calendar.get_event**: Get event details (scope: calendar:read)
+- **calendar.get_availability**: Check availability for a date range (scope: calendar:read)
+- **calendar.create_event**: Create calendar event - REQUIRES HUMAN APPROVAL via Slack/Telegram (scope: calendar:write)
+
+### Statistics & Automation
+- **stats.get**: Get email statistics for a time period (scope: stats:read)
+- **rules.list**: List automation rules (scope: rules:read)
+
+## Request Format
+
+POST https://inbox.sudiptadhara.in/a2a
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "message.send",
+  "params": {
+    "contextId": "unique-context-id",
+    "skill": "email.search",
+    "input": {
+      "query": "from:john@example.com subject:invoice",
+      "maxResults": 10
+    }
+  }
+}
+```
+
+Headers required:
+- Authorization: Bearer YOUR_ACCESS_TOKEN
+- Content-Type: application/json
+
+## Response Format
+
+Success:
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "contextId": "unique-context-id",
+    "taskId": "task_abc123",
+    "state": "submitted"
+  }
+}
+```
+
+Error:
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "error": {
+    "code": -32602,
+    "message": "Invalid params: contextId is required"
+  }
+}
+```
+
+## Task States
+
+Tasks progress through these states:
+- **submitted**: Task queued for execution
+- **working**: Task is executing
+- **auth_required**: Human approval needed (Slack/Telegram notification sent)
+- **completed**: Task finished successfully
+- **failed**: Task failed (check error field)
+- **canceled**: Task was canceled
+- **rejected**: Human rejected the approval request
+- **unknown**: Unknown state (error condition)
+
+## Rate Limits
+
+- Client: 60 requests/minute, 1000/hour
+- User: 100 requests/minute, 2000/hour
+- Task Creation: 30 requests/minute, 500/hour
+- IP (unauthenticated): 20 requests/minute, 200/hour
+
+Rate limit headers included in all responses:
+- X-RateLimit-Limit
+- X-RateLimit-Remaining
+- X-RateLimit-Reset
+
+## Real-Time Updates (SSE)
+
+Instead of polling, subscribe to Server-Sent Events:
+```javascript
+GET https://inbox.sudiptadhara.in/a2a/stream?taskId=TASK_ID
+```
+
+Events:
+- event: ping - Keep-alive (every 15 seconds)
+- event: task.state_changed - State changed
+- event: task.completed - Task completed
+- event: task.failed - Task failed
+- event: final - Terminal state reached (stream closes)
+
+## Webhook Notifications
+
+Configure webhooks to receive push notifications for task state changes:
+- POST https://inbox.sudiptadhara.in/api/user/a2a-webhooks
+- Webhooks include HMAC-SHA256 signature for verification
+- Retry logic: 5 attempts with exponential backoff (1s, 5s, 15s, 1min, 5min)
+- Available events: task.created, task.state_changed, task.completed, task.failed, task.canceled, task.rejected, task.approval_required
+
+## Human-in-the-Loop Approvals
+
+Some skills require human approval (currently: calendar.create_event):
+1. Task enters **auth_required** state
+2. Human receives notification via Slack/Telegram (DharaHIL gateway)
+3. Human can: APPROVE (execute), REJECT (deny), or REVISE (request changes)
+4. Timeout: 3-30 minutes based on risk level
+5. If timeout: Task auto-rejected (fail-safe)
+
+## OAuth Scopes
+
+- email:read - Read emails and search inbox
+- email:write - Send emails and modify labels
+- calendar:read - Read calendar events and availability
+- calendar:write - Create and modify calendar events
+- stats:read - Access email statistics and analytics
+- rules:read - Read automation rules
+- rules:write - Create and modify automation rules
+- ai:analyze - Use AI analysis features
+
+## Error Codes
+
+JSON-RPC standard error codes:
+- -32700: Parse error (invalid JSON)
+- -32600: Invalid Request (missing jsonrpc/method)
+- -32601: Method not found (unknown skill)
+- -32602: Invalid params (validation failed)
+- -32603: Internal error (server error)
+- -32002: Authentication required (invalid token)
+- -32003: Rate limit exceeded
+
+## Documentation Resources
+
+- [OpenAPI Specification](https://inbox.sudiptadhara.in/docs/a2a-openapi.yaml): Complete API reference with schemas and examples
+- [Integration Guide](https://inbox.sudiptadhara.in/docs/a2a-integration-guide): Step-by-step implementation guide with Python and Node.js SDK examples
+- [Interactive API Explorer](https://inbox.sudiptadhara.in/docs/a2a-explorer): Browser-based testing environment
+
+## Example: Search Emails
+
+1. Obtain access token via OAuth
+2. Create search task:
+```json
+POST https://inbox.sudiptadhara.in/a2a
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "message.send",
+  "params": {
+    "contextId": "my-search-001",
+    "skill": "email.search",
+    "input": {
+      "query": "from:john@example.com subject:invoice",
+      "maxResults": 10
+    }
+  }
+}
+```
+
+3. Response contains taskId
+4. Poll task status or subscribe to SSE:
+```json
+POST https://inbox.sudiptadhara.in/a2a
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "method": "task.get",
+  "params": {
+    "taskId": "task_abc123"
+  }
+}
+```
+
+5. When state is "completed", result contains emails
+
+## Example: Create Calendar Event (with Approval)
+
+1. Request event creation:
+```json
+POST https://inbox.sudiptadhara.in/a2a
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "message.send",
+  "params": {
+    "contextId": "my-calendar-001",
+    "skill": "calendar.create_event",
+    "input": {
+      "title": "Team Meeting",
+      "startTime": "2026-03-24T14:00:00Z",
+      "endTime": "2026-03-24T15:00:00Z",
+      "attendees": ["alice@example.com", "bob@example.com"],
+      "description": "Quarterly planning",
+      "location": "Zoom"
+    }
+  }
+}
+```
+
+2. Task enters "auth_required" state
+3. Human receives Slack/Telegram notification with event details
+4. Human approves or rejects
+5. Task transitions to "completed" (if approved) or "rejected"
+6. Poll or use SSE to get final result
+
+## Security Features
+
+- OAuth 2.0 with PKCE (Proof Key for Code Exchange)
+- HMAC-SHA256 webhook signatures
+- Comprehensive audit logging (all operations logged)
+- Multi-tier rate limiting (client, user, IP)
+- Fail-safe approval workflow (timeout = deny)
+- Scope-based access control
+- Idempotency keys for duplicate prevention
+
+## Support
+
+- Documentation: https://inbox.sudiptadhara.in/docs/a2a-integration-guide
+- API Explorer: https://inbox.sudiptadhara.in/docs/a2a-explorer
+- Issue Tracker: Contact support via settings page
+- MCP Server Configuration: claude mcp add --transport http EmailCalendar https://inbox.sudiptadhara.in/mcp-server --scope user
+
+## Technical Specifications
+
+- Protocol: A2A Protocol v0.3 (Google/Linux Foundation)
+- Transport: JSON-RPC 2.0 over HTTPS
+- Authentication: OAuth 2.0 Authorization Code with PKCE
+- Real-time: Server-Sent Events (SSE)
+- Webhooks: HMAC-SHA256 signatures
+- Retry Logic: Exponential backoff (tasks: 3 attempts, webhooks: 5 attempts)
+- Token Lifetime: 1 hour (use refresh token to renew)
+- Max SSE Connection: 5 minutes
+- Task Timeout: 5 minutes for stuck tasks
+
+## Production Endpoints
+
+- Base URL: https://inbox.sudiptadhara.in
+- AgentCard: https://inbox.sudiptadhara.in/.well-known/agent-card.json
+- OAuth Authorize: https://inbox.sudiptadhara.in/mcp-server/authorize
+- OAuth Token: https://inbox.sudiptadhara.in/mcp-server/token
+- JSON-RPC: https://inbox.sudiptadhara.in/a2a
+- SSE Stream: https://inbox.sudiptadhara.in/a2a/stream
+- OpenAPI: https://inbox.sudiptadhara.in/docs/a2a-openapi.yaml
+
+## Quick Integration Checklist
+
+1. ✅ Register OAuth client in Settings → A2A Clients
+2. ✅ Implement OAuth 2.0 PKCE flow
+3. ✅ Store access token and refresh token securely
+4. ✅ Make JSON-RPC requests with Bearer token
+5. ✅ Handle rate limits (check X-RateLimit-* headers)
+6. ✅ Implement retry logic for transient errors
+7. ✅ Use SSE or webhooks for real-time updates (optional)
+8. ✅ Handle approval workflow for sensitive operations
+9. ✅ Test with interactive API explorer
+10. ✅ Monitor audit logs for security
+
+## Compliance & Audit
+
+- All operations logged to audit trail
+- 90-day audit log retention
+- HMAC webhook signatures for authenticity
+- Fail-safe approval workflow (errors = deny)
+- Rate limiting to prevent abuse
+- OAuth token expiration (1 hour)
+- Comprehensive error messages for debugging

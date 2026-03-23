@@ -14,7 +14,7 @@ describe("expandPromptCommand", () => {
   });
 
   it("maps command variants that include a bot username suffix", () => {
-    expect(expandPromptCommand("/summary@InboxZeroBot")).toBe(
+    expect(expandPromptCommand("/summary@InboxBot")).toBe(
       "Summarize what needs attention in my inbox today.",
     );
   });
@@ -36,7 +36,7 @@ describe("isHelpCommand", () => {
   });
 
   it("returns true for help command with bot username", () => {
-    expect(isHelpCommand("/help@InboxZeroBot")).toBe(true);
+    expect(isHelpCommand("/help@InboxBot")).toBe(true);
   });
 
   it("returns false when additional text is appended", () => {

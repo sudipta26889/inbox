@@ -423,6 +423,9 @@ importers:
       motion:
         specifier: 12.37.0
         version: 12.37.0(@emotion/is-prop-valid@1.2.2)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      nanoid:
+        specifier: '3'
+        version: 3.3.11
       next:
         specifier: 16.1.6
         version: 16.1.6(@babel/core@7.29.0)(@opentelemetry/api@1.9.0)(@playwright/test@1.58.2)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -453,9 +456,6 @@ importers:
       p-retry:
         specifier: 7.1.1
         version: 7.1.1
-      pdf-parse:
-        specifier: ^2.4.5
-        version: 2.4.5
       pg:
         specifier: 8.20.0
         version: 8.20.0
@@ -562,7 +562,7 @@ importers:
         specifier: 3.1.1
         version: 3.1.1(react@19.2.4)
       xlsx:
-        specifier: ^0.18.5
+        specifier: 0.18.5
         version: 0.18.5
       zod:
         specifier: 3.25.76
@@ -10208,15 +10208,6 @@ packages:
   pathe@2.0.3:
     resolution: {integrity: sha512-WUjGcAqP1gQacoQe+OBJsFA7Ld4DyXuUIjZ5cc75cLHvJ7dtNsTugphxIADwspS+AraAUePCKrSVtPLFj/F88w==}
 
-  pdf-parse@2.4.5:
-    resolution: {integrity: sha512-mHU89HGh7v+4u2ubfnevJ03lmPgQ5WU4CxAVmTSh/sxVTEDYd1er/dKS/A6vg77NX47KTEoihq8jZBLr8Cxuwg==}
-    engines: {node: '>=20.16.0 <21 || >=22.3.0'}
-    hasBin: true
-
-  pdfjs-dist@5.4.296:
-    resolution: {integrity: sha512-DlOzet0HO7OEnmUmB6wWGJrrdvbyJKftI1bhMitK7O2N8W2gc757yyYBbINy9IDafXAV9wmKr9t7xsTaNKRG5Q==}
-    engines: {node: '>=20.16.0 || >=22.3.0'}
-
   peberminta@0.9.0:
     resolution: {integrity: sha512-XIxfHpEuSJbITd1H3EeQwpcZbTLHc+VVr8ANI9t5sit565tsI4/xK3KWTUFE2e6QiangUkh3B0jihzmGnNrRsQ==}
 
@@ -15431,6 +15422,7 @@ snapshots:
       '@napi-rs/canvas-linux-x64-gnu': 0.1.80
       '@napi-rs/canvas-linux-x64-musl': 0.1.80
       '@napi-rs/canvas-win32-x64-msvc': 0.1.80
+    optional: true
 
   '@next/env@14.2.32': {}
 
@@ -23339,15 +23331,6 @@ snapshots:
   path-type@4.0.0: {}
 
   pathe@2.0.3: {}
-
-  pdf-parse@2.4.5:
-    dependencies:
-      '@napi-rs/canvas': 0.1.80
-      pdfjs-dist: 5.4.296
-
-  pdfjs-dist@5.4.296:
-    optionalDependencies:
-      '@napi-rs/canvas': 0.1.80
 
   peberminta@0.9.0: {}
 

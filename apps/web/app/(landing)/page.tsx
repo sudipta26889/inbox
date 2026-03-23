@@ -23,7 +23,7 @@ export default function NewLanding() {
       <BasicLayout>
         <Hero
           title={"Your AI Email Assistant"}
-          subtitle="Organize your inbox, auto-draft replies, bulk unsubscribe, and reach inbox zero — powered by your own AI, running on your own hardware."
+          subtitle="Organize your inbox, auto-draft replies, bulk unsubscribe, and clear your inbox — powered by your own AI, running on your own hardware."
         />
       </BasicLayout>
     );
@@ -47,7 +47,7 @@ export default function NewLanding() {
             ]}
           />
         }
-        subtitle={`${BRAND_NAME} organizes your inbox and calendar, drafts replies in your voice, and helps you reach inbox zero fast. Never miss an important email again.`}
+        subtitle={`${BRAND_NAME} organizes your inbox and calendar, drafts replies in your voice, and helps you clear your inbox fast. Never miss an important email again.`}
       >
         <HeroContent />
       </Hero>

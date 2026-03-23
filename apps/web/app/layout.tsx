@@ -35,7 +35,7 @@ const geist = Geist({
 
 const title = `${BRAND_NAME} | Automate and clean your inbox`;
 const description =
-  "Your AI executive assistant to reach inbox zero fast. Automate emails, bulk unsubscribe, block cold emails, and analytics. Open-source";
+  "Your AI executive assistant to clear your inbox fast. Automate emails, bulk unsubscribe, block cold emails, and analytics. Open-source";
 
 // JSON-LD structured data
 const jsonLd: WithContext<WebApplication> = {

@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE "a2a_tasks" ADD COLUMN     "lastRetryAt" TIMESTAMP(3),
+ADD COLUMN     "maxRetries" INTEGER NOT NULL DEFAULT 3,
+ADD COLUMN     "retryCount" INTEGER NOT NULL DEFAULT 0;
