@@ -60,24 +60,43 @@ export async function checkRateLimit(
   limit: number,
 ): Promise<RateLimitResult> {
   const now = new Date();
-  const windowStart =
+  const windowStartTime =
     window === "minute"
       ? new Date(now.getTime() - 60 * 1000) // Last minute
       : new Date(now.getTime() - 60 * 60 * 1000); // Last hour
 
-  const windowEnd = now;
+  const windowEndTime = now;
 
-  // Count requests in the current window
-  const count = await prisma.a2aRateLimit.count({
-    where: {
-      key,
-      window,
-      timestamp: {
-        gte: windowStart,
-        lte: windowEnd,
-      },
+  // Parse key to get limitType and identifier
+  // key format: "client:abc123" or "user:xyz789" or "ip:1.2.3.4"
+  const [limitType, identifier] = key.split(":");
+
+  // Build where clause based on limitType
+  const whereClause: Record<string, unknown> = {
+    limitType,
+    windowStart: {
+      gte: windowStartTime,
     },
+    windowEnd: {
+      lte: windowEndTime,
+    },
+  };
+
+  // Add identifier field based on type
+  if (limitType === "client") {
+    whereClause.clientId = identifier;
+  } else if (limitType === "user") {
+    whereClause.userId = identifier;
+  } else if (limitType === "ip") {
+    whereClause.ipAddress = identifier;
+  }
+
+  // Get existing rate limit record or sum up request counts
+  const records = await prisma.a2aRateLimit.findMany({
+    where: whereClause as never,
   });
+
+  const count = records.reduce((sum, record) => sum + record.requestCount, 0);
 
   const remaining = Math.max(0, limit - count);
   const allowed = count < limit;
@@ -115,20 +134,67 @@ export async function checkRateLimit(
  * Record a request for rate limiting
  * Should be called after checkRateLimit returns allowed=true
  *
- * @param key - Unique identifier
+ * @param key - Unique identifier (format: "type:identifier")
  * @param window - Time window
  */
 export async function recordRequest(
   key: string,
   window: RateLimitWindow,
 ): Promise<void> {
-  await prisma.a2aRateLimit.create({
-    data: {
-      key,
-      window,
-      timestamp: new Date(),
+  const now = new Date();
+  const [limitType, identifier] = key.split(":");
+
+  // Calculate window boundaries
+  const windowStart =
+    window === "minute"
+      ? new Date(Math.floor(now.getTime() / 60_000) * 60_000)
+      : new Date(Math.floor(now.getTime() / 3_600_000) * 3_600_000);
+
+  const windowEnd =
+    window === "minute"
+      ? new Date(windowStart.getTime() + 60_000)
+      : new Date(windowStart.getTime() + 3_600_000);
+
+  // Build data object based on limitType
+  const data: Record<string, unknown> = {
+    limitType,
+    windowStart,
+    windowEnd,
+    requestCount: 1,
+  };
+
+  if (limitType === "client") {
+    data.clientId = identifier;
+  } else if (limitType === "user") {
+    data.userId = identifier;
+  } else if (limitType === "ip") {
+    data.ipAddress = identifier;
+  }
+
+  // Try to increment existing record or create new one
+  const existing = await prisma.a2aRateLimit.findFirst({
+    where: {
+      limitType,
+      ...(limitType === "client" && { clientId: identifier }),
+      ...(limitType === "user" && { userId: identifier }),
+      ...(limitType === "ip" && { ipAddress: identifier }),
+      windowStart,
+      windowEnd,
     },
   });
+
+  if (existing) {
+    await prisma.a2aRateLimit.update({
+      where: { id: existing.id },
+      data: {
+        requestCount: { increment: 1 },
+      },
+    });
+  } else {
+    await prisma.a2aRateLimit.create({
+      data: data as never,
+    });
+  }
 }
 
 /**
