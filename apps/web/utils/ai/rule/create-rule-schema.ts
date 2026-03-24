@@ -52,6 +52,8 @@ export function getAvailableActions(provider: string) {
 export const getExtraActions = () => [
   ActionType.DIGEST,
   ActionType.CALL_WEBHOOK,
+  ActionType.HOME_ASSISTANT,
+  ActionType.A2A_NOTIFY,
 ];
 
 const actionSchema = (provider: string) =>
