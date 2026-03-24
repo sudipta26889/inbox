@@ -14,6 +14,7 @@ import {
   MailIcon,
   NewspaperIcon,
   HomeIcon,
+  RadioTowerIcon,
 } from "lucide-react";
 import { truncate } from "@/utils/string";
 
@@ -82,6 +83,8 @@ export function getActionDisplay(
       return "Home Assistant";
     case ActionType.NOTIFY_SENDER:
       return "Notify Sender";
+    case ActionType.A2A_NOTIFY:
+      return "A2A Notify";
     default: {
       const exhaustiveCheck: never = action.type;
       return exhaustiveCheck;
@@ -117,6 +120,8 @@ export function getActionIcon(actionType: ActionType) {
       return NewspaperIcon;
     case ActionType.NOTIFY_SENDER:
       return BellIcon;
+    case ActionType.A2A_NOTIFY:
+      return RadioTowerIcon;
     default: {
       const exhaustiveCheck: never = actionType;
       return exhaustiveCheck;

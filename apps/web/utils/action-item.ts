@@ -155,6 +155,9 @@ export const actionInputs: Record<
   [ActionType.HOME_ASSISTANT]: {
     fields: [], // Custom component will handle rendering
   },
+  [ActionType.A2A_NOTIFY]: {
+    fields: [],
+  },
 };
 
 export function getActionFields(fields: Action | ExecutedAction | undefined) {
@@ -326,6 +329,8 @@ export function sanitizeActionFields(
         haEntityId: action.haEntityId ?? null,
       };
     }
+    case ActionType.A2A_NOTIFY:
+      return base;
     default:
       // biome-ignore lint/correctness/noSwitchDeclarations: intentional exhaustive check
       const exhaustiveCheck: never = action.type;

@@ -11,6 +11,8 @@ import {
   FileTextIcon,
   FolderInputIcon,
   BellIcon,
+  HomeIcon,
+  RadioTowerIcon,
 } from "lucide-react";
 import { ActionType } from "@/generated/prisma/enums";
 
@@ -27,6 +29,8 @@ const ACTION_TYPE_COLORS = {
   [ActionType.DIGEST]: "bg-teal-500",
   [ActionType.MOVE_FOLDER]: "bg-emerald-500",
   [ActionType.NOTIFY_SENDER]: "bg-amber-500",
+  [ActionType.HOME_ASSISTANT]: "bg-indigo-500",
+  [ActionType.A2A_NOTIFY]: "bg-cyan-500",
 } as const;
 
 export const ACTION_TYPE_TEXT_COLORS = {
@@ -42,6 +46,8 @@ export const ACTION_TYPE_TEXT_COLORS = {
   [ActionType.DIGEST]: "text-teal-500",
   [ActionType.MOVE_FOLDER]: "text-emerald-500",
   [ActionType.NOTIFY_SENDER]: "text-amber-500",
+  [ActionType.HOME_ASSISTANT]: "text-indigo-500",
+  [ActionType.A2A_NOTIFY]: "text-cyan-500",
 } as const;
 
 export const ACTION_TYPE_ICONS = {
@@ -57,6 +63,8 @@ export const ACTION_TYPE_ICONS = {
   [ActionType.DIGEST]: FileTextIcon,
   [ActionType.MOVE_FOLDER]: FolderInputIcon,
   [ActionType.NOTIFY_SENDER]: BellIcon,
+  [ActionType.HOME_ASSISTANT]: HomeIcon,
+  [ActionType.A2A_NOTIFY]: RadioTowerIcon,
 } as const;
 
 // Helper function to get action type from string (for RulesPrompt.tsx)

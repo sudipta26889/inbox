@@ -228,6 +228,10 @@ export function getActionColor(actionType: ActionType): Color {
       return "purple";
     case ActionType.NOTIFY_SENDER:
       return "purple";
+    case ActionType.HOME_ASSISTANT:
+      return "purple";
+    case ActionType.A2A_NOTIFY:
+      return "purple";
     default: {
       const exhaustiveCheck: never = actionType;
       return exhaustiveCheck;

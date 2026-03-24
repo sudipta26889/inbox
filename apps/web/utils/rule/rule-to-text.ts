@@ -79,6 +79,9 @@ export function ruleToText(rule: RuleWithActions): string {
           actions.push(`Move to folder "${action.folderName}"`);
         }
         break;
+      case ActionType.A2A_NOTIFY:
+        actions.push("Send A2A notification");
+        break;
     }
   });
 
