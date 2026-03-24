@@ -549,14 +549,16 @@ ${generateSchemaExample(schema)}
 ```bash
 # LLM Provider Configuration
 DEFAULT_LLM_PROVIDER=openai-compatible
-DEFAULT_LLM_MODEL=ollama/gpt-oss:120b-cloud
+DEFAULT_LLM_MODEL=kimi-k2                    # LiteLLM alias — NOT ollama/kimi-k2:1t-cloud
 ECONOMY_LLM_PROVIDER=openai-compatible
-ECONOMY_LLM_MODEL=ollama/gpt-oss:120b-cloud
+ECONOMY_LLM_MODEL=kimi-k2
 
 # LiteLLM Proxy Configuration
 OPENAI_COMPATIBLE_BASE_URL=http://192.168.11.118:4000/v1
 LLM_API_KEY=your-litellm-api-key
 ```
+
+> **Important**: Use LiteLLM model name aliases (e.g., `kimi-k2`) not raw Ollama paths (e.g., `ollama/kimi-k2:1t-cloud`). The raw path triggers `isOllamaModel` detection in the app code, which adds `format: json` and disables structured outputs — breaking tool calling.
 
 ### Model Detection Logic
 
@@ -617,4 +619,149 @@ The integration of Ollama models required understanding the fundamental differen
 4. ✅ Providing explicit examples and constraints in prompts
 5. ✅ Making non-critical fields optional for graceful degradation
 
-**Current Status**: Ollama models (`ollama/gpt-oss:120b-cloud`) fully working for both rule creation and email categorization.
+**Current Status**: Ollama Cloud models fully working for structured output, rule creation, email categorization, and AI chat tool calling.
+
+---
+
+## Ollama Cloud Models — Tool Calling Fix (2026-03-24)
+
+### Background: What Are Ollama Cloud Models?
+
+Ollama Cloud lets you run large models remotely via Ollama's cloud infrastructure while using the same local Ollama server. You add a `:cloud` suffix to the model tag:
+
+- `kimi-k2:1t-cloud` — Kimi K2 1T MoE (32B active), 256K context
+- `gpt-oss:120b-cloud` — GPT-OSS 120B
+- `kimi-k2-thinking:cloud` — Kimi K2 with extended reasoning
+
+These route through `http://localhost:11434` (your local Ollama) which proxies to Ollama's cloud.
+
+### Problem: AI Chat Tool Calling Broken
+
+The AI chat assistant has 17+ tools (searchInbox, getUserRulesAndSettings, createRule, etc.) that use OpenAI-compatible function calling. When using Ollama Cloud models, the model was outputting tool calls as **raw JSON text** in the message content:
+
+```
+{"name": "getUserRulesAndSettings", "arguments": {}}
+```
+
+Instead of using the proper `tool_calls` response field:
+
+```json
+{
+  "choices": [{
+    "message": {
+      "tool_calls": [{
+        "function": { "name": "getUserRulesAndSettings", "arguments": "{}" },
+        "id": "functions.getUserRulesAndSettings:0",
+        "type": "function"
+      }]
+    }
+  }]
+}
+```
+
+### Root Causes
+
+**1. LiteLLM: Wrong Ollama endpoint prefix**
+
+Using `ollama/kimi-k2:1t-cloud` routes through Ollama's `/api/generate` endpoint, which does **NOT** support tool calling. The `/api/chat` endpoint does.
+
+| LiteLLM Prefix | Ollama Endpoint | Tool Calling |
+|----------------|-----------------|--------------|
+| `ollama/`      | `/api/generate` | No           |
+| `ollama_chat/` | `/api/chat`     | Yes          |
+
+**2. App .env: `ollama/` prefix triggering unwanted code paths**
+
+The model name `ollama/kimi-k2:1t-cloud` in `.env` triggered `isOllamaModel = true` in the custom fetch interceptor, which:
+- Added `format: "json"` to all requests (breaking tool calls)
+- Disabled `supportsStructuredOutputs`
+
+**3. `format: "json"` conflicts with tool calling**
+
+When `format: json` is in the request body, the model is forced to emit everything as JSON content. This overrides the model's ability to use the structured `tool_calls` response field.
+
+### Solution: Three-Layer Fix
+
+#### Layer 1: LiteLLM Config — Use `ollama_chat/` prefix
+
+**File**: `/opt/asus-rog-nuc-ai-stack/configs/litellm/config.yaml`
+
+```yaml
+# BEFORE (broken)
+- model_name: kimi-k2
+  litellm_params:
+    model: ollama/kimi-k2:1t-cloud
+    api_base: http://192.168.11.118:11434
+
+# AFTER (working)
+- model_name: kimi-k2
+  litellm_params:
+    model: ollama_chat/kimi-k2:1t-cloud    # /api/chat endpoint
+    api_base: http://192.168.11.118:11434
+    timeout: 600
+    stream_timeout: 120
+  model_info:
+    supports_function_calling: true          # prevent LiteLLM from emulating tools
+```
+
+**Why**: `ollama_chat/` tells LiteLLM to use Ollama's `/api/chat` endpoint which returns proper `tool_calls` in the response. `supports_function_calling: true` prevents LiteLLM from falling back to its JSON-mode tool call emulation.
+
+#### Layer 2: App .env — Drop `ollama/` prefix, use LiteLLM alias
+
+```bash
+# BEFORE
+DEFAULT_LLM_MODEL=ollama/kimi-k2:1t-cloud   # triggers isOllamaModel=true
+
+# AFTER
+DEFAULT_LLM_MODEL=kimi-k2                    # LiteLLM alias, isOllamaModel=false
+```
+
+**Why**: By using the LiteLLM `model_name` alias (not the raw Ollama model path), the app treats it as a regular OpenAI-compatible model. No special Ollama code paths are triggered. LiteLLM handles the Ollama-specific translation.
+
+#### Layer 3: Code — Skip `format:json` when tools are present
+
+**File**: `/apps/web/utils/llms/model.ts`
+
+```typescript
+// BEFORE — added format:json to ALL Ollama requests
+if (!body.format) {
+  body.format = "json";
+
+// AFTER — skip when tools are present
+const hasTools = body.tools && body.tools.length > 0;
+if (!body.format && !hasTools) {
+  body.format = "json";
+```
+
+**Why**: Safety net for models that still go through the `ollama/` code path (e.g., local models used for structured output). `format: json` is correct for `generateObject()` calls but breaks `tool_calls` responses.
+
+### Verification
+
+Direct API test confirmed tool calling works in both streaming and non-streaming modes:
+
+```bash
+# Non-streaming — tool_calls in message
+curl -X POST http://192.168.11.118:4000/v1/chat/completions \
+  -d '{"model": "kimi-k2", "messages": [...], "tools": [...], "stream": false}'
+# Response: "finish_reason": "tool_calls", "tool_calls": [{"function": {"name": "get_weather"}}]
+
+# Streaming — tool_calls in delta
+curl -X POST ... -d '{"stream": true}'
+# Response: "delta": {"tool_calls": [{"function": {"name": "get_weather"}}]}
+```
+
+### Architecture: When to Use Which Prefix
+
+| Use Case | .env Model Name | LiteLLM Config Model | Why |
+|----------|----------------|---------------------|-----|
+| AI Chat (tool calling) | `kimi-k2` | `ollama_chat/kimi-k2:1t-cloud` | Needs `/api/chat` for tool_calls |
+| Structured output (generateObject) | `ollama/gpt-oss:20b` | `ollama/gpt-oss:20b` | `format:json` + `/api/generate` works fine |
+| Thinking/reasoning | `kimi-k2-thinking` | `ollama/kimi-k2-thinking:cloud` | No tools needed, just text |
+
+### Key Takeaway
+
+When using Ollama Cloud models with LiteLLM for **tool calling**:
+1. Use `ollama_chat/` prefix in LiteLLM config (not `ollama/`)
+2. Set `supports_function_calling: true` in `model_info`
+3. Use the LiteLLM alias in `.env` (not the raw `ollama/` path)
+4. Never add `format: json` to requests that include `tools`
