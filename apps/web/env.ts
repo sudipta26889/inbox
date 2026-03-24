@@ -234,6 +234,9 @@ export const env = createEnv({
     DHARAHIL_TENANT_ID: z.string().uuid().optional(),
     DHARAHIL_APP_ID: z.string().uuid().optional(),
     DHARAHIL_ENVIRONMENT: z.enum(["production", "development"]).optional(),
+
+    // A2A Outbound Agent Notifications
+    A2A_REMOTE_AGENTS: z.string().optional(),
   },
   client: {
     // stripe
