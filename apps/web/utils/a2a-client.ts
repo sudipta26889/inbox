@@ -8,8 +8,10 @@ const A2A_TIMEOUT_MS = 10_000;
 type AgentCard = {
   name: string;
   version?: string;
+  url?: string;
   skills?: Array<{ skill: string; name?: string; description?: string }>;
   bindings?: Array<{ url: string; transport: string }>;
+  additionalInterfaces?: Array<{ url: string; transport: string }>;
 };
 
 type A2aMessageParams = {
@@ -46,11 +48,25 @@ export async function resolveA2aEndpoint(
 
   try {
     const card = await fetchAgentCard(base);
-    const binding = card.bindings?.find((b) => b.transport === "json-rpc");
-    if (binding?.url) {
-      return binding.url.startsWith("http")
-        ? binding.url
-        : `${base}${binding.url}`;
+
+    // Check bindings (A2A v0.3 spec) and additionalInterfaces (OpenClaw/Mitra)
+    const interfaces = [
+      ...(card.bindings || []),
+      ...(card.additionalInterfaces || []),
+    ];
+    const jsonRpc = interfaces.find(
+      (b) =>
+        b.transport.toLowerCase().includes("jsonrpc") ||
+        b.transport === "json-rpc",
+    );
+
+    if (jsonRpc?.url) {
+      return rewriteLocalhost(jsonRpc.url, base);
+    }
+
+    // Fall back to top-level url field
+    if (card.url) {
+      return rewriteLocalhost(card.url, base);
     }
   } catch (error) {
     logger.warn("Failed to fetch agent card, falling back to /a2a", {
@@ -60,6 +76,31 @@ export async function resolveA2aEndpoint(
   }
 
   return `${base}/a2a`;
+}
+
+// Agent cards often advertise localhost URLs. Rewrite them to use the actual base URL's host.
+function rewriteLocalhost(endpointUrl: string, baseUrl: string): string {
+  if (!endpointUrl.startsWith("http")) {
+    return `${baseUrl}${endpointUrl.startsWith("/") ? "" : "/"}${endpointUrl}`;
+  }
+
+  try {
+    const endpoint = new URL(endpointUrl);
+    const base = new URL(baseUrl);
+
+    if (
+      endpoint.hostname === "localhost" ||
+      endpoint.hostname === "127.0.0.1"
+    ) {
+      endpoint.hostname = base.hostname;
+      endpoint.port = base.port;
+      endpoint.protocol = base.protocol;
+    }
+
+    return endpoint.toString().replace(/\/$/, "");
+  } catch {
+    return endpointUrl;
+  }
 }
 
 export async function sendA2aMessage(

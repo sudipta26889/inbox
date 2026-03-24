@@ -395,6 +395,11 @@ export function RuleForm({
         value: ActionType.HOME_ASSISTANT,
         icon: getActionIcon(ActionType.HOME_ASSISTANT),
       },
+      {
+        label: "A2A Notify",
+        value: ActionType.A2A_NOTIFY,
+        icon: getActionIcon(ActionType.A2A_NOTIFY),
+      },
       ...(env.NEXT_PUBLIC_DIGEST_ENABLED
         ? [
             {
