@@ -45,6 +45,7 @@ const zodActionType = z.enum([
   ActionType.SEND_EMAIL,
   ActionType.CALL_WEBHOOK,
   ActionType.HOME_ASSISTANT,
+  ActionType.A2A_NOTIFY,
   ActionType.MARK_READ,
   ActionType.DIGEST,
   ActionType.MOVE_FOLDER,
