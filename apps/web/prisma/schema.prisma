@@ -1511,6 +1511,7 @@ enum ActionType {
   MOVE_FOLDER
   NOTIFY_SENDER // Sends notification from Inbox (not user's email). Only for cold email rules.
   HOME_ASSISTANT // Integrates with Home Assistant (webhook, MQTT, service calls)
+  A2A_NOTIFY     // Send A2A message to remote agent (e.g., OpenClaw Mitra)
   // SUMMARIZE
   // SNOOZE
   // ADD_TO_DO
