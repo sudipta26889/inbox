@@ -12,6 +12,18 @@ This API allows AI agents to:
 - Real-time updates available via Server-Sent Events (SSE)
 - Webhook notifications for task state changes
 
+## Outbound A2A Notifications
+
+Inbox can also act as an **A2A client**, sending outbound notifications to remote agents when automation rules trigger. This enables event-driven agent-to-agent workflows:
+
+- **A2A_NOTIFY action**: A zero-config rule action that sends a JSON-RPC 2.0 `message.send` to configured remote A2A agents when a rule matches an email
+- **Use case**: Urgent/important emails trigger notifications to OpenClaw Mitra or other A2A agents, which can then notify users via WhatsApp, Telegram, Slack, etc.
+- **Configuration**: Set `A2A_REMOTE_AGENTS` env var with comma-separated agent URLs (e.g., `http://192.168.10.22:18800`)
+- **Agent card discovery**: Inbox fetches the remote agent's `/.well-known/agent-card.json` to resolve the JSON-RPC endpoint
+- **Payload**: Includes email metadata (from, subject, snippet, thread_id, message_id, labels, received_at, rule info)
+- **Fan-out**: Sends to all configured agents in parallel; succeeds if at least one agent responds
+- **Non-blocking**: A2A notification failures don't block other rule actions
+
 ## Authentication
 
 OAuth 2.0 Authorization Code flow with PKCE is required:

@@ -22,7 +22,8 @@ const AGENT_CARD = {
   description:
     "AI-powered email and calendar automation with multi-account support, " +
     "human-in-the-loop approvals, and advanced AI features for categorization, " +
-    "summarization, and composition. Supports Gmail, Google Workspace, and Outlook.",
+    "summarization, and composition. Supports Gmail, Google Workspace, and Outlook. " +
+    "Can send outbound A2A notifications to remote agents when automation rules match urgent emails.",
   version: "1.0.0",
   url: env.NEXT_PUBLIC_BASE_URL,
 
