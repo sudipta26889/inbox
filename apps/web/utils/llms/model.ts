@@ -259,9 +259,12 @@ function selectModel(
           try {
             const body = JSON.parse(options.body as string);
 
-            // Add format: "json" for JSON mode requests
-            // The AI SDK will handle parsing the JSON from the content field
-            if (!body.format) {
+            // Add format: "json" for JSON mode requests (structured output)
+            // but NOT when tools are present — format: json breaks tool calling
+            // by forcing the model to emit tool calls as plain JSON content
+            // instead of using the proper tool_calls response field
+            const hasTools = body.tools && body.tools.length > 0;
+            if (!body.format && !hasTools) {
               body.format = "json";
               logger.info("Added format: json for Ollama", {
                 model: modelName,
