@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { createScopedLogger } from "@/utils/logger";
 import { env } from "@/env";
 
@@ -9,16 +10,15 @@ type AgentCard = {
   name: string;
   version?: string;
   url?: string;
-  skills?: Array<{ skill: string; name?: string; description?: string }>;
+  skills?: Array<{ id?: string; skill?: string; name?: string }>;
   bindings?: Array<{ url: string; transport: string }>;
   additionalInterfaces?: Array<{ url: string; transport: string }>;
 };
 
 type A2aMessageParams = {
-  content?: string;
-  input?: Record<string, unknown>;
+  text: string;
+  data?: Record<string, unknown>;
   contextId?: string;
-  skill?: string;
 };
 
 type A2aResult = {
@@ -79,44 +79,37 @@ export async function resolveA2aEndpoint(
   return `${base}/a2a`;
 }
 
-// Agent cards often advertise localhost URLs. Rewrite them to use the actual base URL's host.
-function rewriteLocalhost(endpointUrl: string, baseUrl: string): string {
-  if (!endpointUrl.startsWith("http")) {
-    return `${baseUrl}${endpointUrl.startsWith("/") ? "" : "/"}${endpointUrl}`;
-  }
-
-  try {
-    const endpoint = new URL(endpointUrl);
-    const base = new URL(baseUrl);
-
-    if (
-      endpoint.hostname === "localhost" ||
-      endpoint.hostname === "127.0.0.1"
-    ) {
-      endpoint.hostname = base.hostname;
-      endpoint.port = base.port;
-      endpoint.protocol = base.protocol;
-    }
-
-    return endpoint.toString().replace(/\/$/, "");
-  } catch {
-    return endpointUrl;
-  }
-}
-
+/**
+ * Send a Google A2A v0.3.0 message/send to a remote agent.
+ * Non-blocking: returns result or error, never throws.
+ */
 export async function sendA2aMessage(
   endpoint: string,
   params: A2aMessageParams,
 ): Promise<A2aResult> {
+  const parts: Array<Record<string, unknown>> = [
+    { kind: "text", text: params.text },
+  ];
+
+  if (params.data) {
+    parts.push({ kind: "data", data: params.data });
+  }
+
   const body = {
     jsonrpc: "2.0",
-    id: Date.now(),
-    method: "message.send",
+    id: crypto.randomUUID(),
+    method: "message/send",
     params: {
-      content: params.content,
-      input: params.input,
-      skill: params.skill,
-      contextId: params.contextId || `inbox-${Date.now()}`,
+      message: {
+        kind: "message",
+        messageId: crypto.randomUUID(),
+        role: "user",
+        parts,
+        contextId: params.contextId || `inbox-${Date.now()}`,
+      },
+      configuration: {
+        blocking: true,
+      },
     },
   };
 
@@ -130,6 +123,8 @@ export async function sendA2aMessage(
   }
 
   try {
+    logger.info("Sending A2A message", { endpoint, method: "message/send" });
+
     const response = await fetch(endpoint, {
       method: "POST",
       headers,
@@ -149,11 +144,14 @@ export async function sendA2aMessage(
 
     logger.info("A2A message sent successfully", {
       endpoint,
-      taskId: json.result?.taskId,
-      state: json.result?.state,
+      taskId: json.result?.id,
+      state: json.result?.status?.state,
     });
 
-    return { taskId: json.result?.taskId, state: json.result?.state };
+    return {
+      taskId: json.result?.id,
+      state: json.result?.status?.state,
+    };
   } catch (error) {
     logger.error("A2A message send failed", { endpoint, error });
     return {
@@ -187,9 +185,8 @@ export function buildA2aEmailPayload(
   rule: { ruleName?: string; ruleId: string },
 ): A2aMessageParams {
   return {
-    skill: "incident-triage",
-    content: `Urgent email from ${email.from}: ${email.subject}`,
-    input: {
+    text: `Urgent email from ${email.from}: ${email.subject}${email.snippet ? `\n\n${email.snippet}` : ""}`,
+    data: {
       from: email.from,
       subject: email.subject,
       snippet: email.snippet,
@@ -201,5 +198,31 @@ export function buildA2aEmailPayload(
       rule_id: rule.ruleId,
       timestamp: new Date().toISOString(),
     },
+    contextId: `inbox-${email.threadId}`,
   };
+}
+
+// Agent cards often advertise localhost URLs. Rewrite them to use the actual base URL's host.
+function rewriteLocalhost(endpointUrl: string, baseUrl: string): string {
+  if (!endpointUrl.startsWith("http")) {
+    return `${baseUrl}${endpointUrl.startsWith("/") ? "" : "/"}${endpointUrl}`;
+  }
+
+  try {
+    const endpoint = new URL(endpointUrl);
+    const base = new URL(baseUrl);
+
+    if (
+      endpoint.hostname === "localhost" ||
+      endpoint.hostname === "127.0.0.1"
+    ) {
+      endpoint.hostname = base.hostname;
+      endpoint.port = base.port;
+      endpoint.protocol = base.protocol;
+    }
+
+    return endpoint.toString().replace(/\/$/, "");
+  } catch {
+    return endpointUrl;
+  }
 }
