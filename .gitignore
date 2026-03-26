@@ -104,3 +104,5 @@ qa/browser-flows/results/*
 eval-results/
 
 secret/*
+docs/superpowers/
+docs/superpowers/*
