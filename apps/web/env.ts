@@ -237,6 +237,7 @@ export const env = createEnv({
 
     // A2A Outbound Agent Notifications
     A2A_REMOTE_AGENTS: z.string().optional(),
+    A2A_REMOTE_AGENT_TOKEN: z.string().optional(),
   },
   client: {
     // stripe

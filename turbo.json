@@ -200,7 +200,8 @@
         "NEXT_PUBLIC_CLEANER_ENABLED",
         "NEXT_PUBLIC_AUTO_DRAFT_DISABLED",
 
-        "A2A_REMOTE_AGENTS"
+        "A2A_REMOTE_AGENTS",
+        "A2A_REMOTE_AGENT_TOKEN"
       ],
       "outputs": [".next/**", "!.next/cache/**"]
     },
@@ -269,7 +270,8 @@
         "NEXT_PUBLIC_CLEANER_ENABLED",
         "NEXT_PUBLIC_AUTO_DRAFT_DISABLED",
 
-        "A2A_REMOTE_AGENTS"
+        "A2A_REMOTE_AGENTS",
+        "A2A_REMOTE_AGENT_TOKEN"
       ],
       "outputs": [".next/**", "!.next/cache/**"]
     },

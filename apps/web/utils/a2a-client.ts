@@ -18,6 +18,7 @@ type A2aMessageParams = {
   content?: string;
   input?: Record<string, unknown>;
   contextId?: string;
+  skill?: string;
 };
 
 type A2aResult = {
@@ -114,14 +115,24 @@ export async function sendA2aMessage(
     params: {
       content: params.content,
       input: params.input,
+      skill: params.skill,
       contextId: params.contextId || `inbox-${Date.now()}`,
     },
   };
 
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+
+  const token = env.A2A_REMOTE_AGENT_TOKEN;
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
   try {
     const response = await fetch(endpoint, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(A2A_TIMEOUT_MS),
     });
@@ -174,8 +185,9 @@ export function buildA2aEmailPayload(
     receivedAt?: Date;
   },
   rule: { ruleName?: string; ruleId: string },
-): { content: string; input: Record<string, unknown> } {
+): A2aMessageParams {
   return {
+    skill: "incident-triage",
     content: `Urgent email from ${email.from}: ${email.subject}`,
     input: {
       from: email.from,
