@@ -4,6 +4,7 @@ import type { Logger } from "@/utils/logger";
 import { CALENDAR_SCOPES as GOOGLE_CALENDAR_SCOPES } from "@/utils/gmail/scopes";
 import { SafeError } from "@/utils/error";
 import prisma from "@/utils/prisma";
+import { redis } from "@/utils/redis";
 
 type AuthOptions = {
   accessToken?: string | null;
@@ -59,12 +60,25 @@ export const getCalendarClientWithRefresh = async ({
   }
 
   // Token is expired or missing, need to refresh
-  const auth = getAuth({ accessToken, refreshToken });
-  const cal = calendar({ version: "v3", auth });
+  const authClient = getAuth({ accessToken, refreshToken });
+  const cal = calendar({ version: "v3", auth: authClient });
+
+  // Prevent concurrent refreshes — same lock pattern as Gmail client
+  const lockKey = `token-refresh:cal:${emailAccountId}`;
+  const acquired =
+    (await redis?.set(lockKey, "1", { nx: true, ex: 30 })) === "OK";
+
+  if (!acquired) {
+    logger.info("Calendar token refresh already in progress, waiting", {
+      emailAccountId,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    return cal;
+  }
 
   // may throw `invalid_grant` error
   try {
-    const tokens = await auth.refreshAccessToken();
+    const tokens = await authClient.refreshAccessToken();
     const newAccessToken = tokens.credentials.access_token;
     const newExpiresAt = tokens.credentials.expiry_date ?? undefined;
     const newRefreshToken = tokens.credentials.refresh_token ?? undefined;
@@ -129,6 +143,8 @@ export const getCalendarClientWithRefresh = async ({
     }
 
     throw error;
+  } finally {
+    await redis?.del(lockKey);
   }
 };
 

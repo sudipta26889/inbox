@@ -6,6 +6,7 @@ import { env } from "@/env";
 import type { Logger } from "@/utils/logger";
 import { SCOPES } from "@/utils/gmail/scopes";
 import { SafeError } from "@/utils/error";
+import { redis } from "@/utils/redis";
 
 type AuthOptions = {
   accessToken?: string | null;
@@ -70,6 +71,24 @@ export const getGmailClientWithRefresh = async ({
   const expiryDate = expiresAt ? expiresAt : null;
   if (expiryDate && expiryDate > Date.now()) return g;
 
+  // Prevent concurrent refreshes for the same account — if Google rotates
+  // the refresh token, a second concurrent refresh with the old token
+  // will get invalid_grant and wipe out the tokens the first refresh saved.
+  const lockKey = `token-refresh:${emailAccountId}`;
+  const acquired =
+    (await redis?.set(lockKey, "1", { nx: true, ex: 30 })) === "OK";
+
+  if (!acquired) {
+    // Another process is refreshing — wait briefly then re-read tokens from DB
+    logger.info("Token refresh already in progress, waiting", {
+      emailAccountId,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    // Return the client as-is — the auth object will use whatever token
+    // the other process saved, or Google's library will auto-refresh
+    return g;
+  }
+
   // may throw `invalid_grant` error
   try {
     const tokens = await auth.refreshAccessToken();
@@ -112,6 +131,8 @@ export const getGmailClientWithRefresh = async ({
     }
 
     throw error;
+  } finally {
+    await redis?.del(lockKey);
   }
 };
 

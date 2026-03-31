@@ -312,6 +312,7 @@ async function updateGoogleAccountTokens(
       scope: tokens.scope,
       token_type: tokens.token_type,
       id_token: tokens.id_token,
+      disconnectedAt: null,
     },
   });
 }
