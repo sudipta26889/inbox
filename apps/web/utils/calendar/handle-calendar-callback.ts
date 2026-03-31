@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { env } from "@/env";
 import type { Logger } from "@/utils/logger";
+import prisma from "@/utils/prisma";
 import type { CalendarOAuthProvider } from "./oauth-types";
 import {
   validateOAuthCallback,
@@ -91,16 +92,26 @@ export async function handleCalendarCallback(
     );
 
     if (existingConnection) {
-      logger.info("Calendar connection already exists", {
+      // Update tokens on existing connection — the user is re-authorizing
+      // because the old tokens may have expired or been revoked
+      await prisma.calendarConnection.update({
+        where: { id: existingConnection.id },
+        data: {
+          accessToken,
+          refreshToken,
+          expiresAt: expiresAt ? new Date(expiresAt) : null,
+        },
+      });
+
+      logger.info("Calendar connection tokens refreshed", {
         emailAccountId,
         email,
         provider: provider.name,
       });
-      // Cache the result for duplicate requests
-      await setOAuthCodeResult(code, { message: "calendar_already_connected" });
+      await setOAuthCodeResult(code, { message: "calendar_reconnected" });
       return redirectWithMessage(
         finalRedirectUrl,
-        "calendar_already_connected",
+        "calendar_reconnected",
         redirectHeaders,
       );
     }
