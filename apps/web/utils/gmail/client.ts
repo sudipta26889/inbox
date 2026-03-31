@@ -1,6 +1,7 @@
 import { auth, gmail, type gmail_v1 } from "@googleapis/gmail";
 import { people } from "@googleapis/people";
 import { saveTokens } from "@/utils/auth";
+import { cleanupInvalidTokens } from "@/utils/auth/cleanup-invalid-tokens";
 import { env } from "@/env";
 import type { Logger } from "@/utils/logger";
 import { SCOPES } from "@/utils/gmail/scopes";
@@ -73,11 +74,14 @@ export const getGmailClientWithRefresh = async ({
   try {
     const tokens = await auth.refreshAccessToken();
     const newAccessToken = tokens.credentials.access_token;
+    const newRefreshToken = tokens.credentials.refresh_token ?? undefined;
 
-    if (newAccessToken !== accessToken) {
+    if (newAccessToken !== accessToken || newRefreshToken) {
       await saveTokens({
         tokens: {
           access_token: newAccessToken ?? undefined,
+          // Save rotated refresh token — Google periodically issues a new one
+          refresh_token: newRefreshToken,
           expires_at: tokens.credentials.expiry_date
             ? Math.floor(tokens.credentials.expiry_date / 1000)
             : undefined,
@@ -98,6 +102,12 @@ export const getGmailClientWithRefresh = async ({
         emailAccountId,
         error: error.message,
         errorDescription: (error as any).response?.data?.error_description,
+      });
+
+      await cleanupInvalidTokens({
+        emailAccountId,
+        reason: "invalid_grant",
+        logger,
       });
     }
 

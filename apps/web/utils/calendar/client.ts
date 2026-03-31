@@ -109,6 +109,23 @@ export const getCalendarClientWithRefresh = async ({
           }
         ).response?.data?.error_description,
       });
+
+      // Clear the stale calendar tokens so the UI shows "disconnected"
+      const calendarConnection = await prisma.calendarConnection.findFirst({
+        where: { emailAccountId, provider: "google" },
+        select: { id: true },
+      });
+      if (calendarConnection) {
+        await prisma.calendarConnection.update({
+          where: { id: calendarConnection.id },
+          data: {
+            accessToken: null,
+            refreshToken: null,
+            expiresAt: null,
+          },
+        });
+        logger.info("Cleared stale calendar tokens", { emailAccountId });
+      }
     }
 
     throw error;
