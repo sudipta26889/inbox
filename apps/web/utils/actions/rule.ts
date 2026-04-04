@@ -29,6 +29,7 @@ import {
   upsertSystemRule,
   createRule,
   updateRule,
+  validateWebhookUrlsInActions,
 } from "@/utils/rule/rule";
 import {
   mapActionToSanitizedFields,
@@ -593,6 +594,7 @@ export const copyRulesFromAccountAction = actionClientUser
           folderId: null, // Clear the ID - it's account-specific
           delayInMinutes: action.delayInMinutes,
         }));
+        validateWebhookUrlsInActions(mappedActions);
 
         if (existingRuleId) {
           await prisma.rule.update({
@@ -929,6 +931,7 @@ export const importRulesAction = actionClient
             url: action.url,
             delayInMinutes: action.delayInMinutes,
           }));
+          validateWebhookUrlsInActions(mappedActions);
 
           if (existingRuleId) {
             // Update existing rule

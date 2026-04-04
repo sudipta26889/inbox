@@ -13,6 +13,8 @@ import { resolveLabelNameAndId } from "@/utils/label/resolve-label";
 import { getMissingRecipientMessage } from "@/utils/rule/recipient-validation";
 import { isDuplicateError } from "@/utils/prisma-helpers";
 import type { AttachmentSourceInput } from "@/utils/attachments/source-schema";
+import { validateWebhookUrlFormat } from "@/utils/webhook-validation";
+import { SafeError } from "@/utils/error";
 
 export function partialUpdateRule({
   ruleId,
@@ -416,5 +418,20 @@ async function mapActionFields(
     },
   );
 
-  return Promise.all(actionPromises);
+  const mappedActions = await Promise.all(actionPromises);
+  validateWebhookUrlsInActions(mappedActions);
+  return mappedActions;
+}
+
+export function validateWebhookUrlsInActions(
+  actions: Prisma.ActionCreateManyRuleInput[],
+) {
+  for (const action of actions) {
+    if (action.type !== ActionType.CALL_WEBHOOK || !action.url) continue;
+
+    const result = validateWebhookUrlFormat(action.url);
+    if (!result.valid) {
+      throw new SafeError(`Invalid webhook URL: ${result.error}`, 400);
+    }
+  }
 }
