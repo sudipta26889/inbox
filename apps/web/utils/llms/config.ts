@@ -12,10 +12,12 @@ export const Provider = {
   AI_GATEWAY: "aigateway",
   OLLAMA: "ollama",
   OPENAI_COMPATIBLE: "openai-compatible",
+  LITELLM: "litellm",
 };
 
 export const providerOptions: { label: string; value: string }[] = [
   { label: "Default", value: DEFAULT_PROVIDER },
+  { label: "LiteLLM", value: Provider.LITELLM },
   { label: "Anthropic", value: Provider.ANTHROPIC },
   { label: "OpenAI", value: Provider.OPEN_AI },
   { label: "Azure OpenAI", value: Provider.AZURE },

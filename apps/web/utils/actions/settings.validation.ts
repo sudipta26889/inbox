@@ -33,12 +33,18 @@ export const saveAiSettingsBody = z
       Provider.GOOGLE,
       Provider.GROQ,
       Provider.OPENROUTER,
+      Provider.AI_GATEWAY,
+      Provider.LITELLM,
     ]),
     aiModel: z.string(),
     aiApiKey: z.string().optional(),
   })
   .superRefine((val, ctx) => {
-    if (!val.aiApiKey && val.aiProvider !== DEFAULT_PROVIDER) {
+    if (
+      !val.aiApiKey &&
+      val.aiProvider !== DEFAULT_PROVIDER &&
+      val.aiProvider !== Provider.LITELLM
+    ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: "You must provide an API key for this provider",

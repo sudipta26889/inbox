@@ -344,6 +344,32 @@ function selectModel(
         // Note: Anthropic thinking is disabled by default (not including the config)
       };
     }
+    case Provider.LITELLM: {
+      const modelName = aiModel || env.DEFAULT_LLM_MODEL;
+      if (!modelName)
+        throw new SafeError(
+          "No model specified. Set a model name in AI Model settings.",
+        );
+      const baseURL = env.LITELLM_BASE_URL || "http://localhost:4000/v1";
+      const litellmApiKey = resolveApiKey(aiApiKey, env.LLM_API_KEY);
+
+      logger.info("Using LiteLLM provider", {
+        model: modelName,
+        baseURL,
+      });
+
+      const litellm = createOpenAICompatible({
+        name: "litellm",
+        baseURL,
+        ...(litellmApiKey ? { apiKey: litellmApiKey } : {}),
+      });
+
+      return {
+        provider: Provider.LITELLM,
+        modelName,
+        model: litellm(modelName),
+      };
+    }
     default: {
       logger.error("LLM provider not supported", { aiProvider });
       throw new Error(`LLM provider not supported: ${aiProvider}`);
