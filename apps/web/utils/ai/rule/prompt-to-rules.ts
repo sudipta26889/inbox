@@ -22,10 +22,14 @@ export async function aiPromptToRules({
 }): Promise<CreateRuleSchema[]> {
   const modelOptions = getModel(emailAccount.user, "chat");
 
-  // For Ollama models, use generateText with manual parsing
-  const isOllamaModel = modelOptions.model?.modelId?.startsWith("ollama/");
+  // Local/proxied models (Ollama, LiteLLM) don't enforce schemas like
+  // OpenAI's structured outputs. Fall back to generateText + manual parsing.
+  const needsManualParsing =
+    modelOptions.model?.modelId?.startsWith("ollama/") ||
+    modelOptions.provider === "litellm" ||
+    modelOptions.provider === "openai-compatible";
 
-  if (isOllamaModel) {
+  if (needsManualParsing) {
     return await aiPromptToRulesOllama({
       emailAccount,
       promptFile,
