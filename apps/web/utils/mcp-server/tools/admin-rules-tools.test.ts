@@ -45,6 +45,7 @@ beforeEach(() => {
 });
 
 import { adminRulesList } from "./admin-rules-tools";
+import { adminRulesGet } from "./admin-rules-tools";
 
 describe("adminRulesList", () => {
   it("returns the rules ordered by displayOrder then createdAt for the email account", async () => {
@@ -91,5 +92,53 @@ describe("adminRulesList", () => {
       include: { actions: true },
       orderBy: [{ displayOrder: "asc" }, { createdAt: "asc" }],
     });
+  });
+});
+
+describe("adminRulesGet", () => {
+  it("returns the rule with actions and group when it exists for the account", async () => {
+    prisma.rule.findFirst.mockResolvedValue({
+      id: "r_1",
+      name: "Newsletters",
+      enabled: true,
+      runOnThreads: false,
+      displayOrder: 0,
+      systemType: null,
+      instructions: null,
+      createdAt: new Date("2026-01-01"),
+      updatedAt: new Date("2026-01-02"),
+      actions: [],
+      group: null,
+    });
+
+    const out = await adminRulesGet(ctx, { id: "r_1" });
+
+    expect(out.ok).toBe(true);
+    if (out.ok) {
+      expect((out.data as any).rule.id).toBe("r_1");
+    }
+    expect(prisma.rule.findFirst).toHaveBeenCalledWith({
+      where: { id: "r_1", emailAccountId: "ea_1" },
+      include: { actions: true, group: true },
+    });
+  });
+
+  it("returns NOT_FOUND when the rule does not exist for the account", async () => {
+    prisma.rule.findFirst.mockResolvedValue(null);
+
+    const out = await adminRulesGet(ctx, { id: "r_missing" });
+
+    expect(out).toEqual({
+      ok: false,
+      error: { code: "NOT_FOUND", message: "Rule not found" },
+    });
+  });
+
+  it("returns VALIDATION_ERROR when id is missing", async () => {
+    const out = await adminRulesGet(ctx, {});
+    expect(out.ok).toBe(false);
+    if (!out.ok) {
+      expect(out.error.code).toBe("VALIDATION_ERROR");
+    }
   });
 });

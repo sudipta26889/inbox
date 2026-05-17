@@ -1,6 +1,8 @@
+import { z } from "zod";
 import prisma from "@/utils/prisma";
 import { createScopedLogger } from "@/utils/logger";
 import { mapDomainError } from "../error-mapper";
+import { NotFoundError, ValidationError } from "../errors";
 import type { McpToolContext } from "./registry";
 import type { McpResult } from "../envelope";
 
@@ -40,6 +42,41 @@ export async function adminRulesList(
         count: rules.length,
       },
     };
+  } catch (e) {
+    return mapDomainError(e);
+  }
+}
+
+const adminRulesGetSchema = z.object({ id: z.string().min(1) });
+
+export async function adminRulesGet(
+  context: McpToolContext,
+  params: unknown,
+): Promise<McpResult<{ rule: unknown }>> {
+  const parsed = adminRulesGetSchema.safeParse(params);
+  if (!parsed.success) {
+    return mapDomainError(
+      new ValidationError("Invalid input", { issues: parsed.error.issues }),
+    );
+  }
+
+  logger.info("admin_rules_get", {
+    userId: context.userId,
+    emailAccountId: context.emailAccountId,
+    ruleId: parsed.data.id,
+  });
+
+  try {
+    const rule = await prisma.rule.findFirst({
+      where: { id: parsed.data.id, emailAccountId: context.emailAccountId },
+      include: { actions: true, group: true },
+    });
+
+    if (!rule) {
+      throw new NotFoundError("Rule not found");
+    }
+
+    return { ok: true, data: { rule } };
   } catch (e) {
     return mapDomainError(e);
   }

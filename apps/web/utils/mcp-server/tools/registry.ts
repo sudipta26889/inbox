@@ -309,6 +309,27 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     requiredScope: "admin",
   },
 
+  admin_rules_get: {
+    name: "admin_rules_get",
+    description:
+      "Get full details of a single automation rule by ID, including its actions and group condition.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: {
+          type: "string",
+          description: "The rule ID returned by admin_rules_list.",
+        },
+      },
+      required: ["id"],
+    },
+    handler: async (context, params) => {
+      const { adminRulesGet } = await import("./admin-rules-tools");
+      return adminRulesGet(context, params);
+    },
+    requiredScope: "admin",
+  },
+
   list_email_accounts: {
     name: "list_email_accounts",
     description:
