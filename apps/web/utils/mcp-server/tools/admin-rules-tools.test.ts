@@ -49,6 +49,7 @@ import { adminRulesList } from "./admin-rules-tools";
 import { adminRulesGet } from "./admin-rules-tools";
 import { adminRulesCreate } from "./admin-rules-tools";
 import { adminRulesUpdate } from "./admin-rules-tools";
+import { adminRulesDelete } from "./admin-rules-tools";
 
 describe("adminRulesList", () => {
   it("returns the rules ordered by displayOrder then createdAt for the email account", async () => {
@@ -248,5 +249,70 @@ describe("adminRulesUpdate", () => {
       error: { code: "NOT_FOUND", message: "Rule not found" },
     });
     expect(prisma.rule.update).not.toHaveBeenCalled();
+  });
+});
+
+describe("adminRulesDelete", () => {
+  it("returns a dryRun preview and does NOT delete when confirm is omitted", async () => {
+    prisma.rule.findFirst.mockResolvedValue({
+      id: "r_1",
+      name: "Newsletters",
+      groupId: null,
+      actions: [{ id: "a_1" }, { id: "a_2" }],
+    });
+
+    const out = await adminRulesDelete(ctx, { id: "r_1" });
+
+    expect(out).toEqual({
+      ok: true,
+      dryRun: true,
+      preview: {
+        action: "delete_rule",
+        rule: { id: "r_1", name: "Newsletters", actionCount: 2 },
+        irreversible: true,
+      },
+    });
+    expect(prisma.rule.delete).not.toHaveBeenCalled();
+    expect(prisma.group.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it("returns NOT_FOUND when the rule does not belong to the account", async () => {
+    prisma.rule.findFirst.mockResolvedValue(null);
+    const out = await adminRulesDelete(ctx, { id: "r_missing" });
+    expect(out).toEqual({
+      ok: false,
+      error: { code: "NOT_FOUND", message: "Rule not found" },
+    });
+  });
+
+  it("deletes the rule when confirm is true", async () => {
+    prisma.rule.findFirst.mockResolvedValue({
+      id: "r_1",
+      name: "Newsletters",
+      groupId: null,
+      actions: [],
+    });
+    prisma.rule.delete.mockResolvedValue({ id: "r_1" });
+
+    const out = await adminRulesDelete(ctx, { id: "r_1", confirm: true });
+
+    expect(out.ok).toBe(true);
+    if (out.ok) {
+      expect(out.dryRun).toBe(false);
+    }
+    expect(prisma.rule.delete).toHaveBeenCalledWith({
+      where: { id: "r_1", emailAccountId: "ea_1" },
+    });
+  });
+
+  it("returns STALE_STATE when the rule disappears between dry-run and confirm", async () => {
+    prisma.rule.findFirst.mockResolvedValue(null);
+
+    const out = await adminRulesDelete(ctx, { id: "r_1", confirm: true });
+
+    expect(out).toEqual({
+      ok: false,
+      error: { code: "STALE_STATE", message: "Rule no longer exists" },
+    });
   });
 });

@@ -390,6 +390,29 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     requiredScope: "admin",
   },
 
+  admin_rules_delete: {
+    name: "admin_rules_delete",
+    description:
+      "Delete an automation rule. This tool is destructive. Call once without `confirm` to preview what will be deleted, then call again with `confirm: true` to actually delete.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "Rule ID to delete" },
+        confirm: {
+          type: "boolean",
+          description:
+            "Set to true to actually delete. Omit or set false to get a dry-run preview.",
+        },
+      },
+      required: ["id"],
+    },
+    handler: async (context, params) => {
+      const { adminRulesDelete } = await import("./admin-rules-tools");
+      return adminRulesDelete(context, params);
+    },
+    requiredScope: "admin",
+  },
+
   list_email_accounts: {
     name: "list_email_accounts",
     description:

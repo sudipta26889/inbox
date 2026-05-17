@@ -1,9 +1,14 @@
 import { z } from "zod";
 import prisma from "@/utils/prisma";
 import { createScopedLogger } from "@/utils/logger";
-import { createRule, updateRule } from "@/utils/rule/rule";
+import {
+  createRule,
+  deleteRule as deleteRuleDomain,
+  updateRule,
+} from "@/utils/rule/rule";
 import {
   createRuleBody,
+  deleteRuleBody,
   updateRuleBody,
 } from "@/utils/actions/rule.validation";
 import { flattenConditions } from "@/utils/condition";
@@ -12,7 +17,8 @@ import {
   resolveActionLabels,
 } from "@/utils/rule/action-resolution";
 import { mapDomainError } from "../error-mapper";
-import { NotFoundError, ValidationError } from "../errors";
+import { NotFoundError, StaleStateError, ValidationError } from "../errors";
+import { withDryRunGate } from "../dry-run";
 import type { McpToolContext } from "./registry";
 import type { McpResult } from "../envelope";
 
@@ -215,6 +221,72 @@ export async function adminRulesUpdate(
     });
 
     return { ok: true, data: { rule } };
+  } catch (e) {
+    return mapDomainError(e);
+  }
+}
+
+const adminRulesDeleteSchema = deleteRuleBody.extend({
+  confirm: z.boolean().optional(),
+});
+
+export async function adminRulesDelete(
+  context: McpToolContext,
+  params: unknown,
+): Promise<McpResult<{ deleted: true; id: string }>> {
+  const parsed = adminRulesDeleteSchema.safeParse(params);
+  if (!parsed.success) {
+    return mapDomainError(
+      new ValidationError("Invalid input", { issues: parsed.error.issues }),
+    );
+  }
+
+  logger.info("admin_rules_delete", {
+    userId: context.userId,
+    emailAccountId: context.emailAccountId,
+    ruleId: parsed.data.id,
+    confirm: parsed.data.confirm === true,
+  });
+
+  try {
+    return await withDryRunGate({
+      confirm: parsed.data.confirm,
+      preview: async () => {
+        const rule = await prisma.rule.findFirst({
+          where: {
+            id: parsed.data.id,
+            emailAccountId: context.emailAccountId,
+          },
+          select: { id: true, name: true, groupId: true, actions: true },
+        });
+        if (!rule) throw new NotFoundError("Rule not found");
+        return {
+          action: "delete_rule",
+          rule: {
+            id: rule.id,
+            name: rule.name,
+            actionCount: rule.actions.length,
+          },
+          irreversible: true,
+        };
+      },
+      commit: async () => {
+        const rule = await prisma.rule.findFirst({
+          where: {
+            id: parsed.data.id,
+            emailAccountId: context.emailAccountId,
+          },
+          select: { id: true, groupId: true },
+        });
+        if (!rule) throw new StaleStateError("Rule no longer exists");
+        await deleteRuleDomain({
+          ruleId: rule.id,
+          emailAccountId: context.emailAccountId,
+          groupId: rule.groupId,
+        });
+        return { deleted: true as const, id: rule.id };
+      },
+    });
   } catch (e) {
     return mapDomainError(e);
   }
