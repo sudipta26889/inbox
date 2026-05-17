@@ -15,6 +15,8 @@ export const MCP_SCOPES = {
   "stats:read": "Read analytics and statistics",
   "rules:read": "Read automation rules",
   "rules:write": "Create and modify automation rules",
+  admin:
+    "Read and write all inbox settings: rules, categories, knowledge, cold-email blocker, reply tracker, follow-ups, digest, AI model, account settings, cleanup, unsubscribe. Excludes API keys, webhooks, and MCP client registration.",
 } as const;
 
 export type McpScope = keyof typeof MCP_SCOPES;
