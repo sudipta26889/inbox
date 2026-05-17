@@ -339,3 +339,64 @@ export async function adminRulesSetEnabled(
     return mapDomainError(e);
   }
 }
+
+const adminRulesReorderSchema = z.object({
+  ruleIds: z
+    .array(z.string().min(1))
+    .min(1, "ruleIds must contain at least one id")
+    .refine((ids) => new Set(ids).size === ids.length, {
+      message: "ruleIds must not contain duplicates",
+    }),
+});
+
+export async function adminRulesReorder(
+  context: McpToolContext,
+  params: unknown,
+): Promise<McpResult<{ reordered: number }>> {
+  const parsed = adminRulesReorderSchema.safeParse(params);
+  if (!parsed.success) {
+    return mapDomainError(
+      new ValidationError("Invalid input", { issues: parsed.error.issues }),
+    );
+  }
+
+  logger.info("admin_rules_reorder", {
+    userId: context.userId,
+    emailAccountId: context.emailAccountId,
+    count: parsed.data.ruleIds.length,
+  });
+
+  try {
+    const ownedRules = await prisma.rule.findMany({
+      where: { emailAccountId: context.emailAccountId },
+      select: { id: true },
+    });
+    const ownedIds = new Set(ownedRules.map((r) => r.id));
+
+    const suppliedIds = new Set(parsed.data.ruleIds);
+    const missingFromSupplied = [...ownedIds].filter(
+      (id) => !suppliedIds.has(id),
+    );
+    const extraInSupplied = parsed.data.ruleIds.filter(
+      (id) => !ownedIds.has(id),
+    );
+
+    if (missingFromSupplied.length > 0 || extraInSupplied.length > 0) {
+      throw new ValidationError(
+        "ruleIds must be exactly the set of rules owned by this email account",
+        { missingFromSupplied, extraInSupplied },
+      );
+    }
+
+    for (const [index, id] of parsed.data.ruleIds.entries()) {
+      await prisma.rule.update({
+        where: { id, emailAccountId: context.emailAccountId },
+        data: { displayOrder: index },
+      });
+    }
+
+    return { ok: true, data: { reordered: parsed.data.ruleIds.length } };
+  } catch (e) {
+    return mapDomainError(e);
+  }
+}

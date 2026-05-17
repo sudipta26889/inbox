@@ -51,6 +51,7 @@ import { adminRulesCreate } from "./admin-rules-tools";
 import { adminRulesUpdate } from "./admin-rules-tools";
 import { adminRulesDelete } from "./admin-rules-tools";
 import { adminRulesSetEnabled } from "./admin-rules-tools";
+import { adminRulesReorder } from "./admin-rules-tools";
 
 describe("adminRulesList", () => {
   it("returns the rules ordered by displayOrder then createdAt for the email account", async () => {
@@ -359,6 +360,62 @@ describe("adminRulesSetEnabled", () => {
 
   it("returns VALIDATION_ERROR when neither ruleId nor systemType is given", async () => {
     const out = await adminRulesSetEnabled(ctx, { enabled: true });
+    expect(out.ok).toBe(false);
+    if (!out.ok) {
+      expect(out.error.code).toBe("VALIDATION_ERROR");
+    }
+  });
+});
+
+describe("adminRulesReorder", () => {
+  it("rejects when the set of ruleIds is not exactly the account's rules", async () => {
+    prisma.rule.findMany.mockResolvedValue([
+      { id: "r_1" },
+      { id: "r_2" },
+      { id: "r_3" },
+    ]);
+
+    const out = await adminRulesReorder(ctx, { ruleIds: ["r_1", "r_2"] });
+
+    expect(out.ok).toBe(false);
+    if (!out.ok) {
+      expect(out.error.code).toBe("VALIDATION_ERROR");
+    }
+    expect(prisma.rule.update).not.toHaveBeenCalled();
+  });
+
+  it("updates displayOrder for each rule in the supplied order", async () => {
+    prisma.rule.findMany.mockResolvedValue([
+      { id: "r_1" },
+      { id: "r_2" },
+      { id: "r_3" },
+    ]);
+    prisma.rule.update.mockResolvedValue({});
+
+    const out = await adminRulesReorder(ctx, {
+      ruleIds: ["r_3", "r_1", "r_2"],
+    });
+
+    expect(out.ok).toBe(true);
+    expect(prisma.rule.update).toHaveBeenCalledTimes(3);
+    expect(prisma.rule.update).toHaveBeenNthCalledWith(1, {
+      where: { id: "r_3", emailAccountId: "ea_1" },
+      data: { displayOrder: 0 },
+    });
+    expect(prisma.rule.update).toHaveBeenNthCalledWith(2, {
+      where: { id: "r_1", emailAccountId: "ea_1" },
+      data: { displayOrder: 1 },
+    });
+    expect(prisma.rule.update).toHaveBeenNthCalledWith(3, {
+      where: { id: "r_2", emailAccountId: "ea_1" },
+      data: { displayOrder: 2 },
+    });
+  });
+
+  it("returns VALIDATION_ERROR when ruleIds contains duplicates", async () => {
+    const out = await adminRulesReorder(ctx, {
+      ruleIds: ["r_1", "r_1"],
+    });
     expect(out.ok).toBe(false);
     if (!out.ok) {
       expect(out.error.code).toBe("VALIDATION_ERROR");

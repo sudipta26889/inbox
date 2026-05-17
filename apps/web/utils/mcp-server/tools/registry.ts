@@ -432,6 +432,28 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     requiredScope: "admin",
   },
 
+  admin_rules_reorder: {
+    name: "admin_rules_reorder",
+    description:
+      "Set the display order of automation rules. The ruleIds array must contain exactly the set of rules owned by the account; the new displayOrder is assigned in the order supplied (0 = first).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ruleIds: {
+          type: "array",
+          items: { type: "string" },
+          description: "Rule IDs in their new order",
+        },
+      },
+      required: ["ruleIds"],
+    },
+    handler: async (context, params) => {
+      const { adminRulesReorder } = await import("./admin-rules-tools");
+      return adminRulesReorder(context, params);
+    },
+    requiredScope: "admin",
+  },
+
   list_email_accounts: {
     name: "list_email_accounts",
     description:
