@@ -450,6 +450,8 @@ model Rule {
   automate          Boolean            @default(true) // @deprecated - No longer used. All rules are now automated. Kept for historical data only.
   runOnThreads      Boolean            @default(false) // if disabled, only runs on individual emails
 
+  displayOrder      Int                @default(0) // user-controlled ordering (admin_rules_reorder)
+
   emailAccountId String
   emailAccount   EmailAccount @relation(fields: [emailAccountId], references: [id], onDelete: Cascade)
 
