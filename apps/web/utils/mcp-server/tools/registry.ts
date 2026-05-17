@@ -367,6 +367,29 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     requiredScope: "admin",
   },
 
+  admin_rules_update: {
+    name: "admin_rules_update",
+    description:
+      "Update an existing automation rule. Replaces actions and conditions atomically.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "Rule ID" },
+        name: { type: "string" },
+        runOnThreads: { type: "boolean" },
+        actions: { type: "array" },
+        conditions: { type: "array" },
+        conditionalOperator: { type: "string", enum: ["AND", "OR"] },
+      },
+      required: ["id", "name", "actions", "conditions"],
+    },
+    handler: async (context, params) => {
+      const { adminRulesUpdate } = await import("./admin-rules-tools");
+      return adminRulesUpdate(context, params);
+    },
+    requiredScope: "admin",
+  },
+
   list_email_accounts: {
     name: "list_email_accounts",
     description:

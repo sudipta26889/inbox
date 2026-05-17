@@ -48,6 +48,7 @@ beforeEach(() => {
 import { adminRulesList } from "./admin-rules-tools";
 import { adminRulesGet } from "./admin-rules-tools";
 import { adminRulesCreate } from "./admin-rules-tools";
+import { adminRulesUpdate } from "./admin-rules-tools";
 
 describe("adminRulesList", () => {
   it("returns the rules ordered by displayOrder then createdAt for the email account", async () => {
@@ -189,5 +190,63 @@ describe("adminRulesCreate", () => {
     if (!out.ok) {
       expect(out.error.code).toBe("VALIDATION_ERROR");
     }
+  });
+});
+
+describe("adminRulesUpdate", () => {
+  it("verifies ownership and updates via the domain function", async () => {
+    prisma.rule.findFirst.mockResolvedValue({
+      id: "r_1",
+      emailAccountId: "ea_1",
+    });
+    prisma.emailAccount.findUnique.mockResolvedValue({
+      account: { provider: "google" },
+    });
+    prisma.rule.update.mockResolvedValue({
+      id: "r_1",
+      name: "Renamed",
+      actions: [],
+      enabled: true,
+      runOnThreads: false,
+      displayOrder: 0,
+      systemType: null,
+      instructions: null,
+      createdAt: new Date("2026-02-01"),
+      updatedAt: new Date("2026-02-02"),
+      group: null,
+    });
+
+    const out = await adminRulesUpdate(ctx, {
+      id: "r_1",
+      name: "Renamed",
+      actions: [
+        { type: "LABEL", labelId: { value: null, name: "test-label" } },
+      ],
+      conditions: [{ type: "AI", instructions: "match" }],
+    });
+
+    expect(out.ok).toBe(true);
+    if (out.ok) {
+      expect((out.data as any).rule.id).toBe("r_1");
+    }
+  });
+
+  it("returns NOT_FOUND when the rule does not belong to the account", async () => {
+    prisma.rule.findFirst.mockResolvedValue(null);
+
+    const out = await adminRulesUpdate(ctx, {
+      id: "r_other",
+      name: "x",
+      actions: [
+        { type: "LABEL", labelId: { value: null, name: "test-label" } },
+      ],
+      conditions: [{ type: "AI", instructions: "match" }],
+    });
+
+    expect(out).toEqual({
+      ok: false,
+      error: { code: "NOT_FOUND", message: "Rule not found" },
+    });
+    expect(prisma.rule.update).not.toHaveBeenCalled();
   });
 });
