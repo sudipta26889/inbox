@@ -50,6 +50,7 @@ import { adminRulesGet } from "./admin-rules-tools";
 import { adminRulesCreate } from "./admin-rules-tools";
 import { adminRulesUpdate } from "./admin-rules-tools";
 import { adminRulesDelete } from "./admin-rules-tools";
+import { adminRulesSetEnabled } from "./admin-rules-tools";
 
 describe("adminRulesList", () => {
   it("returns the rules ordered by displayOrder then createdAt for the email account", async () => {
@@ -314,5 +315,53 @@ describe("adminRulesDelete", () => {
       ok: false,
       error: { code: "STALE_STATE", message: "Rule no longer exists" },
     });
+  });
+});
+
+describe("adminRulesSetEnabled", () => {
+  it("toggles enabled via partialUpdateRule when ownership is verified", async () => {
+    prisma.rule.findFirst.mockResolvedValue({ id: "r_1" });
+    prisma.rule.update.mockResolvedValue({
+      id: "r_1",
+      enabled: false,
+      actions: [],
+      group: null,
+    });
+
+    const out = await adminRulesSetEnabled(ctx, {
+      ruleId: "r_1",
+      enabled: false,
+    });
+
+    expect(out.ok).toBe(true);
+    if (out.ok) {
+      expect((out.data as any).rule.enabled).toBe(false);
+    }
+    expect(prisma.rule.update).toHaveBeenCalledWith({
+      where: { id: "r_1" },
+      data: { enabled: false },
+      include: { actions: true, group: true },
+    });
+  });
+
+  it("returns NOT_FOUND when the rule does not belong to the account", async () => {
+    prisma.rule.findFirst.mockResolvedValue(null);
+    const out = await adminRulesSetEnabled(ctx, {
+      ruleId: "r_other",
+      enabled: true,
+    });
+    expect(out).toEqual({
+      ok: false,
+      error: { code: "NOT_FOUND", message: "Rule not found" },
+    });
+    expect(prisma.rule.update).not.toHaveBeenCalled();
+  });
+
+  it("returns VALIDATION_ERROR when neither ruleId nor systemType is given", async () => {
+    const out = await adminRulesSetEnabled(ctx, { enabled: true });
+    expect(out.ok).toBe(false);
+    if (!out.ok) {
+      expect(out.error.code).toBe("VALIDATION_ERROR");
+    }
   });
 });

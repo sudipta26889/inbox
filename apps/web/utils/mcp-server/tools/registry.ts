@@ -413,6 +413,25 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     requiredScope: "admin",
   },
 
+  admin_rules_set_enabled: {
+    name: "admin_rules_set_enabled",
+    description:
+      "Enable or disable a specific automation rule by ruleId. Non-destructive.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ruleId: { type: "string", description: "Rule ID to toggle" },
+        enabled: { type: "boolean", description: "Target enabled state" },
+      },
+      required: ["ruleId", "enabled"],
+    },
+    handler: async (context, params) => {
+      const { adminRulesSetEnabled } = await import("./admin-rules-tools");
+      return adminRulesSetEnabled(context, params);
+    },
+    requiredScope: "admin",
+  },
+
   list_email_accounts: {
     name: "list_email_accounts",
     description:

@@ -4,11 +4,13 @@ import { createScopedLogger } from "@/utils/logger";
 import {
   createRule,
   deleteRule as deleteRuleDomain,
+  partialUpdateRule,
   updateRule,
 } from "@/utils/rule/rule";
 import {
   createRuleBody,
   deleteRuleBody,
+  toggleRuleBody,
   updateRuleBody,
 } from "@/utils/actions/rule.validation";
 import { flattenConditions } from "@/utils/condition";
@@ -287,6 +289,52 @@ export async function adminRulesDelete(
         return { deleted: true as const, id: rule.id };
       },
     });
+  } catch (e) {
+    return mapDomainError(e);
+  }
+}
+
+export async function adminRulesSetEnabled(
+  context: McpToolContext,
+  params: unknown,
+): Promise<McpResult<{ rule: unknown }>> {
+  const parsed = toggleRuleBody.safeParse(params);
+  if (!parsed.success) {
+    return mapDomainError(
+      new ValidationError("Invalid input", { issues: parsed.error.issues }),
+    );
+  }
+
+  logger.info("admin_rules_set_enabled", {
+    userId: context.userId,
+    emailAccountId: context.emailAccountId,
+    ruleId: parsed.data.ruleId,
+    systemType: parsed.data.systemType,
+    enabled: parsed.data.enabled,
+  });
+
+  try {
+    if (!parsed.data.ruleId) {
+      throw new ValidationError(
+        "admin_rules_set_enabled requires ruleId (systemType lookup not supported by this tool)",
+      );
+    }
+
+    const existing = await prisma.rule.findFirst({
+      where: {
+        id: parsed.data.ruleId,
+        emailAccountId: context.emailAccountId,
+      },
+      select: { id: true },
+    });
+    if (!existing) throw new NotFoundError("Rule not found");
+
+    const rule = await partialUpdateRule({
+      ruleId: parsed.data.ruleId,
+      data: { enabled: parsed.data.enabled },
+    });
+
+    return { ok: true, data: { rule } };
   } catch (e) {
     return mapDomainError(e);
   }
