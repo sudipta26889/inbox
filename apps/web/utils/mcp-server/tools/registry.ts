@@ -294,6 +294,21 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     requiredScope: "rules:read",
   },
 
+  admin_rules_list: {
+    name: "admin_rules_list",
+    description:
+      "List all automation rules for the email account, including each rule's actions, enabled state, and display order. Read-only.",
+    inputSchema: {
+      type: "object",
+      properties: {},
+    },
+    handler: async (context, params) => {
+      const { adminRulesList } = await import("./admin-rules-tools");
+      return adminRulesList(context, params);
+    },
+    requiredScope: "admin",
+  },
+
   list_email_accounts: {
     name: "list_email_accounts",
     description:
