@@ -128,11 +128,20 @@ export default function ConsentContent() {
               {scopes.map((scope) => {
                 const scopeKey = scope as keyof typeof MCP_SCOPES;
                 const description = MCP_SCOPES[scopeKey] || scope;
+                const isAdmin = scope === "admin";
                 return (
                   <li key={scope} className="flex items-start space-x-2">
                     <Checkbox checked disabled className="mt-1" />
                     <div className="flex-1">
-                      <p className="text-sm font-medium">{description}</p>
+                      <p
+                        className={
+                          isAdmin
+                            ? "text-sm font-semibold text-amber-700"
+                            : "text-sm font-medium"
+                        }
+                      >
+                        {description}
+                      </p>
                       <p className="text-xs text-gray-500">{scope}</p>
                     </div>
                   </li>
