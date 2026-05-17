@@ -4,6 +4,10 @@ import { createScopedLogger } from "@/utils/logger";
 import { createRule } from "@/utils/rule/rule";
 import { createRuleBody } from "@/utils/actions/rule.validation";
 import { flattenConditions } from "@/utils/condition";
+import {
+  mapActionToSanitizedFields,
+  resolveActionLabels,
+} from "@/utils/rule/action-resolution";
 import { mapDomainError } from "../error-mapper";
 import { NotFoundError, ValidationError } from "../errors";
 import type { McpToolContext } from "./registry";
@@ -96,48 +100,6 @@ async function getProviderForAccount(emailAccountId: string): Promise<string> {
   return ea.account.provider;
 }
 
-function buildDomainResultFromCreateBody(
-  input: ReturnType<typeof createRuleBody.parse>,
-) {
-  const conditions = flattenConditions(input.conditions, logger);
-  return {
-    name: input.name,
-    condition: {
-      aiInstructions: conditions.instructions ?? null,
-      conditionalOperator: input.conditionalOperator ?? null,
-      static: {
-        from: conditions.from ?? null,
-        to: conditions.to ?? null,
-        subject: conditions.subject ?? null,
-      },
-    },
-    actions: input.actions.map((a) => ({
-      type: a.type,
-      fields: {
-        label: a.labelId?.name ?? null,
-        to: a.to?.value ?? null,
-        cc: a.cc?.value ?? null,
-        bcc: a.bcc?.value ?? null,
-        subject: a.subject?.value ?? null,
-        content: a.content?.value ?? null,
-        webhookUrl: a.url?.value ?? null,
-        folderName: a.folderName?.value ?? null,
-      },
-      labelId: a.labelId?.value ?? null,
-      folderId: a.folderId?.value ?? null,
-      delayInMinutes: a.delayInMinutes ?? null,
-      staticAttachments: a.staticAttachments ?? null,
-      haIntegrationType: a.haIntegrationType ?? null,
-      haWebhookId: a.haWebhookId ?? null,
-      haMqttTopic: a.haMqttTopic ?? null,
-      haServiceDomain: a.haServiceDomain ?? null,
-      haServiceName: a.haServiceName ?? null,
-      haServiceData: a.haServiceData ?? null,
-      haEntityId: a.haEntityId ?? null,
-    })),
-  };
-}
-
 export async function adminRulesCreate(
   context: McpToolContext,
   params: unknown,
@@ -157,10 +119,29 @@ export async function adminRulesCreate(
 
   try {
     const provider = await getProviderForAccount(context.emailAccountId);
-    const result = buildDomainResultFromCreateBody(parsed.data);
+    const conditions = flattenConditions(parsed.data.conditions, logger);
+
+    const resolvedActions = await resolveActionLabels(
+      parsed.data.actions || [],
+      context.emailAccountId,
+      provider,
+      logger,
+    );
 
     const rule = await createRule({
-      result,
+      result: {
+        name: parsed.data.name,
+        condition: {
+          aiInstructions: conditions.instructions ?? null,
+          conditionalOperator: parsed.data.conditionalOperator ?? null,
+          static: {
+            from: conditions.from ?? null,
+            to: conditions.to ?? null,
+            subject: conditions.subject ?? null,
+          },
+        },
+        actions: resolvedActions.map(mapActionToSanitizedFields),
+      },
       emailAccountId: context.emailAccountId,
       provider,
       runOnThreads: parsed.data.runOnThreads ?? true,
