@@ -330,6 +330,43 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     requiredScope: "admin",
   },
 
+  admin_rules_create: {
+    name: "admin_rules_create",
+    description:
+      "Create a new automation rule for the email account. Validated with the same Zod schema as the web UI. Returns the created rule and its actions.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Display name of the rule" },
+        runOnThreads: {
+          type: "boolean",
+          description: "Whether the rule runs on threads (default true)",
+        },
+        actions: {
+          type: "array",
+          description:
+            "Actions to execute when the rule matches (see Zod schema for shape)",
+        },
+        conditions: {
+          type: "array",
+          description:
+            "Conditions that trigger the rule (AI or STATIC entries; see Zod schema)",
+        },
+        conditionalOperator: {
+          type: "string",
+          enum: ["AND", "OR"],
+          description: "How to combine multiple conditions",
+        },
+      },
+      required: ["name", "actions", "conditions"],
+    },
+    handler: async (context, params) => {
+      const { adminRulesCreate } = await import("./admin-rules-tools");
+      return adminRulesCreate(context, params);
+    },
+    requiredScope: "admin",
+  },
+
   list_email_accounts: {
     name: "list_email_accounts",
     description:

@@ -21,6 +21,7 @@ vi.mock("@/utils/label/resolve-label", () => ({
 }));
 vi.mock("@/utils/rule/recipient-validation", () => ({
   getMissingRecipientMessage: vi.fn(() => null),
+  addMissingRecipientIssue: vi.fn(),
 }));
 vi.mock("@/utils/prisma-helpers", () => ({
   isDuplicateError: vi.fn(() => false),
@@ -46,6 +47,7 @@ beforeEach(() => {
 
 import { adminRulesList } from "./admin-rules-tools";
 import { adminRulesGet } from "./admin-rules-tools";
+import { adminRulesCreate } from "./admin-rules-tools";
 
 describe("adminRulesList", () => {
   it("returns the rules ordered by displayOrder then createdAt for the email account", async () => {
@@ -136,6 +138,53 @@ describe("adminRulesGet", () => {
 
   it("returns VALIDATION_ERROR when id is missing", async () => {
     const out = await adminRulesGet(ctx, {});
+    expect(out.ok).toBe(false);
+    if (!out.ok) {
+      expect(out.error.code).toBe("VALIDATION_ERROR");
+    }
+  });
+});
+
+describe("adminRulesCreate", () => {
+  it("creates a rule via the domain function and returns its data", async () => {
+    prisma.emailAccount.findUnique.mockResolvedValue({
+      account: { provider: "google" },
+    });
+    prisma.rule.create.mockResolvedValue({
+      id: "r_new",
+      name: "New rule",
+      actions: [{ id: "a_1", type: "LABEL", label: "test-label" }],
+      enabled: true,
+      runOnThreads: true,
+      displayOrder: 0,
+      systemType: null,
+      instructions: null,
+      createdAt: new Date("2026-02-01"),
+      updatedAt: new Date("2026-02-01"),
+      group: null,
+    });
+
+    const out = await adminRulesCreate(ctx, {
+      name: "New rule",
+      runOnThreads: true,
+      actions: [
+        {
+          type: "LABEL",
+          labelId: { value: null, name: "test-label" },
+        },
+      ],
+      conditions: [{ type: "AI", instructions: "match newsletters" }],
+    });
+
+    expect(out.ok).toBe(true);
+    if (out.ok) {
+      expect((out.data as any).rule.id).toBe("r_new");
+    }
+    expect(prisma.rule.create).toHaveBeenCalled();
+  });
+
+  it("returns VALIDATION_ERROR when the body fails Zod validation", async () => {
+    const out = await adminRulesCreate(ctx, { name: "" });
     expect(out.ok).toBe(false);
     if (!out.ok) {
       expect(out.error.code).toBe("VALIDATION_ERROR");
