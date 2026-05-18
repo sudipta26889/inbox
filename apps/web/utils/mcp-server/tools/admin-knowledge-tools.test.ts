@@ -1,12 +1,18 @@
 import { describe, it, expect, vi } from "vitest";
 import prisma from "@/utils/__mocks__/prisma";
-import { adminKnowledgeGet, adminKnowledgeList } from "./admin-knowledge-tools";
+import {
+  adminKnowledgeCreate,
+  adminKnowledgeGet,
+  adminKnowledgeList,
+  adminKnowledgeUpdate,
+} from "./admin-knowledge-tools";
 import type { McpToolContext } from "./registry";
 
 vi.mock("@/utils/prisma");
 vi.mock("@/utils/prisma-helpers", () => ({
   isDuplicateError: vi.fn(),
 }));
+import { isDuplicateError } from "@/utils/prisma-helpers";
 
 const ctx: McpToolContext = {
   clientId: "test-client",
@@ -83,6 +89,96 @@ describe("adminKnowledgeGet", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.error.code).toBe("VALIDATION_ERROR");
+    }
+  });
+});
+
+describe("adminKnowledgeCreate", () => {
+  it("inserts a row and returns ok envelope", async () => {
+    prisma.knowledge.create.mockResolvedValue({
+      id: "k_new",
+      title: "MCP-Created",
+      content: "via mcp",
+      emailAccountId: ctx.emailAccountId,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as never);
+    vi.mocked(isDuplicateError).mockReturnValue(false);
+
+    const result = await adminKnowledgeCreate(ctx, {
+      title: "MCP-Created",
+      content: "via mcp",
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok && result.data) {
+      expect((result.data.item as { title: string }).title).toBe("MCP-Created");
+    }
+  });
+
+  it("returns CONFLICT on duplicate title", async () => {
+    const dupErr = Object.assign(new Error("dup"), {
+      code: "P2002",
+      meta: { target: ["emailAccountId", "title"] },
+    });
+    prisma.knowledge.create.mockRejectedValue(dupErr);
+    vi.mocked(isDuplicateError).mockReturnValue(true);
+
+    const result = await adminKnowledgeCreate(ctx, {
+      title: "dup",
+      content: "b",
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("CONFLICT");
+    }
+  });
+
+  it("returns VALIDATION_ERROR on empty title", async () => {
+    const result = await adminKnowledgeCreate(ctx, { title: "", content: "x" });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("VALIDATION_ERROR");
+  });
+});
+
+describe("adminKnowledgeUpdate", () => {
+  it("modifies the row", async () => {
+    prisma.knowledge.findFirst.mockResolvedValue({ id: "k_1" } as never);
+    prisma.knowledge.update.mockResolvedValue({
+      id: "k_1",
+      title: "new",
+      content: "y",
+      emailAccountId: ctx.emailAccountId,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as never);
+    vi.mocked(isDuplicateError).mockReturnValue(false);
+
+    const result = await adminKnowledgeUpdate(ctx, {
+      id: "k_1",
+      title: "new",
+      content: "y",
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok && result.data) {
+      expect((result.data.item as { title: string }).title).toBe("new");
+    }
+  });
+
+  it("returns NOT_FOUND for cross-account (or unknown) id", async () => {
+    prisma.knowledge.findFirst.mockResolvedValue(null);
+
+    const result = await adminKnowledgeUpdate(ctx, {
+      id: "k_other",
+      title: "hack",
+      content: "h",
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("NOT_FOUND");
     }
   });
 });

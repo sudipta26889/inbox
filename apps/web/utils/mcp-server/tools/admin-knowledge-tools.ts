@@ -1,9 +1,16 @@
 import { createScopedLogger } from "@/utils/logger";
 import {
+  createKnowledgeBody,
   getKnowledgeBody,
   listKnowledgeQuery,
+  updateKnowledgeBody,
 } from "@/utils/actions/knowledge.validation";
-import { getKnowledge, listKnowledge } from "@/utils/knowledge/knowledge";
+import {
+  createKnowledge,
+  getKnowledge,
+  listKnowledge,
+  updateKnowledge,
+} from "@/utils/knowledge/knowledge";
 import { mapDomainError } from "@/utils/mcp-server/error-mapper";
 import { ValidationError } from "@/utils/mcp-server/errors";
 import type { McpResult } from "@/utils/mcp-server/envelope";
@@ -52,6 +59,56 @@ export async function adminKnowledgeGet(
   }
   try {
     const data = await getKnowledge(
+      { userId: ctx.userId, emailAccountId: ctx.emailAccountId },
+      parsed.data,
+    );
+    return { ok: true, data };
+  } catch (e) {
+    return mapDomainError(e);
+  }
+}
+
+export async function adminKnowledgeCreate(
+  ctx: McpToolContext,
+  params: unknown,
+): Promise<McpResult<{ item: unknown }>> {
+  logger.info("MCP tool: admin_knowledge_create", {
+    userId: ctx.userId,
+    emailAccountId: ctx.emailAccountId,
+  });
+  const parsed = createKnowledgeBody.safeParse(params);
+  if (!parsed.success) {
+    return mapDomainError(
+      new ValidationError("Invalid input", { issues: parsed.error.issues }),
+    );
+  }
+  try {
+    const data = await createKnowledge(
+      { userId: ctx.userId, emailAccountId: ctx.emailAccountId },
+      parsed.data,
+    );
+    return { ok: true, data };
+  } catch (e) {
+    return mapDomainError(e);
+  }
+}
+
+export async function adminKnowledgeUpdate(
+  ctx: McpToolContext,
+  params: unknown,
+): Promise<McpResult<{ item: unknown }>> {
+  logger.info("MCP tool: admin_knowledge_update", {
+    userId: ctx.userId,
+    emailAccountId: ctx.emailAccountId,
+  });
+  const parsed = updateKnowledgeBody.safeParse(params);
+  if (!parsed.success) {
+    return mapDomainError(
+      new ValidationError("Invalid input", { issues: parsed.error.issues }),
+    );
+  }
+  try {
+    const data = await updateKnowledge(
       { userId: ctx.userId, emailAccountId: ctx.emailAccountId },
       parsed.data,
     );
