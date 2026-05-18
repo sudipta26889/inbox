@@ -1,6 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
 import prisma from "@/utils/__mocks__/prisma";
-import { adminCategoriesList } from "./admin-categories-tools";
+import {
+  adminCategoriesList,
+  adminCategoriesCreate,
+} from "./admin-categories-tools";
 import type { McpToolContext } from "./registry";
 
 vi.mock("@/utils/prisma");
@@ -10,6 +13,7 @@ vi.mock("@/utils/prisma-helpers", () => ({
 vi.mock("@/utils/senders/record", () => ({
   upsertSenderRecord: vi.fn(),
 }));
+import { isDuplicateError } from "@/utils/prisma-helpers";
 
 const ctx: McpToolContext = {
   clientId: "test-client",
@@ -35,7 +39,59 @@ describe("adminCategoriesList", () => {
     expect(result.ok).toBe(true);
     if (result.ok && result.data) {
       expect(result.data.categories).toHaveLength(1);
-      expect(result.data.categories[0].name).toBe("Newsletter");
+      expect((result.data.categories[0] as { name: string }).name).toBe(
+        "Newsletter",
+      );
+    }
+  });
+});
+
+describe("adminCategoriesCreate", () => {
+  it("creates a category and returns ok envelope", async () => {
+    prisma.category.create.mockResolvedValue({
+      id: "new_cat",
+      name: "Work",
+      description: "Work emails",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as never);
+    vi.mocked(isDuplicateError).mockReturnValue(false);
+
+    const result = await adminCategoriesCreate(ctx, {
+      name: "Work",
+      description: "Work emails",
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok && result.data) {
+      expect((result.data.category as { name: string }).name).toBe("Work");
+    }
+  });
+
+  it("returns VALIDATION_ERROR on missing name", async () => {
+    const result = await adminCategoriesCreate(ctx, {
+      description: "no name",
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("VALIDATION_ERROR");
+    }
+  });
+
+  it("returns CONFLICT on duplicate name", async () => {
+    const dupErr = Object.assign(new Error("dup"), {
+      code: "P2002",
+      meta: { target: ["name"] },
+    });
+    prisma.category.create.mockRejectedValue(dupErr);
+    vi.mocked(isDuplicateError).mockReturnValue(true);
+
+    const result = await adminCategoriesCreate(ctx, { name: "Newsletter" });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("CONFLICT");
     }
   });
 });

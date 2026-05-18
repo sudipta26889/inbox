@@ -1,6 +1,8 @@
 import { createScopedLogger } from "@/utils/logger";
-import { listCategories } from "@/utils/categories/categories";
+import { createCategory, listCategories } from "@/utils/categories/categories";
+import { createCategoryBody } from "@/utils/categories/validation";
 import { mapDomainError } from "@/utils/mcp-server/error-mapper";
+import { ValidationError } from "@/utils/mcp-server/errors";
 import type { McpResult } from "@/utils/mcp-server/envelope";
 import type { McpToolContext } from "./registry";
 
@@ -19,6 +21,31 @@ export async function adminCategoriesList(
       userId: ctx.userId,
       emailAccountId: ctx.emailAccountId,
     });
+    return { ok: true, data };
+  } catch (e) {
+    return mapDomainError(e);
+  }
+}
+
+export async function adminCategoriesCreate(
+  ctx: McpToolContext,
+  params: unknown,
+): Promise<McpResult<{ category: unknown }>> {
+  logger.info("MCP tool: admin_categories_create", {
+    userId: ctx.userId,
+    emailAccountId: ctx.emailAccountId,
+  });
+  const parsed = createCategoryBody.safeParse(params);
+  if (!parsed.success) {
+    return mapDomainError(
+      new ValidationError("Invalid input", { issues: parsed.error.issues }),
+    );
+  }
+  try {
+    const data = await createCategory(
+      { userId: ctx.userId, emailAccountId: ctx.emailAccountId },
+      parsed.data,
+    );
     return { ok: true, data };
   } catch (e) {
     return mapDomainError(e);

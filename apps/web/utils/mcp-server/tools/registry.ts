@@ -474,6 +474,30 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     requiredScope: "admin",
   },
 
+  admin_categories_create: {
+    name: "admin_categories_create",
+    description:
+      "Create a new sender category for this email account. Categories group senders for rule targeting and bulk archive. Name is unique per account; duplicate names return CONFLICT.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Category name (max 30 chars)" },
+        description: {
+          type: "string",
+          description: "Optional description (max 300 chars)",
+        },
+      },
+      required: ["name"],
+    },
+    handler: async (context, params) => {
+      const { adminCategoriesCreate } = await import(
+        "./admin-categories-tools"
+      );
+      return adminCategoriesCreate(context, params);
+    },
+    requiredScope: "admin",
+  },
+
   list_email_accounts: {
     name: "list_email_accounts",
     description:
