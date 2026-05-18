@@ -1212,6 +1212,65 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     requiredScope: "admin",
   },
+
+  admin_account_get: {
+    name: "admin_account_get",
+    description:
+      "Read the bound email account's non-credential profile (name, about, signature, timezone, calendarBookingLink, role) plus read-only fields (id, email, image, createdAt, updatedAt). Never returns API keys, webhooks, MCP client registration, AI model, premium, or any subsystem-owned setting (cold-email, digest, reply-tracker, follow-ups, categorization, drafting, persona, writingStyle, behavior, meeting briefings).",
+    inputSchema: {
+      type: "object",
+      properties: {},
+      additionalProperties: false,
+    },
+    handler: async (context, params) => {
+      const { adminAccountGet } = await import("./admin-account-tools");
+      return adminAccountGet(context, params);
+    },
+    requiredScope: "admin",
+  },
+
+  admin_account_update: {
+    name: "admin_account_update",
+    description:
+      "Update non-credential profile fields on the bound email account. Accepts ONLY: name, about, signature, timezone (IANA), calendarBookingLink (http(s) URL), role. Unknown fields — including apiKey, webhookUrl, mcpClient*, aiModel/aiProvider/aiApiKey, premium*, coldEmail*, writingStyle, behaviorProfile, personaAnalysis, digestSchedule, follow-up flags, and provider sync state — are rejected with VALIDATION_ERROR and the row is unchanged.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: {
+          type: ["string", "null"],
+          description: "Display name, max 200 chars",
+        },
+        about: {
+          type: ["string", "null"],
+          description: "Free-form bio, max 2000 chars",
+        },
+        signature: {
+          type: ["string", "null"],
+          description: "HTML signature, max 20000 chars",
+        },
+        timezone: {
+          type: ["string", "null"],
+          description:
+            "IANA timezone string (e.g. 'America/Los_Angeles', 'Asia/Jerusalem')",
+        },
+        calendarBookingLink: {
+          type: ["string", "null"],
+          description:
+            "Public booking URL (must start with http:// or https://)",
+        },
+        role: {
+          type: ["string", "null"],
+          description: "User-confirmed role, max 100 chars",
+        },
+      },
+      additionalProperties: false,
+    },
+    handler: async (context, params) => {
+      const { adminAccountUpdate } = await import("./admin-account-tools");
+      return adminAccountUpdate(context, params);
+    },
+    requiredScope: "admin",
+  },
 };
 
 /**
