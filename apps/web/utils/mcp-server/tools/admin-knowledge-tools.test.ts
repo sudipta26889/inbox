@@ -271,3 +271,102 @@ describe("adminKnowledgeDelete", () => {
     }
   });
 });
+
+describe("admin_knowledge_* registry integration", () => {
+  it("all five tools require the 'admin' scope", async () => {
+    const { MCP_TOOLS, hasRequiredScope } = await import("./registry");
+    for (const name of [
+      "admin_knowledge_list",
+      "admin_knowledge_get",
+      "admin_knowledge_create",
+      "admin_knowledge_update",
+      "admin_knowledge_delete",
+    ]) {
+      const t = MCP_TOOLS[name];
+      expect(t, name).toBeDefined();
+      expect(t.requiredScope).toBe("admin");
+      expect(hasRequiredScope(t, ["rules:read"])).toBe(false);
+      expect(hasRequiredScope(t, ["admin"])).toBe(true);
+    }
+  });
+
+  it("end-to-end CRUD via registry handlers", async () => {
+    const { MCP_TOOLS } = await import("./registry");
+
+    // Create
+    prisma.knowledge.create.mockResolvedValue({
+      id: "k_e2e",
+      title: "K",
+      content: "C",
+      emailAccountId: ctx.emailAccountId,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as never);
+    vi.mocked(isDuplicateError).mockReturnValue(false);
+
+    const created = (await MCP_TOOLS.admin_knowledge_create.handler(ctx, {
+      title: "K",
+      content: "C",
+    })) as { ok: true; data: { item: { id: string } } };
+    expect(created.ok).toBe(true);
+    expect(created.data.item.id).toBe("k_e2e");
+
+    // List
+    prisma.knowledge.findMany.mockResolvedValue([
+      {
+        id: "k_e2e",
+        title: "K",
+        content: "C",
+        emailAccountId: ctx.emailAccountId,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    ] as never);
+    const listed = (await MCP_TOOLS.admin_knowledge_list.handler(ctx, {})) as {
+      ok: true;
+      data: { items: Array<{ id: string }> };
+    };
+    expect(listed.data.items.map((i) => i.id)).toContain("k_e2e");
+
+    // Update
+    prisma.knowledge.findFirst.mockResolvedValueOnce({ id: "k_e2e" } as never);
+    prisma.knowledge.update.mockResolvedValue({
+      id: "k_e2e",
+      title: "K2",
+      content: "C2",
+      emailAccountId: ctx.emailAccountId,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as never);
+    const updated = (await MCP_TOOLS.admin_knowledge_update.handler(ctx, {
+      id: "k_e2e",
+      title: "K2",
+      content: "C2",
+    })) as { ok: true; data: { item: { title: string } } };
+    expect(updated.data.item.title).toBe("K2");
+
+    // Delete dry-run
+    prisma.knowledge.findFirst.mockResolvedValueOnce({
+      id: "k_e2e",
+      title: "K2",
+      content: "C2",
+      updatedAt: new Date(),
+    } as never);
+    const dry = (await MCP_TOOLS.admin_knowledge_delete.handler(ctx, {
+      id: "k_e2e",
+    })) as { ok: true; dryRun: true; preview: Record<string, unknown> };
+    expect(dry.dryRun).toBe(true);
+
+    // Delete confirm
+    prisma.knowledge.findFirst.mockResolvedValueOnce({ id: "k_e2e" } as never);
+    prisma.knowledge.findFirst.mockResolvedValueOnce({ id: "k_e2e" } as never);
+    prisma.knowledge.delete.mockResolvedValue({ id: "k_e2e" } as never);
+    const real = (await MCP_TOOLS.admin_knowledge_delete.handler(ctx, {
+      id: "k_e2e",
+      confirm: true,
+    })) as { ok: true; dryRun: false; data: { id: string } };
+    expect(real.ok).toBe(true);
+    expect(real.dryRun).toBe(false);
+    expect(real.data.id).toBe("k_e2e");
+  });
+});
