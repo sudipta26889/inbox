@@ -347,3 +347,41 @@ describe("admin_follow_ups_delete (destructive)", () => {
     if (!result.ok) expect(result.error.code).toBe("VALIDATION_ERROR");
   });
 });
+
+describe("registry wiring", () => {
+  it.each([
+    "admin_reply_tracker_get_settings",
+    "admin_reply_tracker_update_settings",
+    "admin_follow_ups_list",
+    "admin_follow_ups_update",
+    "admin_follow_ups_delete",
+  ])("registers %s with admin scope", async (name) => {
+    const { getTool, hasRequiredScope } = await import("./registry");
+    const tool = getTool(name);
+    expect(tool).toBeDefined();
+    expect(tool!.requiredScope).toBe("admin");
+    expect(hasRequiredScope(tool!, ["admin"])).toBe(true);
+    expect(hasRequiredScope(tool!, ["email:read"])).toBe(false);
+  });
+
+  it("admin_follow_ups_delete description mentions destructive + confirm", async () => {
+    const { getTool } = await import("./registry");
+    const tool = getTool("admin_follow_ups_delete")!;
+    expect(tool.description?.toLowerCase()).toContain("destructive");
+    expect(tool.description?.toLowerCase()).toContain("confirm");
+  });
+
+  it("end-to-end: handler resolved via registry executes against mocked DB", async () => {
+    const { MCP_TOOLS } = await import("./registry");
+    prisma.emailAccount.findFirst.mockResolvedValue({
+      id: mcpCtx.emailAccountId,
+      draftReplyConfidence: DraftReplyConfidence.STANDARD,
+      allowHiddenAiDraftLinks: false,
+    } as never);
+    prisma.rule.findUnique.mockResolvedValue(null as never);
+
+    const tool = MCP_TOOLS.admin_reply_tracker_get_settings!;
+    const result = (await tool.handler(mcpCtx, {})) as { ok: boolean };
+    expect(result.ok).toBe(true);
+  });
+});
