@@ -3,6 +3,7 @@ import prisma from "@/utils/__mocks__/prisma";
 import { ActionType, SystemType } from "@/generated/prisma/enums";
 import {
   adminDigestGet,
+  adminDigestUpdateItems,
   adminDigestUpdateSchedule,
 } from "./admin-digest-tools";
 import type { McpToolContext } from "./registry";
@@ -100,5 +101,40 @@ describe("adminDigestUpdateSchedule", () => {
     expect(result.ok).toBe(false);
     expect((result as any).error.code).toBe("VALIDATION_ERROR");
     expect(prisma.schedule.upsert).not.toHaveBeenCalled();
+  });
+});
+
+describe("adminDigestUpdateItems", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("applies preferences and returns partial-failure envelope", async () => {
+    prisma.rule.findUnique
+      .mockResolvedValueOnce({ id: "r1", actions: [] } as any)
+      .mockResolvedValueOnce(null);
+    prisma.action.create.mockResolvedValue({} as any);
+
+    const result = await adminDigestUpdateItems(ctx, {
+      ruleDigestPreferences: { r1: true, ghost: true },
+    });
+
+    expect(result.ok).toBe(true);
+    expect((result as any).data.successCount).toBe(1);
+    expect((result as any).data.failureCount).toBe(1);
+    expect((result as any).data.failed[0]).toEqual({
+      id: "ghost",
+      error: { code: "NOT_FOUND", message: "Rule not found" },
+    });
+  });
+
+  it("rejects malformed input with VALIDATION_ERROR", async () => {
+    const result = await adminDigestUpdateItems(ctx, {
+      ruleDigestPreferences: { r1: "yes" },
+    });
+
+    expect(result.ok).toBe(false);
+    expect((result as any).error.code).toBe("VALIDATION_ERROR");
+    expect(prisma.rule.findUnique).not.toHaveBeenCalled();
   });
 });

@@ -3,8 +3,13 @@ import { mapDomainError } from "@/utils/mcp-server/error-mapper";
 import {
   getDigestConfigBody,
   saveDigestScheduleBody,
+  updateDigestItemsBody,
 } from "@/utils/actions/settings.validation";
-import { getDigestConfig, updateDigestSchedule } from "@/utils/digest/domain";
+import {
+  getDigestConfig,
+  updateDigestItems,
+  updateDigestSchedule,
+} from "@/utils/digest/domain";
 import type { McpToolContext } from "./registry";
 
 const logger = createScopedLogger("mcp-admin-digest-tools");
@@ -86,6 +91,50 @@ export async function adminDigestUpdateSchedule(
     return { ok: true as const, data };
   } catch (e) {
     logger.error("admin_digest_update_schedule failed", { error: e });
+    return mapDomainError(e);
+  }
+}
+
+export async function adminDigestUpdateItems(
+  ctx: McpToolContext,
+  params: unknown,
+) {
+  const started = Date.now();
+  const parsed = updateDigestItemsBody.safeParse(params);
+  if (!parsed.success) {
+    logger.info("admin_digest_update_items validation error", {
+      userId: ctx.userId,
+      emailAccountId: ctx.emailAccountId,
+      durationMs: Date.now() - started,
+      outcome: "validation_error",
+    });
+    return {
+      ok: false as const,
+      error: {
+        code: "VALIDATION_ERROR" as const,
+        message: "Invalid input",
+        details: parsed.error.issues,
+      },
+    };
+  }
+
+  try {
+    const data = await updateDigestItems(
+      { userId: ctx.userId, emailAccountId: ctx.emailAccountId },
+      parsed.data,
+    );
+    logger.info("admin_digest_update_items success", {
+      tool: "admin_digest_update_items",
+      userId: ctx.userId,
+      emailAccountId: ctx.emailAccountId,
+      durationMs: Date.now() - started,
+      outcome: "success",
+      successCount: data.successCount,
+      failureCount: data.failureCount,
+    });
+    return { ok: true as const, data };
+  } catch (e) {
+    logger.error("admin_digest_update_items failed", { error: e });
     return mapDomainError(e);
   }
 }
