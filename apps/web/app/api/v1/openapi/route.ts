@@ -19,6 +19,14 @@ import {
   ruleResponseSchema,
   rulesResponseSchema,
 } from "@/app/api/v1/rules/validation";
+import { accountsResponseSchema } from "@/app/api/v1/accounts/validation";
+import {
+  emailDetailQuerySchema,
+  emailDetailResponseSchema,
+  emailPathParamsSchema,
+  emailsQuerySchema,
+  emailsResponseSchema,
+} from "@/app/api/v1/emails/validation";
 import { API_KEY_HEADER } from "@/utils/api-auth";
 import { env } from "@/env";
 import { BRAND_NAME } from "@/utils/branding";
@@ -213,6 +221,70 @@ function createRegistry() {
     responses: {
       204: {
         description: "Rule deleted",
+      },
+    },
+  });
+
+  registry.registerPath({
+    method: "get",
+    path: "/accounts",
+    description:
+      "List every email account linked to the API key's user. The account the key was originally bound to is flagged with is_default=true.",
+    security: [{ ApiKeyAuth: [] }],
+    responses: {
+      200: {
+        description: "Successful response",
+        content: {
+          "application/json": {
+            schema: accountsResponseSchema,
+          },
+        },
+      },
+    },
+  });
+
+  registry.registerPath({
+    method: "get",
+    path: "/emails",
+    description:
+      "List emails for any account linked to the API key's user, filtered by a provider-native query (e.g. Gmail search syntax like 'label:ai-news'). The account parameter selects which linked account to query. Pagination via the opaque cursor.",
+    security: [{ ApiKeyAuth: [] }],
+    request: {
+      query: emailsQuerySchema,
+    },
+    responses: {
+      200: {
+        description: "Successful response",
+        content: {
+          "application/json": {
+            schema: emailsResponseSchema,
+          },
+        },
+      },
+    },
+  });
+
+  registry.registerPath({
+    method: "get",
+    path: "/emails/{messageId}",
+    description:
+      "Fetch a single email with body and attachment metadata. The account parameter selects which of the API key's user's linked accounts to read from.",
+    security: [{ ApiKeyAuth: [] }],
+    request: {
+      params: emailPathParamsSchema,
+      query: emailDetailQuerySchema,
+    },
+    responses: {
+      200: {
+        description: "Successful response",
+        content: {
+          "application/json": {
+            schema: emailDetailResponseSchema,
+          },
+        },
+      },
+      404: {
+        description: "Email not found",
       },
     },
   });
