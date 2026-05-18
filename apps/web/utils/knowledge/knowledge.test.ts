@@ -1,9 +1,13 @@
 import { describe, it, expect, vi } from "vitest";
 import prisma from "@/utils/__mocks__/prisma";
-import { getKnowledge, listKnowledge } from "./knowledge";
-import { NotFoundError } from "@/utils/mcp-server/errors";
+import { createKnowledge, getKnowledge, listKnowledge } from "./knowledge";
+import { ConflictError, NotFoundError } from "@/utils/mcp-server/errors";
 
 vi.mock("@/utils/prisma");
+vi.mock("@/utils/prisma-helpers", () => ({
+  isDuplicateError: vi.fn(),
+}));
+import { isDuplicateError } from "@/utils/prisma-helpers";
 
 const ctx = { userId: "user_1", emailAccountId: "ea_1" };
 
@@ -100,5 +104,50 @@ describe("getKnowledge", () => {
     await expect(getKnowledge(ctx, { id: "k_other" })).rejects.toBeInstanceOf(
       NotFoundError,
     );
+  });
+});
+
+describe("createKnowledge", () => {
+  it("inserts a row owned by ctx.emailAccountId", async () => {
+    const created = {
+      id: "k_new",
+      title: "Hello",
+      content: "World",
+      emailAccountId: ctx.emailAccountId,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    prisma.knowledge.create.mockResolvedValue(created as never);
+    vi.mocked(isDuplicateError).mockReturnValue(false);
+
+    const out = await createKnowledge(ctx, {
+      title: "Hello",
+      content: "World",
+    });
+
+    expect(out.item.emailAccountId).toBe(ctx.emailAccountId);
+    expect(out.item.title).toBe("Hello");
+    expect(prisma.knowledge.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: {
+          emailAccountId: ctx.emailAccountId,
+          title: "Hello",
+          content: "World",
+        },
+      }),
+    );
+  });
+
+  it("throws ConflictError on duplicate (emailAccountId,title)", async () => {
+    const dupErr = Object.assign(new Error("dup"), {
+      code: "P2002",
+      meta: { target: ["emailAccountId", "title"] },
+    });
+    prisma.knowledge.create.mockRejectedValue(dupErr);
+    vi.mocked(isDuplicateError).mockReturnValue(true);
+
+    await expect(
+      createKnowledge(ctx, { title: "Dup", content: "b" }),
+    ).rejects.toBeInstanceOf(ConflictError);
   });
 });

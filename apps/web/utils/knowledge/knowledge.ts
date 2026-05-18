@@ -1,7 +1,9 @@
 import prisma from "@/utils/prisma";
 import { createScopedLogger } from "@/utils/logger";
-import { NotFoundError } from "@/utils/mcp-server/errors";
+import { isDuplicateError } from "@/utils/prisma-helpers";
+import { ConflictError, NotFoundError } from "@/utils/mcp-server/errors";
 import type {
+  CreateKnowledgeBody,
   GetKnowledgeBody,
   ListKnowledgeQuery,
 } from "@/utils/actions/knowledge.validation";
@@ -38,4 +40,36 @@ export async function getKnowledge(
   });
   if (!item) throw new NotFoundError(`Knowledge ${input.id} not found`);
   return { item };
+}
+
+export async function createKnowledge(
+  ctx: KnowledgeCtx,
+  input: CreateKnowledgeBody,
+): Promise<{ item: Knowledge }> {
+  logger.info("createKnowledge", {
+    userId: ctx.userId,
+    emailAccountId: ctx.emailAccountId,
+  });
+  logger.trace("createKnowledge content", {
+    title: input.title,
+    content: input.content,
+  });
+
+  try {
+    const item = await prisma.knowledge.create({
+      data: {
+        emailAccountId: ctx.emailAccountId,
+        title: input.title,
+        content: input.content,
+      },
+    });
+    return { item };
+  } catch (error) {
+    if (isDuplicateError(error, "title")) {
+      throw new ConflictError(
+        `Knowledge item with title "${input.title}" already exists`,
+      );
+    }
+    throw error;
+  }
 }
