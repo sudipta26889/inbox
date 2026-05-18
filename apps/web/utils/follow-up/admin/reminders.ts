@@ -53,12 +53,42 @@ export async function listFollowUps(ctx: Ctx, input: ListFollowUpsInput) {
   return { items, nextCursor, count: items.length };
 }
 
-// Placeholders so test file compiles. Replaced in later tasks.
-export async function updateFollowUp(
-  _ctx: Ctx,
-  _input: UpdateFollowUpInput,
-): Promise<unknown> {
-  throw new Error("not implemented");
+export async function updateFollowUp(ctx: Ctx, input: UpdateFollowUpInput) {
+  await assertOwnership(ctx);
+
+  const existing = await prisma.threadTracker.findFirst({
+    where: { id: input.id, emailAccountId: ctx.emailAccountId },
+    select: { id: true },
+  });
+  if (!existing) throw new NotFoundError("ThreadTracker not found");
+
+  const updated = await prisma.threadTracker.update({
+    where: { id: input.id },
+    data: {
+      ...(input.resolved !== undefined && { resolved: input.resolved }),
+      ...(input.followUpAppliedAt !== undefined && {
+        followUpAppliedAt: input.followUpAppliedAt,
+      }),
+      ...(input.followUpDraftId !== undefined && {
+        followUpDraftId: input.followUpDraftId,
+      }),
+    },
+    select: {
+      id: true,
+      threadId: true,
+      messageId: true,
+      sentAt: true,
+      type: true,
+      resolved: true,
+      followUpAppliedAt: true,
+      followUpDraftId: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  });
+
+  logger.info("updateFollowUp", { id: updated.id });
+  return updated;
 }
 
 export async function previewDeleteFollowUp(
