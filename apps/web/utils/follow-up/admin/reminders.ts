@@ -1,5 +1,5 @@
 import { createScopedLogger } from "@/utils/logger";
-import { NotFoundError } from "@/utils/mcp-server/errors";
+import { NotFoundError, StaleStateError } from "@/utils/mcp-server/errors";
 import prisma from "@/utils/prisma";
 import type {
   ListFollowUpsInput,
@@ -91,22 +91,63 @@ export async function updateFollowUp(ctx: Ctx, input: UpdateFollowUpInput) {
   return updated;
 }
 
-export async function previewDeleteFollowUp(
-  _ctx: Ctx,
-  _id: string,
-): Promise<{
-  action: "delete_follow_up";
-  followUp: Record<string, unknown>;
-  willCascade: { hasProviderDraft: boolean };
-  irreversible: true;
-}> {
-  throw new Error("not implemented");
+async function loadOwnedTracker(ctx: Ctx, id: string) {
+  const row = await prisma.threadTracker.findFirst({
+    where: { id, emailAccountId: ctx.emailAccountId },
+    select: {
+      id: true,
+      threadId: true,
+      messageId: true,
+      type: true,
+      resolved: true,
+      followUpAppliedAt: true,
+      followUpDraftId: true,
+      updatedAt: true,
+    },
+  });
+  if (!row) throw new NotFoundError("ThreadTracker not found");
+  return row;
+}
+
+export async function previewDeleteFollowUp(ctx: Ctx, id: string) {
+  await assertOwnership(ctx);
+  const row = await loadOwnedTracker(ctx, id);
+  return {
+    action: "delete_follow_up" as const,
+    followUp: {
+      id: row.id,
+      threadId: row.threadId,
+      messageId: row.messageId,
+      type: row.type,
+      resolved: row.resolved,
+      followUpAppliedAt: row.followUpAppliedAt,
+      followUpDraftId: row.followUpDraftId,
+      updatedAt: row.updatedAt,
+    },
+    willCascade: { hasProviderDraft: !!row.followUpDraftId },
+    irreversible: true as const,
+  };
 }
 
 export async function deleteFollowUp(
-  _ctx: Ctx,
-  _id: string,
-  _opts: { expectedUpdatedAt?: Date } = {},
-): Promise<{ id: string; threadId: string }> {
-  throw new Error("not implemented");
+  ctx: Ctx,
+  id: string,
+  opts: { expectedUpdatedAt?: Date } = {},
+) {
+  await assertOwnership(ctx);
+  const row = await loadOwnedTracker(ctx, id);
+
+  if (
+    opts.expectedUpdatedAt &&
+    row.updatedAt.getTime() !== opts.expectedUpdatedAt.getTime()
+  ) {
+    throw new StaleStateError("ThreadTracker has been modified since preview", {
+      expected: opts.expectedUpdatedAt,
+      actual: row.updatedAt,
+    });
+  }
+
+  await prisma.threadTracker.delete({ where: { id } });
+  logger.info("deleteFollowUp", { id });
+  return { id: row.id, threadId: row.threadId };
 }
