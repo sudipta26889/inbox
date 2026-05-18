@@ -474,6 +474,31 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     requiredScope: "admin",
   },
 
+  admin_categories_update: {
+    name: "admin_categories_update",
+    description:
+      "Update a sender category's name or description. Pass only the fields you want to change. Returns NOT_FOUND if the category does not exist for this account.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        categoryId: { type: "string", description: "Category ID to update" },
+        name: { type: "string", description: "New name (max 30 chars)" },
+        description: {
+          type: "string",
+          description: "New description (max 300 chars)",
+        },
+      },
+      required: ["categoryId"],
+    },
+    handler: async (context, params) => {
+      const { adminCategoriesUpdate } = await import(
+        "./admin-categories-tools"
+      );
+      return adminCategoriesUpdate(context, params);
+    },
+    requiredScope: "admin",
+  },
+
   admin_categories_create: {
     name: "admin_categories_create",
     description:

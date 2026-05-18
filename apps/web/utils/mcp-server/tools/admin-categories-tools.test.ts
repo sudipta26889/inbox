@@ -3,6 +3,7 @@ import prisma from "@/utils/__mocks__/prisma";
 import {
   adminCategoriesList,
   adminCategoriesCreate,
+  adminCategoriesUpdate,
 } from "./admin-categories-tools";
 import type { McpToolContext } from "./registry";
 
@@ -92,6 +93,47 @@ describe("adminCategoriesCreate", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.error.code).toBe("CONFLICT");
+    }
+  });
+});
+
+describe("adminCategoriesUpdate", () => {
+  it("updates name and returns ok", async () => {
+    prisma.category.findUnique.mockResolvedValue({
+      id: "cat_1",
+      emailAccountId: ctx.emailAccountId,
+    } as never);
+    prisma.category.update.mockResolvedValue({
+      id: "cat_1",
+      name: "Renamed",
+      description: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as never);
+    vi.mocked(isDuplicateError).mockReturnValue(false);
+
+    const result = await adminCategoriesUpdate(ctx, {
+      categoryId: "cat_1",
+      name: "Renamed",
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok && result.data) {
+      expect((result.data.category as { name: string }).name).toBe("Renamed");
+    }
+  });
+
+  it("returns NOT_FOUND for unknown id", async () => {
+    prisma.category.findUnique.mockResolvedValue(null);
+
+    const result = await adminCategoriesUpdate(ctx, {
+      categoryId: "missing",
+      name: "x",
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("NOT_FOUND");
     }
   });
 });
