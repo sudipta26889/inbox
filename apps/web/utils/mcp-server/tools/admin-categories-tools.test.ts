@@ -285,3 +285,146 @@ describe("adminSendersCategorize", () => {
     }
   });
 });
+
+describe("admin categories — end-to-end flow", () => {
+  it("runs full lifecycle: create → list → categorize → update → dry-run delete → confirm delete", async () => {
+    // 1. Create
+    prisma.category.create.mockResolvedValue({
+      id: "lifecycle_cat",
+      name: "Lifecycle",
+      description: "lifecycle test",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as never);
+    vi.mocked(isDuplicateError).mockReturnValue(false);
+
+    const created = await adminCategoriesCreate(ctx, {
+      name: "Lifecycle",
+      description: "lifecycle test",
+    });
+    expect(created.ok).toBe(true);
+    const categoryId =
+      created.ok && created.data
+        ? (created.data.category as { id: string }).id
+        : "";
+    expect(categoryId).toBe("lifecycle_cat");
+
+    // 2. List shows it
+    prisma.category.findMany.mockResolvedValue([
+      {
+        id: categoryId,
+        name: "Lifecycle",
+        description: "lifecycle test",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    ] as never);
+    const listed = await adminCategoriesList(ctx, {});
+    expect(listed.ok).toBe(true);
+    if (listed.ok && listed.data) {
+      const names = listed.data.categories.map(
+        (c) => (c as { name: string }).name,
+      );
+      expect(names).toContain("Lifecycle");
+    }
+
+    // 3. Categorize two senders into it
+    prisma.category.findMany.mockResolvedValue([{ id: categoryId }] as never);
+    vi.mocked(upsertSenderRecord).mockResolvedValue({} as never);
+    const bulk = await adminSendersCategorize(ctx, {
+      assignments: [
+        { sender: "x@example.com", categoryId },
+        { sender: "y@example.com", categoryId },
+      ],
+    });
+    expect(bulk.ok).toBe(true);
+    if (bulk.ok && bulk.data) {
+      expect(bulk.data.successCount).toBe(2);
+    }
+
+    // 4. Senders list filtered shows them
+    prisma.newsletter.findMany.mockResolvedValue([
+      {
+        id: "n1",
+        email: "x@example.com",
+        name: null,
+        categoryId,
+        category: { id: categoryId, name: "Lifecycle" },
+      },
+      {
+        id: "n2",
+        email: "y@example.com",
+        name: null,
+        categoryId,
+        category: { id: categoryId, name: "Lifecycle" },
+      },
+    ] as never);
+    const senders = await adminSendersList(ctx, { categoryId });
+    expect(senders.ok).toBe(true);
+    if (senders.ok && senders.data) {
+      expect(senders.data.senders).toHaveLength(2);
+    }
+
+    // 5. Update the category description
+    prisma.category.findUnique.mockResolvedValue({
+      id: categoryId,
+      emailAccountId: ctx.emailAccountId,
+    } as never);
+    prisma.category.update.mockResolvedValue({
+      id: categoryId,
+      name: "Lifecycle",
+      description: "renamed desc",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as never);
+    const updated = await adminCategoriesUpdate(ctx, {
+      categoryId,
+      description: "renamed desc",
+    });
+    expect(updated.ok).toBe(true);
+    if (updated.ok && updated.data) {
+      expect(
+        (updated.data.category as { description: string }).description,
+      ).toBe("renamed desc");
+    }
+
+    // 6. Dry-run delete: preview returns affected sender count, no DB change
+    prisma.category.findUnique.mockResolvedValue({
+      id: categoryId,
+      name: "Lifecycle",
+      description: "renamed desc",
+      emailAccountId: ctx.emailAccountId,
+    } as never);
+    prisma.newsletter.count.mockResolvedValue(2);
+
+    const dryRun = await adminCategoriesDelete(ctx, { categoryId });
+    expect(dryRun.ok).toBe(true);
+    if (dryRun.ok) {
+      expect(dryRun.dryRun).toBe(true);
+      const preview = dryRun.preview as {
+        willCascade: { detachSenders: number };
+      };
+      expect(preview.willCascade.detachSenders).toBe(2);
+    }
+
+    // 7. Confirm delete: actually removes
+    prisma.category.findUnique.mockResolvedValue({
+      id: categoryId,
+      emailAccountId: ctx.emailAccountId,
+    } as never);
+    prisma.newsletter.updateMany.mockResolvedValue({ count: 2 } as never);
+    prisma.category.delete.mockResolvedValue({ id: categoryId } as never);
+
+    const confirmed = await adminCategoriesDelete(ctx, {
+      categoryId,
+      confirm: true,
+    });
+    expect(confirmed.ok).toBe(true);
+    if (confirmed.ok) {
+      expect(confirmed.dryRun).toBe(false);
+    }
+    expect(prisma.category.delete).toHaveBeenCalledWith({
+      where: { id: categoryId },
+    });
+  });
+});
