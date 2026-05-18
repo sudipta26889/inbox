@@ -1,13 +1,14 @@
 import { describe, it, expect, vi } from "vitest";
 import prisma from "@/utils/__mocks__/prisma";
 import { GroupItemType } from "@/generated/prisma/enums";
-import { getGroup, listGroups } from "./group-domain";
-import { NotFoundError } from "@/utils/mcp-server/errors";
+import { createGroup, getGroup, listGroups } from "./group-domain";
+import { ConflictError, NotFoundError } from "@/utils/mcp-server/errors";
 
 vi.mock("@/utils/prisma");
 vi.mock("@/utils/prisma-helpers", () => ({
   isDuplicateError: vi.fn(),
 }));
+import { isDuplicateError } from "@/utils/prisma-helpers";
 
 const ctx = { userId: "user_1", emailAccountId: "ea_1" };
 
@@ -120,6 +121,79 @@ describe("getGroup", () => {
 
     await expect(getGroup(ctx, { groupId: "g1" })).rejects.toBeInstanceOf(
       NotFoundError,
+    );
+  });
+});
+
+describe("createGroup", () => {
+  it("creates a group bound to the rule and returns groupId", async () => {
+    prisma.rule.findUnique.mockResolvedValue({
+      id: "r1",
+      name: "Newsletters",
+      groupId: null,
+      emailAccountId: ctx.emailAccountId,
+    } as never);
+    prisma.group.create.mockResolvedValue({
+      id: "g_new",
+      name: "Newsletters",
+    } as never);
+    vi.mocked(isDuplicateError).mockReturnValue(false);
+
+    const result = await createGroup(ctx, { ruleId: "r1" });
+    expect(result.groupId).toBe("g_new");
+    expect(prisma.group.create).toHaveBeenCalled();
+  });
+
+  it("returns existing groupId if rule already has a group", async () => {
+    prisma.rule.findUnique.mockResolvedValue({
+      id: "r1",
+      name: "Newsletters",
+      groupId: "g_existing",
+      emailAccountId: ctx.emailAccountId,
+    } as never);
+
+    const result = await createGroup(ctx, { ruleId: "r1" });
+    expect(result.groupId).toBe("g_existing");
+    expect(prisma.group.create).not.toHaveBeenCalled();
+  });
+
+  it("throws NotFoundError when rule does not belong to caller", async () => {
+    prisma.rule.findUnique.mockResolvedValue({
+      id: "r1",
+      name: "X",
+      groupId: null,
+      emailAccountId: "other_account",
+    } as never);
+
+    await expect(createGroup(ctx, { ruleId: "r1" })).rejects.toBeInstanceOf(
+      NotFoundError,
+    );
+  });
+
+  it("throws NotFoundError when rule is missing", async () => {
+    prisma.rule.findUnique.mockResolvedValue(null as never);
+
+    await expect(
+      createGroup(ctx, { ruleId: "missing" }),
+    ).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it("throws ConflictError on duplicate name", async () => {
+    prisma.rule.findUnique.mockResolvedValue({
+      id: "r1",
+      name: "Taken",
+      groupId: null,
+      emailAccountId: ctx.emailAccountId,
+    } as never);
+    const dupErr = Object.assign(new Error("dup"), {
+      code: "P2002",
+      meta: { target: ["name"] },
+    });
+    prisma.group.create.mockRejectedValue(dupErr);
+    vi.mocked(isDuplicateError).mockReturnValue(true);
+
+    await expect(createGroup(ctx, { ruleId: "r1" })).rejects.toBeInstanceOf(
+      ConflictError,
     );
   });
 });

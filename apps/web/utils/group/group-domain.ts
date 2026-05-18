@@ -1,7 +1,11 @@
 import prisma from "@/utils/prisma";
 import { createScopedLogger } from "@/utils/logger";
-import { NotFoundError } from "@/utils/mcp-server/errors";
-import type { GetGroupBody } from "@/utils/actions/group.validation";
+import { isDuplicateError } from "@/utils/prisma-helpers";
+import { ConflictError, NotFoundError } from "@/utils/mcp-server/errors";
+import type {
+  CreateGroupBody,
+  GetGroupBody,
+} from "@/utils/actions/group.validation";
 
 const logger = createScopedLogger("group-domain");
 
@@ -75,4 +79,36 @@ export async function getGroup(ctx: GroupCtx, input: GetGroupBody) {
       updatedAt: group.updatedAt.toISOString(),
     },
   };
+}
+
+export async function createGroup(ctx: GroupCtx, input: CreateGroupBody) {
+  logger.info("createGroup", {
+    emailAccountId: ctx.emailAccountId,
+    ruleId: input.ruleId,
+  });
+
+  const rule = await prisma.rule.findUnique({
+    where: { id: input.ruleId },
+    select: { id: true, name: true, groupId: true, emailAccountId: true },
+  });
+  if (!rule || rule.emailAccountId !== ctx.emailAccountId) {
+    throw new NotFoundError(`Rule ${input.ruleId} not found`);
+  }
+  if (rule.groupId) return { groupId: rule.groupId };
+
+  try {
+    const group = await prisma.group.create({
+      data: {
+        name: rule.name,
+        emailAccountId: ctx.emailAccountId,
+        rule: { connect: { id: rule.id } },
+      },
+    });
+    return { groupId: group.id };
+  } catch (e) {
+    if (isDuplicateError(e)) {
+      throw new ConflictError(`A group named "${rule.name}" already exists`);
+    }
+    throw e;
+  }
 }
