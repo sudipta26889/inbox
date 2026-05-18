@@ -459,6 +459,21 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     requiredScope: "admin",
   },
 
+  admin_categories_list: {
+    name: "admin_categories_list",
+    description:
+      "List all sender categories for this email account. Returns id, name, description, createdAt, updatedAt for each. Read-only.",
+    inputSchema: {
+      type: "object",
+      properties: {},
+    },
+    handler: async (context, params) => {
+      const { adminCategoriesList } = await import("./admin-categories-tools");
+      return adminCategoriesList(context, params);
+    },
+    requiredScope: "admin",
+  },
+
   list_email_accounts: {
     name: "list_email_accounts",
     description:
