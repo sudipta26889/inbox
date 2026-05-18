@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import prisma from "@/utils/__mocks__/prisma";
-import { listKnowledge } from "./knowledge";
+import { getKnowledge, listKnowledge } from "./knowledge";
+import { NotFoundError } from "@/utils/mcp-server/errors";
 
 vi.mock("@/utils/prisma");
 
@@ -59,6 +60,45 @@ describe("listKnowledge", () => {
 
     expect(prisma.knowledge.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ take: 5 }),
+    );
+  });
+});
+
+describe("getKnowledge", () => {
+  it("returns the item for the owning account", async () => {
+    const row = {
+      id: "k1",
+      title: "T",
+      content: "C",
+      emailAccountId: ctx.emailAccountId,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    prisma.knowledge.findFirst.mockResolvedValue(row as never);
+
+    const out = await getKnowledge(ctx, { id: "k1" });
+
+    expect(out.item.id).toBe("k1");
+    expect(prisma.knowledge.findFirst).toHaveBeenCalledWith({
+      where: { id: "k1", emailAccountId: ctx.emailAccountId },
+    });
+  });
+
+  it("throws NotFoundError for unknown id", async () => {
+    prisma.knowledge.findFirst.mockResolvedValue(null);
+
+    await expect(getKnowledge(ctx, { id: "nope" })).rejects.toBeInstanceOf(
+      NotFoundError,
+    );
+  });
+
+  it("throws NotFoundError when the item belongs to a different account (no existence leak)", async () => {
+    // The findFirst's where clause filters by emailAccountId, so a row
+    // owned by another account would not match → null returned.
+    prisma.knowledge.findFirst.mockResolvedValue(null);
+
+    await expect(getKnowledge(ctx, { id: "k_other" })).rejects.toBeInstanceOf(
+      NotFoundError,
     );
   });
 });

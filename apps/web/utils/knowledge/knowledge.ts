@@ -1,6 +1,10 @@
 import prisma from "@/utils/prisma";
 import { createScopedLogger } from "@/utils/logger";
-import type { ListKnowledgeQuery } from "@/utils/actions/knowledge.validation";
+import { NotFoundError } from "@/utils/mcp-server/errors";
+import type {
+  GetKnowledgeBody,
+  ListKnowledgeQuery,
+} from "@/utils/actions/knowledge.validation";
 import type { Knowledge } from "@/generated/prisma/client";
 
 const logger = createScopedLogger("knowledge-domain");
@@ -23,4 +27,15 @@ export async function listKnowledge(
     take: input.limit ?? undefined,
   });
   return { items };
+}
+
+export async function getKnowledge(
+  ctx: KnowledgeCtx,
+  input: GetKnowledgeBody,
+): Promise<{ item: Knowledge }> {
+  const item = await prisma.knowledge.findFirst({
+    where: { id: input.id, emailAccountId: ctx.emailAccountId },
+  });
+  if (!item) throw new NotFoundError(`Knowledge ${input.id} not found`);
+  return { item };
 }
