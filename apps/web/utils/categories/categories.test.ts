@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import prisma from "@/utils/__mocks__/prisma";
-import { listCategories, createCategory } from "./categories";
-import { ConflictError } from "@/utils/mcp-server/errors";
+import { listCategories, createCategory, updateCategory } from "./categories";
+import { ConflictError, NotFoundError } from "@/utils/mcp-server/errors";
 
 vi.mock("@/utils/prisma");
 vi.mock("@/utils/prisma-helpers", () => ({
@@ -101,5 +101,50 @@ describe("createCategory", () => {
     await expect(
       createCategory(ctx, { name: "Newsletter" }),
     ).rejects.toBeInstanceOf(ConflictError);
+  });
+});
+
+describe("updateCategory", () => {
+  it("updates name and description", async () => {
+    prisma.category.findUnique.mockResolvedValue({
+      id: "cat_1",
+      emailAccountId: ctx.emailAccountId,
+    } as never);
+    prisma.category.update.mockResolvedValue({
+      id: "cat_1",
+      name: "Renamed",
+      description: "New desc",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as never);
+    vi.mocked(isDuplicateError).mockReturnValue(false);
+
+    const result = await updateCategory(ctx, {
+      categoryId: "cat_1",
+      name: "Renamed",
+      description: "New desc",
+    });
+
+    expect(result.category.name).toBe("Renamed");
+    expect(result.category.description).toBe("New desc");
+  });
+
+  it("throws NotFoundError when category does not exist", async () => {
+    prisma.category.findUnique.mockResolvedValue(null);
+
+    await expect(
+      updateCategory(ctx, { categoryId: "missing-id", name: "x" }),
+    ).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it("throws NotFoundError when category belongs to a different account", async () => {
+    prisma.category.findUnique.mockResolvedValue({
+      id: "cat_1",
+      emailAccountId: "ea_other",
+    } as never);
+
+    await expect(
+      updateCategory(ctx, { categoryId: "cat_1", name: "x" }),
+    ).rejects.toBeInstanceOf(NotFoundError);
   });
 });
