@@ -20,6 +20,8 @@ import { clearSpecificErrorMessages, ErrorType } from "@/utils/error-messages";
 import { SafeError } from "@/utils/error";
 import { env } from "@/env";
 import { updateDigestItems, updateDigestSchedule } from "@/utils/digest/domain";
+import { updateAiSettings } from "@/utils/ai-settings/update-ai-settings";
+import { NotFoundError } from "@/utils/mcp-server/errors";
 
 export const updateEmailSettingsAction = actionClient
   .metadata({ name: "updateEmailSettings" })
@@ -53,17 +55,25 @@ export const updateAiSettingsAction = actionClientUser
         );
       }
 
-      const result = await prisma.user.updateMany({
+      try {
+        await updateAiSettings({ userId }, { aiProvider, aiModel });
+      } catch (e) {
+        if (e instanceof NotFoundError) {
+          throw new SafeError("User not found");
+        }
+        throw e;
+      }
+
+      // Preserve the existing aiApiKey write behavior for the web UI: the form
+      // sends `aiApiKey: undefined` when the user clears it. The MCP path does
+      // not call this action and never touches aiApiKey.
+      await prisma.user.update({
         where: { id: userId },
         data:
           aiProvider === DEFAULT_PROVIDER
-            ? { aiProvider: null, aiModel: null, aiApiKey: null }
-            : { aiProvider, aiModel, aiApiKey },
+            ? { aiApiKey: null }
+            : { aiApiKey: aiApiKey ?? null },
       });
-
-      if (result.count === 0) {
-        throw new SafeError("User not found");
-      }
 
       // Clear AI-related error messages when user updates their settings
       // This allows them to be notified again if the new settings are also invalid
