@@ -3,6 +3,7 @@ import prisma from "@/utils/__mocks__/prisma";
 import { ActionType, SystemType } from "@/generated/prisma/enums";
 import {
   adminDigestGet,
+  adminDigestSetEnabled,
   adminDigestUpdateItems,
   adminDigestUpdateSchedule,
 } from "./admin-digest-tools";
@@ -157,5 +158,43 @@ describe("admin digest tool registration", () => {
     const tool = MCP_TOOLS.admin_digest_get;
     expect(hasRequiredScope(tool, ["rules:read"])).toBe(false);
     expect(hasRequiredScope(tool, ["admin"])).toBe(true);
+  });
+});
+
+describe("adminDigestSetEnabled", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("returns success envelope with enabled=false after disabling", async () => {
+    prisma.schedule.deleteMany.mockResolvedValue({ count: 1 } as any);
+
+    const result = await adminDigestSetEnabled(ctx, { enabled: false });
+
+    expect(result).toEqual({ ok: true, data: { enabled: false } });
+  });
+
+  it("returns success envelope with enabled=true after enabling", async () => {
+    prisma.schedule.upsert.mockResolvedValue({} as any);
+    prisma.rule.findFirst.mockResolvedValue(null);
+
+    const result = await adminDigestSetEnabled(ctx, { enabled: true });
+
+    expect(result).toEqual({ ok: true, data: { enabled: true } });
+  });
+
+  it("rejects missing `enabled` field with VALIDATION_ERROR", async () => {
+    const result = await adminDigestSetEnabled(ctx, {});
+
+    expect(result.ok).toBe(false);
+    expect((result as any).error.code).toBe("VALIDATION_ERROR");
+    expect(prisma.schedule.upsert).not.toHaveBeenCalled();
+    expect(prisma.schedule.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it("is registered with admin scope", () => {
+    const tool = getTool("admin_digest_set_enabled");
+    expect(tool).toBeDefined();
+    expect(tool!.requiredScope).toBe("admin");
   });
 });

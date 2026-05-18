@@ -1101,6 +1101,29 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     requiredScope: "admin",
   },
 
+  admin_digest_set_enabled: {
+    name: "admin_digest_set_enabled",
+    description:
+      "Enable or disable digest delivery for the authorized email account. When enabled=false the underlying Schedule row is deleted. When enabled=true a default schedule is created (1 day interval, every day of week, 09:00) only if no schedule already exists; an existing schedule is preserved. On enable, the newsletter system rule is auto-tagged with the DIGEST action when present. Returns the post-mutation enabled boolean.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        enabled: {
+          type: "boolean",
+          description:
+            "Target digest-enabled state. true = ensure schedule exists; false = delete schedule.",
+        },
+      },
+      required: ["enabled"],
+      additionalProperties: false,
+    },
+    handler: async (context, params) => {
+      const { adminDigestSetEnabled } = await import("./admin-digest-tools");
+      return adminDigestSetEnabled(context, params);
+    },
+    requiredScope: "admin",
+  },
+
   admin_digest_update_items: {
     name: "admin_digest_update_items",
     description:

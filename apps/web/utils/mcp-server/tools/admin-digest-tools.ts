@@ -3,10 +3,12 @@ import { mapDomainError } from "@/utils/mcp-server/error-mapper";
 import {
   getDigestConfigBody,
   saveDigestScheduleBody,
+  setDigestEnabledBody,
   updateDigestItemsBody,
 } from "@/utils/actions/settings.validation";
 import {
   getDigestConfig,
+  setDigestEnabled,
   updateDigestItems,
   updateDigestSchedule,
 } from "@/utils/digest/domain";
@@ -135,6 +137,49 @@ export async function adminDigestUpdateItems(
     return { ok: true as const, data };
   } catch (e) {
     logger.error("admin_digest_update_items failed", { error: e });
+    return mapDomainError(e);
+  }
+}
+
+export async function adminDigestSetEnabled(
+  ctx: McpToolContext,
+  params: unknown,
+) {
+  const started = Date.now();
+  const parsed = setDigestEnabledBody.safeParse(params);
+  if (!parsed.success) {
+    logger.info("admin_digest_set_enabled validation error", {
+      userId: ctx.userId,
+      emailAccountId: ctx.emailAccountId,
+      durationMs: Date.now() - started,
+      outcome: "validation_error",
+    });
+    return {
+      ok: false as const,
+      error: {
+        code: "VALIDATION_ERROR" as const,
+        message: "Invalid input",
+        details: parsed.error.issues,
+      },
+    };
+  }
+
+  try {
+    const data = await setDigestEnabled(
+      { userId: ctx.userId, emailAccountId: ctx.emailAccountId },
+      parsed.data,
+    );
+    logger.info("admin_digest_set_enabled success", {
+      tool: "admin_digest_set_enabled",
+      userId: ctx.userId,
+      emailAccountId: ctx.emailAccountId,
+      durationMs: Date.now() - started,
+      outcome: "success",
+      enabled: data.enabled,
+    });
+    return { ok: true as const, data };
+  } catch (e) {
+    logger.error("admin_digest_set_enabled failed", { error: e });
     return mapDomainError(e);
   }
 }

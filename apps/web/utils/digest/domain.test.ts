@@ -3,6 +3,7 @@ import prisma from "@/utils/__mocks__/prisma";
 import { ActionType, SystemType } from "@/generated/prisma/enums";
 import {
   getDigestConfig,
+  setDigestEnabled,
   updateDigestItems,
   updateDigestSchedule,
 } from "./domain";
@@ -253,5 +254,82 @@ describe("updateDigestItems", () => {
       where: { id: "r1", emailAccountId: "ea-target" },
       select: { id: true, actions: { select: { type: true } } },
     });
+  });
+});
+
+describe("setDigestEnabled", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("deletes the schedule row when enabled=false", async () => {
+    prisma.schedule.deleteMany.mockResolvedValue({ count: 1 } as any);
+
+    const result = await setDigestEnabled(
+      { userId: "u1", emailAccountId: "ea1" },
+      { enabled: false },
+    );
+
+    expect(prisma.schedule.deleteMany).toHaveBeenCalledWith({
+      where: { emailAccountId: "ea1" },
+    });
+    expect(result).toEqual({ enabled: false });
+    expect(prisma.schedule.upsert).not.toHaveBeenCalled();
+  });
+
+  it("upserts default schedule and adds DIGEST action to newsletter rule when enabled=true", async () => {
+    prisma.schedule.upsert.mockResolvedValue({} as any);
+    prisma.rule.findFirst.mockResolvedValue({
+      id: "rn",
+      actions: [],
+    } as any);
+    prisma.action.create.mockResolvedValue({} as any);
+
+    const result = await setDigestEnabled(
+      { userId: "u1", emailAccountId: "ea1" },
+      { enabled: true },
+    );
+
+    const upsertArg = prisma.schedule.upsert.mock.calls[0][0];
+    expect(upsertArg.where).toEqual({ emailAccountId: "ea1" });
+    expect(upsertArg.create.emailAccountId).toBe("ea1");
+    expect(upsertArg.create.intervalDays).toBe(1);
+    expect(upsertArg.create.occurrences).toBe(1);
+    expect(upsertArg.create.daysOfWeek).toBe(127);
+    expect(upsertArg.create.timeOfDay).toBeInstanceOf(Date);
+    expect(upsertArg.update).toEqual({});
+
+    expect(prisma.action.create).toHaveBeenCalledWith({
+      data: { ruleId: "rn", type: ActionType.DIGEST },
+    });
+    expect(result).toEqual({ enabled: true });
+  });
+
+  it("does not add a duplicate DIGEST action when newsletter rule already has one", async () => {
+    prisma.schedule.upsert.mockResolvedValue({} as any);
+    prisma.rule.findFirst.mockResolvedValue({
+      id: "rn",
+      actions: [{ type: ActionType.DIGEST }],
+    } as any);
+
+    await setDigestEnabled(
+      { userId: "u1", emailAccountId: "ea1" },
+      { enabled: true },
+    );
+
+    expect(prisma.action.create).not.toHaveBeenCalled();
+  });
+
+  it("skips newsletter-rule auto-action when no newsletter rule exists", async () => {
+    prisma.schedule.upsert.mockResolvedValue({} as any);
+    prisma.rule.findFirst.mockResolvedValue(null);
+
+    const result = await setDigestEnabled(
+      { userId: "u1", emailAccountId: "ea1" },
+      { enabled: true },
+    );
+
+    expect(prisma.action.create).not.toHaveBeenCalled();
+    expect(result.enabled).toBe(true);
   });
 });

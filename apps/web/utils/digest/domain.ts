@@ -1,8 +1,12 @@
 import prisma from "@/utils/prisma";
-import { ActionType, type SystemType } from "@/generated/prisma/enums";
-import { calculateNextScheduleDate } from "@/utils/schedule";
+import { ActionType, SystemType } from "@/generated/prisma/enums";
+import {
+  calculateNextScheduleDate,
+  createCanonicalTimeOfDay,
+} from "@/utils/schedule";
 import type {
   SaveDigestScheduleBody,
+  SetDigestEnabledBody,
   UpdateDigestItemsBody,
 } from "@/utils/actions/settings.validation";
 import type { Prisma } from "@/generated/prisma/client";
@@ -196,4 +200,58 @@ export async function updateDigestItems(
     successCount: succeeded.length,
     failureCount: failed.length,
   };
+}
+
+export async function setDigestEnabled(
+  ctx: DigestAuthContext,
+  input: SetDigestEnabledBody,
+): Promise<{ enabled: boolean }> {
+  if (!input.enabled) {
+    await prisma.schedule.deleteMany({
+      where: { emailAccountId: ctx.emailAccountId },
+    });
+    return { enabled: false };
+  }
+
+  // Re-enable: mirror toggleDigestAction default schedule (1 day, every day, 09:00).
+  const defaultSchedule = {
+    intervalDays: 1,
+    occurrences: 1,
+    daysOfWeek: 127,
+    timeOfDay: createCanonicalTimeOfDay(9, 0),
+  };
+
+  await prisma.schedule.upsert({
+    where: { emailAccountId: ctx.emailAccountId },
+    create: {
+      emailAccountId: ctx.emailAccountId,
+      ...defaultSchedule,
+      lastOccurrenceAt: new Date(),
+      nextOccurrenceAt: calculateNextScheduleDate({
+        ...defaultSchedule,
+        lastOccurrenceAt: null,
+      }),
+    },
+    // Empty update so re-enabling on an existing schedule doesn't clobber user-customised cadence.
+    update: {},
+  });
+
+  const newsletterRule = await prisma.rule.findFirst({
+    where: {
+      emailAccountId: ctx.emailAccountId,
+      systemType: SystemType.NEWSLETTER,
+    },
+    select: { id: true, actions: { select: { type: true } } },
+  });
+
+  if (
+    newsletterRule &&
+    !newsletterRule.actions.some((a) => a.type === ActionType.DIGEST)
+  ) {
+    await prisma.action.create({
+      data: { ruleId: newsletterRule.id, type: ActionType.DIGEST },
+    });
+  }
+
+  return { enabled: true };
 }
