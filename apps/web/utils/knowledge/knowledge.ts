@@ -6,6 +6,7 @@ import type {
   CreateKnowledgeBody,
   GetKnowledgeBody,
   ListKnowledgeQuery,
+  UpdateKnowledgeBody,
 } from "@/utils/actions/knowledge.validation";
 import type { Knowledge } from "@/generated/prisma/client";
 
@@ -62,6 +63,38 @@ export async function createKnowledge(
         title: input.title,
         content: input.content,
       },
+    });
+    return { item };
+  } catch (error) {
+    if (isDuplicateError(error, "title")) {
+      throw new ConflictError(
+        `Knowledge item with title "${input.title}" already exists`,
+      );
+    }
+    throw error;
+  }
+}
+
+export async function updateKnowledge(
+  ctx: KnowledgeCtx,
+  input: UpdateKnowledgeBody,
+): Promise<{ item: Knowledge }> {
+  logger.info("updateKnowledge", {
+    userId: ctx.userId,
+    emailAccountId: ctx.emailAccountId,
+    id: input.id,
+  });
+
+  const existing = await prisma.knowledge.findFirst({
+    where: { id: input.id, emailAccountId: ctx.emailAccountId },
+    select: { id: true },
+  });
+  if (!existing) throw new NotFoundError(`Knowledge ${input.id} not found`);
+
+  try {
+    const item = await prisma.knowledge.update({
+      where: { id: input.id },
+      data: { title: input.title, content: input.content },
     });
     return { item };
   } catch (error) {

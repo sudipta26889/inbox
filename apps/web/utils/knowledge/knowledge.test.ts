@@ -1,6 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
 import prisma from "@/utils/__mocks__/prisma";
-import { createKnowledge, getKnowledge, listKnowledge } from "./knowledge";
+import {
+  createKnowledge,
+  getKnowledge,
+  listKnowledge,
+  updateKnowledge,
+} from "./knowledge";
 import { ConflictError, NotFoundError } from "@/utils/mcp-server/errors";
 
 vi.mock("@/utils/prisma");
@@ -148,6 +153,66 @@ describe("createKnowledge", () => {
 
     await expect(
       createKnowledge(ctx, { title: "Dup", content: "b" }),
+    ).rejects.toBeInstanceOf(ConflictError);
+  });
+});
+
+describe("updateKnowledge", () => {
+  it("changes title+content for the owning account", async () => {
+    prisma.knowledge.findFirst.mockResolvedValue({ id: "k_1" } as never);
+    prisma.knowledge.update.mockResolvedValue({
+      id: "k_1",
+      title: "B",
+      content: "2",
+      emailAccountId: ctx.emailAccountId,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as never);
+    vi.mocked(isDuplicateError).mockReturnValue(false);
+
+    const out = await updateKnowledge(ctx, {
+      id: "k_1",
+      title: "B",
+      content: "2",
+    });
+
+    expect(out.item.title).toBe("B");
+    expect(out.item.content).toBe("2");
+    expect(prisma.knowledge.update).toHaveBeenCalledWith({
+      where: { id: "k_1" },
+      data: { title: "B", content: "2" },
+    });
+  });
+
+  it("throws NotFoundError when id is missing", async () => {
+    prisma.knowledge.findFirst.mockResolvedValue(null);
+
+    await expect(
+      updateKnowledge(ctx, { id: "nope", title: "x", content: "y" }),
+    ).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it("throws NotFoundError on another account's row (re-verifies ownership)", async () => {
+    // findFirst filters by emailAccountId, so a foreign row → null
+    prisma.knowledge.findFirst.mockResolvedValue(null);
+
+    await expect(
+      updateKnowledge(ctx, { id: "k_other", title: "x", content: "y" }),
+    ).rejects.toBeInstanceOf(NotFoundError);
+    expect(prisma.knowledge.update).not.toHaveBeenCalled();
+  });
+
+  it("translates P2002 on update to ConflictError", async () => {
+    prisma.knowledge.findFirst.mockResolvedValue({ id: "k_1" } as never);
+    const dupErr = Object.assign(new Error("dup"), {
+      code: "P2002",
+      meta: { target: ["emailAccountId", "title"] },
+    });
+    prisma.knowledge.update.mockRejectedValue(dupErr);
+    vi.mocked(isDuplicateError).mockReturnValue(true);
+
+    await expect(
+      updateKnowledge(ctx, { id: "k_1", title: "Dup", content: "x" }),
     ).rejects.toBeInstanceOf(ConflictError);
   });
 });
