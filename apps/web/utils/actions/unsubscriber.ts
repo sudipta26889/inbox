@@ -5,10 +5,9 @@ import {
   unsubscribeSenderBody,
 } from "@/utils/actions/unsubscriber.validation";
 import { actionClient } from "@/utils/actions/safe-action";
-import {
-  setSenderStatus,
-  unsubscribeSenderAndMark,
-} from "@/utils/senders/unsubscribe";
+import { SafeError } from "@/utils/error";
+import { setSenderStatus } from "@/utils/senders/unsubscribe";
+import { requestUnsubscribe } from "@/utils/unsubscriber/domain";
 
 export const setNewsletterStatusAction = actionClient
   .metadata({ name: "setNewsletterStatus" })
@@ -32,14 +31,26 @@ export const unsubscribeSenderAction = actionClient
   .action(
     async ({
       parsedInput: { newsletterEmail, unsubscribeLink, listUnsubscribeHeader },
-      ctx: { emailAccountId, logger },
+      ctx: { userId, emailAccountId, logger },
     }) => {
-      return unsubscribeSenderAndMark({
-        emailAccountId,
-        newsletterEmail,
-        unsubscribeLink,
-        listUnsubscribeHeader,
-        logger,
-      });
+      try {
+        const result = await requestUnsubscribe(
+          { userId, emailAccountId, logger },
+          {
+            newsletterEmail,
+            unsubscribeLink,
+            listUnsubscribeHeader,
+            confirm: true,
+          },
+        );
+        if (result.dryRun) {
+          throw new SafeError("Unexpected dry-run result");
+        }
+        return result.data;
+      } catch (error) {
+        if (error instanceof SafeError) throw error;
+        if (error instanceof Error) throw new SafeError(error.message);
+        throw new SafeError("Failed to unsubscribe");
+      }
     },
   );
