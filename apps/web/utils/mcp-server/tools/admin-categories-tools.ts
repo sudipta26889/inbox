@@ -6,8 +6,9 @@ import {
   previewDeleteCategory,
   updateCategory,
 } from "@/utils/categories/categories";
-import { listSenders } from "@/utils/categories/senders";
+import { categorizeSenders, listSenders } from "@/utils/categories/senders";
 import {
+  categorizeSendersBody,
   createCategoryBody,
   deleteCategoryBody,
   listSendersBody,
@@ -147,6 +148,39 @@ export async function adminSendersList(
   }
   try {
     const data = await listSenders(
+      { userId: ctx.userId, emailAccountId: ctx.emailAccountId },
+      parsed.data,
+    );
+    return { ok: true, data };
+  } catch (e) {
+    return mapDomainError(e);
+  }
+}
+
+export async function adminSendersCategorize(
+  ctx: McpToolContext,
+  params: unknown,
+): Promise<
+  McpResult<{
+    succeeded: string[];
+    failed: Array<{ id: string; error: { code: string; message: string } }>;
+    total: number;
+    successCount: number;
+    failureCount: number;
+  }>
+> {
+  logger.info("MCP tool: admin_senders_categorize", {
+    userId: ctx.userId,
+    emailAccountId: ctx.emailAccountId,
+  });
+  const parsed = categorizeSendersBody.safeParse(params);
+  if (!parsed.success) {
+    return mapDomainError(
+      new ValidationError("Invalid input", { issues: parsed.error.issues }),
+    );
+  }
+  try {
+    const data = await categorizeSenders(
       { userId: ctx.userId, emailAccountId: ctx.emailAccountId },
       parsed.data,
     );

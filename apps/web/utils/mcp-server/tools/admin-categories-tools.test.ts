@@ -6,6 +6,7 @@ import {
   adminCategoriesUpdate,
   adminCategoriesDelete,
   adminSendersList,
+  adminSendersCategorize,
 } from "./admin-categories-tools";
 import type { McpToolContext } from "./registry";
 
@@ -17,6 +18,7 @@ vi.mock("@/utils/senders/record", () => ({
   upsertSenderRecord: vi.fn(),
 }));
 import { isDuplicateError } from "@/utils/prisma-helpers";
+import { upsertSenderRecord } from "@/utils/senders/record";
 
 const ctx: McpToolContext = {
   clientId: "test-client",
@@ -248,6 +250,38 @@ describe("adminSendersList", () => {
       expect((result.data.senders[0] as { email: string }).email).toBe(
         "a@work.com",
       );
+    }
+  });
+});
+
+describe("adminSendersCategorize", () => {
+  it("returns per-item success/failure envelope", async () => {
+    prisma.category.findMany.mockResolvedValue([{ id: "cat_work" }] as never);
+    vi.mocked(upsertSenderRecord).mockResolvedValue({} as never);
+
+    const result = await adminSendersCategorize(ctx, {
+      assignments: [
+        { sender: "alice@work.com", categoryId: "cat_work" },
+        { sender: "bob@bad.com", categoryId: "missing-cat" },
+      ],
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok && result.data) {
+      expect(result.data.successCount).toBe(1);
+      expect(result.data.failureCount).toBe(1);
+      expect(result.data.succeeded).toEqual(["alice@work.com"]);
+      expect(result.data.failed[0].id).toBe("bob@bad.com");
+      expect(result.data.failed[0].error.code).toBe("NOT_FOUND");
+    }
+  });
+
+  it("returns VALIDATION_ERROR on empty assignments array", async () => {
+    const result = await adminSendersCategorize(ctx, { assignments: [] });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("VALIDATION_ERROR");
     }
   });
 });

@@ -578,6 +578,37 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     requiredScope: "admin",
   },
 
+  admin_senders_categorize: {
+    name: "admin_senders_categorize",
+    description:
+      "Bulk-assign senders to categories. Commits per item, not transactionally: succeeded and failed items are reported individually. Up to 200 assignments per call.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        assignments: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              sender: { type: "string", description: "Sender email address" },
+              categoryId: { type: "string", description: "Target category ID" },
+            },
+            required: ["sender", "categoryId"],
+          },
+          description: "List of {sender, categoryId} assignments (1-200)",
+        },
+      },
+      required: ["assignments"],
+    },
+    handler: async (context, params) => {
+      const { adminSendersCategorize } = await import(
+        "./admin-categories-tools"
+      );
+      return adminSendersCategorize(context, params);
+    },
+    requiredScope: "admin",
+  },
+
   list_email_accounts: {
     name: "list_email_accounts",
     description:
