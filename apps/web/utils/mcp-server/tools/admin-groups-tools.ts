@@ -130,7 +130,7 @@ export async function adminGroupsDelete(
       confirm: input.confirm,
       preview: () =>
         previewGroupDeletion(domainCtx, { groupId: input.groupId }),
-      commit: () => deleteGroup(domainCtx, input),
+      commit: () => deleteGroup(domainCtx, { groupId: input.groupId }),
     });
   } catch (e) {
     return mapDomainError(e);

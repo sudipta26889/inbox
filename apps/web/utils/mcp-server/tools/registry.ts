@@ -623,6 +623,138 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     requiredScope: "email:read",
   },
+
+  admin_groups_list: {
+    name: "admin_groups_list",
+    description:
+      "List all learned-pattern groups for the email account. Returns id, name, item count, and any rule each group is attached to.",
+    inputSchema: { type: "object", properties: {} },
+    handler: async (context, params) => {
+      const { adminGroupsList } = await import("./admin-groups-tools");
+      return adminGroupsList(context, params);
+    },
+    requiredScope: "admin",
+  },
+
+  admin_groups_get: {
+    name: "admin_groups_get",
+    description:
+      "Fetch a single group with all of its items and the rule it belongs to.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        groupId: { type: "string", description: "The group ID" },
+      },
+      required: ["groupId"],
+    },
+    handler: async (context, params) => {
+      const { adminGroupsGet } = await import("./admin-groups-tools");
+      return adminGroupsGet(context, params);
+    },
+    requiredScope: "admin",
+  },
+
+  admin_groups_create: {
+    name: "admin_groups_create",
+    description:
+      "Create a learned-pattern group attached to an existing rule. Returns existing groupId if the rule already has a group.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ruleId: {
+          type: "string",
+          description: "The rule ID this group will be attached to.",
+        },
+      },
+      required: ["ruleId"],
+    },
+    handler: async (context, params) => {
+      const { adminGroupsCreate } = await import("./admin-groups-tools");
+      return adminGroupsCreate(context, params);
+    },
+    requiredScope: "admin",
+  },
+
+  admin_groups_update: {
+    name: "admin_groups_update",
+    description: "Update a group's name or prompt.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        groupId: { type: "string" },
+        name: { type: "string" },
+        prompt: { type: "string" },
+      },
+      required: ["groupId"],
+    },
+    handler: async (context, params) => {
+      const { adminGroupsUpdate } = await import("./admin-groups-tools");
+      return adminGroupsUpdate(context, params);
+    },
+    requiredScope: "admin",
+  },
+
+  admin_groups_delete: {
+    name: "admin_groups_delete",
+    description:
+      "Delete a group and cascade-delete all of its items. This tool is destructive. Call once without `confirm` to preview (returns item count that will cascade), then call again with `confirm: true` to apply.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        groupId: { type: "string" },
+        confirm: {
+          type: "boolean",
+          description:
+            "Set true to actually delete. Omit/false to preview only.",
+          default: false,
+        },
+      },
+      required: ["groupId"],
+    },
+    handler: async (context, params) => {
+      const { adminGroupsDelete } = await import("./admin-groups-tools");
+      return adminGroupsDelete(context, params);
+    },
+    requiredScope: "admin",
+  },
+
+  admin_groups_add_item: {
+    name: "admin_groups_add_item",
+    description:
+      "Add a pattern (FROM or SUBJECT) to a group. Idempotent: returns the existing item ID if the pattern is already present.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        groupId: { type: "string" },
+        type: { type: "string", enum: ["FROM", "SUBJECT"] },
+        value: { type: "string" },
+        exclude: { type: "boolean", default: false },
+      },
+      required: ["groupId", "type", "value"],
+    },
+    handler: async (context, params) => {
+      const { adminGroupsAddItem } = await import("./admin-groups-tools");
+      return adminGroupsAddItem(context, params);
+    },
+    requiredScope: "admin",
+  },
+
+  admin_groups_remove_item: {
+    name: "admin_groups_remove_item",
+    description: "Remove a single pattern from a group by item ID.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        itemId: { type: "string" },
+      },
+      required: ["itemId"],
+    },
+    handler: async (context, params) => {
+      const { adminGroupsRemoveItem } = await import("./admin-groups-tools");
+      return adminGroupsRemoveItem(context, params);
+    },
+    requiredScope: "admin",
+  },
 };
 
 /**

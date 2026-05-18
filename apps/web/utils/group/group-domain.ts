@@ -5,7 +5,6 @@ import { ConflictError, NotFoundError } from "@/utils/mcp-server/errors";
 import type {
   AddGroupItemBody,
   CreateGroupBody,
-  DeleteGroupBody,
   GetGroupBody,
   RemoveGroupItemBody,
   UpdateGroupBody,
@@ -182,7 +181,7 @@ export async function previewGroupDeletion(ctx: GroupCtx, input: GetGroupBody) {
   };
 }
 
-export async function deleteGroup(ctx: GroupCtx, input: DeleteGroupBody) {
+export async function deleteGroup(ctx: GroupCtx, input: { groupId: string }) {
   logger.info("deleteGroup", {
     emailAccountId: ctx.emailAccountId,
     groupId: input.groupId,
