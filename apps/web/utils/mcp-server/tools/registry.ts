@@ -1041,6 +1041,89 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     requiredScope: "admin",
   },
 
+  admin_digest_get: {
+    name: "admin_digest_get",
+    description:
+      "Read the current digest configuration for the authorized email account. Returns the enabled state, schedule (intervalDays, daysOfWeek bitmask, timeOfDay, occurrences, lastOccurrenceAt, nextOccurrenceAt) and per-rule digest item membership.",
+    inputSchema: {
+      type: "object",
+      properties: {},
+      additionalProperties: false,
+    },
+    handler: async (context, params) => {
+      const { adminDigestGet } = await import("./admin-digest-tools");
+      return adminDigestGet(context, params);
+    },
+    requiredScope: "admin",
+  },
+
+  admin_digest_update_schedule: {
+    name: "admin_digest_update_schedule",
+    description:
+      "Create or update the digest delivery schedule. At least one of intervalDays, daysOfWeek, timeOfDay, occurrences must be provided. daysOfWeek is a 7-bit bitmask (Sunday=bit 6 … Saturday=bit 0); timeOfDay is an ISO-8601 datetime where only the time portion is used.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        intervalDays: {
+          type: ["integer", "null"],
+          minimum: 1,
+          description:
+            "Total interval in days between digests (e.g. 1 = daily, 7 = weekly).",
+        },
+        daysOfWeek: {
+          type: ["integer", "null"],
+          minimum: 0,
+          maximum: 127,
+          description:
+            "Bitmask of allowed days of week (0-127). e.g. 127 = every day.",
+        },
+        timeOfDay: {
+          type: ["string", "null"],
+          format: "date-time",
+          description:
+            "ISO-8601 datetime; only the time portion is used (canonical date 1970-01-01).",
+        },
+        occurrences: {
+          type: ["integer", "null"],
+          minimum: 1,
+          description: "Number of digests within the interval (default 1).",
+        },
+      },
+      required: ["intervalDays", "daysOfWeek", "timeOfDay", "occurrences"],
+      additionalProperties: false,
+    },
+    handler: async (context, params) => {
+      const { adminDigestUpdateSchedule } = await import(
+        "./admin-digest-tools"
+      );
+      return adminDigestUpdateSchedule(context, params);
+    },
+    requiredScope: "admin",
+  },
+
+  admin_digest_update_items: {
+    name: "admin_digest_update_items",
+    description:
+      "Set which rules contribute to the digest. Pass a map of rule ID to boolean (true = include in digest, false = exclude). Rules not present in the map are left unchanged. Returns a per-item result: { succeeded, failed, total, successCount, failureCount }.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ruleDigestPreferences: {
+          type: "object",
+          additionalProperties: { type: "boolean" },
+          description: "Map of rule ID to digest-enabled boolean.",
+        },
+      },
+      required: ["ruleDigestPreferences"],
+      additionalProperties: false,
+    },
+    handler: async (context, params) => {
+      const { adminDigestUpdateItems } = await import("./admin-digest-tools");
+      return adminDigestUpdateItems(context, params);
+    },
+    requiredScope: "admin",
+  },
+
   admin_follow_ups_delete: {
     name: "admin_follow_ups_delete",
     description:

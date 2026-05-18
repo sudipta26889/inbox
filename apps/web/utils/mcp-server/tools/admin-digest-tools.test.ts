@@ -6,6 +6,7 @@ import {
   adminDigestUpdateItems,
   adminDigestUpdateSchedule,
 } from "./admin-digest-tools";
+import { MCP_TOOLS, getTool, hasRequiredScope } from "./registry";
 import type { McpToolContext } from "./registry";
 
 vi.mock("server-only", () => ({}));
@@ -136,5 +137,25 @@ describe("adminDigestUpdateItems", () => {
     expect(result.ok).toBe(false);
     expect((result as any).error.code).toBe("VALIDATION_ERROR");
     expect(prisma.rule.findUnique).not.toHaveBeenCalled();
+  });
+});
+
+describe("admin digest tool registration", () => {
+  it("registers all three digest tools with admin scope", () => {
+    for (const name of [
+      "admin_digest_get",
+      "admin_digest_update_schedule",
+      "admin_digest_update_items",
+    ]) {
+      const tool = getTool(name);
+      expect(tool).toBeDefined();
+      expect(tool!.requiredScope).toBe("admin");
+    }
+  });
+
+  it("admin scope is required (rules:read is insufficient)", () => {
+    const tool = MCP_TOOLS.admin_digest_get;
+    expect(hasRequiredScope(tool, ["rules:read"])).toBe(false);
+    expect(hasRequiredScope(tool, ["admin"])).toBe(true);
   });
 });
