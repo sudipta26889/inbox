@@ -1229,6 +1229,106 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     requiredScope: "admin",
   },
 
+  admin_cleanup_list_jobs: {
+    name: "admin_cleanup_list_jobs",
+    description:
+      "List cleanup jobs (active + history) for this email account. Returns each job's action (ARCHIVE/MARK_READ), daysOld, instructions, and the count of threads processed.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        limit: {
+          type: "number",
+          description: "Max jobs to return (1-200, default 50)",
+        },
+      },
+    },
+    handler: async (context, params) => {
+      const { adminCleanupListJobs } = await import("./admin-cleanup-tools");
+      return adminCleanupListJobs(context, params);
+    },
+    requiredScope: "admin",
+  },
+
+  admin_cleanup_create_job: {
+    name: "admin_cleanup_create_job",
+    description:
+      "Create a cleanup job that mass-archives or mass-marks-as-read inbox threads older than daysOld. This tool is destructive. Call once without `confirm` to preview the matched thread count; the response includes a `previewToken` you can pass back on the confirm call to detect drift. Call again with `confirm: true` to start the job.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        action: { type: "string", enum: ["ARCHIVE", "MARK_READ"] },
+        daysOld: { type: "number" },
+        instructions: { type: "string" },
+        maxEmails: { type: "number" },
+        skips: {
+          type: "object",
+          properties: {
+            reply: { type: "boolean" },
+            starred: { type: "boolean" },
+            calendar: { type: "boolean" },
+            receipt: { type: "boolean" },
+            attachment: { type: "boolean" },
+            conversation: { type: "boolean" },
+          },
+        },
+        confirm: { type: "boolean", default: false },
+        previewToken: { type: "string" },
+      },
+      required: ["action", "skips"],
+    },
+    handler: async (context, params) => {
+      const { adminCleanupCreateJob } = await import("./admin-cleanup-tools");
+      return adminCleanupCreateJob(context, params);
+    },
+    requiredScope: "admin",
+  },
+
+  admin_unsubscribe_list: {
+    name: "admin_unsubscribe_list",
+    description:
+      "List unsubscribe candidates / history for this account. Senders are returned with their current status (APPROVED, UNSUBSCRIBED, AUTO_ARCHIVED, or null).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        status: {
+          type: "string",
+          enum: ["APPROVED", "UNSUBSCRIBED", "AUTO_ARCHIVED"],
+        },
+        limit: { type: "number" },
+      },
+    },
+    handler: async (context, params) => {
+      const { adminUnsubscribeList } = await import(
+        "./admin-unsubscribe-tools"
+      );
+      return adminUnsubscribeList(context, params);
+    },
+    requiredScope: "admin",
+  },
+
+  admin_unsubscribe_request: {
+    name: "admin_unsubscribe_request",
+    description:
+      "Send/forward an unsubscribe request to a sender's List-Unsubscribe URL or mailto endpoint. This tool is destructive. Call once without `confirm` to preview the target sender and the chosen method (http/mailto/none). Call again with `confirm: true` to actually fire the request.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        newsletterEmail: { type: "string" },
+        unsubscribeLink: { type: "string" },
+        listUnsubscribeHeader: { type: "string" },
+        confirm: { type: "boolean", default: false },
+      },
+      required: ["newsletterEmail"],
+    },
+    handler: async (context, params) => {
+      const { adminUnsubscribeRequest } = await import(
+        "./admin-unsubscribe-tools"
+      );
+      return adminUnsubscribeRequest(context, params);
+    },
+    requiredScope: "admin",
+  },
+
   admin_account_update: {
     name: "admin_account_update",
     description:
