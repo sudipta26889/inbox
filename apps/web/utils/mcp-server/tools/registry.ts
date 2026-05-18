@@ -755,6 +755,111 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     requiredScope: "admin",
   },
+
+  admin_knowledge_list: {
+    name: "admin_knowledge_list",
+    description:
+      "List all knowledge base items for the authorized email account, newest-updated first.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        limit: {
+          type: "number",
+          description: "Optional max number of items to return (1-200).",
+        },
+        cursor: {
+          type: "string",
+          description: "Reserved for pagination.",
+        },
+      },
+    },
+    handler: async (context, params) => {
+      const { adminKnowledgeList } = await import("./admin-knowledge-tools");
+      return adminKnowledgeList(context, params);
+    },
+    requiredScope: "admin",
+  },
+
+  admin_knowledge_get: {
+    name: "admin_knowledge_get",
+    description: "Get a single knowledge base item by id.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "The knowledge item id." },
+      },
+      required: ["id"],
+    },
+    handler: async (context, params) => {
+      const { adminKnowledgeGet } = await import("./admin-knowledge-tools");
+      return adminKnowledgeGet(context, params);
+    },
+    requiredScope: "admin",
+  },
+
+  admin_knowledge_create: {
+    name: "admin_knowledge_create",
+    description: "Create a new knowledge base item (title + content).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        title: {
+          type: "string",
+          description: "Required, must be unique per account.",
+        },
+        content: { type: "string" },
+      },
+      required: ["title", "content"],
+    },
+    handler: async (context, params) => {
+      const { adminKnowledgeCreate } = await import("./admin-knowledge-tools");
+      return adminKnowledgeCreate(context, params);
+    },
+    requiredScope: "admin",
+  },
+
+  admin_knowledge_update: {
+    name: "admin_knowledge_update",
+    description: "Update an existing knowledge base item by id.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string" },
+        title: { type: "string" },
+        content: { type: "string" },
+      },
+      required: ["id", "title", "content"],
+    },
+    handler: async (context, params) => {
+      const { adminKnowledgeUpdate } = await import("./admin-knowledge-tools");
+      return adminKnowledgeUpdate(context, params);
+    },
+    requiredScope: "admin",
+  },
+
+  admin_knowledge_delete: {
+    name: "admin_knowledge_delete",
+    description:
+      "Delete a knowledge base item. This tool is destructive. Call once without `confirm` to preview, then call again with `confirm: true` to apply.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string" },
+        confirm: {
+          type: "boolean",
+          description:
+            "Must be true on the second call to actually delete. Omit or set false to preview.",
+          default: false,
+        },
+      },
+      required: ["id"],
+    },
+    handler: async (context, params) => {
+      const { adminKnowledgeDelete } = await import("./admin-knowledge-tools");
+      return adminKnowledgeDelete(context, params);
+    },
+    requiredScope: "admin",
+  },
 };
 
 /**
