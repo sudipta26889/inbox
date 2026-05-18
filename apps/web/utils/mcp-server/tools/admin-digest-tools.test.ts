@@ -198,3 +198,100 @@ describe("adminDigestSetEnabled", () => {
     expect(tool!.requiredScope).toBe("admin");
   });
 });
+
+describe("admin_digest integration: get → update_schedule → update_items → set_enabled → get", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("reflects schedule + item + enabled changes in subsequent get calls", async () => {
+    // 1. Initial get: no schedule, one rule with no digest action
+    prisma.schedule.findUnique.mockResolvedValueOnce(null);
+    prisma.rule.findMany.mockResolvedValueOnce([
+      {
+        id: "r1",
+        name: "Newsletters",
+        systemType: SystemType.NEWSLETTER,
+        actions: [],
+      },
+    ] as any);
+
+    const initial = await adminDigestGet(ctx, {});
+    expect((initial as any).data.enabled).toBe(false);
+    expect((initial as any).data.items[0].enabled).toBe(false);
+
+    // 2. Update schedule
+    const timeOfDay = new Date("1970-01-01T09:00:00Z");
+    prisma.schedule.upsert.mockResolvedValueOnce({
+      intervalDays: 1,
+      occurrences: 1,
+      daysOfWeek: 127,
+      timeOfDay,
+      lastOccurrenceAt: new Date("2026-05-17T00:00:00Z"),
+      nextOccurrenceAt: new Date("2026-05-17T09:00:00Z"),
+    } as any);
+    const scheduleResult = await adminDigestUpdateSchedule(ctx, {
+      intervalDays: 1,
+      daysOfWeek: 127,
+      timeOfDay: "1970-01-01T09:00:00Z",
+      occurrences: 1,
+    });
+    expect(scheduleResult.ok).toBe(true);
+
+    // 3. Update items: enable digest on r1
+    prisma.rule.findUnique.mockResolvedValueOnce({
+      id: "r1",
+      actions: [],
+    } as any);
+    prisma.action.create.mockResolvedValueOnce({} as any);
+    const itemsResult = await adminDigestUpdateItems(ctx, {
+      ruleDigestPreferences: { r1: true },
+    });
+    expect(itemsResult.ok).toBe(true);
+    expect((itemsResult as any).data.successCount).toBe(1);
+
+    // 4. Get after item update: schedule present, item enabled
+    prisma.schedule.findUnique.mockResolvedValueOnce({
+      intervalDays: 1,
+      occurrences: 1,
+      daysOfWeek: 127,
+      timeOfDay,
+      lastOccurrenceAt: new Date("2026-05-17T00:00:00Z"),
+      nextOccurrenceAt: new Date("2026-05-17T09:00:00Z"),
+    } as any);
+    prisma.rule.findMany.mockResolvedValueOnce([
+      {
+        id: "r1",
+        name: "Newsletters",
+        systemType: SystemType.NEWSLETTER,
+        actions: [{ type: ActionType.DIGEST }],
+      },
+    ] as any);
+    const afterItems = await adminDigestGet(ctx, {});
+    expect(afterItems.ok).toBe(true);
+    expect((afterItems as any).data.enabled).toBe(true);
+    expect((afterItems as any).data.schedule.intervalDays).toBe(1);
+    expect((afterItems as any).data.items[0].enabled).toBe(true);
+
+    // 5. Disable digest via set_enabled
+    prisma.schedule.deleteMany.mockResolvedValueOnce({ count: 1 } as any);
+    const disableResult = await adminDigestSetEnabled(ctx, { enabled: false });
+    expect(disableResult.ok).toBe(true);
+    expect((disableResult as any).data.enabled).toBe(false);
+
+    // 6. Final get: schedule gone, item still has DIGEST action on rule
+    prisma.schedule.findUnique.mockResolvedValueOnce(null);
+    prisma.rule.findMany.mockResolvedValueOnce([
+      {
+        id: "r1",
+        name: "Newsletters",
+        systemType: SystemType.NEWSLETTER,
+        actions: [{ type: ActionType.DIGEST }],
+      },
+    ] as any);
+    const final = await adminDigestGet(ctx, {});
+    expect(final.ok).toBe(true);
+    expect((final as any).data.enabled).toBe(false);
+    expect((final as any).data.schedule).toBeNull();
+  });
+});
