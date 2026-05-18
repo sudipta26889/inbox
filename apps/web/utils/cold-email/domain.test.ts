@@ -8,11 +8,17 @@ import prisma from "@/utils/__mocks__/prisma";
 import {
   getColdEmailSettings,
   listColdEmailBlockedSenders,
+  markColdEmailSender,
   updateColdEmailSettings,
 } from "@/utils/cold-email/domain";
+import { ColdEmailRuleNotFoundError } from "@/utils/cold-email/errors";
+import { saveLearnedPattern } from "@/utils/rule/learned-patterns";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/utils/prisma");
+vi.mock("@/utils/rule/learned-patterns", () => ({
+  saveLearnedPattern: vi.fn(),
+}));
 
 const ctx = { userId: "test-user-1", emailAccountId: "test-acc-1" };
 
@@ -409,6 +415,60 @@ describe("listColdEmailBlockedSenders", () => {
       expect.objectContaining({
         cursor: { id: "gi_x" },
         skip: 1,
+      }),
+    );
+  });
+});
+
+describe("markColdEmailSender", () => {
+  it("throws ColdEmailRuleNotFoundError when no cold-email rule exists", async () => {
+    prisma.rule.findUnique.mockResolvedValue(null as never);
+
+    await expect(
+      markColdEmailSender(ctx, { sender: "x@y.com", action: "mark" }),
+    ).rejects.toBeInstanceOf(ColdEmailRuleNotFoundError);
+  });
+
+  it("marks a sender as cold (saveLearnedPattern with exclude=false)", async () => {
+    prisma.rule.findUnique.mockResolvedValue({ id: "rule_1" } as never);
+    vi.mocked(saveLearnedPattern).mockResolvedValue(undefined);
+
+    const result = await markColdEmailSender(ctx, {
+      sender: "spam@x.com",
+      action: "mark",
+      reason: "Sales pitch",
+    });
+
+    expect(result.action).toBe("mark");
+    expect(result.sender).toBe("spam@x.com");
+    expect(result.ruleId).toBe("rule_1");
+    expect(saveLearnedPattern).toHaveBeenCalledWith(
+      expect.objectContaining({
+        emailAccountId: ctx.emailAccountId,
+        from: "spam@x.com",
+        ruleId: "rule_1",
+        exclude: false,
+        reason: "Sales pitch",
+        source: GroupItemSource.USER,
+      }),
+    );
+  });
+
+  it("unmark sets exclude=true so sender is no longer blocked", async () => {
+    prisma.rule.findUnique.mockResolvedValue({ id: "rule_1" } as never);
+    vi.mocked(saveLearnedPattern).mockResolvedValue(undefined);
+
+    const result = await markColdEmailSender(ctx, {
+      sender: "spam@x.com",
+      action: "unmark",
+    });
+
+    expect(result.action).toBe("unmark");
+    expect(saveLearnedPattern).toHaveBeenCalledWith(
+      expect.objectContaining({
+        exclude: true,
+        from: "spam@x.com",
+        ruleId: "rule_1",
       }),
     );
   });

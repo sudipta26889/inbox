@@ -1,14 +1,19 @@
 import {
   ActionType,
+  GroupItemSource,
   GroupItemType,
   SystemType,
 } from "@/generated/prisma/enums";
 import type {
   ColdEmailListBlockedBody,
+  ColdEmailMarkBody,
   ColdEmailUpdateSettingsBody,
 } from "@/utils/actions/cold-email.validation";
 import { getColdEmailRule } from "@/utils/cold-email/cold-email-rule";
+import { ColdEmailRuleNotFoundError } from "@/utils/cold-email/errors";
+import { createScopedLogger } from "@/utils/logger";
 import prisma from "@/utils/prisma";
+import { saveLearnedPattern } from "@/utils/rule/learned-patterns";
 
 const DEFAULT_COLD_EMAIL_LABEL = "Cold Emails";
 const DEFAULT_RULE_NAME = "Cold Email Blocker";
@@ -252,6 +257,49 @@ export async function listColdEmailBlockedSenders(
     nextCursor,
     total,
   };
+}
+
+export interface MarkColdEmailResult {
+  action: "mark" | "unmark";
+  ruleId: string;
+  sender: string;
+}
+
+export async function markColdEmailSender(
+  ctx: { userId: string; emailAccountId: string },
+  input: ColdEmailMarkBody,
+): Promise<MarkColdEmailResult> {
+  const logger = createScopedLogger("cold-email-mark").with({
+    emailAccountId: ctx.emailAccountId,
+  });
+  logger.trace("marking sender", {
+    sender: input.sender,
+    action: input.action,
+  });
+
+  const rule = await prisma.rule.findUnique({
+    where: {
+      emailAccountId_systemType: {
+        emailAccountId: ctx.emailAccountId,
+        systemType: SystemType.COLD_EMAIL,
+      },
+    },
+    select: { id: true },
+  });
+
+  if (!rule) throw new ColdEmailRuleNotFoundError();
+
+  await saveLearnedPattern({
+    emailAccountId: ctx.emailAccountId,
+    from: input.sender,
+    ruleId: rule.id,
+    exclude: input.action === "unmark",
+    reason: input.reason ?? null,
+    logger,
+    source: GroupItemSource.USER,
+  });
+
+  return { sender: input.sender, action: input.action, ruleId: rule.id };
 }
 
 function computeMode(args: {
