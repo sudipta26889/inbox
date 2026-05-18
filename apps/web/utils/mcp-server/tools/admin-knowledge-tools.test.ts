@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import prisma from "@/utils/__mocks__/prisma";
 import {
   adminKnowledgeCreate,
+  adminKnowledgeDelete,
   adminKnowledgeGet,
   adminKnowledgeList,
   adminKnowledgeUpdate,
@@ -179,6 +180,94 @@ describe("adminKnowledgeUpdate", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.error.code).toBe("NOT_FOUND");
+    }
+  });
+});
+
+describe("adminKnowledgeDelete", () => {
+  it("returns dryRun preview without mutating when confirm omitted", async () => {
+    const now = new Date("2026-04-01T10:00:00Z");
+    prisma.knowledge.findFirst.mockResolvedValue({
+      id: "k_1",
+      title: "tbd",
+      content: "...",
+      updatedAt: now,
+    } as never);
+
+    const result = await adminKnowledgeDelete(ctx, { id: "k_1" });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.dryRun).toBe(true);
+      const preview = result.preview as {
+        action: string;
+        knowledge: { id: string; title: string; updatedAt: string };
+        irreversible: boolean;
+      };
+      expect(preview.action).toBe("delete_knowledge");
+      expect(preview.knowledge.id).toBe("k_1");
+      expect(preview.knowledge.title).toBe("tbd");
+      expect(preview.knowledge.updatedAt).toBe(now.toISOString());
+      expect(preview.irreversible).toBe(true);
+    }
+    expect(prisma.knowledge.delete).not.toHaveBeenCalled();
+  });
+
+  it("mutates when confirm:true", async () => {
+    prisma.knowledge.findFirst.mockResolvedValue({
+      id: "k_1",
+      title: "real",
+      content: "...",
+      updatedAt: new Date(),
+    } as never);
+    prisma.knowledge.delete.mockResolvedValue({ id: "k_1" } as never);
+
+    const result = await adminKnowledgeDelete(ctx, {
+      id: "k_1",
+      confirm: true,
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.dryRun).toBe(false);
+    }
+    expect(prisma.knowledge.delete).toHaveBeenCalledWith({
+      where: { id: "k_1" },
+    });
+  });
+
+  it("returns NOT_FOUND when row does not exist (no confirm)", async () => {
+    prisma.knowledge.findFirst.mockResolvedValue(null);
+
+    const result = await adminKnowledgeDelete(ctx, { id: "nope" });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("NOT_FOUND");
+    }
+  });
+
+  it("returns STALE_STATE when row disappears between dry-run and confirm", async () => {
+    // Commit path: findFirst → null → STALE_STATE
+    prisma.knowledge.findFirst.mockResolvedValue(null);
+
+    const result = await adminKnowledgeDelete(ctx, {
+      id: "k_1",
+      confirm: true,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("STALE_STATE");
+    }
+  });
+
+  it("returns VALIDATION_ERROR on missing id", async () => {
+    const result = await adminKnowledgeDelete(ctx, {});
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("VALIDATION_ERROR");
     }
   });
 });
