@@ -6,7 +6,7 @@ import { createEmailProvider } from "@/utils/email/provider";
 import {
   type CreateCategoryBody,
   createCategoryBody,
-} from "@/utils/actions/categorize.validation";
+} from "@/utils/categories/validation";
 import prisma from "@/utils/prisma";
 import { isDuplicateError } from "@/utils/prisma-helpers";
 import { defaultCategory } from "@/utils/categories";
