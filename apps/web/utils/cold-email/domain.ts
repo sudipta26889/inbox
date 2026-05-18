@@ -1,5 +1,12 @@
-import { ActionType, SystemType } from "@/generated/prisma/enums";
-import type { ColdEmailUpdateSettingsBody } from "@/utils/actions/cold-email.validation";
+import {
+  ActionType,
+  GroupItemType,
+  SystemType,
+} from "@/generated/prisma/enums";
+import type {
+  ColdEmailListBlockedBody,
+  ColdEmailUpdateSettingsBody,
+} from "@/utils/actions/cold-email.validation";
 import { getColdEmailRule } from "@/utils/cold-email/cold-email-rule";
 import prisma from "@/utils/prisma";
 
@@ -169,6 +176,82 @@ function buildActionsForMode(
       return _exhaustive;
     }
   }
+}
+
+export interface BlockedSenderItem {
+  createdAt: string;
+  id: string;
+  reason: string | null;
+  sender: string;
+  source: string | null;
+}
+
+export interface BlockedSenderPage {
+  items: BlockedSenderItem[];
+  nextCursor: string | null;
+  total: number;
+}
+
+export async function listColdEmailBlockedSenders(
+  ctx: { userId: string; emailAccountId: string },
+  input: ColdEmailListBlockedBody,
+): Promise<BlockedSenderPage> {
+  const rule = await prisma.rule.findUnique({
+    where: {
+      emailAccountId_systemType: {
+        emailAccountId: ctx.emailAccountId,
+        systemType: SystemType.COLD_EMAIL,
+      },
+    },
+    select: { groupId: true },
+  });
+
+  if (!rule?.groupId) {
+    return { items: [], nextCursor: null, total: 0 };
+  }
+
+  const limit = input.limit;
+  const items = await prisma.groupItem.findMany({
+    where: {
+      groupId: rule.groupId,
+      type: GroupItemType.FROM,
+      exclude: false,
+    },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: limit + 1,
+    ...(input.cursor ? { cursor: { id: input.cursor }, skip: 1 } : {}),
+    select: {
+      id: true,
+      value: true,
+      reason: true,
+      source: true,
+      createdAt: true,
+    },
+  });
+
+  const total = await prisma.groupItem.count({
+    where: {
+      groupId: rule.groupId,
+      type: GroupItemType.FROM,
+      exclude: false,
+    },
+  });
+
+  const hasMore = items.length > limit;
+  const sliced = hasMore ? items.slice(0, limit) : items;
+  const nextCursor = hasMore ? sliced[sliced.length - 1].id : null;
+
+  return {
+    items: sliced.map((row) => ({
+      id: row.id,
+      sender: row.value,
+      reason: row.reason ?? null,
+      source: row.source ?? null,
+      createdAt: row.createdAt.toISOString(),
+    })),
+    nextCursor,
+    total,
+  };
 }
 
 function computeMode(args: {

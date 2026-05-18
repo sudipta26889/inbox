@@ -1,7 +1,13 @@
-import { ActionType, SystemType } from "@/generated/prisma/enums";
+import {
+  ActionType,
+  GroupItemSource,
+  GroupItemType,
+  SystemType,
+} from "@/generated/prisma/enums";
 import prisma from "@/utils/__mocks__/prisma";
 import {
   getColdEmailSettings,
+  listColdEmailBlockedSenders,
   updateColdEmailSettings,
 } from "@/utils/cold-email/domain";
 import { describe, expect, it, vi } from "vitest";
@@ -296,5 +302,114 @@ describe("updateColdEmailSettings", () => {
     expect(result.mode).toBe("DISABLED");
     expect(result.ruleId).toBeNull();
     expect(prisma.rule.create).not.toHaveBeenCalled();
+  });
+});
+
+describe("listColdEmailBlockedSenders", () => {
+  it("returns empty when no cold-email rule", async () => {
+    prisma.rule.findUnique.mockResolvedValue(null as never);
+
+    const result = await listColdEmailBlockedSenders(ctx, { limit: 50 });
+
+    expect(result.items).toEqual([]);
+    expect(result.nextCursor).toBeNull();
+    expect(result.total).toBe(0);
+  });
+
+  it("returns empty when rule has no group", async () => {
+    prisma.rule.findUnique.mockResolvedValue({ groupId: null } as never);
+
+    const result = await listColdEmailBlockedSenders(ctx, { limit: 50 });
+
+    expect(result.items).toEqual([]);
+    expect(result.total).toBe(0);
+  });
+
+  it("returns blocked senders (exclude=false)", async () => {
+    prisma.rule.findUnique.mockResolvedValue({ groupId: "g_1" } as never);
+    const now = new Date("2026-01-01T00:00:00Z");
+    prisma.groupItem.findMany.mockResolvedValue([
+      {
+        id: "gi_1",
+        value: "spam@x.com",
+        reason: "Sales pitch",
+        source: GroupItemSource.AI,
+        createdAt: now,
+      },
+    ] as never);
+    prisma.groupItem.count.mockResolvedValue(1 as never);
+
+    const result = await listColdEmailBlockedSenders(ctx, { limit: 50 });
+
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]).toMatchObject({
+      id: "gi_1",
+      sender: "spam@x.com",
+      reason: "Sales pitch",
+      source: GroupItemSource.AI,
+    });
+    expect(result.nextCursor).toBeNull();
+    expect(result.total).toBe(1);
+    // Verify the query filters by exclude=false and type=FROM
+    expect(prisma.groupItem.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          groupId: "g_1",
+          type: GroupItemType.FROM,
+          exclude: false,
+        },
+      }),
+    );
+  });
+
+  it("respects limit and returns cursor when more items exist", async () => {
+    prisma.rule.findUnique.mockResolvedValue({ groupId: "g_1" } as never);
+    const now = new Date();
+    // Return limit+1 rows to signal more available.
+    prisma.groupItem.findMany.mockResolvedValue([
+      {
+        id: "gi_1",
+        value: "a@x.com",
+        reason: null,
+        source: null,
+        createdAt: now,
+      },
+      {
+        id: "gi_2",
+        value: "b@x.com",
+        reason: null,
+        source: null,
+        createdAt: now,
+      },
+      {
+        id: "gi_3",
+        value: "c@x.com",
+        reason: null,
+        source: null,
+        createdAt: now,
+      },
+    ] as never);
+    prisma.groupItem.count.mockResolvedValue(5 as never);
+
+    const result = await listColdEmailBlockedSenders(ctx, { limit: 2 });
+
+    expect(result.items).toHaveLength(2);
+    expect(result.nextCursor).toBe("gi_2");
+    expect(result.total).toBe(5);
+  });
+
+  it("uses cursor when provided", async () => {
+    prisma.rule.findUnique.mockResolvedValue({ groupId: "g_1" } as never);
+    prisma.groupItem.findMany.mockResolvedValue([] as never);
+    prisma.groupItem.count.mockResolvedValue(0 as never);
+
+    await listColdEmailBlockedSenders(ctx, { limit: 10, cursor: "gi_x" });
+
+    expect(prisma.groupItem.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cursor: { id: "gi_x" },
+        skip: 1,
+      }),
+    );
   });
 });
