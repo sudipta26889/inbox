@@ -222,3 +222,128 @@ describe("admin_follow_ups_update", () => {
     if (!result.ok) expect(result.error.code).toBe("VALIDATION_ERROR");
   });
 });
+
+describe("admin_follow_ups_delete (destructive)", () => {
+  it("dry-run when confirm omitted: returns preview, no mutation", async () => {
+    const { adminFollowUpsDelete } = await import(
+      "@/utils/mcp-server/tools/admin-reply-tracker-tools"
+    );
+    prisma.emailAccount.findFirst.mockResolvedValue({
+      id: mcpCtx.emailAccountId,
+    } as never);
+    const row = {
+      id: "tt-d-1",
+      threadId: "td",
+      messageId: "md",
+      type: ThreadTrackerType.AWAITING,
+      resolved: false,
+      followUpAppliedAt: new Date(),
+      followUpDraftId: null,
+      updatedAt: new Date("2026-01-01"),
+    };
+    prisma.threadTracker.findFirst.mockResolvedValue(row as never);
+
+    const result = await adminFollowUpsDelete(mcpCtx, { id: row.id });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.dryRun).toBe(true);
+      expect(result.preview).toMatchObject({
+        action: "delete_follow_up",
+        followUp: { id: row.id },
+        irreversible: true,
+      });
+    }
+    expect(prisma.threadTracker.delete).not.toHaveBeenCalled();
+  });
+
+  it("confirm=true deletes the row", async () => {
+    const { adminFollowUpsDelete } = await import(
+      "@/utils/mcp-server/tools/admin-reply-tracker-tools"
+    );
+    prisma.emailAccount.findFirst.mockResolvedValue({
+      id: mcpCtx.emailAccountId,
+    } as never);
+    const row = {
+      id: "tt-d-2",
+      threadId: "td2",
+      messageId: "md2",
+      type: ThreadTrackerType.AWAITING,
+      resolved: false,
+      followUpAppliedAt: new Date(),
+      followUpDraftId: null,
+      updatedAt: new Date("2026-01-01"),
+    };
+    prisma.threadTracker.findFirst.mockResolvedValue(row as never);
+    prisma.threadTracker.delete.mockResolvedValue(row as never);
+
+    const result = await adminFollowUpsDelete(mcpCtx, {
+      id: row.id,
+      confirm: true,
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.dryRun).toBe(false);
+    expect(prisma.threadTracker.delete).toHaveBeenCalledWith({
+      where: { id: row.id },
+    });
+  });
+
+  it("STALE_STATE when expectedUpdatedAt does not match", async () => {
+    const { adminFollowUpsDelete } = await import(
+      "@/utils/mcp-server/tools/admin-reply-tracker-tools"
+    );
+    const updatedAt = new Date("2026-01-01");
+    prisma.emailAccount.findFirst.mockResolvedValue({
+      id: mcpCtx.emailAccountId,
+    } as never);
+    prisma.threadTracker.findFirst.mockResolvedValue({
+      id: "tt-d-3",
+      threadId: "t",
+      messageId: "m",
+      type: ThreadTrackerType.AWAITING,
+      resolved: false,
+      followUpAppliedAt: new Date(),
+      followUpDraftId: null,
+      updatedAt,
+    } as never);
+
+    const stale = new Date(updatedAt.getTime() - 1000).toISOString();
+    const result = await adminFollowUpsDelete(mcpCtx, {
+      id: "tt-d-3",
+      confirm: true,
+      expectedUpdatedAt: stale,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("STALE_STATE");
+    expect(prisma.threadTracker.delete).not.toHaveBeenCalled();
+  });
+
+  it("NOT_FOUND on missing id (commit path)", async () => {
+    const { adminFollowUpsDelete } = await import(
+      "@/utils/mcp-server/tools/admin-reply-tracker-tools"
+    );
+    prisma.emailAccount.findFirst.mockResolvedValue({
+      id: mcpCtx.emailAccountId,
+    } as never);
+    prisma.threadTracker.findFirst.mockResolvedValue(null as never);
+
+    const result = await adminFollowUpsDelete(mcpCtx, {
+      id: "missing",
+      confirm: true,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("NOT_FOUND");
+  });
+
+  it("VALIDATION_ERROR when id missing", async () => {
+    const { adminFollowUpsDelete } = await import(
+      "@/utils/mcp-server/tools/admin-reply-tracker-tools"
+    );
+    const result = await adminFollowUpsDelete(mcpCtx, {});
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("VALIDATION_ERROR");
+  });
+});

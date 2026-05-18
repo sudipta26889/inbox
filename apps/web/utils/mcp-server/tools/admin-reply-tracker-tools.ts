@@ -1,13 +1,17 @@
 import {
+  deleteFollowUp,
   listFollowUps,
+  previewDeleteFollowUp,
   updateFollowUp,
 } from "@/utils/follow-up/admin/reminders";
 import {
+  deleteFollowUpInput,
   listFollowUpsInput,
   updateFollowUpInput,
 } from "@/utils/follow-up/admin/reminders.validation";
 import { createScopedLogger } from "@/utils/logger";
 import type { McpResult } from "@/utils/mcp-server/envelope";
+import { withDryRunGate } from "@/utils/mcp-server/dry-run";
 import { mapDomainError } from "@/utils/mcp-server/error-mapper";
 import { ValidationError } from "@/utils/mcp-server/errors";
 import {
@@ -127,6 +131,42 @@ export async function adminFollowUpsUpdate(
       id: data.id,
     });
     return { ok: true, data };
+  } catch (e) {
+    return mapDomainError(e);
+  }
+}
+
+type FollowUpDeleteResult = Awaited<ReturnType<typeof deleteFollowUp>>;
+
+export async function adminFollowUpsDelete(
+  ctx: McpToolContext,
+  params: unknown,
+): Promise<McpResult<FollowUpDeleteResult>> {
+  const parsed = deleteFollowUpInput.safeParse(params);
+  if (!parsed.success) {
+    return mapDomainError(
+      new ValidationError("Invalid input for admin_follow_ups_delete", {
+        issues: parsed.error.issues,
+      }),
+    );
+  }
+  const { id, confirm, expectedUpdatedAt } = parsed.data;
+  try {
+    const result = await withDryRunGate({
+      confirm,
+      preview: () =>
+        previewDeleteFollowUp(authCtx(ctx), id) as unknown as Promise<
+          Record<string, unknown>
+        >,
+      commit: () => deleteFollowUp(authCtx(ctx), id, { expectedUpdatedAt }),
+    });
+    logger.info("tool:admin_follow_ups_delete ok", {
+      userId: ctx.userId,
+      emailAccountId: ctx.emailAccountId,
+      id,
+      dryRun: result.ok ? result.dryRun : undefined,
+    });
+    return result;
   } catch (e) {
     return mapDomainError(e);
   }
