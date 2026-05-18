@@ -1,8 +1,12 @@
 import { describe, it, expect, vi } from "vitest";
 import prisma from "@/utils/__mocks__/prisma";
-import { listSenders } from "./senders";
+import { listSenders, categorizeSenders } from "./senders";
 
 vi.mock("@/utils/prisma");
+vi.mock("@/utils/senders/record", () => ({
+  upsertSenderRecord: vi.fn(),
+}));
+import { upsertSenderRecord } from "@/utils/senders/record";
 
 const ctx = { userId: "user_1", emailAccountId: "ea_1" };
 
@@ -66,5 +70,48 @@ describe("listSenders", () => {
         },
       }),
     );
+  });
+});
+
+describe("categorizeSenders (bulk)", () => {
+  it("assigns senders to categories and reports per-item outcomes", async () => {
+    prisma.category.findMany.mockResolvedValue([
+      { id: "cat_work" },
+      { id: "cat_personal" },
+    ] as never);
+    vi.mocked(upsertSenderRecord).mockResolvedValue({} as never);
+
+    const result = await categorizeSenders(ctx, {
+      assignments: [
+        { sender: "alice@work.com", categoryId: "cat_work" },
+        { sender: "bob@personal.com", categoryId: "cat_personal" },
+      ],
+    });
+
+    expect(result.successCount).toBe(2);
+    expect(result.failureCount).toBe(0);
+    expect([...result.succeeded].sort()).toEqual([
+      "alice@work.com",
+      "bob@personal.com",
+    ]);
+    expect(upsertSenderRecord).toHaveBeenCalledTimes(2);
+  });
+
+  it("reports failure for unknown categoryId without aborting other items", async () => {
+    prisma.category.findMany.mockResolvedValue([{ id: "cat_work" }] as never);
+    vi.mocked(upsertSenderRecord).mockResolvedValue({} as never);
+
+    const result = await categorizeSenders(ctx, {
+      assignments: [
+        { sender: "alice@work.com", categoryId: "cat_work" },
+        { sender: "bob@bad.com", categoryId: "does-not-exist" },
+      ],
+    });
+
+    expect(result.successCount).toBe(1);
+    expect(result.failureCount).toBe(1);
+    expect(result.succeeded).toEqual(["alice@work.com"]);
+    expect(result.failed[0].id).toBe("bob@bad.com");
+    expect(result.failed[0].error.code).toBe("NOT_FOUND");
   });
 });
