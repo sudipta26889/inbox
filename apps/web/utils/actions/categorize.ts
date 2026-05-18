@@ -3,13 +3,13 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createEmailProvider } from "@/utils/email/provider";
-import {
-  type CreateCategoryBody,
-  createCategoryBody,
-} from "@/utils/categories/validation";
+import { createCategoryBody } from "@/utils/categories/validation";
 import prisma from "@/utils/prisma";
-import { isDuplicateError } from "@/utils/prisma-helpers";
 import { defaultCategory } from "@/utils/categories";
+import {
+  createCategory as createCategoryDomain,
+  deleteCategory as deleteCategoryDomain,
+} from "@/utils/categories/categories";
 import {
   categorizeSender,
   updateCategoryForSender,
@@ -169,96 +169,73 @@ export const upsertDefaultCategoriesAction = actionClient
       ),
     }),
   )
-  .action(async ({ ctx: { emailAccountId }, parsedInput: { categories } }) => {
-    for (const { id, name, enabled } of categories) {
-      const description = Object.values(defaultCategory).find(
-        (c) => c.name === name,
-      )?.description;
-
-      if (enabled) {
-        await upsertCategory({
-          emailAccountId,
-          newCategory: { name, description },
-        });
-      } else {
-        if (id) await deleteCategory({ emailAccountId, categoryId: id });
-      }
-    }
-
-    revalidatePath(prefixPath(emailAccountId, "/smart-categories"));
-  });
-
-export const createCategoryAction = actionClient
-  .metadata({ name: "createCategory" })
-  .inputSchema(createCategoryBody)
   .action(
-    async ({ ctx: { emailAccountId }, parsedInput: { name, description } }) => {
-      await upsertCategory({
-        emailAccountId,
-        newCategory: { name, description },
-      });
+    async ({
+      ctx: { emailAccountId, userId },
+      parsedInput: { categories },
+    }) => {
+      for (const { id, name, enabled } of categories) {
+        const description = Object.values(defaultCategory).find(
+          (c) => c.name === name,
+        )?.description;
+
+        if (enabled) {
+          try {
+            await createCategoryDomain(
+              { userId, emailAccountId },
+              { name, description },
+            );
+          } catch (e) {
+            // ConflictError means category already exists; ignore per existing behavior.
+            if ((e as Error).name !== "ConflictError") throw e;
+          }
+        } else if (id) {
+          try {
+            await deleteCategoryDomain(
+              { userId, emailAccountId },
+              { categoryId: id },
+            );
+          } catch (e) {
+            if ((e as Error).name !== "NotFoundError") throw e;
+          }
+        }
+      }
 
       revalidatePath(prefixPath(emailAccountId, "/smart-categories"));
     },
   );
 
+export const createCategoryAction = actionClient
+  .metadata({ name: "createCategory" })
+  .inputSchema(createCategoryBody)
+  .action(async ({ ctx: { emailAccountId, userId }, parsedInput }) => {
+    try {
+      const result = await createCategoryDomain(
+        { userId, emailAccountId },
+        parsedInput,
+      );
+      revalidatePath(prefixPath(emailAccountId, "/smart-categories"));
+      return { id: result.category.id };
+    } catch (e) {
+      if ((e as Error).name === "ConflictError") {
+        throw new SafeError("Category with this name already exists");
+      }
+      throw e;
+    }
+  });
+
 export const deleteCategoryAction = actionClient
   .metadata({ name: "deleteCategory" })
   .inputSchema(z.object({ categoryId: z.string() }))
-  .action(async ({ ctx: { emailAccountId }, parsedInput: { categoryId } }) => {
-    await deleteCategory({ emailAccountId, categoryId });
-
-    revalidatePath(prefixPath(emailAccountId, "/smart-categories"));
-  });
-
-async function deleteCategory({
-  emailAccountId,
-  categoryId,
-}: {
-  emailAccountId: string;
-  categoryId: string;
-}) {
-  await prisma.category.delete({
-    where: { id: categoryId, emailAccountId },
-  });
-}
-
-async function upsertCategory({
-  emailAccountId,
-  newCategory,
-}: {
-  emailAccountId: string;
-  newCategory: CreateCategoryBody;
-}) {
-  try {
-    if (newCategory.id) {
-      const category = await prisma.category.update({
-        where: { id: newCategory.id, emailAccountId },
-        data: {
-          name: newCategory.name,
-          description: newCategory.description,
-        },
-      });
-
-      return { id: category.id };
-    } else {
-      const category = await prisma.category.create({
-        data: {
-          emailAccountId,
-          name: newCategory.name,
-          description: newCategory.description,
-        },
-      });
-
-      return { id: category.id };
-    }
-  } catch (error) {
-    if (isDuplicateError(error, "name"))
-      throw new SafeError("Category with this name already exists");
-
-    throw error;
-  }
-}
+  .action(
+    async ({
+      ctx: { emailAccountId, userId },
+      parsedInput: { categoryId },
+    }) => {
+      await deleteCategoryDomain({ userId, emailAccountId }, { categoryId });
+      revalidatePath(prefixPath(emailAccountId, "/smart-categories"));
+    },
+  );
 
 export const setAutoCategorizeAction = actionClient
   .metadata({ name: "setAutoCategorize" })
