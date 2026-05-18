@@ -1,7 +1,10 @@
 import prisma from "@/utils/prisma";
 import { ActionType, type SystemType } from "@/generated/prisma/enums";
 import { calculateNextScheduleDate } from "@/utils/schedule";
-import type { SaveDigestScheduleBody } from "@/utils/actions/settings.validation";
+import type {
+  SaveDigestScheduleBody,
+  UpdateDigestItemsBody,
+} from "@/utils/actions/settings.validation";
 import type { Prisma } from "@/generated/prisma/client";
 
 export type DigestAuthContext = {
@@ -128,5 +131,69 @@ export async function updateDigestSchedule(
       lastOccurrenceAt: schedule.lastOccurrenceAt,
       nextOccurrenceAt: schedule.nextOccurrenceAt,
     },
+  };
+}
+
+export type UpdateDigestItemsResult = {
+  succeeded: string[];
+  failed: Array<{
+    id: string;
+    error: { code: "NOT_FOUND"; message: string };
+  }>;
+  total: number;
+  successCount: number;
+  failureCount: number;
+};
+
+export async function updateDigestItems(
+  ctx: DigestAuthContext,
+  input: UpdateDigestItemsBody,
+): Promise<UpdateDigestItemsResult> {
+  const entries = Object.entries(input.ruleDigestPreferences);
+
+  const results = await Promise.all(
+    entries.map(async ([ruleId, enabled]) => {
+      const rule = await prisma.rule.findUnique({
+        where: { id: ruleId, emailAccountId: ctx.emailAccountId },
+        select: { id: true, actions: { select: { type: true } } },
+      });
+
+      if (!rule) {
+        return {
+          ok: false as const,
+          id: ruleId,
+          error: { code: "NOT_FOUND" as const, message: "Rule not found" },
+        };
+      }
+
+      const hasDigestAction = rule.actions.some(
+        (a) => a.type === ActionType.DIGEST,
+      );
+
+      if (enabled && !hasDigestAction) {
+        await prisma.action.create({
+          data: { ruleId: rule.id, type: ActionType.DIGEST },
+        });
+      } else if (!enabled && hasDigestAction) {
+        await prisma.action.deleteMany({
+          where: { ruleId: rule.id, type: ActionType.DIGEST },
+        });
+      }
+
+      return { ok: true as const, id: ruleId };
+    }),
+  );
+
+  const succeeded = results.filter((r) => r.ok).map((r) => r.id);
+  const failed = results
+    .filter((r): r is Extract<typeof r, { ok: false }> => !r.ok)
+    .map(({ id, error }) => ({ id, error }));
+
+  return {
+    succeeded,
+    failed,
+    total: entries.length,
+    successCount: succeeded.length,
+    failureCount: failed.length,
   };
 }
