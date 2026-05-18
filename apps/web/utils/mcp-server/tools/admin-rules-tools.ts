@@ -4,7 +4,6 @@ import { createScopedLogger } from "@/utils/logger";
 import {
   createRule,
   deleteRule as deleteRuleDomain,
-  partialUpdateRule,
   updateRule,
 } from "@/utils/rule/rule";
 import {
@@ -329,9 +328,13 @@ export async function adminRulesSetEnabled(
     });
     if (!existing) throw new NotFoundError("Rule not found");
 
-    const rule = await partialUpdateRule({
-      ruleId: parsed.data.ruleId,
+    const rule = await prisma.rule.update({
+      where: {
+        id: parsed.data.ruleId,
+        emailAccountId: context.emailAccountId,
+      },
       data: { enabled: parsed.data.enabled },
+      include: { actions: true, group: true },
     });
 
     return { ok: true, data: { rule } };
@@ -388,12 +391,14 @@ export async function adminRulesReorder(
       );
     }
 
-    for (const [index, id] of parsed.data.ruleIds.entries()) {
-      await prisma.rule.update({
-        where: { id, emailAccountId: context.emailAccountId },
-        data: { displayOrder: index },
-      });
-    }
+    await prisma.$transaction(
+      parsed.data.ruleIds.map((id, index) =>
+        prisma.rule.update({
+          where: { id, emailAccountId: context.emailAccountId },
+          data: { displayOrder: index },
+        }),
+      ),
+    );
 
     return { ok: true, data: { reordered: parsed.data.ruleIds.length } };
   } catch (e) {

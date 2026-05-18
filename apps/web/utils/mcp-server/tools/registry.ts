@@ -1,4 +1,5 @@
 import type { Tool } from "@modelcontextprotocol/sdk/types.js";
+import type { McpResult } from "../envelope";
 
 /**
  * MCP Tool Registry
@@ -14,10 +15,14 @@ export interface McpToolContext {
   userId: string;
 }
 
+// Union return type: new admin tools must return an `McpResult<unknown>`
+// envelope (ok/error discriminant); pre-envelope tools (search_emails,
+// get_email, send_email, calendar, stats) still return plain objects.
+// New tools should target `McpResult<unknown>`.
 export type McpToolHandler = (
   context: McpToolContext,
-  params: any,
-) => Promise<any>;
+  params: unknown,
+) => Promise<McpResult<unknown> | unknown>;
 
 export interface McpToolDefinition extends Tool {
   handler: McpToolHandler;

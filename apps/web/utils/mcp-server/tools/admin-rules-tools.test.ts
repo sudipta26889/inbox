@@ -320,7 +320,7 @@ describe("adminRulesDelete", () => {
 });
 
 describe("adminRulesSetEnabled", () => {
-  it("toggles enabled via partialUpdateRule when ownership is verified", async () => {
+  it("toggles enabled via a scoped prisma.rule.update when ownership is verified", async () => {
     prisma.rule.findFirst.mockResolvedValue({ id: "r_1" });
     prisma.rule.update.mockResolvedValue({
       id: "r_1",
@@ -339,7 +339,7 @@ describe("adminRulesSetEnabled", () => {
       expect((out.data as any).rule.enabled).toBe(false);
     }
     expect(prisma.rule.update).toHaveBeenCalledWith({
-      where: { id: "r_1" },
+      where: { id: "r_1", emailAccountId: "ea_1" },
       data: { enabled: false },
       include: { actions: true, group: true },
     });
@@ -384,19 +384,23 @@ describe("adminRulesReorder", () => {
     expect(prisma.rule.update).not.toHaveBeenCalled();
   });
 
-  it("updates displayOrder for each rule in the supplied order", async () => {
+  it("updates displayOrder for each rule in the supplied order within a transaction", async () => {
     prisma.rule.findMany.mockResolvedValue([
       { id: "r_1" },
       { id: "r_2" },
       { id: "r_3" },
     ]);
     prisma.rule.update.mockResolvedValue({});
+    prisma.$transaction.mockImplementation(async (ops: Promise<any>[]) =>
+      Promise.all(ops),
+    );
 
     const out = await adminRulesReorder(ctx, {
       ruleIds: ["r_3", "r_1", "r_2"],
     });
 
     expect(out.ok).toBe(true);
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
     expect(prisma.rule.update).toHaveBeenCalledTimes(3);
     expect(prisma.rule.update).toHaveBeenNthCalledWith(1, {
       where: { id: "r_3", emailAccountId: "ea_1" },
