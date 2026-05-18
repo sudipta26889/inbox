@@ -1,27 +1,26 @@
 "use server";
 
-import prisma from "@/utils/prisma";
-import { GroupItemSource } from "@/generated/prisma/enums";
-import { emailToContent } from "@/utils/mail";
-import { isColdEmail } from "@/utils/cold-email/is-cold-email";
 import {
   coldEmailBlockerBody,
   markNotColdEmailBody,
 } from "@/utils/actions/cold-email.validation";
 import { actionClient } from "@/utils/actions/safe-action";
-import { SafeError } from "@/utils/error";
+import { getColdEmailRule } from "@/utils/cold-email/cold-email-rule";
+import { markColdEmailSender } from "@/utils/cold-email/domain";
+import { isColdEmail } from "@/utils/cold-email/is-cold-email";
+import { internalDateToDate } from "@/utils/date";
 import { createEmailProvider } from "@/utils/email/provider";
 import type { EmailProvider } from "@/utils/email/types";
-import { getColdEmailRule } from "@/utils/cold-email/cold-email-rule";
-import { internalDateToDate } from "@/utils/date";
-import { saveLearnedPattern } from "@/utils/rule/learned-patterns";
+import { SafeError } from "@/utils/error";
+import { emailToContent } from "@/utils/mail";
+import prisma from "@/utils/prisma";
 
 export const markNotColdEmailAction = actionClient
   .metadata({ name: "markNotColdEmail" })
   .inputSchema(markNotColdEmailBody)
   .action(
     async ({
-      ctx: { emailAccountId, provider, logger },
+      ctx: { userId, emailAccountId, provider, logger },
       parsedInput: { sender },
     }) => {
       const [emailProvider, coldEmailRule] = await Promise.all([
@@ -38,15 +37,10 @@ export const markNotColdEmailAction = actionClient
       }
 
       await Promise.all([
-        // Mark as excluded so AI doesn't match it again
-        saveLearnedPattern({
-          emailAccountId,
-          from: sender,
-          ruleId: coldEmailRule.id,
-          exclude: true,
-          logger,
-          source: GroupItemSource.USER,
-        }),
+        markColdEmailSender(
+          { userId, emailAccountId },
+          { sender, action: "unmark" },
+        ),
         removeColdEmailLabelFromSender(emailProvider, sender, coldEmailRule),
       ]);
     },
