@@ -4,6 +4,7 @@ import { isDuplicateError } from "@/utils/prisma-helpers";
 import { ConflictError, NotFoundError } from "@/utils/mcp-server/errors";
 import type {
   CreateGroupBody,
+  DeleteGroupBody,
   GetGroupBody,
   UpdateGroupBody,
 } from "@/utils/actions/group.validation";
@@ -156,4 +157,48 @@ export async function updateGroup(ctx: GroupCtx, input: UpdateGroupBody) {
     }
     throw e;
   }
+}
+
+export async function previewGroupDeletion(ctx: GroupCtx, input: GetGroupBody) {
+  const group = await prisma.group.findUnique({
+    where: { id: input.groupId },
+    select: {
+      id: true,
+      name: true,
+      emailAccountId: true,
+      _count: { select: { items: true } },
+    },
+  });
+  if (!group || group.emailAccountId !== ctx.emailAccountId) {
+    throw new NotFoundError(`Group ${input.groupId} not found`);
+  }
+  return {
+    action: "delete_group" as const,
+    group: { id: group.id, name: group.name },
+    willCascade: { items: group._count.items },
+    irreversible: true as const,
+  };
+}
+
+export async function deleteGroup(ctx: GroupCtx, input: DeleteGroupBody) {
+  logger.info("deleteGroup", {
+    emailAccountId: ctx.emailAccountId,
+    groupId: input.groupId,
+  });
+
+  const existing = await prisma.group.findUnique({
+    where: { id: input.groupId },
+    select: {
+      id: true,
+      emailAccountId: true,
+      _count: { select: { items: true } },
+    },
+  });
+  if (!existing || existing.emailAccountId !== ctx.emailAccountId) {
+    throw new NotFoundError(`Group ${input.groupId} not found`);
+  }
+
+  const deletedItems = existing._count.items;
+  await prisma.group.delete({ where: { id: input.groupId } });
+  return { deletedGroupId: input.groupId, deletedItems };
 }
