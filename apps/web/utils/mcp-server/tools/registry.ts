@@ -499,6 +499,32 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     requiredScope: "admin",
   },
 
+  admin_categories_delete: {
+    name: "admin_categories_delete",
+    description:
+      "Delete a sender category. This tool is destructive. Call once without `confirm` to preview, then call again with `confirm: true` to apply. Senders previously in this category are detached (categoryId set to null), not deleted.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        categoryId: { type: "string", description: "Category ID to delete" },
+        confirm: {
+          type: "boolean",
+          description:
+            "Set true to actually delete. Omit or false for dry-run preview.",
+          default: false,
+        },
+      },
+      required: ["categoryId"],
+    },
+    handler: async (context, params) => {
+      const { adminCategoriesDelete } = await import(
+        "./admin-categories-tools"
+      );
+      return adminCategoriesDelete(context, params);
+    },
+    requiredScope: "admin",
+  },
+
   admin_categories_create: {
     name: "admin_categories_create",
     description:

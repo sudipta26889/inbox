@@ -4,6 +4,7 @@ import {
   adminCategoriesList,
   adminCategoriesCreate,
   adminCategoriesUpdate,
+  adminCategoriesDelete,
 } from "./admin-categories-tools";
 import type { McpToolContext } from "./registry";
 
@@ -134,6 +135,68 @@ describe("adminCategoriesUpdate", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.error.code).toBe("NOT_FOUND");
+    }
+  });
+});
+
+describe("adminCategoriesDelete", () => {
+  it("dry-run (confirm omitted) previews and does not delete", async () => {
+    prisma.category.findUnique.mockResolvedValue({
+      id: "cat_1",
+      name: "ToDelete",
+      description: null,
+      emailAccountId: ctx.emailAccountId,
+    } as never);
+    prisma.newsletter.count.mockResolvedValue(2);
+
+    const result = await adminCategoriesDelete(ctx, { categoryId: "cat_1" });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.dryRun).toBe(true);
+      expect(result.preview).toBeDefined();
+    }
+    expect(prisma.category.delete).not.toHaveBeenCalled();
+  });
+
+  it("confirm:true deletes the category", async () => {
+    prisma.category.findUnique.mockResolvedValue({
+      id: "cat_1",
+      emailAccountId: ctx.emailAccountId,
+    } as never);
+    prisma.newsletter.updateMany.mockResolvedValue({ count: 1 } as never);
+    prisma.category.delete.mockResolvedValue({ id: "cat_1" } as never);
+
+    const result = await adminCategoriesDelete(ctx, {
+      categoryId: "cat_1",
+      confirm: true,
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.dryRun).toBe(false);
+    }
+    expect(prisma.category.delete).toHaveBeenCalledWith({
+      where: { id: "cat_1" },
+    });
+  });
+
+  it("returns NOT_FOUND for unknown id (both dry-run and confirm)", async () => {
+    prisma.category.findUnique.mockResolvedValue(null);
+    const dryRun = await adminCategoriesDelete(ctx, { categoryId: "missing" });
+    expect(dryRun.ok).toBe(false);
+    if (!dryRun.ok) {
+      expect(dryRun.error.code).toBe("NOT_FOUND");
+    }
+
+    prisma.category.findUnique.mockResolvedValue(null);
+    const confirm = await adminCategoriesDelete(ctx, {
+      categoryId: "missing",
+      confirm: true,
+    });
+    expect(confirm.ok).toBe(false);
+    if (!confirm.ok) {
+      expect(confirm.error.code).toBe("NOT_FOUND");
     }
   });
 });
