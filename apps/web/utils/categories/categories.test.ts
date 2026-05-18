@@ -1,6 +1,12 @@
 import { describe, it, expect, vi } from "vitest";
 import prisma from "@/utils/__mocks__/prisma";
-import { listCategories, createCategory, updateCategory } from "./categories";
+import {
+  listCategories,
+  createCategory,
+  updateCategory,
+  previewDeleteCategory,
+  deleteCategory,
+} from "./categories";
 import { ConflictError, NotFoundError } from "@/utils/mcp-server/errors";
 
 vi.mock("@/utils/prisma");
@@ -145,6 +151,65 @@ describe("updateCategory", () => {
 
     await expect(
       updateCategory(ctx, { categoryId: "cat_1", name: "x" }),
+    ).rejects.toBeInstanceOf(NotFoundError);
+  });
+});
+
+describe("previewDeleteCategory", () => {
+  it("returns category and sender count without deleting", async () => {
+    prisma.category.findUnique.mockResolvedValue({
+      id: "cat_1",
+      name: "ToDelete",
+      description: null,
+      emailAccountId: ctx.emailAccountId,
+    } as never);
+    prisma.newsletter.count.mockResolvedValue(2);
+
+    const result = await previewDeleteCategory(ctx, { categoryId: "cat_1" });
+
+    expect(result.category.id).toBe("cat_1");
+    expect(result.affectedSenders).toBe(2);
+    expect(prisma.category.delete).not.toHaveBeenCalled();
+  });
+
+  it("throws NotFoundError on missing category", async () => {
+    prisma.category.findUnique.mockResolvedValue(null);
+
+    await expect(
+      previewDeleteCategory(ctx, { categoryId: "missing" }),
+    ).rejects.toBeInstanceOf(NotFoundError);
+  });
+});
+
+describe("deleteCategory", () => {
+  it("deletes the category and detaches senders", async () => {
+    prisma.category.findUnique.mockResolvedValue({
+      id: "cat_1",
+      emailAccountId: ctx.emailAccountId,
+    } as never);
+    prisma.newsletter.updateMany.mockResolvedValue({ count: 1 } as never);
+    prisma.category.delete.mockResolvedValue({ id: "cat_1" } as never);
+
+    const result = await deleteCategory(ctx, { categoryId: "cat_1" });
+
+    expect(result.deletedId).toBe("cat_1");
+    expect(prisma.newsletter.updateMany).toHaveBeenCalledWith({
+      where: {
+        emailAccountId: ctx.emailAccountId,
+        categoryId: "cat_1",
+      },
+      data: { categoryId: null },
+    });
+    expect(prisma.category.delete).toHaveBeenCalledWith({
+      where: { id: "cat_1" },
+    });
+  });
+
+  it("throws NotFoundError on missing category", async () => {
+    prisma.category.findUnique.mockResolvedValue(null);
+
+    await expect(
+      deleteCategory(ctx, { categoryId: "missing" }),
     ).rejects.toBeInstanceOf(NotFoundError);
   });
 });

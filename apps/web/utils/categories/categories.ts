@@ -50,6 +50,67 @@ export async function createCategory(
   }
 }
 
+export async function previewDeleteCategory(
+  ctx: DomainCtx,
+  input: { categoryId: string },
+) {
+  const category = await prisma.category.findUnique({
+    where: { id: input.categoryId },
+    select: {
+      id: true,
+      name: true,
+      description: true,
+      emailAccountId: true,
+    },
+  });
+  if (!category || category.emailAccountId !== ctx.emailAccountId) {
+    throw new NotFoundError(`Category ${input.categoryId} not found`);
+  }
+
+  const affectedSenders = await prisma.newsletter.count({
+    where: {
+      emailAccountId: ctx.emailAccountId,
+      categoryId: input.categoryId,
+    },
+  });
+
+  return {
+    category: {
+      id: category.id,
+      name: category.name,
+      description: category.description,
+    },
+    affectedSenders,
+  };
+}
+
+export async function deleteCategory(
+  ctx: DomainCtx,
+  input: { categoryId: string },
+) {
+  const category = await prisma.category.findUnique({
+    where: { id: input.categoryId },
+    select: { id: true, emailAccountId: true },
+  });
+  if (!category || category.emailAccountId !== ctx.emailAccountId) {
+    throw new NotFoundError(`Category ${input.categoryId} not found`);
+  }
+
+  // Detach senders first (categoryId is nullable on Newsletter). No transaction:
+  // project rule forbids prisma.$transaction(async (tx) => ...). Two sequential
+  // statements; if the second fails, senders simply remain detached (idempotent).
+  await prisma.newsletter.updateMany({
+    where: {
+      emailAccountId: ctx.emailAccountId,
+      categoryId: input.categoryId,
+    },
+    data: { categoryId: null },
+  });
+  await prisma.category.delete({ where: { id: input.categoryId } });
+
+  return { deletedId: input.categoryId };
+}
+
 export async function updateCategory(
   ctx: DomainCtx,
   input: UpdateCategoryBody,
