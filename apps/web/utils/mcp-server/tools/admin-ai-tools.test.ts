@@ -180,3 +180,53 @@ describe("admin_ai_update_model", () => {
     if (!res.ok) expect(res.error.code).toBe("NOT_FOUND");
   });
 });
+
+describe("admin_ai_* integration: get → update → get", () => {
+  it("get returns null, update writes, get returns the new values, and aiApiKey is never exposed", async () => {
+    // First get: user has no AI configured.
+    prisma.user.findUnique.mockResolvedValueOnce({
+      aiProvider: null,
+      aiModel: null,
+    } as never);
+
+    const first = await adminAiGetSettings(ctx("user_1"), {});
+    expect(first.ok).toBe(true);
+    if (first.ok && first.data) {
+      expect(first.data.aiProvider).toBeNull();
+      expect(first.data.aiModel).toBeNull();
+    }
+
+    // Update succeeds.
+    prisma.user.updateMany.mockResolvedValue({ count: 1 } as never);
+
+    const update = await adminAiUpdateModel(ctx("user_1"), {
+      aiProvider: Provider.LITELLM,
+      aiModel: "gpt-5.1-via-litellm",
+    });
+    expect(update.ok).toBe(true);
+
+    // Second get: domain returns the new values.
+    prisma.user.findUnique.mockResolvedValueOnce({
+      aiProvider: Provider.LITELLM,
+      aiModel: "gpt-5.1-via-litellm",
+    } as never);
+
+    const second = await adminAiGetSettings(ctx("user_1"), {});
+    expect(second.ok).toBe(true);
+    if (second.ok && second.data) {
+      expect(second.data.aiProvider).toBe(Provider.LITELLM);
+      expect(second.data.aiModel).toBe("gpt-5.1-via-litellm");
+    }
+
+    // Defense in depth: at no point did either tool emit aiApiKey.
+    expect(JSON.stringify(first)).not.toContain("aiApiKey");
+    expect(JSON.stringify(update)).not.toContain("aiApiKey");
+    expect(JSON.stringify(second)).not.toContain("aiApiKey");
+
+    // Defense in depth: updateMany never received aiApiKey in data.
+    const call = prisma.user.updateMany.mock.calls[0]?.[0] as {
+      data: Record<string, unknown>;
+    };
+    expect(call.data).not.toHaveProperty("aiApiKey");
+  });
+});
