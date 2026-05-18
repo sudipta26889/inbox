@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import prisma from "@/utils/__mocks__/prisma";
 import {
   createKnowledge,
+  deleteKnowledge,
   getKnowledge,
   listKnowledge,
   updateKnowledge,
@@ -214,5 +215,38 @@ describe("updateKnowledge", () => {
     await expect(
       updateKnowledge(ctx, { id: "k_1", title: "Dup", content: "x" }),
     ).rejects.toBeInstanceOf(ConflictError);
+  });
+});
+
+describe("deleteKnowledge", () => {
+  it("removes the row", async () => {
+    prisma.knowledge.findFirst.mockResolvedValue({ id: "k_1" } as never);
+    prisma.knowledge.delete.mockResolvedValue({ id: "k_1" } as never);
+
+    const result = await deleteKnowledge(ctx, { id: "k_1" });
+
+    expect(result.id).toBe("k_1");
+    expect(prisma.knowledge.delete).toHaveBeenCalledWith({
+      where: { id: "k_1" },
+    });
+  });
+
+  it("throws NotFoundError on missing id", async () => {
+    prisma.knowledge.findFirst.mockResolvedValue(null);
+
+    await expect(deleteKnowledge(ctx, { id: "nope" })).rejects.toBeInstanceOf(
+      NotFoundError,
+    );
+    expect(prisma.knowledge.delete).not.toHaveBeenCalled();
+  });
+
+  it("cannot delete another account's row (NotFoundError)", async () => {
+    // findFirst filters by emailAccountId → null for cross-account
+    prisma.knowledge.findFirst.mockResolvedValue(null);
+
+    await expect(
+      deleteKnowledge(ctx, { id: "k_other" }),
+    ).rejects.toBeInstanceOf(NotFoundError);
+    expect(prisma.knowledge.delete).not.toHaveBeenCalled();
   });
 });

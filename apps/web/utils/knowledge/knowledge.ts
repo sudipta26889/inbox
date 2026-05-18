@@ -4,6 +4,7 @@ import { isDuplicateError } from "@/utils/prisma-helpers";
 import { ConflictError, NotFoundError } from "@/utils/mcp-server/errors";
 import type {
   CreateKnowledgeBody,
+  DeleteKnowledgeBody,
   GetKnowledgeBody,
   ListKnowledgeQuery,
   UpdateKnowledgeBody,
@@ -73,6 +74,26 @@ export async function createKnowledge(
     }
     throw error;
   }
+}
+
+export async function deleteKnowledge(
+  ctx: KnowledgeCtx,
+  input: DeleteKnowledgeBody,
+): Promise<{ id: string }> {
+  logger.info("deleteKnowledge", {
+    userId: ctx.userId,
+    emailAccountId: ctx.emailAccountId,
+    id: input.id,
+  });
+
+  const existing = await prisma.knowledge.findFirst({
+    where: { id: input.id, emailAccountId: ctx.emailAccountId },
+    select: { id: true },
+  });
+  if (!existing) throw new NotFoundError(`Knowledge ${input.id} not found`);
+
+  await prisma.knowledge.delete({ where: { id: input.id } });
+  return { id: input.id };
 }
 
 export async function updateKnowledge(
