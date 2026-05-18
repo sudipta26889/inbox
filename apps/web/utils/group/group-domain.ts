@@ -5,6 +5,7 @@ import { ConflictError, NotFoundError } from "@/utils/mcp-server/errors";
 import type {
   CreateGroupBody,
   GetGroupBody,
+  UpdateGroupBody,
 } from "@/utils/actions/group.validation";
 
 const logger = createScopedLogger("group-domain");
@@ -108,6 +109,50 @@ export async function createGroup(ctx: GroupCtx, input: CreateGroupBody) {
   } catch (e) {
     if (isDuplicateError(e)) {
       throw new ConflictError(`A group named "${rule.name}" already exists`);
+    }
+    throw e;
+  }
+}
+
+export async function updateGroup(ctx: GroupCtx, input: UpdateGroupBody) {
+  logger.info("updateGroup", {
+    emailAccountId: ctx.emailAccountId,
+    groupId: input.groupId,
+  });
+
+  const existing = await prisma.group.findUnique({
+    where: { id: input.groupId },
+    select: { id: true, emailAccountId: true },
+  });
+  if (!existing || existing.emailAccountId !== ctx.emailAccountId) {
+    throw new NotFoundError(`Group ${input.groupId} not found`);
+  }
+
+  try {
+    const updated = await prisma.group.update({
+      where: { id: input.groupId },
+      data: {
+        ...(input.name !== undefined ? { name: input.name } : {}),
+        ...(input.prompt !== undefined ? { prompt: input.prompt } : {}),
+      },
+      select: {
+        id: true,
+        name: true,
+        prompt: true,
+        updatedAt: true,
+      },
+    });
+    return {
+      group: {
+        id: updated.id,
+        name: updated.name,
+        prompt: updated.prompt,
+        updatedAt: updated.updatedAt.toISOString(),
+      },
+    };
+  } catch (e) {
+    if (isDuplicateError(e)) {
+      throw new ConflictError(`A group named "${input.name}" already exists`);
     }
     throw e;
   }

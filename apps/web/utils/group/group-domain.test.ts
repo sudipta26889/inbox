@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import prisma from "@/utils/__mocks__/prisma";
 import { GroupItemType } from "@/generated/prisma/enums";
-import { createGroup, getGroup, listGroups } from "./group-domain";
+import { createGroup, getGroup, listGroups, updateGroup } from "./group-domain";
 import { ConflictError, NotFoundError } from "@/utils/mcp-server/errors";
 
 vi.mock("@/utils/prisma");
@@ -195,5 +195,65 @@ describe("createGroup", () => {
     await expect(createGroup(ctx, { ruleId: "r1" })).rejects.toBeInstanceOf(
       ConflictError,
     );
+  });
+});
+
+describe("updateGroup", () => {
+  it("updates name and prompt", async () => {
+    prisma.group.findUnique.mockResolvedValue({
+      id: "g1",
+      emailAccountId: ctx.emailAccountId,
+    } as never);
+    prisma.group.update.mockResolvedValue({
+      id: "g1",
+      name: "new",
+      prompt: "describe me",
+      updatedAt: new Date(),
+    } as never);
+    vi.mocked(isDuplicateError).mockReturnValue(false);
+
+    const result = await updateGroup(ctx, {
+      groupId: "g1",
+      name: "new",
+      prompt: "describe me",
+    });
+    expect(result.group.name).toBe("new");
+    expect(result.group.prompt).toBe("describe me");
+  });
+
+  it("throws NotFoundError when group missing", async () => {
+    prisma.group.findUnique.mockResolvedValue(null as never);
+
+    await expect(
+      updateGroup(ctx, { groupId: "missing", name: "y" }),
+    ).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it("throws NotFoundError for other account's group", async () => {
+    prisma.group.findUnique.mockResolvedValue({
+      id: "g1",
+      emailAccountId: "other_account",
+    } as never);
+
+    await expect(
+      updateGroup(ctx, { groupId: "g1", name: "y" }),
+    ).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it("throws ConflictError on duplicate name", async () => {
+    prisma.group.findUnique.mockResolvedValue({
+      id: "g1",
+      emailAccountId: ctx.emailAccountId,
+    } as never);
+    const dupErr = Object.assign(new Error("dup"), {
+      code: "P2002",
+      meta: { target: ["name"] },
+    });
+    prisma.group.update.mockRejectedValue(dupErr);
+    vi.mocked(isDuplicateError).mockReturnValue(true);
+
+    await expect(
+      updateGroup(ctx, { groupId: "g1", name: "taken" }),
+    ).rejects.toBeInstanceOf(ConflictError);
   });
 });
