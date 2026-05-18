@@ -860,6 +860,99 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     requiredScope: "admin",
   },
+
+  admin_cold_email_get_settings: {
+    name: "admin_cold_email_get_settings",
+    description:
+      "Read cold-email blocker settings for the current account. Returns enabled flag, mode (DISABLED|LIST|LABEL|ARCHIVE_AND_LABEL|ARCHIVE_AND_READ_AND_LABEL), AI prompt, and label name.",
+    inputSchema: { type: "object", properties: {} },
+    handler: async (context, params) => {
+      const { adminColdEmailGetSettings } = await import(
+        "./admin-cold-email-tools"
+      );
+      return adminColdEmailGetSettings(context, params);
+    },
+    requiredScope: "admin",
+  },
+
+  admin_cold_email_update_settings: {
+    name: "admin_cold_email_update_settings",
+    description:
+      "Update cold-email blocker settings. Fields: enabled (bool), mode (DISABLED|LIST|LABEL|ARCHIVE_AND_LABEL|ARCHIVE_AND_READ_AND_LABEL), prompt (string), labelName (string). Any subset may be provided; omitted fields keep existing values.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        enabled: { type: "boolean" },
+        mode: {
+          type: "string",
+          enum: [
+            "DISABLED",
+            "LIST",
+            "LABEL",
+            "ARCHIVE_AND_LABEL",
+            "ARCHIVE_AND_READ_AND_LABEL",
+          ],
+        },
+        prompt: { type: ["string", "null"] },
+        labelName: { type: "string" },
+      },
+    },
+    handler: async (context, params) => {
+      const { adminColdEmailUpdateSettings } = await import(
+        "./admin-cold-email-tools"
+      );
+      return adminColdEmailUpdateSettings(context, params);
+    },
+    requiredScope: "admin",
+  },
+
+  admin_cold_email_list_blocked: {
+    name: "admin_cold_email_list_blocked",
+    description:
+      "List senders currently treated as cold emails. Paginated; pass `cursor` from the previous response to fetch the next page.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        limit: {
+          type: "number",
+          minimum: 1,
+          maximum: 200,
+          default: 50,
+        },
+        cursor: { type: "string" },
+      },
+    },
+    handler: async (context, params) => {
+      const { adminColdEmailListBlocked } = await import(
+        "./admin-cold-email-tools"
+      );
+      return adminColdEmailListBlocked(context, params);
+    },
+    requiredScope: "admin",
+  },
+
+  admin_cold_email_mark: {
+    name: "admin_cold_email_mark",
+    description:
+      "Mark a sender as cold (`action: 'mark'`) or remove a sender from the cold-email block list (`action: 'unmark'`). Not destructive — both operations are reversible by calling the tool again with the inverse action.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        sender: { type: "string", description: "Email address of the sender" },
+        action: { type: "string", enum: ["mark", "unmark"] },
+        reason: {
+          type: ["string", "null"],
+          description: "Optional human-readable reason for the change",
+        },
+      },
+      required: ["sender", "action"],
+    },
+    handler: async (context, params) => {
+      const { adminColdEmailMark } = await import("./admin-cold-email-tools");
+      return adminColdEmailMark(context, params);
+    },
+    requiredScope: "admin",
+  },
 };
 
 /**
