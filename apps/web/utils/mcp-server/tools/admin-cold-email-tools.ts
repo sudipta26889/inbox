@@ -1,5 +1,6 @@
 import {
   coldEmailListBlockedBody,
+  coldEmailMarkBody,
   coldEmailUpdateSettingsBody,
 } from "@/utils/actions/cold-email.validation";
 import {
@@ -7,6 +8,8 @@ import {
   type ColdEmailSettings,
   getColdEmailSettings,
   listColdEmailBlockedSenders,
+  markColdEmailSender,
+  type MarkColdEmailResult,
   updateColdEmailSettings,
 } from "@/utils/cold-email/domain";
 import { createScopedLogger } from "@/utils/logger";
@@ -97,6 +100,38 @@ export async function adminColdEmailListBlocked(
     logger.info("tool:admin_cold_email_list_blocked ok", {
       durationMs: Date.now() - started,
       count: data.items.length,
+    });
+    return { ok: true, data };
+  } catch (e) {
+    return mapDomainError(e);
+  }
+}
+
+export async function adminColdEmailMark(
+  ctx: McpToolContext,
+  params: unknown,
+): Promise<McpResult<MarkColdEmailResult>> {
+  const started = Date.now();
+  logger.info("tool:admin_cold_email_mark", {
+    userId: ctx.userId,
+    emailAccountId: ctx.emailAccountId,
+  });
+  const parsed = coldEmailMarkBody.safeParse(params);
+  if (!parsed.success) {
+    return mapDomainError(
+      new ValidationError("Invalid input for admin_cold_email_mark", {
+        issues: parsed.error.issues,
+      }),
+    );
+  }
+  try {
+    const data = await markColdEmailSender(
+      { userId: ctx.userId, emailAccountId: ctx.emailAccountId },
+      parsed.data,
+    );
+    logger.info("tool:admin_cold_email_mark ok", {
+      durationMs: Date.now() - started,
+      action: parsed.data.action,
     });
     return { ok: true, data };
   } catch (e) {

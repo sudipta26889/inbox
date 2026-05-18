@@ -3,6 +3,7 @@ import prisma from "@/utils/__mocks__/prisma";
 import {
   adminColdEmailGetSettings,
   adminColdEmailListBlocked,
+  adminColdEmailMark,
   adminColdEmailUpdateSettings,
 } from "@/utils/mcp-server/tools/admin-cold-email-tools";
 import { describe, expect, it, vi } from "vitest";
@@ -135,6 +136,45 @@ describe("adminColdEmailListBlocked", () => {
 
   it("returns VALIDATION_ERROR for invalid limit", async () => {
     const result = await adminColdEmailListBlocked(ctx, { limit: 0 });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("VALIDATION_ERROR");
+  });
+});
+
+describe("adminColdEmailMark", () => {
+  it("returns NOT_FOUND when rule is missing", async () => {
+    prisma.rule.findUnique.mockResolvedValue(null as never);
+
+    const result = await adminColdEmailMark(ctx, {
+      sender: "x@y.com",
+      action: "mark",
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("NOT_FOUND");
+  });
+
+  it("marks then unmarks a sender", async () => {
+    prisma.rule.findUnique.mockResolvedValue({ id: "rule_1" } as never);
+
+    const marked = await adminColdEmailMark(ctx, {
+      sender: "spam@x.com",
+      action: "mark",
+    });
+    expect(marked.ok).toBe(true);
+
+    const unmarked = await adminColdEmailMark(ctx, {
+      sender: "spam@x.com",
+      action: "unmark",
+    });
+    expect(unmarked.ok).toBe(true);
+  });
+
+  it("returns VALIDATION_ERROR on bad action value", async () => {
+    const result = await adminColdEmailMark(ctx, {
+      sender: "x@y.com",
+      action: "delete",
+    });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.code).toBe("VALIDATION_ERROR");
   });
