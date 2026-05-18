@@ -953,6 +953,115 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     requiredScope: "admin",
   },
+
+  admin_reply_tracker_get_settings: {
+    name: "admin_reply_tracker_get_settings",
+    description:
+      "Read Reply Zero (reply tracker) settings: whether draft replies are enabled, the draft confidence level (ALL_EMAILS | STANDARD | HIGH_CONFIDENCE), and whether hidden AI-draft tracking links are allowed.",
+    inputSchema: { type: "object", properties: {} },
+    handler: async (context, params) => {
+      const { adminReplyTrackerGetSettings } = await import(
+        "./admin-reply-tracker-tools"
+      );
+      return adminReplyTrackerGetSettings(context, params);
+    },
+    requiredScope: "admin",
+  },
+
+  admin_reply_tracker_update_settings: {
+    name: "admin_reply_tracker_update_settings",
+    description:
+      "Update Reply Zero settings. Toggling draftRepliesEnabled creates/updates the TO_REPLY system rule and its DRAFT_EMAIL action.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        draftRepliesEnabled: { type: "boolean" },
+        draftReplyConfidence: {
+          type: "string",
+          enum: ["ALL_EMAILS", "STANDARD", "HIGH_CONFIDENCE"],
+        },
+        allowHiddenAiDraftLinks: { type: "boolean" },
+      },
+    },
+    handler: async (context, params) => {
+      const { adminReplyTrackerUpdateSettings } = await import(
+        "./admin-reply-tracker-tools"
+      );
+      return adminReplyTrackerUpdateSettings(context, params);
+    },
+    requiredScope: "admin",
+  },
+
+  admin_follow_ups_list: {
+    name: "admin_follow_ups_list",
+    description:
+      "List follow-up reminders (ThreadTracker rows with followUpAppliedAt set). Supports filters: resolved, type (AWAITING | NEEDS_REPLY | NEEDS_ACTION), and cursor pagination.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        resolved: { type: "boolean" },
+        type: {
+          type: "string",
+          enum: ["AWAITING", "NEEDS_REPLY", "NEEDS_ACTION"],
+        },
+        appliedOnly: { type: "boolean", default: true },
+        limit: { type: "number", minimum: 1, maximum: 200, default: 50 },
+        cursor: { type: "string" },
+      },
+    },
+    handler: async (context, params) => {
+      const { adminFollowUpsList } = await import(
+        "./admin-reply-tracker-tools"
+      );
+      return adminFollowUpsList(context, params);
+    },
+    requiredScope: "admin",
+  },
+
+  admin_follow_ups_update: {
+    name: "admin_follow_ups_update",
+    description:
+      "Update a follow-up reminder: mark resolved, reschedule via followUpAppliedAt, or clear/set followUpDraftId.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string" },
+        resolved: { type: "boolean" },
+        followUpAppliedAt: { type: ["string", "null"], format: "date-time" },
+        followUpDraftId: { type: ["string", "null"] },
+      },
+      required: ["id"],
+    },
+    handler: async (context, params) => {
+      const { adminFollowUpsUpdate } = await import(
+        "./admin-reply-tracker-tools"
+      );
+      return adminFollowUpsUpdate(context, params);
+    },
+    requiredScope: "admin",
+  },
+
+  admin_follow_ups_delete: {
+    name: "admin_follow_ups_delete",
+    description:
+      "This tool is destructive. Call once without confirm to preview, then call again with confirm: true to apply. Deletes a single follow-up reminder row from ThreadTracker. Provide expectedUpdatedAt (the updatedAt returned by the preview) to detect mid-flight changes.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string" },
+        expectedUpdatedAt: { type: "string", format: "date-time" },
+        confirm: { type: "boolean", default: false },
+      },
+      required: ["id"],
+    },
+    handler: async (context, params) => {
+      const { adminFollowUpsDelete } = await import(
+        "./admin-reply-tracker-tools"
+      );
+      return adminFollowUpsDelete(context, params);
+    },
+    requiredScope: "admin",
+  },
 };
 
 /**
