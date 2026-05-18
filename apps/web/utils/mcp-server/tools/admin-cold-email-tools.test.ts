@@ -2,6 +2,7 @@ import { ActionType } from "@/generated/prisma/enums";
 import prisma from "@/utils/__mocks__/prisma";
 import {
   adminColdEmailGetSettings,
+  adminColdEmailListBlocked,
   adminColdEmailUpdateSettings,
 } from "@/utils/mcp-server/tools/admin-cold-email-tools";
 import { describe, expect, it, vi } from "vitest";
@@ -108,5 +109,33 @@ describe("adminColdEmailUpdateSettings", () => {
       expect(result.data.enabled).toBe(true);
       expect(result.data.mode).toBe("ARCHIVE_AND_LABEL");
     }
+  });
+});
+
+describe("adminColdEmailListBlocked", () => {
+  it("returns empty data when no rule exists", async () => {
+    prisma.rule.findUnique.mockResolvedValue(null as never);
+
+    const result = await adminColdEmailListBlocked(ctx, { limit: 50 });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.items).toEqual([]);
+      expect(result.data.total).toBe(0);
+    }
+  });
+
+  it("applies default limit when not provided", async () => {
+    prisma.rule.findUnique.mockResolvedValue({ groupId: null } as never);
+
+    const result = await adminColdEmailListBlocked(ctx, {});
+
+    expect(result.ok).toBe(true);
+  });
+
+  it("returns VALIDATION_ERROR for invalid limit", async () => {
+    const result = await adminColdEmailListBlocked(ctx, { limit: 0 });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("VALIDATION_ERROR");
   });
 });
