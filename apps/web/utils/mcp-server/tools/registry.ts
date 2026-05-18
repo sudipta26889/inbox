@@ -1168,6 +1168,50 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     requiredScope: "admin",
   },
+
+  admin_ai_get_settings: {
+    name: "admin_ai_get_settings",
+    description:
+      "Read the current AI provider and model for the inbox account, plus the list of allowed providers. API keys are NEVER returned by this tool.",
+    inputSchema: {
+      type: "object",
+      properties: {},
+      additionalProperties: false,
+    },
+    handler: async (context, params) => {
+      const { adminAiGetSettings } = await import("./admin-ai-tools");
+      return adminAiGetSettings(context, params);
+    },
+    requiredScope: "admin",
+  },
+
+  admin_ai_update_model: {
+    name: "admin_ai_update_model",
+    description:
+      "Update the AI provider and/or model name for the inbox account. This tool does NOT accept API keys, secrets, or tokens — those must be configured through the web UI. Pass aiProvider='DEFAULT' to revert to the system default model (the stored API key, if any, is preserved).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        aiProvider: {
+          type: "string",
+          description:
+            "One of the allowed provider IDs returned by admin_ai_get_settings (e.g. 'anthropic', 'openai', 'litellm', or 'DEFAULT').",
+        },
+        aiModel: {
+          type: "string",
+          description:
+            "Model name, e.g. 'claude-4.7-sonnet' or 'gpt-5.1'. Use '' when aiProvider is 'DEFAULT'.",
+        },
+      },
+      required: ["aiProvider", "aiModel"],
+      additionalProperties: false,
+    },
+    handler: async (context, params) => {
+      const { adminAiUpdateModel } = await import("./admin-ai-tools");
+      return adminAiUpdateModel(context, params);
+    },
+    requiredScope: "admin",
+  },
 };
 
 /**
