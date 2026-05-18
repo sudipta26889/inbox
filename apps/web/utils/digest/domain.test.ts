@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import prisma from "@/utils/__mocks__/prisma";
 import { ActionType, SystemType } from "@/generated/prisma/enums";
-import { getDigestConfig } from "./domain";
+import { getDigestConfig, updateDigestSchedule } from "./domain";
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/utils/prisma");
@@ -97,5 +97,67 @@ describe("getDigestConfig", () => {
         where: { emailAccountId: "ea1" },
       }),
     );
+  });
+});
+
+describe("updateDigestSchedule", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("upserts the schedule with computed nextOccurrenceAt", async () => {
+    const timeOfDay = new Date("1970-01-01T09:00:00Z");
+    prisma.schedule.upsert.mockResolvedValue({
+      id: "s1",
+      intervalDays: 1,
+      occurrences: 1,
+      daysOfWeek: 127,
+      timeOfDay,
+      lastOccurrenceAt: new Date(),
+      nextOccurrenceAt: new Date(),
+    } as any);
+
+    const result = await updateDigestSchedule(
+      { userId: "u1", emailAccountId: "ea1" },
+      {
+        intervalDays: 1,
+        daysOfWeek: 127,
+        timeOfDay,
+        occurrences: 1,
+      },
+    );
+
+    expect(prisma.schedule.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { emailAccountId: "ea1" },
+      }),
+    );
+    expect(result.schedule.intervalDays).toBe(1);
+  });
+
+  it("scopes upsert to caller's emailAccountId", async () => {
+    prisma.schedule.upsert.mockResolvedValue({
+      id: "s1",
+      intervalDays: 7,
+      occurrences: 1,
+      daysOfWeek: 1,
+      timeOfDay: null,
+      lastOccurrenceAt: new Date(),
+      nextOccurrenceAt: new Date(),
+    } as any);
+
+    await updateDigestSchedule(
+      { userId: "u1", emailAccountId: "ea-target" },
+      {
+        intervalDays: 7,
+        daysOfWeek: 1,
+        timeOfDay: null,
+        occurrences: 1,
+      },
+    );
+
+    const callArg = prisma.schedule.upsert.mock.calls[0][0];
+    expect(callArg.where).toEqual({ emailAccountId: "ea-target" });
+    expect(callArg.create.emailAccountId).toBe("ea-target");
   });
 });

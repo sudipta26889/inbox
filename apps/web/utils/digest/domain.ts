@@ -1,5 +1,8 @@
 import prisma from "@/utils/prisma";
 import { ActionType, type SystemType } from "@/generated/prisma/enums";
+import { calculateNextScheduleDate } from "@/utils/schedule";
+import type { SaveDigestScheduleBody } from "@/utils/actions/settings.validation";
+import type { Prisma } from "@/generated/prisma/client";
 
 export type DigestAuthContext = {
   userId: string;
@@ -75,5 +78,55 @@ export async function getDigestConfig(
         }
       : null,
     items,
+  };
+}
+
+export async function updateDigestSchedule(
+  ctx: DigestAuthContext,
+  input: SaveDigestScheduleBody,
+): Promise<{ schedule: DigestScheduleSnapshot }> {
+  const { intervalDays, daysOfWeek, timeOfDay, occurrences } = input;
+
+  const create: Prisma.ScheduleUpsertArgs["create"] = {
+    emailAccountId: ctx.emailAccountId,
+    intervalDays,
+    daysOfWeek,
+    timeOfDay,
+    occurrences,
+    lastOccurrenceAt: new Date(),
+    nextOccurrenceAt: calculateNextScheduleDate({
+      intervalDays,
+      daysOfWeek,
+      timeOfDay,
+      occurrences,
+      lastOccurrenceAt: null,
+    }),
+  };
+
+  const { emailAccountId: _e, ...update } = create;
+
+  const schedule = await prisma.schedule.upsert({
+    where: { emailAccountId: ctx.emailAccountId },
+    create,
+    update,
+    select: {
+      intervalDays: true,
+      occurrences: true,
+      daysOfWeek: true,
+      timeOfDay: true,
+      lastOccurrenceAt: true,
+      nextOccurrenceAt: true,
+    },
+  });
+
+  return {
+    schedule: {
+      intervalDays: schedule.intervalDays,
+      occurrences: schedule.occurrences,
+      daysOfWeek: schedule.daysOfWeek,
+      timeOfDay: schedule.timeOfDay,
+      lastOccurrenceAt: schedule.lastOccurrenceAt,
+      nextOccurrenceAt: schedule.nextOccurrenceAt,
+    },
   };
 }
