@@ -256,3 +256,32 @@ describe("adminGroupsAddItem + adminGroupsRemoveItem", () => {
     if (!result.ok) expect(result.error.code).toBe("NOT_FOUND");
   });
 });
+
+import { getTool, hasRequiredScope } from "./registry";
+
+describe("registry integration", () => {
+  it.each([
+    "admin_groups_list",
+    "admin_groups_get",
+    "admin_groups_create",
+    "admin_groups_update",
+    "admin_groups_delete",
+    "admin_groups_add_item",
+    "admin_groups_remove_item",
+  ])("registers %s with admin scope", (name) => {
+    const tool = getTool(name);
+    expect(tool).toBeDefined();
+    expect(tool?.requiredScope).toBe("admin");
+    expect(hasRequiredScope(tool!, ["admin"])).toBe(true);
+    expect(hasRequiredScope(tool!, ["email:read"])).toBe(false);
+  });
+
+  it("runs admin_groups_list end-to-end through registry handler", async () => {
+    prisma.group.findMany.mockResolvedValue([] as never);
+
+    const tool = getTool("admin_groups_list");
+    expect(tool).toBeDefined();
+    const result = await tool!.handler(ctx, {});
+    expect(result).toEqual({ ok: true, data: { groups: [] } });
+  });
+});
