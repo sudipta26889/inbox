@@ -1,7 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import prisma from "@/utils/__mocks__/prisma";
 import { ActionType, SystemType } from "@/generated/prisma/enums";
-import { adminDigestGet } from "./admin-digest-tools";
+import {
+  adminDigestGet,
+  adminDigestUpdateSchedule,
+} from "./admin-digest-tools";
 import type { McpToolContext } from "./registry";
 
 vi.mock("server-only", () => ({}));
@@ -54,5 +57,48 @@ describe("adminDigestGet", () => {
 
     expect(result.ok).toBe(false);
     expect((result as any).error.code).toBe("VALIDATION_ERROR");
+  });
+});
+
+describe("adminDigestUpdateSchedule", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("upserts schedule and returns success envelope", async () => {
+    prisma.schedule.upsert.mockResolvedValue({
+      intervalDays: 1,
+      occurrences: 1,
+      daysOfWeek: 127,
+      timeOfDay: new Date("1970-01-01T09:00:00Z"),
+      lastOccurrenceAt: new Date("2026-05-17T00:00:00Z"),
+      nextOccurrenceAt: new Date("2026-05-17T09:00:00Z"),
+    } as any);
+
+    const result = await adminDigestUpdateSchedule(ctx, {
+      intervalDays: 1,
+      daysOfWeek: 127,
+      timeOfDay: "1970-01-01T09:00:00Z",
+      occurrences: 1,
+    });
+
+    expect(result.ok).toBe(true);
+    expect((result as any).data.schedule.intervalDays).toBe(1);
+    expect(prisma.schedule.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { emailAccountId: "ea1" } }),
+    );
+  });
+
+  it("rejects all-null payload with VALIDATION_ERROR", async () => {
+    const result = await adminDigestUpdateSchedule(ctx, {
+      intervalDays: null,
+      daysOfWeek: null,
+      timeOfDay: null,
+      occurrences: null,
+    });
+
+    expect(result.ok).toBe(false);
+    expect((result as any).error.code).toBe("VALIDATION_ERROR");
+    expect(prisma.schedule.upsert).not.toHaveBeenCalled();
   });
 });
