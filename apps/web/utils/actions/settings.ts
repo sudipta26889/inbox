@@ -16,10 +16,10 @@ import {
 } from "@/utils/schedule";
 import { actionClientUser } from "@/utils/actions/safe-action";
 import { ActionType, SystemType } from "@/generated/prisma/enums";
-import type { Prisma } from "@/generated/prisma/client";
 import { clearSpecificErrorMessages, ErrorType } from "@/utils/error-messages";
 import { SafeError } from "@/utils/error";
 import { env } from "@/env";
+import { updateDigestItems, updateDigestSchedule } from "@/utils/digest/domain";
 
 export const updateEmailSettingsAction = actionClient
   .metadata({ name: "updateEmailSettings" })
@@ -88,85 +88,27 @@ export const updateAiSettingsAction = actionClientUser
 export const updateDigestScheduleAction = actionClient
   .metadata({ name: "updateDigestSchedule" })
   .inputSchema(saveDigestScheduleBody)
-  .action(async ({ ctx: { emailAccountId }, parsedInput }) => {
-    const { intervalDays, daysOfWeek, timeOfDay, occurrences } = parsedInput;
-
-    const create: Prisma.ScheduleUpsertArgs["create"] = {
-      emailAccountId,
-      intervalDays,
-      daysOfWeek,
-      timeOfDay,
-      occurrences,
-      lastOccurrenceAt: new Date(),
-      nextOccurrenceAt: calculateNextScheduleDate({
-        ...parsedInput,
-        lastOccurrenceAt: null,
-      }),
-    };
-
-    const { emailAccountId: _emailAccountId, ...update } = create;
-
-    await prisma.schedule.upsert({
-      where: { emailAccountId },
-      create,
-      update,
-    });
-
+  .action(async ({ ctx: { emailAccountId, userId }, parsedInput }) => {
+    await updateDigestSchedule({ userId, emailAccountId }, parsedInput);
     return { success: true };
   });
 
 export const updateDigestItemsAction = actionClient
   .metadata({ name: "updateDigestItems" })
   .inputSchema(updateDigestItemsBody)
-  .action(
-    async ({
-      ctx: { emailAccountId, logger },
-      parsedInput: { ruleDigestPreferences },
-    }) => {
-      const promises = Object.entries(ruleDigestPreferences).map(
-        async ([ruleId, enabled]) => {
-          // Verify the rule belongs to this email account
-          const rule = await prisma.rule.findUnique({
-            where: {
-              id: ruleId,
-              emailAccountId,
-            },
-            select: { id: true, actions: true },
-          });
-
-          if (!rule) {
-            logger.error("Rule not found", { ruleId });
-            return;
-          }
-
-          const hasDigestAction = rule.actions.some(
-            (action) => action.type === ActionType.DIGEST,
-          );
-
-          if (enabled && !hasDigestAction) {
-            // Add DIGEST action
-            await prisma.action.create({
-              data: {
-                ruleId: rule.id,
-                type: ActionType.DIGEST,
-              },
-            });
-          } else if (!enabled && hasDigestAction) {
-            // Remove DIGEST action
-            await prisma.action.deleteMany({
-              where: {
-                ruleId: rule.id,
-                type: ActionType.DIGEST,
-              },
-            });
-          }
-        },
-      );
-
-      await Promise.all(promises);
-      return { success: true };
-    },
-  );
+  .action(async ({ ctx: { emailAccountId, userId, logger }, parsedInput }) => {
+    const result = await updateDigestItems(
+      { userId, emailAccountId },
+      parsedInput,
+    );
+    if (result.failureCount > 0) {
+      logger.warn("updateDigestItems partial failure", {
+        successCount: result.successCount,
+        failureCount: result.failureCount,
+      });
+    }
+    return { success: true, ...result };
+  });
 
 export const toggleDigestAction = actionClient
   .metadata({ name: "toggleDigest" })
