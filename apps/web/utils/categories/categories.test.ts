@@ -1,8 +1,13 @@
 import { describe, it, expect, vi } from "vitest";
 import prisma from "@/utils/__mocks__/prisma";
-import { listCategories } from "./categories";
+import { listCategories, createCategory } from "./categories";
+import { ConflictError } from "@/utils/mcp-server/errors";
 
 vi.mock("@/utils/prisma");
+vi.mock("@/utils/prisma-helpers", () => ({
+  isDuplicateError: vi.fn(),
+}));
+import { isDuplicateError } from "@/utils/prisma-helpers";
 
 const ctx = { userId: "user_1", emailAccountId: "ea_1" };
 
@@ -51,5 +56,50 @@ describe("listCategories", () => {
         where: { emailAccountId: ctx.emailAccountId },
       }),
     );
+  });
+});
+
+describe("createCategory", () => {
+  it("creates a new category", async () => {
+    const created = {
+      id: "new_cat",
+      name: "Work",
+      description: "Work emails",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    prisma.category.create.mockResolvedValue(created as never);
+    vi.mocked(isDuplicateError).mockReturnValue(false);
+
+    const result = await createCategory(ctx, {
+      name: "Work",
+      description: "Work emails",
+    });
+
+    expect(result.category.id).toBe("new_cat");
+    expect(result.category.name).toBe("Work");
+    expect(result.category.description).toBe("Work emails");
+    expect(prisma.category.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          emailAccountId: ctx.emailAccountId,
+          name: "Work",
+          description: "Work emails",
+        }),
+      }),
+    );
+  });
+
+  it("throws ConflictError on duplicate name", async () => {
+    const dupErr = Object.assign(new Error("dup"), {
+      code: "P2002",
+      meta: { target: ["name"] },
+    });
+    prisma.category.create.mockRejectedValue(dupErr);
+    vi.mocked(isDuplicateError).mockReturnValue(true);
+
+    await expect(
+      createCategory(ctx, { name: "Newsletter" }),
+    ).rejects.toBeInstanceOf(ConflictError);
   });
 });
