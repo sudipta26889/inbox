@@ -2,11 +2,13 @@ import { describe, it, expect, vi } from "vitest";
 import prisma from "@/utils/__mocks__/prisma";
 import { GroupItemType } from "@/generated/prisma/enums";
 import {
+  addGroupItem,
   createGroup,
   deleteGroup,
   getGroup,
   listGroups,
   previewGroupDeletion,
+  removeGroupItem,
   updateGroup,
 } from "./group-domain";
 import { ConflictError, NotFoundError } from "@/utils/mcp-server/errors";
@@ -334,6 +336,114 @@ describe("deleteGroup", () => {
     } as never);
     await expect(
       deleteGroup(ctx, { groupId: "g1", confirm: true }),
+    ).rejects.toBeInstanceOf(NotFoundError);
+  });
+});
+
+describe("addGroupItem", () => {
+  it("creates an item bound to the group", async () => {
+    prisma.group.findUnique.mockResolvedValue({
+      id: "g1",
+      emailAccountId: ctx.emailAccountId,
+    } as never);
+    prisma.groupItem.create.mockResolvedValue({
+      id: "item_new",
+      type: GroupItemType.FROM,
+      value: "newsletter@x.co",
+      exclude: false,
+    } as never);
+    vi.mocked(isDuplicateError).mockReturnValue(false);
+
+    const result = await addGroupItem(ctx, {
+      groupId: "g1",
+      type: GroupItemType.FROM,
+      value: "newsletter@x.co",
+    });
+    expect(result.item.id).toBe("item_new");
+    expect(result.item.value).toBe("newsletter@x.co");
+  });
+
+  it("throws NotFoundError when group missing", async () => {
+    prisma.group.findUnique.mockResolvedValue(null as never);
+    await expect(
+      addGroupItem(ctx, {
+        groupId: "missing",
+        type: GroupItemType.FROM,
+        value: "z@y.co",
+      }),
+    ).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it("throws NotFoundError for foreign group", async () => {
+    prisma.group.findUnique.mockResolvedValue({
+      id: "g1",
+      emailAccountId: "other_account",
+    } as never);
+    await expect(
+      addGroupItem(ctx, {
+        groupId: "g1",
+        type: GroupItemType.FROM,
+        value: "z@y.co",
+      }),
+    ).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it("returns existing item id on duplicate (idempotent)", async () => {
+    prisma.group.findUnique.mockResolvedValue({
+      id: "g1",
+      emailAccountId: ctx.emailAccountId,
+    } as never);
+    const dupErr = Object.assign(new Error("dup"), {
+      code: "P2002",
+      meta: { target: ["groupId", "type", "value"] },
+    });
+    prisma.groupItem.create.mockRejectedValue(dupErr);
+    vi.mocked(isDuplicateError).mockReturnValue(true);
+    prisma.groupItem.findUnique.mockResolvedValue({
+      id: "item_existing",
+      type: GroupItemType.FROM,
+      value: "dup@x.co",
+      exclude: false,
+    } as never);
+
+    const result = await addGroupItem(ctx, {
+      groupId: "g1",
+      type: GroupItemType.FROM,
+      value: "dup@x.co",
+    });
+    expect(result.item.id).toBe("item_existing");
+  });
+});
+
+describe("removeGroupItem", () => {
+  it("deletes the item", async () => {
+    prisma.groupItem.findUnique.mockResolvedValue({
+      id: "item_1",
+      group: { emailAccountId: ctx.emailAccountId },
+    } as never);
+    prisma.groupItem.delete.mockResolvedValue({ id: "item_1" } as never);
+
+    const result = await removeGroupItem(ctx, { itemId: "item_1" });
+    expect(result).toEqual({ deletedItemId: "item_1" });
+    expect(prisma.groupItem.delete).toHaveBeenCalledWith({
+      where: { id: "item_1" },
+    });
+  });
+
+  it("throws NotFoundError when item missing", async () => {
+    prisma.groupItem.findUnique.mockResolvedValue(null as never);
+    await expect(
+      removeGroupItem(ctx, { itemId: "missing" }),
+    ).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it("throws NotFoundError for foreign item", async () => {
+    prisma.groupItem.findUnique.mockResolvedValue({
+      id: "item_1",
+      group: { emailAccountId: "other_account" },
+    } as never);
+    await expect(
+      removeGroupItem(ctx, { itemId: "item_1" }),
     ).rejects.toBeInstanceOf(NotFoundError);
   });
 });

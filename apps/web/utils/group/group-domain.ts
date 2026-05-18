@@ -3,9 +3,11 @@ import { createScopedLogger } from "@/utils/logger";
 import { isDuplicateError } from "@/utils/prisma-helpers";
 import { ConflictError, NotFoundError } from "@/utils/mcp-server/errors";
 import type {
+  AddGroupItemBody,
   CreateGroupBody,
   DeleteGroupBody,
   GetGroupBody,
+  RemoveGroupItemBody,
   UpdateGroupBody,
 } from "@/utils/actions/group.validation";
 
@@ -201,4 +203,82 @@ export async function deleteGroup(ctx: GroupCtx, input: DeleteGroupBody) {
   const deletedItems = existing._count.items;
   await prisma.group.delete({ where: { id: input.groupId } });
   return { deletedGroupId: input.groupId, deletedItems };
+}
+
+export async function addGroupItem(ctx: GroupCtx, input: AddGroupItemBody) {
+  logger.info("addGroupItem", {
+    emailAccountId: ctx.emailAccountId,
+    groupId: input.groupId,
+  });
+
+  const group = await prisma.group.findUnique({
+    where: { id: input.groupId },
+    select: { id: true, emailAccountId: true },
+  });
+  if (!group || group.emailAccountId !== ctx.emailAccountId) {
+    throw new NotFoundError(`Group ${input.groupId} not found`);
+  }
+
+  try {
+    const item = await prisma.groupItem.create({
+      data: {
+        groupId: input.groupId,
+        type: input.type,
+        value: input.value,
+        exclude: input.exclude ?? false,
+      },
+    });
+    return {
+      item: {
+        id: item.id,
+        type: item.type,
+        value: item.value,
+        exclude: item.exclude,
+      },
+    };
+  } catch (e) {
+    if (isDuplicateError(e)) {
+      const existing = await prisma.groupItem.findUnique({
+        where: {
+          groupId_type_value: {
+            groupId: input.groupId,
+            type: input.type,
+            value: input.value,
+          },
+        },
+      });
+      if (existing) {
+        return {
+          item: {
+            id: existing.id,
+            type: existing.type,
+            value: existing.value,
+            exclude: existing.exclude,
+          },
+        };
+      }
+    }
+    throw e;
+  }
+}
+
+export async function removeGroupItem(
+  ctx: GroupCtx,
+  input: RemoveGroupItemBody,
+) {
+  logger.info("removeGroupItem", {
+    emailAccountId: ctx.emailAccountId,
+    itemId: input.itemId,
+  });
+
+  const item = await prisma.groupItem.findUnique({
+    where: { id: input.itemId },
+    select: { id: true, group: { select: { emailAccountId: true } } },
+  });
+  if (!item || item.group?.emailAccountId !== ctx.emailAccountId) {
+    throw new NotFoundError(`Group item ${input.itemId} not found`);
+  }
+
+  await prisma.groupItem.delete({ where: { id: input.itemId } });
+  return { deletedItemId: input.itemId };
 }
