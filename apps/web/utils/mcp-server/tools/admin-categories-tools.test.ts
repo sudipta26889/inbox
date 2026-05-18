@@ -5,6 +5,7 @@ import {
   adminCategoriesCreate,
   adminCategoriesUpdate,
   adminCategoriesDelete,
+  adminSendersList,
 } from "./admin-categories-tools";
 import type { McpToolContext } from "./registry";
 
@@ -197,6 +198,56 @@ describe("adminCategoriesDelete", () => {
     expect(confirm.ok).toBe(false);
     if (!confirm.ok) {
       expect(confirm.error.code).toBe("NOT_FOUND");
+    }
+  });
+});
+
+describe("adminSendersList", () => {
+  it("returns ok envelope with all senders", async () => {
+    prisma.newsletter.findMany.mockResolvedValue([
+      {
+        id: "n1",
+        email: "a@work.com",
+        name: null,
+        categoryId: "cat_work",
+        category: { id: "cat_work", name: "Work" },
+      },
+      {
+        id: "n2",
+        email: "b@personal.com",
+        name: null,
+        categoryId: null,
+        category: null,
+      },
+    ] as never);
+
+    const result = await adminSendersList(ctx, {});
+
+    expect(result.ok).toBe(true);
+    if (result.ok && result.data) {
+      expect(result.data.senders).toHaveLength(2);
+    }
+  });
+
+  it("filters by categoryId", async () => {
+    prisma.newsletter.findMany.mockResolvedValue([
+      {
+        id: "n1",
+        email: "a@work.com",
+        name: null,
+        categoryId: "cat_work",
+        category: { id: "cat_work", name: "Work" },
+      },
+    ] as never);
+
+    const result = await adminSendersList(ctx, { categoryId: "cat_work" });
+
+    expect(result.ok).toBe(true);
+    if (result.ok && result.data) {
+      expect(result.data.senders).toHaveLength(1);
+      expect((result.data.senders[0] as { email: string }).email).toBe(
+        "a@work.com",
+      );
     }
   });
 });

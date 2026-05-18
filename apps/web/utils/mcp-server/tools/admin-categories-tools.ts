@@ -6,9 +6,11 @@ import {
   previewDeleteCategory,
   updateCategory,
 } from "@/utils/categories/categories";
+import { listSenders } from "@/utils/categories/senders";
 import {
   createCategoryBody,
   deleteCategoryBody,
+  listSendersBody,
   updateCategoryBody,
 } from "@/utils/categories/validation";
 import { mapDomainError } from "@/utils/mcp-server/error-mapper";
@@ -124,6 +126,31 @@ export async function adminCategoriesDelete(
         return await deleteCategory(domainCtx, { categoryId });
       },
     });
+  } catch (e) {
+    return mapDomainError(e);
+  }
+}
+
+export async function adminSendersList(
+  ctx: McpToolContext,
+  params: unknown,
+): Promise<McpResult<{ senders: unknown[]; nextCursor: string | null }>> {
+  logger.info("MCP tool: admin_senders_list", {
+    userId: ctx.userId,
+    emailAccountId: ctx.emailAccountId,
+  });
+  const parsed = listSendersBody.safeParse(params);
+  if (!parsed.success) {
+    return mapDomainError(
+      new ValidationError("Invalid input", { issues: parsed.error.issues }),
+    );
+  }
+  try {
+    const data = await listSenders(
+      { userId: ctx.userId, emailAccountId: ctx.emailAccountId },
+      parsed.data,
+    );
+    return { ok: true, data };
   } catch (e) {
     return mapDomainError(e);
   }

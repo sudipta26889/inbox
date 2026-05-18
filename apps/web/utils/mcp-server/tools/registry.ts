@@ -549,6 +549,35 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     requiredScope: "admin",
   },
 
+  admin_senders_list: {
+    name: "admin_senders_list",
+    description:
+      "List sender addresses recorded for this email account, with their current category assignment. Supports optional categoryId filter and cursor pagination.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        categoryId: {
+          type: "string",
+          description: "Optional: only return senders in this category",
+        },
+        limit: {
+          type: "number",
+          description: "Max results per page (1-200, default 50)",
+        },
+        cursor: {
+          type: "string",
+          description:
+            "Pagination cursor (sender id from previous page's nextCursor)",
+        },
+      },
+    },
+    handler: async (context, params) => {
+      const { adminSendersList } = await import("./admin-categories-tools");
+      return adminSendersList(context, params);
+    },
+    requiredScope: "admin",
+  },
+
   list_email_accounts: {
     name: "list_email_accounts",
     description:
