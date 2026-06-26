@@ -15,6 +15,8 @@ type AuthOptions = {
   expiresAt?: number | null;
 };
 
+const TOKEN_REFRESH_BUFFER_MS = 10 * 60 * 1000;
+
 const getAuth = ({
   accessToken,
   refreshToken,
@@ -69,7 +71,9 @@ export const getGmailClientWithRefresh = async ({
   const g = gmail({ version: "v1", auth });
 
   const expiryDate = expiresAt ? expiresAt : null;
-  if (expiryDate && expiryDate > Date.now()) return g;
+  if (expiryDate && expiryDate > Date.now() + TOKEN_REFRESH_BUFFER_MS) {
+    return g;
+  }
 
   // Prevent concurrent refreshes for the same account — if Google rotates
   // the refresh token, a second concurrent refresh with the old token
