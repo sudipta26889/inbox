@@ -8,6 +8,7 @@ import { useIsInAiQueue } from "@/store/ai-queue";
 import { EmailThread } from "@/components/email-list/EmailThread";
 import { useAccount } from "@/providers/EmailAccountProvider";
 import { MutedText } from "@/components/Typography";
+import { TaskpilotConvertButton } from "@/components/email-list/TaskpilotConvertButton";
 
 export function EmailPanel({
   row,
@@ -24,7 +25,7 @@ export function EmailPanel({
   close: () => void;
   refetch: () => void;
 }) {
-  const { provider } = useAccount();
+  const { provider, emailAccountId } = useAccount();
   const isPlanning = useIsInAiQueue(row.id);
 
   const lastMessage = row.messages?.[row.messages.length - 1];
@@ -47,6 +48,12 @@ export function EmailPanel({
         </div>
 
         <div className="mt-3 flex items-center md:ml-2 md:mt-0">
+          {emailAccountId && lastMessage?.id && (
+            <TaskpilotConvertButton
+              emailAccountId={emailAccountId}
+              messageId={lastMessage.id}
+            />
+          )}
           <ActionButtons
             threadId={row.id!}
             isPlanning={isPlanning}
