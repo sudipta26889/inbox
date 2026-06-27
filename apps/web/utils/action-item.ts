@@ -334,6 +334,8 @@ export function sanitizeActionFields(
     }
     case ActionType.A2A_NOTIFY:
       return base;
+    case ActionType.CREATE_TASK:
+      return base;
     default:
       // biome-ignore lint/correctness/noSwitchDeclarations: intentional exhaustive check
       const exhaustiveCheck: never = action.type;
