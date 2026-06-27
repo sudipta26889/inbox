@@ -92,6 +92,10 @@ model User {
   homeAssistantUrl   String? // e.g., "https://soul-ha.sudiptadhara.in"
   homeAssistantToken String? // Long-lived access token
 
+  // TaskPilot integration settings
+  taskpilotApiKey        String?
+  taskpilotWorkspaceSlug String?
+
   // referral system
   referralCode String? @unique // User's own referral code
 
@@ -218,6 +222,8 @@ model EmailAccount {
 
   // A2A Protocol
   a2aTasks A2aTask[] @relation("A2aTaskToEmailAccount")
+
+  taskpilotLinks EmailTaskLink[]
 
   @@index([userId])
   @@index([lastSummaryEmailAt])
@@ -484,6 +490,8 @@ model Rule {
   promptText String? // natural language for this rule for prompt file. prompt file is combination of these fields
 
   history RuleHistory[]
+
+  taskpilotLinks EmailTaskLink[]
 
   @@unique([name, emailAccountId])
   @@unique([emailAccountId, systemType])
@@ -1514,10 +1522,37 @@ enum ActionType {
   NOTIFY_SENDER // Sends notification from Inbox (not user's email). Only for cold email rules.
   HOME_ASSISTANT // Integrates with Home Assistant (webhook, MQTT, service calls)
   A2A_NOTIFY     // Send A2A message to remote agent (e.g., OpenClaw Mitra)
+  CREATE_TASK
   // SUMMARIZE
   // SNOOZE
   // ADD_TO_DO
   // INTEGRATION // for example, add to Notion
+}
+
+enum EmailTaskLinkSource {
+  MANUAL
+  CHAT
+  RULE
+}
+
+model EmailTaskLink {
+  id                  String              @id @default(cuid())
+  emailAccountId      String
+  emailAccount        EmailAccount        @relation(fields: [emailAccountId], references: [id], onDelete: Cascade)
+  gmailMessageId      String
+  threadId            String?
+  workspaceSlug       String
+  projectId           String
+  taskpilotIssueId    String
+  taskpilotIdentifier String
+  source              EmailTaskLinkSource
+  ruleId              String?
+  rule                Rule?               @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+  createdAt           DateTime            @default(now())
+
+  @@unique([emailAccountId, gmailMessageId])
+  @@index([emailAccountId, createdAt])
+  @@index([ruleId])
 }
 
 enum Frequency {
