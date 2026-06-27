@@ -40,7 +40,7 @@ export class TaskpilotClient {
       "GET",
       `/workspaces/${this.workspaceSlug}/projects/`,
     );
-    return (await res.json()) as Project[];
+    return unwrapList<Project>(await res.json());
   }
 
   async listLabels(projectId: string): Promise<Label[]> {
@@ -48,7 +48,7 @@ export class TaskpilotClient {
       "GET",
       `/workspaces/${this.workspaceSlug}/projects/${projectId}/labels/`,
     );
-    return (await res.json()) as Label[];
+    return unwrapList<Label>(await res.json());
   }
 
   async createWorkItem(
@@ -138,4 +138,22 @@ async function safeMessage(res: Response, fallback: string): Promise<string> {
   } catch {
     return fallback;
   }
+}
+
+/**
+ * TaskPilot's REST list endpoints return either a bare array or a paginated
+ * envelope `{count, results, next_cursor, ...}`. Unwrap both shapes so the
+ * downstream `for (const x of list)` loops are safe.
+ */
+function unwrapList<T>(body: unknown): T[] {
+  if (Array.isArray(body)) return body as T[];
+  if (
+    body &&
+    typeof body === "object" &&
+    "results" in body &&
+    Array.isArray((body as { results: unknown }).results)
+  ) {
+    return (body as { results: T[] }).results;
+  }
+  return [];
 }
