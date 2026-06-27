@@ -196,7 +196,15 @@ describe("updateAccountProfile", () => {
   };
 
   it("performs a partial update and returns the new profile", async () => {
-    prisma.emailAccount.findFirst.mockResolvedValue({ id: "ea_1" } as never);
+    // First findFirst = ownership check (before update). Second findFirst =
+    // re-read inside getAccountProfile() at the end of updateAccountProfile;
+    // its select includes the nested `user` for taskpilot fields.
+    prisma.emailAccount.findFirst
+      .mockResolvedValueOnce({ id: "ea_1" } as never)
+      .mockResolvedValueOnce({
+        ...updatedRow,
+        user: { taskpilotApiKey: null, taskpilotWorkspaceSlug: null },
+      } as never);
     prisma.emailAccount.update.mockResolvedValue(updatedRow as never);
 
     const out = await updateAccountProfile(

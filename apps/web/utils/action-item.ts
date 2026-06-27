@@ -158,6 +158,9 @@ export const actionInputs: Record<
   [ActionType.A2A_NOTIFY]: {
     fields: [],
   },
+  [ActionType.CREATE_TASK]: {
+    fields: [],
+  },
 };
 
 export function getActionFields(fields: Action | ExecutedAction | undefined) {
