@@ -1381,6 +1381,38 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     requiredScope: "admin",
   },
+
+  convert_to_taskpilot_task: {
+    name: "convert_to_taskpilot_task",
+    description:
+      "Convert an email into a TaskPilot work item. With preview=true, returns the AI-enriched draft (project, title, description, priority, labels, optional target date) without creating the task. With preview=false (default), creates the task and returns the new identifier (e.g. WEB-42). Idempotent: a second call for the same emailId returns the existing identifier.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        emailId: {
+          type: "string",
+          description: "Email ID to convert.",
+        },
+        emailAccountId: {
+          type: "string",
+          description:
+            "Optional email account id; defaults to the authorized account.",
+        },
+        preview: {
+          type: "boolean",
+          description:
+            "If true, returns the AI draft without creating the task. Default false.",
+          default: false,
+        },
+      },
+      required: ["emailId"],
+    },
+    handler: async (context, params) => {
+      const { convertToTaskpilotTask } = await import("./taskpilot-tools");
+      return convertToTaskpilotTask(context, params);
+    },
+    requiredScope: "email:write",
+  },
 };
 
 /**
