@@ -1,8 +1,8 @@
-// apps/web/utils/taskpilot/errors.ts
-
 export class TaskpilotNotConfiguredError extends Error {
   readonly code = "TASKPILOT_NOT_CONFIGURED" as const;
-  constructor(message = "TaskPilot credentials are not configured for this user") {
+  constructor(
+    message = "TaskPilot credentials are not configured for this user",
+  ) {
     super(message);
     this.name = "TaskpilotNotConfiguredError";
   }
@@ -10,9 +10,11 @@ export class TaskpilotNotConfiguredError extends Error {
 
 export class TaskpilotAuthError extends Error {
   readonly code = "TASKPILOT_AUTH" as const;
-  constructor(public readonly status: 401 | 403, message: string) {
+  readonly status: 401 | 403;
+  constructor(status: 401 | 403, message: string) {
     super(message);
     this.name = "TaskpilotAuthError";
+    this.status = status;
   }
 }
 
@@ -26,17 +28,21 @@ export class TaskpilotNotFoundError extends Error {
 
 export class TaskpilotValidationError extends Error {
   readonly code = "TASKPILOT_VALIDATION" as const;
-  constructor(public readonly status: 400 | 422, message: string) {
+  readonly status: 400 | 422;
+  constructor(status: 400 | 422, message: string) {
     super(message);
     this.name = "TaskpilotValidationError";
+    this.status = status;
   }
 }
 
 export class TaskpilotRateLimitError extends Error {
   readonly code = "TASKPILOT_RATE_LIMITED" as const;
-  constructor(public readonly resetAt: Date, message = "TaskPilot rate limit hit") {
+  readonly resetAt: Date;
+  constructor(resetAt: Date, message = "TaskPilot rate limit hit") {
     super(message);
     this.name = "TaskpilotRateLimitError";
+    this.resetAt = resetAt;
   }
   retryAfterMs(now = Date.now()): number {
     return Math.max(0, this.resetAt.getTime() - now);
@@ -45,8 +51,10 @@ export class TaskpilotRateLimitError extends Error {
 
 export class TaskpilotServerError extends Error {
   readonly code = "TASKPILOT_SERVER" as const;
-  constructor(public readonly status: number, message: string) {
+  readonly status: number;
+  constructor(status: number, message: string) {
     super(message);
     this.name = "TaskpilotServerError";
+    this.status = status;
   }
 }
