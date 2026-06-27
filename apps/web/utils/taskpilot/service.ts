@@ -8,6 +8,7 @@ import {
 import type {
   EnrichedTaskDraft,
   EnrichmentEmail,
+  EnrichmentInput,
 } from "@/utils/ai/taskpilot/enrich";
 import { taskpilotCache } from "@/utils/taskpilot/cache";
 import { TaskpilotClient } from "@/utils/taskpilot/client";
@@ -17,6 +18,8 @@ import type { Label, Project } from "@/utils/taskpilot/types";
 const logger = createScopedLogger("taskpilot-service");
 
 export interface DraftInput {
+  /** Required for production; injected by callers that have an emailAccount in scope. */
+  chatCompletionObject?: EnrichmentInput["chatCompletionObject"];
   email: EnrichmentEmail;
   emailAccountId: string;
   messageId: string;
@@ -76,6 +79,7 @@ export async function draftTaskFromEmail(
     projects,
     labelsByProject,
     ruleContext: input.ruleContext,
+    chatCompletionObject: input.chatCompletionObject,
   });
 
   return {
