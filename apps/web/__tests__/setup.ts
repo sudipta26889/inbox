@@ -32,6 +32,7 @@ function setRequiredTestEnv() {
   setEnvDefault("EMAIL_ENCRYPT_SALT", "test-email-encrypt-salt");
   setEnvDefault("INTERNAL_API_KEY", "test-internal-api-key");
   setEnvDefault("DEFAULT_LLM_PROVIDER", "openai");
+  setEnvDefault("DEFAULT_LLM_MODEL", "gpt-oss-20b");
   setEnvDefault("NEXT_PUBLIC_BASE_URL", "http://localhost:3000");
 }
 
