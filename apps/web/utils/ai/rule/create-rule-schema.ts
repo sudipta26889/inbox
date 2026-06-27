@@ -54,6 +54,7 @@ export const getExtraActions = () => [
   ActionType.CALL_WEBHOOK,
   ActionType.HOME_ASSISTANT,
   ActionType.A2A_NOTIFY,
+  ActionType.CREATE_TASK,
 ];
 
 const actionSchema = (provider: string) =>

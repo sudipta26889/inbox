@@ -400,6 +400,11 @@ export function RuleForm({
         value: ActionType.A2A_NOTIFY,
         icon: getActionIcon(ActionType.A2A_NOTIFY),
       },
+      {
+        label: "Create TaskPilot task",
+        value: ActionType.CREATE_TASK,
+        icon: getActionIcon(ActionType.CREATE_TASK),
+      },
       ...(env.NEXT_PUBLIC_DIGEST_ENABLED
         ? [
             {

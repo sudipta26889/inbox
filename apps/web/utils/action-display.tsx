@@ -3,18 +3,19 @@ import { getEmailTerminology } from "@/utils/terminology";
 import {
   ArchiveIcon,
   BellIcon,
+  FileTextIcon,
   FolderInputIcon,
   ForwardIcon,
-  ReplyIcon,
-  ShieldCheckIcon,
-  SendIcon,
-  TagIcon,
-  WebhookIcon,
-  FileTextIcon,
+  HomeIcon,
+  ListChecksIcon,
   MailIcon,
   NewspaperIcon,
-  HomeIcon,
   RadioTowerIcon,
+  ReplyIcon,
+  SendIcon,
+  ShieldCheckIcon,
+  TagIcon,
+  WebhookIcon,
 } from "lucide-react";
 import { truncate } from "@/utils/string";
 
@@ -85,6 +86,8 @@ export function getActionDisplay(
       return "Notify Sender";
     case ActionType.A2A_NOTIFY:
       return "A2A Notify";
+    case ActionType.CREATE_TASK:
+      return "Create TaskPilot task";
     default: {
       const exhaustiveCheck: never = action.type;
       return exhaustiveCheck;
@@ -122,6 +125,8 @@ export function getActionIcon(actionType: ActionType) {
       return BellIcon;
     case ActionType.A2A_NOTIFY:
       return RadioTowerIcon;
+    case ActionType.CREATE_TASK:
+      return ListChecksIcon;
     default: {
       const exhaustiveCheck: never = actionType;
       return exhaustiveCheck;
