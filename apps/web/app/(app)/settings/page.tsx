@@ -31,6 +31,7 @@ import { OrgAnalyticsConsentSection } from "@/app/(app)/[emailAccountId]/setting
 import { ResetAnalyticsSection } from "@/app/(app)/[emailAccountId]/settings/ResetAnalyticsSection";
 import { WebhookSection } from "@/app/(app)/[emailAccountId]/settings/WebhookSection";
 import { HomeAssistantSection } from "@/app/(app)/[emailAccountId]/settings/HomeAssistantSection";
+import { TaskpilotIntegrationSection } from "@/app/(app)/settings/TaskpilotIntegrationSection";
 import { CopyRulesSection } from "@/app/(app)/[emailAccountId]/settings/CopyRulesSection";
 import { RuleImportExportSetting } from "@/app/(app)/[emailAccountId]/assistant/settings/RuleImportExportSetting";
 import { ToggleAllRulesSection } from "@/app/(app)/[emailAccountId]/settings/ToggleAllRulesSection";
@@ -155,6 +156,8 @@ export default function SettingsPage() {
         >
           <ItemCard>
             <HomeAssistantSection />
+            <ItemSeparator />
+            <TaskpilotIntegrationSection />
             <ItemSeparator />
             <WebhookSection />
             {env.NEXT_PUBLIC_EXTERNAL_API_ENABLED && (
