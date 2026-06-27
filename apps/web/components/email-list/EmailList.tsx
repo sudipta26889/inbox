@@ -31,6 +31,8 @@ import {
 import { useAccount } from "@/providers/EmailAccountProvider";
 import { prefixPath } from "@/utils/path";
 import { useIsMobile } from "@/hooks/use-mobile";
+import useSWR from "swr";
+import type { TaskpilotLinksResponse } from "@/app/api/user/me/taskpilot-links/route";
 
 export function List({
   emails,
@@ -351,6 +353,21 @@ export function EmailList({
 
   const isEmpty = threads.length === 0;
 
+  const visibleMessageIds = useMemo(() => {
+    const ids: string[] = [];
+    for (const t of threads) {
+      const lastId = t.messages?.[t.messages.length - 1]?.id;
+      if (lastId) ids.push(lastId);
+    }
+    return ids;
+  }, [threads]);
+
+  const { data: taskpilotLinks } = useSWR<TaskpilotLinksResponse>(
+    visibleMessageIds.length
+      ? `/api/user/me/taskpilot-links?messageIds=${visibleMessageIds.join(",")}`
+      : null,
+  );
+
   return (
     <>
       {!(isEmpty && hideActionBarWhenEmpty) && (
@@ -421,6 +438,12 @@ export function EmailList({
                   });
                 };
 
+                const lastMessageId =
+                  thread.messages?.[thread.messages.length - 1]?.id;
+                const taskpilotLink = lastMessageId
+                  ? taskpilotLinks?.[lastMessageId]
+                  : undefined;
+
                 return (
                   <EmailListItem
                     key={thread.id}
@@ -444,6 +467,7 @@ export function EmailList({
                     onPlanAiAction={onPlanAiAction}
                     onArchive={onArchive}
                     refetch={refetch}
+                    taskpilotLink={taskpilotLink ?? undefined}
                   />
                 );
               })}

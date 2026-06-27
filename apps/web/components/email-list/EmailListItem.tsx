@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { findCtaLink } from "@/utils/parse/parseHtml.client";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { internalDateToDate } from "@/utils/date";
+import { TaskpilotBadge } from "@/components/email-list/TaskpilotBadge";
 
 export const EmailListItem = forwardRef(
   (
@@ -35,6 +36,7 @@ export const EmailListItem = forwardRef(
       onPlanAiAction: (thread: Thread) => void;
       onArchive: (thread: Thread) => void;
       refetch: () => void;
+      taskpilotLink?: { identifier: string; url: string };
     },
     ref: ForwardedRef<HTMLLIElement>,
   ) => {
@@ -169,6 +171,14 @@ export const EmailListItem = forwardRef(
                 {!!thread.plan && (
                   <div className="ml-3 flex items-center space-x-2 whitespace-nowrap">
                     <PlanBadge plan={thread.plan} provider={provider} />
+                  </div>
+                )}
+                {props.taskpilotLink && (
+                  <div className="ml-3 flex items-center whitespace-nowrap">
+                    <TaskpilotBadge
+                      identifier={props.taskpilotLink.identifier}
+                      url={props.taskpilotLink.url}
+                    />
                   </div>
                 )}
               </div>
