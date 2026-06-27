@@ -50,6 +50,7 @@ const zodActionType = z.enum([
   ActionType.DIGEST,
   ActionType.MOVE_FOLDER,
   ActionType.NOTIFY_SENDER,
+  ActionType.CREATE_TASK,
 ]);
 
 const zodConditionType = z.enum([ConditionType.AI, ConditionType.STATIC]);
