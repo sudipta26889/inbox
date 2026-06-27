@@ -1,3 +1,4 @@
+import { encryptToken } from "@/utils/encryption";
 import { createScopedLogger } from "@/utils/logger";
 import { NotFoundError } from "@/utils/mcp-server/errors";
 import prisma from "@/utils/prisma";
@@ -34,7 +35,15 @@ export async function getAccountProfile(ctx: {
 }) {
   const row = await prisma.emailAccount.findFirst({
     where: { id: ctx.emailAccountId, userId: ctx.userId },
-    select: profileSelect,
+    select: {
+      ...profileSelect,
+      user: {
+        select: {
+          taskpilotApiKey: true,
+          taskpilotWorkspaceSlug: true,
+        },
+      },
+    },
   });
   if (!row) {
     logger.warn("getAccountProfile: account not found", {
@@ -42,7 +51,16 @@ export async function getAccountProfile(ctx: {
     });
     throw new NotFoundError("Email account not found");
   }
-  return row;
+  const { user, ...profile } = row;
+  return {
+    ...profile,
+    taskpilot: {
+      configured: Boolean(
+        user?.taskpilotApiKey && user?.taskpilotWorkspaceSlug,
+      ),
+      workspaceSlug: user?.taskpilotWorkspaceSlug ?? null,
+    },
+  };
 }
 
 /**
@@ -89,10 +107,30 @@ export const updateAccountProfileSchema = z
       .startsWith("http", { message: "Must be an http(s) URL" })
       .nullable()
       .optional(),
+    taskpilotApiKey: z.string().min(1).nullable().optional(),
+    taskpilotWorkspaceSlug: z
+      .string()
+      .min(1)
+      .max(100)
+      .regex(/^[a-z0-9-]+$/i)
+      .nullable()
+      .optional(),
   })
   .strict()
   .refine((obj) => Object.keys(obj).length > 0, {
     message: "At least one field is required",
+  })
+  .superRefine((data, ctx) => {
+    const keyTouched = Object.hasOwn(data, "taskpilotApiKey");
+    const slugTouched = Object.hasOwn(data, "taskpilotWorkspaceSlug");
+    if (keyTouched !== slugTouched) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          "taskpilotApiKey and taskpilotWorkspaceSlug must be set or cleared together",
+        path: ["taskpilotApiKey"],
+      });
+    }
   });
 
 export type UpdateAccountProfileInput = z.infer<
@@ -114,16 +152,34 @@ export async function updateAccountProfile(
     throw new NotFoundError("Email account not found");
   }
 
-  const updated = await prisma.emailAccount.update({
-    where: { id: ctx.emailAccountId },
-    data: input,
-    select: profileSelect,
-  });
+  const { taskpilotApiKey, taskpilotWorkspaceSlug, ...emailAccountData } =
+    input;
+  const taskpilotTouched =
+    Object.hasOwn(input, "taskpilotApiKey") ||
+    Object.hasOwn(input, "taskpilotWorkspaceSlug");
+
+  if (Object.keys(emailAccountData).length > 0) {
+    await prisma.emailAccount.update({
+      where: { id: ctx.emailAccountId },
+      data: emailAccountData,
+    });
+  }
+
+  if (taskpilotTouched) {
+    await prisma.user.update({
+      where: { id: ctx.userId },
+      data: {
+        taskpilotApiKey:
+          taskpilotApiKey === null ? null : encryptToken(taskpilotApiKey),
+        taskpilotWorkspaceSlug: taskpilotWorkspaceSlug ?? null,
+      },
+    });
+  }
 
   logger.info("Account profile updated", {
     emailAccountId: ctx.emailAccountId,
     fields: Object.keys(input),
   });
 
-  return updated;
+  return getAccountProfile(ctx);
 }

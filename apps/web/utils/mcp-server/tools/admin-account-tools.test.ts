@@ -30,6 +30,10 @@ const baseRow = {
   timezone: "Europe/London",
   calendarBookingLink: null as string | null,
   role: null as string | null,
+  user: {
+    taskpilotApiKey: null as string | null,
+    taskpilotWorkspaceSlug: null as string | null,
+  },
 };
 
 describe("admin_account_get", () => {
@@ -75,6 +79,34 @@ describe("admin_account_get", () => {
     expect(json).not.toContain("webhookUrl");
     expect(json).not.toContain("mcpClient");
   });
+
+  it("returns taskpilot.configured=false when both fields are null", async () => {
+    prisma.emailAccount.findFirst.mockResolvedValue(baseRow as never);
+    const out = await adminAccountGet(ctx("user_1", "ea_1"), {});
+    expect(out).toMatchObject({
+      ok: true,
+      data: { taskpilot: { configured: false, workspaceSlug: null } },
+    });
+  });
+
+  it("returns taskpilot.configured=true when both fields are set", async () => {
+    prisma.emailAccount.findFirst.mockResolvedValue({
+      ...baseRow,
+      user: {
+        taskpilotApiKey: "enc:cipher",
+        taskpilotWorkspaceSlug: "acme",
+      },
+    } as never);
+    const out = await adminAccountGet(ctx("user_1", "ea_1"), {});
+    expect(out).toMatchObject({
+      ok: true,
+      data: { taskpilot: { configured: true, workspaceSlug: "acme" } },
+    });
+    // The raw key is never returned
+    const json = JSON.stringify(out);
+    expect(json).not.toContain("enc:cipher");
+    expect(json).not.toContain("taskpilotApiKey");
+  });
 });
 
 describe("admin_account_update", () => {
@@ -85,7 +117,9 @@ describe("admin_account_update", () => {
   };
 
   it("updates allowed fields and returns the new snapshot", async () => {
-    prisma.emailAccount.findFirst.mockResolvedValue({ id: "ea_1" } as never);
+    prisma.emailAccount.findFirst
+      .mockResolvedValueOnce({ id: "ea_1" } as never) // ownership check
+      .mockResolvedValueOnce(updatedRow as never); // re-read at end
     prisma.emailAccount.update.mockResolvedValue(updatedRow as never);
 
     const out = await adminAccountUpdate(ctx("user_1", "ea_1"), {
@@ -224,6 +258,92 @@ describe("admin_account_update", () => {
     });
     expect(prisma.emailAccount.update).not.toHaveBeenCalled();
   });
+
+  it("rejects setting only taskpilotApiKey", async () => {
+    prisma.emailAccount.findFirst.mockResolvedValue({ id: "ea_1" } as never);
+    const out = await adminAccountUpdate(ctx("user_1", "ea_1"), {
+      taskpilotApiKey: "tk_x",
+    });
+    expect(out).toMatchObject({
+      ok: false,
+      error: { code: "VALIDATION_ERROR" },
+    });
+    expect(prisma.emailAccount.update).not.toHaveBeenCalled();
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects setting only taskpilotWorkspaceSlug", async () => {
+    prisma.emailAccount.findFirst.mockResolvedValue({ id: "ea_1" } as never);
+    const out = await adminAccountUpdate(ctx("user_1", "ea_1"), {
+      taskpilotWorkspaceSlug: "acme",
+    });
+    expect(out).toMatchObject({
+      ok: false,
+      error: { code: "VALIDATION_ERROR" },
+    });
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it("sets both taskpilot fields atomically and encrypts the key", async () => {
+    prisma.emailAccount.findFirst
+      .mockResolvedValueOnce({ id: "ea_1" } as never) // initial ownership check
+      .mockResolvedValueOnce({
+        ...baseRow,
+        user: {
+          taskpilotApiKey: "encrypted-blob",
+          taskpilotWorkspaceSlug: "acme",
+        },
+      } as never); // getAccountProfile re-read
+    prisma.user.update.mockResolvedValue({} as never);
+
+    const out = await adminAccountUpdate(ctx("user_1", "ea_1"), {
+      taskpilotApiKey: "tk_secret",
+      taskpilotWorkspaceSlug: "acme",
+    });
+
+    expect(out).toMatchObject({
+      ok: true,
+      data: { taskpilot: { configured: true, workspaceSlug: "acme" } },
+    });
+    // EmailAccount not updated because the input contains no EmailAccount fields
+    expect(prisma.emailAccount.update).not.toHaveBeenCalled();
+    // User.update was called with an ENCRYPTED key (not the raw "tk_secret")
+    const call = prisma.user.update.mock.calls[0]?.[0] as {
+      where: Record<string, unknown>;
+      data: {
+        taskpilotApiKey: string | null;
+        taskpilotWorkspaceSlug: string | null;
+      };
+    };
+    expect(call.where).toEqual({ id: "user_1" });
+    expect(call.data.taskpilotWorkspaceSlug).toBe("acme");
+    expect(call.data.taskpilotApiKey).not.toBe("tk_secret");
+    expect(call.data.taskpilotApiKey).toBeTruthy();
+  });
+
+  it("clears both fields when both are null", async () => {
+    prisma.emailAccount.findFirst
+      .mockResolvedValueOnce({ id: "ea_1" } as never)
+      .mockResolvedValueOnce(baseRow as never);
+    prisma.user.update.mockResolvedValue({} as never);
+
+    const out = await adminAccountUpdate(ctx("user_1", "ea_1"), {
+      taskpilotApiKey: null,
+      taskpilotWorkspaceSlug: null,
+    });
+
+    expect(out.ok).toBe(true);
+    const call = prisma.user.update.mock.calls[0]?.[0] as {
+      data: {
+        taskpilotApiKey: string | null;
+        taskpilotWorkspaceSlug: string | null;
+      };
+    };
+    expect(call.data).toEqual({
+      taskpilotApiKey: null,
+      taskpilotWorkspaceSlug: null,
+    });
+  });
 });
 
 describe("admin_account_* integration: get → update → get", () => {
@@ -236,10 +356,14 @@ describe("admin_account_* integration: get → update → get", () => {
       expect(first.data.about).toBe("About text");
     }
 
-    // Update: ownership check returns the row, then update returns new values
-    prisma.emailAccount.findFirst.mockResolvedValueOnce({
-      id: "ea_1",
-    } as never);
+    // Update: ownership check, then emailAccount.update, then re-read via getAccountProfile
+    prisma.emailAccount.findFirst
+      .mockResolvedValueOnce({ id: "ea_1" } as never) // ownership check
+      .mockResolvedValueOnce({
+        ...baseRow,
+        about: "Updated bio",
+        timezone: "Asia/Jerusalem",
+      } as never); // re-read at end of updateAccountProfile
     prisma.emailAccount.update.mockResolvedValueOnce({
       ...baseRow,
       about: "Updated bio",
