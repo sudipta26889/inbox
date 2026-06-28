@@ -35,6 +35,27 @@ services:
       DIRECT_URL: "postgresql://inbox_zero_user:fdJ5GJ6IYEwdar9gd94jAoFY@192.168.11.118:5432/inbox_zero_db?schema=public"
       REDIS_URL: "redis://:YyD0Tp54vIhmH9gyrbtDu7vDtv8zc5gL@192.168.11.118:6379/3"
       INTERNAL_API_URL: "http://web:5500"
+      # Required at runtime; values resolved from ./apps/web/.env (or host env).
+      # `:?required` makes compose fail-fast on missing values instead of the
+      # app booting and crashing later on first encryption/auth/LLM call.
+      AUTH_SECRET: ${AUTH_SECRET:?required}
+      EMAIL_ENCRYPT_SECRET: ${EMAIL_ENCRYPT_SECRET:?required}
+      EMAIL_ENCRYPT_SALT: ${EMAIL_ENCRYPT_SALT:?required}
+      API_KEY_SALT: ${API_KEY_SALT:?required}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?required}
+      CRON_SECRET: ${CRON_SECRET:?required}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:?required}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:?required}
+      GOOGLE_PUBSUB_TOPIC_NAME: ${GOOGLE_PUBSUB_TOPIC_NAME:?required}
+      GOOGLE_PUBSUB_VERIFICATION_TOKEN: ${GOOGLE_PUBSUB_VERIFICATION_TOKEN:?required}
+      # LLM gateway
+      LLM_API_KEY: ${LLM_API_KEY:?required}
+      OPENAI_COMPATIBLE_BASE_URL: ${OPENAI_COMPATIBLE_BASE_URL:?required}
+      DEFAULT_LLM_PROVIDER: ${DEFAULT_LLM_PROVIDER:?required}
+      # Qdrant for taskpilot cross-thread semantic dedupe (optional feature;
+      # mark non-required if you ever want to disable cleanly)
+      QDRANT_URL: ${QDRANT_URL:?required}
+      QDRANT_API_KEY: ${QDRANT_API_KEY:?required}
     restart: always
     networks:
       - inbox-network
