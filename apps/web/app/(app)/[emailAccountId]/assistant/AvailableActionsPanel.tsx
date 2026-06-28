@@ -24,7 +24,7 @@ const actionNames: Record<ActionType, string> = {
   [ActionType.DIGEST]: "Add to digest",
   [ActionType.NOTIFY_SENDER]: "Notify sender",
   [ActionType.A2A_NOTIFY]: "A2A Notify",
-  [ActionType.CREATE_TASK]: "Create TaskPilot task",
+  [ActionType.CREATE_TASK]: "TaskPilot",
 };
 
 const actionTooltips: Partial<Record<ActionType, string>> = {
@@ -36,7 +36,7 @@ const actionTooltips: Partial<Record<ActionType, string>> = {
     "Group emails together and receive them as a daily summary",
   [ActionType.A2A_NOTIFY]: "Send notification to remote A2A agent",
   [ActionType.CREATE_TASK]:
-    "Convert the email into a TaskPilot work item using AI enrichment. Requires TaskPilot credentials in settings.",
+    "Create a TaskPilot task from this email — or, if the same thread already has a task, add the new message as a comment instead. Requires TaskPilot credentials in settings.",
 };
 
 export function AvailableActionsPanel() {

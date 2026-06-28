@@ -230,3 +230,121 @@ export async function getEmailTaskLink(
 function buildTaskpilotUrl(workspaceSlug: string, identifier: string): string {
   return `https://taskpilot.sudiptadhara.in/${workspaceSlug}/browse/${identifier}`;
 }
+
+export async function findLinkByThread(
+  emailAccountId: string,
+  threadId: string,
+) {
+  return prisma.emailTaskLink.findFirst({
+    where: { emailAccountId, threadId },
+    orderBy: { createdAt: "desc" },
+  });
+}
+
+export interface CommentInput {
+  deepLink: string;
+  email: {
+    subject: string;
+    from: string;
+    snippet: string;
+    receivedAt: Date;
+  };
+  emailAccountId: string;
+  messageId: string;
+  ruleId?: string | null;
+  source: EmailTaskLinkSource;
+  threadId: string;
+  userId: string;
+}
+
+/**
+ * Comment on the task linked to this thread and record a link row for the new
+ * message (so badges show on both messages). Returns null when the linked task
+ * no longer exists in TaskPilot — caller should fall through to commitTask.
+ */
+export async function commentOnLinkedTask(
+  input: CommentInput,
+): Promise<CommitResult | null> {
+  const existing = await findLinkByThread(input.emailAccountId, input.threadId);
+  if (!existing) return null;
+
+  const config = await getTaskpilotConfigForUser(input.userId);
+  const client = new TaskpilotClient(config);
+  const html = buildCommentHtml(input);
+
+  try {
+    await client.addComment(
+      existing.projectId,
+      existing.taskpilotIssueId,
+      html,
+    );
+  } catch (err) {
+    // 404 = task was deleted in TaskPilot; signal caller to create instead.
+    if (
+      err &&
+      typeof err === "object" &&
+      "code" in err &&
+      (err as { code: string }).code === "TASKPILOT_NOT_FOUND"
+    ) {
+      logger.warn("linked task gone in TaskPilot, will create", {
+        issueId: existing.taskpilotIssueId,
+      });
+      return null;
+    }
+    throw err;
+  }
+
+  await prisma.emailTaskLink.upsert({
+    where: {
+      emailAccountId_gmailMessageId: {
+        emailAccountId: input.emailAccountId,
+        gmailMessageId: input.messageId,
+      },
+    },
+    create: {
+      emailAccountId: input.emailAccountId,
+      gmailMessageId: input.messageId,
+      threadId: input.threadId,
+      workspaceSlug: existing.workspaceSlug,
+      projectId: existing.projectId,
+      taskpilotIssueId: existing.taskpilotIssueId,
+      taskpilotIdentifier: existing.taskpilotIdentifier,
+      source: input.source,
+      ruleId: input.ruleId ?? null,
+    },
+    update: {},
+  });
+
+  return {
+    taskpilotIdentifier: existing.taskpilotIdentifier,
+    taskpilotIssueId: existing.taskpilotIssueId,
+    taskpilotUrl: buildTaskpilotUrl(
+      existing.workspaceSlug,
+      existing.taskpilotIdentifier,
+    ),
+    alreadyExisted: true,
+  };
+}
+
+function buildCommentHtml(input: CommentInput): string {
+  const when = input.email.receivedAt.toISOString();
+  const safeFrom = escapeHtml(input.email.from);
+  const safeSubject = escapeHtml(input.email.subject);
+  const safeSnippet = escapeHtml(input.email.snippet);
+  return (
+    "<p><strong>New message in this thread</strong></p>" +
+    `<p>From: ${safeFrom}<br/>` +
+    `Subject: ${safeSubject}<br/>` +
+    `Received: ${when}</p>` +
+    `<p>${safeSnippet}</p>` +
+    `<p><a href="${input.deepLink}">Open in Inbox</a></p>`
+  );
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}

@@ -82,6 +82,18 @@ export class TaskpilotClient {
     );
   }
 
+  async addComment(
+    projectId: string,
+    issueId: string,
+    commentHtml: string,
+  ): Promise<void> {
+    await this.request(
+      "POST",
+      `/workspaces/${this.workspaceSlug}/projects/${projectId}/work-items/${issueId}/comments/`,
+      { comment_html: commentHtml },
+    );
+  }
+
   private async request(
     method: "GET" | "POST",
     path: string,
