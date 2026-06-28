@@ -182,7 +182,10 @@ async function processPendingTasks(logger: Logger) {
         });
       } catch (updateError: unknown) {
         taskLogger.error("Failed to mark task as failed", {
-          error: updateError instanceof Error ? updateError.message : String(updateError),
+          error:
+            updateError instanceof Error
+              ? updateError.message
+              : String(updateError),
         });
       }
     }
@@ -336,7 +339,9 @@ async function cleanupOldRecords(logger: Logger) {
       webhooksDeleted,
     };
   } catch (error: unknown) {
-    logger.error("Failed to clean up old records", { error: error instanceof Error ? error.message : String(error) });
+    logger.error("Failed to clean up old records", {
+      error: error instanceof Error ? error.message : String(error),
+    });
     return {
       rateLimitsDeleted: 0,
       webhooksDeleted: 0,

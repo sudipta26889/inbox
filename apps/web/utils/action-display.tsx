@@ -87,7 +87,7 @@ export function getActionDisplay(
     case ActionType.A2A_NOTIFY:
       return "A2A Notify";
     case ActionType.CREATE_TASK:
-      return "Create TaskPilot task";
+      return "TaskPilot";
     default: {
       const exhaustiveCheck: never = action.type;
       return exhaustiveCheck;

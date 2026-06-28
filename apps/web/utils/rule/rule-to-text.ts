@@ -83,7 +83,7 @@ export function ruleToText(rule: RuleWithActions): string {
         actions.push("Send A2A notification");
         break;
       case ActionType.CREATE_TASK:
-        actions.push("Create TaskPilot task");
+        actions.push("TaskPilot");
         break;
     }
   });

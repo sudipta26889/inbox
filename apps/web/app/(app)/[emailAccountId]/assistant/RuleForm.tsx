@@ -401,7 +401,7 @@ export function RuleForm({
         icon: getActionIcon(ActionType.A2A_NOTIFY),
       },
       {
-        label: "Create TaskPilot task",
+        label: "TaskPilot",
         value: ActionType.CREATE_TASK,
         icon: getActionIcon(ActionType.CREATE_TASK),
       },
