@@ -2,6 +2,7 @@ import { createScopedLogger } from "@/utils/logger";
 import type { EnrichmentInput } from "@/utils/ai/taskpilot/enrich";
 import {
   commentOnLinkedTask,
+  commentOnSimilarTask,
   commitTask,
   draftTaskFromEmail,
 } from "@/utils/taskpilot/service";
@@ -60,6 +61,31 @@ export async function executeCreateTaskAction(
         alreadyExisted: true,
       };
     }
+  }
+
+  // Cross-thread semantic dedupe via qdrant vector search.
+  const semanticHit = await commentOnSimilarTask({
+    userId: input.userId,
+    emailAccountId: input.emailAccountId,
+    messageId: input.email.id,
+    threadId: input.email.threadId,
+    deepLink: input.email.deepLink,
+    email: {
+      subject: input.email.subject,
+      from: input.email.from,
+      snippet: input.email.snippet,
+      bodyText: input.email.bodyText,
+      receivedAt: new Date(Number(input.email.internalDate) || Date.now()),
+    },
+    source: "RULE",
+    ruleId: input.rule?.id ?? null,
+  });
+  if (semanticHit) {
+    return {
+      taskpilotIdentifier: semanticHit.taskpilotIdentifier,
+      taskpilotIssueId: semanticHit.taskpilotIssueId,
+      alreadyExisted: true,
+    };
   }
 
   const draftResult = await draftTaskFromEmail({

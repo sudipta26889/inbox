@@ -13,6 +13,7 @@ import type {
 import { taskpilotCache } from "@/utils/taskpilot/cache";
 import { TaskpilotClient } from "@/utils/taskpilot/client";
 import { getTaskpilotConfigForUser } from "@/utils/taskpilot/config";
+import { findSimilarTask, indexTask } from "@/utils/taskpilot/similar";
 import type { Label, Project } from "@/utils/taskpilot/types";
 
 const logger = createScopedLogger("taskpilot-service");
@@ -195,6 +196,20 @@ export async function commitTask(input: CommitInput): Promise<CommitResult> {
     },
   });
 
+  // Best-effort: index for cross-thread semantic dedupe on future emails.
+  // Failure here is non-fatal — the task is already created and linked.
+  if (!created.alreadyExisted) {
+    // Fire-and-forget. indexTask catches its own errors.
+    indexTask({
+      emailAccountId: input.emailAccountId,
+      taskpilotIssueId: created.id,
+      taskpilotIdentifier: link.taskpilotIdentifier,
+      workspaceSlug,
+      projectId: input.draft.projectId,
+      text: `${input.draft.title}\n\n${input.draft.description_html}`,
+    }).catch(() => undefined);
+  }
+
   return {
     taskpilotIdentifier: link.taskpilotIdentifier,
     taskpilotIssueId: link.taskpilotIssueId,
@@ -247,14 +262,22 @@ export interface CommentInput {
     subject: string;
     from: string;
     snippet: string;
+    bodyText?: string;
     receivedAt: Date;
   };
   emailAccountId: string;
   messageId: string;
   ruleId?: string | null;
   source: EmailTaskLinkSource;
-  threadId: string;
+  threadId: string | null;
   userId: string;
+}
+
+interface ExistingTaskTarget {
+  projectId: string;
+  taskpilotIdentifier: string;
+  taskpilotIssueId: string;
+  workspaceSlug: string;
 }
 
 /**
@@ -265,19 +288,56 @@ export interface CommentInput {
 export async function commentOnLinkedTask(
   input: CommentInput,
 ): Promise<CommitResult | null> {
+  if (!input.threadId) return null;
   const existing = await findLinkByThread(input.emailAccountId, input.threadId);
   if (!existing) return null;
+  return applyCommentAndLink(input, {
+    taskpilotIssueId: existing.taskpilotIssueId,
+    taskpilotIdentifier: existing.taskpilotIdentifier,
+    workspaceSlug: existing.workspaceSlug,
+    projectId: existing.projectId,
+  });
+}
 
+/**
+ * Cross-thread semantic dedupe via qdrant. Returns null when there is no
+ * sufficiently similar open task (or qdrant is unreachable) — caller falls
+ * through to commitTask.
+ */
+export async function commentOnSimilarTask(
+  input: CommentInput,
+): Promise<CommitResult | null> {
+  const text = [
+    input.email.subject,
+    input.email.from,
+    input.email.bodyText ?? input.email.snippet,
+  ]
+    .filter(Boolean)
+    .join("\n");
+  const hit = await findSimilarTask(input.emailAccountId, text);
+  if (!hit) return null;
+  logger.info("semantic-dedupe hit", {
+    issueId: hit.taskpilotIssueId,
+    score: hit.score,
+  });
+  return applyCommentAndLink(input, {
+    taskpilotIssueId: hit.taskpilotIssueId,
+    taskpilotIdentifier: hit.taskpilotIdentifier,
+    workspaceSlug: hit.workspaceSlug,
+    projectId: hit.projectId,
+  });
+}
+
+async function applyCommentAndLink(
+  input: CommentInput,
+  target: ExistingTaskTarget,
+): Promise<CommitResult | null> {
   const config = await getTaskpilotConfigForUser(input.userId);
   const client = new TaskpilotClient(config);
   const html = buildCommentHtml(input);
 
   try {
-    await client.addComment(
-      existing.projectId,
-      existing.taskpilotIssueId,
-      html,
-    );
+    await client.addComment(target.projectId, target.taskpilotIssueId, html);
   } catch (err) {
     // 404 = task was deleted in TaskPilot; signal caller to create instead.
     if (
@@ -286,8 +346,8 @@ export async function commentOnLinkedTask(
       "code" in err &&
       (err as { code: string }).code === "TASKPILOT_NOT_FOUND"
     ) {
-      logger.warn("linked task gone in TaskPilot, will create", {
-        issueId: existing.taskpilotIssueId,
+      logger.warn("target task gone in TaskPilot, will create", {
+        issueId: target.taskpilotIssueId,
       });
       return null;
     }
@@ -305,10 +365,10 @@ export async function commentOnLinkedTask(
       emailAccountId: input.emailAccountId,
       gmailMessageId: input.messageId,
       threadId: input.threadId,
-      workspaceSlug: existing.workspaceSlug,
-      projectId: existing.projectId,
-      taskpilotIssueId: existing.taskpilotIssueId,
-      taskpilotIdentifier: existing.taskpilotIdentifier,
+      workspaceSlug: target.workspaceSlug,
+      projectId: target.projectId,
+      taskpilotIssueId: target.taskpilotIssueId,
+      taskpilotIdentifier: target.taskpilotIdentifier,
       source: input.source,
       ruleId: input.ruleId ?? null,
     },
@@ -316,11 +376,11 @@ export async function commentOnLinkedTask(
   });
 
   return {
-    taskpilotIdentifier: existing.taskpilotIdentifier,
-    taskpilotIssueId: existing.taskpilotIssueId,
+    taskpilotIdentifier: target.taskpilotIdentifier,
+    taskpilotIssueId: target.taskpilotIssueId,
     taskpilotUrl: buildTaskpilotUrl(
-      existing.workspaceSlug,
-      existing.taskpilotIdentifier,
+      target.workspaceSlug,
+      target.taskpilotIdentifier,
     ),
     alreadyExisted: true,
   };

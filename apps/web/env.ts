@@ -105,6 +105,9 @@ export const env = createEnv({
     OPENAI_COMPATIBLE_MODEL: z.string().optional(),
     LITELLM_BASE_URL: z.string().optional(),
 
+    QDRANT_URL: z.string().optional(),
+    QDRANT_API_KEY: z.string().optional(),
+
     OPENAI_ZERO_DATA_RETENTION: booleanString.optional().default(false),
 
     // Upstash HTTP client removed — using ioredis directly
