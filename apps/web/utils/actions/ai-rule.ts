@@ -58,6 +58,14 @@ export const runRulesAction = actionClient
 
       const fetchExecutedRule = !isTest && !rerun;
 
+      // ponytail: collapse history on rerun. add a soft-delete flag if you
+      // ever need a real audit trail of every rerun.
+      if (rerun && !isTest) {
+        await prisma.executedRule.deleteMany({
+          where: { emailAccountId, threadId, messageId },
+        });
+      }
+
       const executedRules = fetchExecutedRule
         ? await prisma.executedRule.findMany({
             where: {
