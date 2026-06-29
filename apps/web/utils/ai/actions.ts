@@ -33,8 +33,6 @@ import {
   getRemoteAgentUrls,
 } from "@/utils/a2a-client";
 import { executeCreateTaskAction } from "@/utils/ai/actions/create-task";
-import { buildTaskpilotChatCompletion } from "@/utils/taskpilot/llm";
-import { getEmailUrlForMessage } from "@/utils/url";
 
 const MODULE = "ai-actions";
 
@@ -618,66 +616,11 @@ const a2a_notify: ActionFunction<Record<string, unknown>> = async ({
 };
 
 const create_task: ActionFunction<Record<string, unknown>> = async ({
-  client,
   email,
-  executedRule,
-  userId,
-  userEmail,
   emailAccountId,
-  logger,
 }) => {
-  try {
-    let ruleInstructions: string | null = null;
-    if (executedRule.ruleId) {
-      const ruleRow = await prisma.rule.findUnique({
-        where: { id: executedRule.ruleId },
-        select: { instructions: true },
-      });
-      ruleInstructions = ruleRow?.instructions ?? null;
-    }
-
-    const chatCompletionObject =
-      await buildTaskpilotChatCompletion(emailAccountId);
-
-    const result = await executeCreateTaskAction({
-      email: {
-        id: email.id,
-        threadId: email.threadId ?? null,
-        subject: email.headers.subject ?? "",
-        from: email.headers.from ?? "",
-        snippet: email.snippet ?? "",
-        bodyText: email.textPlain ?? "",
-        internalDate: String(email.internalDate ?? Date.now()),
-        deepLink: getEmailUrlForMessage(
-          email.id,
-          email.threadId ?? "",
-          userEmail,
-          client.name,
-        ),
-      },
-      emailAccountId,
-      userId,
-      rule: executedRule.ruleId
-        ? { id: executedRule.ruleId, instructions: ruleInstructions }
-        : null,
-      chatCompletionObject,
-    });
-    return {
-      success: true,
-      taskpilotIdentifier: result.taskpilotIdentifier,
-      alreadyExisted: result.alreadyExisted,
-    };
-  } catch (err) {
-    logger.error("CREATE_TASK action failed", { err });
-    captureException(
-      err instanceof Error ? err : new Error("CREATE_TASK action failed"),
-      {
-        extra: { actionType: ActionType.CREATE_TASK },
-        sampleRate: 0.1,
-      },
-    );
-    return { success: false, errorCode: "EXECUTION_FAILED" };
-  }
+  await executeCreateTaskAction({ messageId: email.id, emailAccountId });
+  return { success: true };
 };
 
 async function lazyUpdateActionLabelId({

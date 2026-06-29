@@ -1,134 +1,21 @@
 import { createScopedLogger } from "@/utils/logger";
-import type { EnrichmentInput } from "@/utils/ai/taskpilot/enrich";
-import {
-  commentOnLinkedTask,
-  commentOnSimilarTask,
-  commitTask,
-  draftTaskFromEmail,
-} from "@/utils/taskpilot/service";
 
-const logger = createScopedLogger("taskpilot-create-task-action");
+const logger = createScopedLogger("action-create-task");
 
-export interface CreateTaskActionInput {
-  /** Required in production; built from emailAccount by the caller. */
-  chatCompletionObject: NonNullable<EnrichmentInput["chatCompletionObject"]>;
-  email: {
-    id: string;
-    threadId: string | null;
-    subject: string;
-    from: string;
-    snippet: string;
-    bodyText: string;
-    internalDate: string;
-    deepLink: string;
-  };
+/**
+ * CREATE_TASK action: a canCreate signal only. The actual TaskPilot decision
+ * happens in the post-rules hook (maybeRouteToTaskPilot), which inspects
+ * executedRules to find this action type. The hook may pick COMMENT_ON over
+ * CREATE when a strong similar task exists (B+C policy).
+ *
+ * ponytail: stub — real logic lives in route.ts maybeRouteToTaskPilot (Task 17)
+ */
+export async function executeCreateTaskAction(input: {
+  messageId: string;
   emailAccountId: string;
-  rule: { id: string; instructions: string | null } | null;
-  userId: string;
-}
-
-export interface CreateTaskActionResult {
-  alreadyExisted: boolean;
-  taskpilotIdentifier: string;
-  taskpilotIssueId: string;
-}
-
-export async function executeCreateTaskAction(
-  input: CreateTaskActionInput,
-): Promise<CreateTaskActionResult> {
-  // Same thread already has a linked task? Comment on it instead of duplicating.
-  // Skips the enrichment LLM call entirely on the comment path.
-  if (input.email.threadId) {
-    const commented = await commentOnLinkedTask({
-      userId: input.userId,
-      emailAccountId: input.emailAccountId,
-      messageId: input.email.id,
-      threadId: input.email.threadId,
-      deepLink: input.email.deepLink,
-      email: {
-        subject: input.email.subject,
-        from: input.email.from,
-        snippet: input.email.snippet,
-        receivedAt: new Date(Number(input.email.internalDate) || Date.now()),
-      },
-      source: "RULE",
-      ruleId: input.rule?.id ?? null,
-    });
-    if (commented) {
-      return {
-        taskpilotIdentifier: commented.taskpilotIdentifier,
-        taskpilotIssueId: commented.taskpilotIssueId,
-        alreadyExisted: true,
-      };
-    }
-  }
-
-  // Cross-thread semantic dedupe via qdrant vector search.
-  const semanticHit = await commentOnSimilarTask({
-    userId: input.userId,
+}): Promise<void> {
+  logger.info("CREATE_TASK signal emitted; post-rules hook will decide", {
+    messageId: input.messageId,
     emailAccountId: input.emailAccountId,
-    messageId: input.email.id,
-    threadId: input.email.threadId,
-    deepLink: input.email.deepLink,
-    email: {
-      subject: input.email.subject,
-      from: input.email.from,
-      snippet: input.email.snippet,
-      bodyText: input.email.bodyText,
-      receivedAt: new Date(Number(input.email.internalDate) || Date.now()),
-    },
-    source: "RULE",
-    ruleId: input.rule?.id ?? null,
   });
-  if (semanticHit) {
-    return {
-      taskpilotIdentifier: semanticHit.taskpilotIdentifier,
-      taskpilotIssueId: semanticHit.taskpilotIssueId,
-      alreadyExisted: true,
-    };
-  }
-
-  const draftResult = await draftTaskFromEmail({
-    userId: input.userId,
-    emailAccountId: input.emailAccountId,
-    messageId: input.email.id,
-    email: {
-      subject: input.email.subject,
-      from: input.email.from,
-      snippet: input.email.snippet,
-      bodyText: input.email.bodyText,
-      receivedAt: new Date(Number(input.email.internalDate) || Date.now()),
-    },
-    ruleContext: input.rule?.instructions ?? undefined,
-    chatCompletionObject: input.chatCompletionObject,
-  });
-
-  if (draftResult.alreadyExisted && draftResult.link) {
-    return {
-      taskpilotIdentifier: draftResult.link.taskpilotIdentifier,
-      taskpilotIssueId: draftResult.link.taskpilotIssueId,
-      alreadyExisted: true,
-    };
-  }
-  if (!draftResult.draft) {
-    logger.error("draft missing without alreadyExisted; cannot proceed");
-    throw new Error("taskpilot: draft missing in non-existing branch");
-  }
-
-  const commit = await commitTask({
-    userId: input.userId,
-    emailAccountId: input.emailAccountId,
-    messageId: input.email.id,
-    threadId: input.email.threadId,
-    deepLink: input.email.deepLink,
-    draft: draftResult.draft,
-    source: "RULE",
-    ruleId: input.rule?.id ?? null,
-  });
-
-  return {
-    taskpilotIdentifier: commit.taskpilotIdentifier,
-    taskpilotIssueId: commit.taskpilotIssueId,
-    alreadyExisted: commit.alreadyExisted,
-  };
 }
