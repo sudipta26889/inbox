@@ -6,14 +6,20 @@ import {
   convertEmailDraftBody,
   updateTaskpilotIntegrationBody,
 } from "@/utils/actions/taskpilot.validation";
+import { env } from "@/env";
 import { createEmailProvider } from "@/utils/email/provider";
 import { encryptToken } from "@/utils/encryption";
 import prisma from "@/utils/prisma";
+import { taskpilotCache } from "@/utils/taskpilot/cache";
+import { TaskpilotClient } from "@/utils/taskpilot/client";
 import {
   getTaskpilotClientForUser,
+  getTaskpilotConfigForUser,
   getTaskpilotConfigStatus,
 } from "@/utils/taskpilot/config";
-import { commitTask, draftTaskFromEmail } from "@/utils/taskpilot/service";
+import { decidePass1 } from "@/utils/taskpilot/decide";
+import { commitTask } from "@/utils/taskpilot/service";
+import type { CreateTaskDraft } from "@/utils/taskpilot/types";
 import { getEmailUrlForMessage } from "@/utils/url";
 
 export const convertEmailToTaskpilotTaskDraftAction = actionClient
@@ -24,24 +30,85 @@ export const convertEmailToTaskpilotTaskDraftAction = actionClient
       ctx: { userId, emailAccountId, provider: providerType, logger },
       parsedInput: { messageId },
     }) => {
+      const existing = await prisma.emailTaskLink.findFirst({
+        where: { emailAccountId, gmailMessageId: messageId },
+      });
+      if (existing) {
+        return {
+          alreadyExisted: true as const,
+          link: {
+            taskpilotIdentifier: existing.taskpilotIdentifier,
+            taskpilotIssueId: existing.taskpilotIssueId,
+            projectId: existing.projectId,
+          },
+        };
+      }
+
       const provider = await createEmailProvider({
         emailAccountId,
         provider: providerType,
         logger,
       });
       const message = await provider.getMessage(messageId);
-      return draftTaskFromEmail({
-        userId,
-        emailAccountId,
-        messageId,
+
+      const config = await getTaskpilotConfigForUser(userId);
+      const client = new TaskpilotClient(config);
+      const projects = await taskpilotCache.getProjects(userId, () =>
+        client.listProjects(),
+      );
+      const labelsByProject: Record<
+        string,
+        Array<{ id: string; name: string }>
+      > = {};
+      for (const p of projects) {
+        labelsByProject[p.id] = await taskpilotCache.getLabels(
+          userId,
+          p.id,
+          () => client.listLabels(p.id),
+        );
+      }
+
+      const pass1 = await decidePass1({
+        mode: "force_create",
         email: {
-          subject: message.headers.subject ?? "",
           from: message.headers.from ?? "",
-          snippet: message.snippet ?? "",
+          subject: message.headers.subject ?? "",
           bodyText: message.textPlain ?? "",
-          receivedAt: new Date(Number(message.internalDate ?? Date.now())),
+          receivedAt: new Date(Number(message.internalDate) || Date.now()),
         },
+        candidates: [],
+        canCreate: true,
+        projects,
+        labelsByProject,
+        todayISO: new Date().toISOString().slice(0, 10),
+        model: env.TASKPILOT_DECIDER_MODEL,
+        effort: env.TASKPILOT_DECIDER_REASONING_EFFORT,
+        maxTokens: env.TASKPILOT_DECIDER_MAX_TOKENS,
+        timeoutMs: env.TASKPILOT_DECIDER_TIMEOUT_MS,
       });
+
+      if (!pass1.ok || pass1.decision.action !== "CREATE") {
+        return {
+          alreadyExisted: false as const,
+          error: pass1.ok ? "force_create violation" : pass1.errorMsg,
+        };
+      }
+
+      const draft: CreateTaskDraft = {
+        projectId: pass1.decision.draft.projectId,
+        title: pass1.decision.draft.title,
+        description_html: pass1.decision.draft.descriptionHtml,
+        priority: pass1.decision.draft.priority,
+        labelNames: pass1.decision.draft.labelNames,
+        targetDate: pass1.decision.draft.targetDate ?? undefined,
+      };
+
+      return {
+        alreadyExisted: false as const,
+        draft,
+        projects,
+        labelsByProject,
+      };
     },
   );
 
