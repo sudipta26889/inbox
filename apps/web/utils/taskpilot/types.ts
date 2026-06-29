@@ -7,6 +7,12 @@ export interface Project {
   name: string;
 }
 
+export interface WorkspaceMember {
+  display_name: string;
+  email: string;
+  id: string;
+}
+
 export interface Label {
   id: string;
   name: string;

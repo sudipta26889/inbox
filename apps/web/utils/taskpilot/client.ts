@@ -16,6 +16,7 @@ import type {
   TaskUpdatePatch,
   WorkItemCreateInput,
   WorkItemCreateResult,
+  WorkspaceMember,
 } from "@/utils/taskpilot/types";
 
 const logger = createScopedLogger("taskpilot-client");
@@ -45,6 +46,14 @@ export class TaskpilotClient {
       `/workspaces/${this.workspaceSlug}/projects/`,
     );
     return unwrapList<Project>(await res.json());
+  }
+
+  async listMembers(): Promise<WorkspaceMember[]> {
+    const res = await this.request(
+      "GET",
+      `/workspaces/${this.workspaceSlug}/members/`,
+    );
+    return unwrapList<WorkspaceMember>(await res.json());
   }
 
   async listLabels(projectId: string): Promise<Label[]> {

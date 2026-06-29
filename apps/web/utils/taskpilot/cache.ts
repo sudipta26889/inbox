@@ -1,4 +1,9 @@
-import type { Label, Project, TaskState } from "@/utils/taskpilot/types";
+import type {
+  Label,
+  Project,
+  TaskState,
+  WorkspaceMember,
+} from "@/utils/taskpilot/types";
 
 interface Entry<T> {
   expiresAt: number;
@@ -14,6 +19,7 @@ export class TaskpilotCache {
   private readonly projects = new Map<string, Entry<Project[]>>();
   private readonly labels = new Map<string, Entry<Label[]>>();
   private readonly states = new Map<string, Entry<TaskState[]>>();
+  private readonly members = new Map<string, Entry<WorkspaceMember[]>>();
 
   constructor(opts: TaskpilotCacheOptions) {
     this.ttlMs = opts.ttlMs;
@@ -42,8 +48,16 @@ export class TaskpilotCache {
     return this.getOrLoad(this.states, `${userId}:${projectId}`, loader);
   }
 
+  async getMembers(
+    userId: string,
+    loader: () => Promise<WorkspaceMember[]>,
+  ): Promise<WorkspaceMember[]> {
+    return this.getOrLoad(this.members, userId, loader);
+  }
+
   invalidateUser(userId: string): void {
     this.projects.delete(userId);
+    this.members.delete(userId);
     const prefix = `${userId}:`;
     for (const key of this.labels.keys()) {
       if (key.startsWith(prefix)) this.labels.delete(key);
