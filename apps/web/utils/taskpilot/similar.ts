@@ -6,7 +6,6 @@ const logger = createScopedLogger("taskpilot-similar");
 // ponytail: hardcoded knobs. promote to env if anyone needs to tune live.
 const COLLECTION = "taskpilot_tasks";
 const EMBED_MODEL = "nomic-embed-text"; // 768d, local via litellm
-const SIMILARITY_THRESHOLD = 0.65; // cosine. nomic-embed-text is conservative — same-topic BPCL pair scores 0.67. tune up if false positives.
 
 export interface SimilarTaskHit {
   projectId: string;
@@ -25,16 +24,18 @@ export interface IndexTaskInput {
   workspaceSlug: string;
 }
 
-export async function findSimilarTask(
+export async function findSimilarTasksTopK(
   emailAccountId: string,
   text: string,
-): Promise<SimilarTaskHit | null> {
+  k: number,
+  scoreThreshold: number,
+): Promise<SimilarTaskHit[]> {
   const qdrantUrl = env.QDRANT_URL;
-  if (!qdrantUrl) return null;
+  if (!qdrantUrl) return [];
 
   try {
     const vector = await embed(text);
-    if (!vector) return null;
+    if (!vector) return [];
 
     const res = await fetch(
       `${qdrantUrl.replace(/\/$/, "")}/collections/${COLLECTION}/points/search`,
@@ -43,23 +44,18 @@ export async function findSimilarTask(
         headers: qdrantHeaders(),
         body: JSON.stringify({
           vector,
-          limit: 1,
+          limit: k,
           with_payload: true,
-          score_threshold: SIMILARITY_THRESHOLD,
+          score_threshold: scoreThreshold,
           filter: {
-            must: [
-              {
-                key: "emailAccountId",
-                match: { value: emailAccountId },
-              },
-            ],
+            must: [{ key: "emailAccountId", match: { value: emailAccountId } }],
           },
         }),
       },
     );
     if (!res.ok) {
       logger.warn("qdrant search non-ok", { status: res.status });
-      return null;
+      return [];
     }
     const body = (await res.json()) as {
       result?: Array<{
@@ -72,18 +68,18 @@ export async function findSimilarTask(
         };
       }>;
     };
-    const top = body.result?.[0];
-    if (!top?.payload?.taskpilotIssueId) return null;
-    return {
-      taskpilotIssueId: top.payload.taskpilotIssueId,
-      taskpilotIdentifier: top.payload.taskpilotIdentifier ?? "",
-      workspaceSlug: top.payload.workspaceSlug ?? "",
-      projectId: top.payload.projectId ?? "",
-      score: top.score,
-    };
+    return (body.result ?? [])
+      .filter((r) => r.payload?.taskpilotIssueId)
+      .map((r) => ({
+        taskpilotIssueId: r.payload!.taskpilotIssueId!,
+        taskpilotIdentifier: r.payload!.taskpilotIdentifier ?? "",
+        workspaceSlug: r.payload!.workspaceSlug ?? "",
+        projectId: r.payload!.projectId ?? "",
+        score: r.score,
+      }));
   } catch (err) {
-    logger.warn("findSimilarTask failed; falling through to create", { err });
-    return null;
+    logger.warn("findSimilarTasksTopK failed; returning []", { err });
+    return [];
   }
 }
 

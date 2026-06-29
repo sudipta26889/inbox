@@ -17,7 +17,7 @@ import {
   getTaskpilotConfigStatus,
 } from "@/utils/taskpilot/config";
 import { classifyEmailIntent } from "@/utils/taskpilot/intent";
-import { findSimilarTask, indexTask } from "@/utils/taskpilot/similar";
+import { findSimilarTasksTopK, indexTask } from "@/utils/taskpilot/similar";
 import type { Label, Project } from "@/utils/taskpilot/types";
 
 const logger = createScopedLogger("taskpilot-service");
@@ -318,7 +318,8 @@ export async function commentOnSimilarTask(
   ]
     .filter(Boolean)
     .join("\n");
-  const hit = await findSimilarTask(input.emailAccountId, text);
+  const hits = await findSimilarTasksTopK(input.emailAccountId, text, 1, 0.65);
+  const hit = hits[0] ?? null;
   if (!hit) return null;
   logger.info("semantic-dedupe hit", {
     issueId: hit.taskpilotIssueId,
