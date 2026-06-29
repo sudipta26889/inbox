@@ -10,6 +10,7 @@ import type {
   IssueLinkInput,
   Label,
   Project,
+  TaskState,
   WorkItemCreateInput,
   WorkItemCreateResult,
 } from "@/utils/taskpilot/types";
@@ -94,8 +95,28 @@ export class TaskpilotClient {
     );
   }
 
+  async listStates(projectId: string): Promise<TaskState[]> {
+    const res = await this.request(
+      "GET",
+      `/workspaces/${this.workspaceSlug}/projects/${projectId}/states/`,
+    );
+    return unwrapList<TaskState>(await res.json());
+  }
+
+  async moveTask(
+    projectId: string,
+    issueId: string,
+    stateId: string,
+  ): Promise<void> {
+    await this.request(
+      "PATCH",
+      `/workspaces/${this.workspaceSlug}/projects/${projectId}/work-items/${issueId}/`,
+      { state: stateId },
+    );
+  }
+
   private async request(
-    method: "GET" | "POST",
+    method: "GET" | "POST" | "PATCH",
     path: string,
     body?: unknown,
     opts: { allow409?: boolean } = {},

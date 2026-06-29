@@ -12,7 +12,11 @@ import type {
 } from "@/utils/ai/taskpilot/enrich";
 import { taskpilotCache } from "@/utils/taskpilot/cache";
 import { TaskpilotClient } from "@/utils/taskpilot/client";
-import { getTaskpilotConfigForUser } from "@/utils/taskpilot/config";
+import {
+  getTaskpilotConfigForUser,
+  getTaskpilotConfigStatus,
+} from "@/utils/taskpilot/config";
+import { classifyEmailIntent } from "@/utils/taskpilot/intent";
 import { findSimilarTask, indexTask } from "@/utils/taskpilot/similar";
 import type { Label, Project } from "@/utils/taskpilot/types";
 
@@ -375,6 +379,10 @@ async function applyCommentAndLink(
     update: {},
   });
 
+  // Best-effort: if the email signals resolution, move the task to a
+  // completed state. Failure here is non-fatal — comment is already there.
+  maybeMoveTaskState(client, target, input).catch(() => undefined);
+
   return {
     taskpilotIdentifier: target.taskpilotIdentifier,
     taskpilotIssueId: target.taskpilotIssueId,
@@ -384,6 +392,76 @@ async function applyCommentAndLink(
     ),
     alreadyExisted: true,
   };
+}
+
+/**
+ * Rule-independent comment hook: run after any rule processes an email.
+ * If the email's thread or its semantic neighborhood already has a TaskPilot
+ * task, comment on it. NEVER creates a new task — that's reserved for the
+ * explicit CREATE_TASK rule action.
+ *
+ * Idempotent. Safe to call on every processed email — bails fast when:
+ *  - the message already has an EmailTaskLink (CREATE_TASK already handled it,
+ *    or a previous post-hook call already commented), or
+ *  - the user has no TaskPilot credentials configured.
+ *
+ * Best-effort: swallows all errors. Never blocks the calling rule pipeline.
+ */
+export async function maybeCommentOnRelatedTask(input: {
+  userId: string;
+  emailAccountId: string;
+  messageId: string;
+  threadId: string | null;
+  email: {
+    subject: string;
+    from: string;
+    snippet: string;
+    bodyText?: string;
+    receivedAt: Date;
+  };
+  deepLink: string;
+}): Promise<void> {
+  try {
+    const already = await prisma.emailTaskLink.findUnique({
+      where: {
+        emailAccountId_gmailMessageId: {
+          emailAccountId: input.emailAccountId,
+          gmailMessageId: input.messageId,
+        },
+      },
+    });
+    if (already) return;
+
+    const status = await getTaskpilotConfigStatus(input.userId);
+    if (!status.configured) return;
+
+    const commentInput: CommentInput = {
+      userId: input.userId,
+      emailAccountId: input.emailAccountId,
+      messageId: input.messageId,
+      threadId: input.threadId,
+      deepLink: input.deepLink,
+      email: input.email,
+      source: "RULE",
+      ruleId: null,
+    };
+
+    const linked = await commentOnLinkedTask(commentInput);
+    if (linked) {
+      logger.info("post-rules: commented on thread-linked task", {
+        identifier: linked.taskpilotIdentifier,
+      });
+      return;
+    }
+    const similar = await commentOnSimilarTask(commentInput);
+    if (similar) {
+      logger.info("post-rules: commented on semantically-similar task", {
+        identifier: similar.taskpilotIdentifier,
+      });
+    }
+  } catch (err) {
+    logger.warn("maybeCommentOnRelatedTask: swallowed error", { err });
+  }
 }
 
 function buildCommentHtml(input: CommentInput): string {
@@ -399,6 +477,42 @@ function buildCommentHtml(input: CommentInput): string {
     `<p>${safeSnippet}</p>` +
     `<p><a href="${input.deepLink}">Open in Inbox</a></p>`
   );
+}
+
+async function maybeMoveTaskState(
+  client: TaskpilotClient,
+  target: ExistingTaskTarget,
+  input: CommentInput,
+): Promise<void> {
+  const intent = await classifyEmailIntent({
+    subject: input.email.subject,
+    from: input.email.from,
+    snippet: input.email.snippet,
+    bodyText: input.email.bodyText,
+  });
+  if (intent !== "RESOLVED") return;
+
+  const states = await taskpilotCache.getStates(
+    input.userId,
+    target.projectId,
+    () => client.listStates(target.projectId),
+  );
+  const completed = states.find((s) => s.group === "completed");
+  if (!completed) {
+    logger.warn("intent=RESOLVED but no completed state on project", {
+      projectId: target.projectId,
+    });
+    return;
+  }
+  await client.moveTask(
+    target.projectId,
+    target.taskpilotIssueId,
+    completed.id,
+  );
+  logger.info("moved task to completed", {
+    identifier: target.taskpilotIdentifier,
+    stateId: completed.id,
+  });
 }
 
 function escapeHtml(s: string): string {

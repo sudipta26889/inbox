@@ -33,6 +33,8 @@ import {
   CONVERSATION_STATUS_TYPES,
   isConversationStatusType,
 } from "@/utils/reply-tracker/conversation-status-config";
+import { maybeCommentOnRelatedTask } from "@/utils/taskpilot/service";
+import { getEmailUrlForMessage } from "@/utils/url";
 import {
   determineConversationStatus,
   updateThreadTrackers,
@@ -244,6 +246,35 @@ export async function runRules({
       ...executedRule,
       status: executedRule.executedRule?.status || ExecutedRuleStatus.APPLIED,
     });
+  }
+
+  // Rule-independent TaskPilot comment hook. Runs only in production
+  // (skipped in test/preview). NEVER creates a new task — that requires an
+  // explicit CREATE_TASK action on a matched rule. Comments on a thread- or
+  // semantic-neighbor task when one exists, and auto-resolves the task if
+  // the email signals resolution. Best-effort: swallows its own errors.
+  if (!isTest) {
+    after(() =>
+      maybeCommentOnRelatedTask({
+        userId: emailAccount.userId,
+        emailAccountId: emailAccount.id,
+        messageId: message.id,
+        threadId: message.threadId ?? null,
+        deepLink: getEmailUrlForMessage(
+          message.id,
+          message.threadId ?? "",
+          emailAccount.email,
+          provider.name,
+        ),
+        email: {
+          subject: message.headers.subject ?? "",
+          from: message.headers.from ?? "",
+          snippet: message.snippet ?? "",
+          bodyText: message.textPlain ?? "",
+          receivedAt: new Date(Number(message.internalDate) || Date.now()),
+        },
+      }),
+    );
   }
 
   return executedRules;

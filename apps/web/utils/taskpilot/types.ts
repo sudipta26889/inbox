@@ -34,3 +34,17 @@ export interface IssueLinkInput {
   title: string;
   url: string;
 }
+
+export type StateGroup =
+  | "backlog"
+  | "unstarted"
+  | "started"
+  | "completed"
+  | "cancelled"
+  | "triage";
+
+export interface TaskState {
+  group: StateGroup;
+  id: string;
+  name: string;
+}
