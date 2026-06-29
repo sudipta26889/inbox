@@ -1,4 +1,4 @@
-import { callDecider } from "@/utils/taskpilot/llm-call";
+import { callDecider } from "@/utils/taskpilot/llm";
 import {
   buildPass1Prompt,
   buildPass2Prompt,

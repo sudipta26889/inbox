@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { decidePass1, decidePass2 } from "@/utils/taskpilot/decide";
 
-vi.mock("@/utils/taskpilot/llm-call", () => ({
+vi.mock("@/utils/taskpilot/llm", () => ({
   callDecider: vi.fn(),
 }));
-import { callDecider } from "@/utils/taskpilot/llm-call";
+import { callDecider } from "@/utils/taskpilot/llm";
 
 describe("decidePass1", () => {
   it("returns ok with decision on success", async () => {

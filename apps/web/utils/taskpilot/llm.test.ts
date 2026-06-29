@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { callDecider } from "@/utils/taskpilot/llm-call";
+import { callDecider } from "@/utils/taskpilot/llm";
 
 const TestSchema = z.object({
   action: z.literal("IGNORE"),
