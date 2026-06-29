@@ -200,6 +200,7 @@ function tryParse<T>(
   } catch (e) {
     return { ok: false, error: `not valid JSON: ${(e as Error).message}` };
   }
+  normalizeDiscriminators(json);
   const result = schema.safeParse(json);
   if (!result.success) {
     return { ok: false, error: result.error.message };
@@ -211,6 +212,21 @@ function extractJsonBlock(raw: string): string {
   // ponytail: strip markdown fences if model wraps JSON
   const fence = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
   return fence ? fence[1].trim() : raw.trim();
+}
+
+// ponytail: reasoning models occasionally emit lowercase discriminator values
+// ("ignore" instead of "IGNORE"). Uppercase + trim before Zod validation so
+// shape is right even when capitalization isn't. Mutates in place; safe
+// because the caller has the only reference.
+function normalizeDiscriminators(json: unknown): void {
+  if (!json || typeof json !== "object") return;
+  const obj = json as Record<string, unknown>;
+  if (typeof obj.action === "string") {
+    obj.action = obj.action.trim().toUpperCase();
+  }
+  if (typeof obj.stateConfidence === "string") {
+    obj.stateConfidence = obj.stateConfidence.trim().toUpperCase();
+  }
 }
 
 function combineUsage(

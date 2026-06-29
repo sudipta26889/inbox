@@ -14,7 +14,7 @@ export const PriorityEnum = z.enum(["urgent", "high", "medium", "low", "none"]);
 export const Pass1Schema = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("IGNORE"),
-    reason: z.string(),
+    reason: z.string().default(""),
   }),
   z.object({
     action: z.literal("COMMENT_ON"),
@@ -26,7 +26,7 @@ export const Pass1Schema = z.discriminatedUnion("action", [
     stateGroup: StateGroupEnum.nullable(),
     stateConfidence: z.enum(["LOW", "MEDIUM", "HIGH"]),
     fieldUpdatesNeeded: z.boolean(),
-    reason: z.string(),
+    reason: z.string().default(""),
   }),
   z.object({
     action: z.literal("CREATE"),
@@ -41,7 +41,7 @@ export const Pass1Schema = z.discriminatedUnion("action", [
         .regex(/^\d{4}-\d{2}-\d{2}$/)
         .nullable(),
     }),
-    reason: z.string(),
+    reason: z.string().default(""),
   }),
 ]);
 
