@@ -105,6 +105,36 @@ export const env = createEnv({
     OPENAI_COMPATIBLE_MODEL: z.string().optional(),
     LITELLM_BASE_URL: z.string().optional(),
 
+    TASKPILOT_DECIDER_MODEL: z.string().default("kimi-k2.6"),
+    TASKPILOT_FIELDS_MODEL: z.string().default("kimi-k2.6"),
+    TASKPILOT_DECIDER_REASONING_EFFORT: z
+      .enum(["low", "medium", "high"])
+      .default("medium"),
+    TASKPILOT_FIELDS_REASONING_EFFORT: z
+      .enum(["low", "medium", "high"])
+      .default("low"),
+    TASKPILOT_DECIDER_MAX_TOKENS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(8000),
+    TASKPILOT_FIELDS_MAX_TOKENS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(4000),
+    TASKPILOT_PREGATE_RECALL_THRESHOLD: z.coerce
+      .number()
+      .min(0)
+      .max(1)
+      .default(0.5),
+    TASKPILOT_DECIDER_TIMEOUT_MS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(30_000),
+    TASKPILOT_DECISIONS_SHADOW: booleanString.optional().default(false),
+
     QDRANT_URL: z.string().optional(),
     QDRANT_API_KEY: z.string().optional(),
 
@@ -398,5 +428,18 @@ export const env = createEnv({
     NEXT_PUBLIC_IS_RESEND_CONFIGURED:
       process.env.NEXT_PUBLIC_IS_RESEND_CONFIGURED,
     NEXT_PUBLIC_TABS_EXTENSION_ID: process.env.NEXT_PUBLIC_TABS_EXTENSION_ID,
+
+    TASKPILOT_DECIDER_MODEL: process.env.TASKPILOT_DECIDER_MODEL,
+    TASKPILOT_FIELDS_MODEL: process.env.TASKPILOT_FIELDS_MODEL,
+    TASKPILOT_DECIDER_REASONING_EFFORT:
+      process.env.TASKPILOT_DECIDER_REASONING_EFFORT,
+    TASKPILOT_FIELDS_REASONING_EFFORT:
+      process.env.TASKPILOT_FIELDS_REASONING_EFFORT,
+    TASKPILOT_DECIDER_MAX_TOKENS: process.env.TASKPILOT_DECIDER_MAX_TOKENS,
+    TASKPILOT_FIELDS_MAX_TOKENS: process.env.TASKPILOT_FIELDS_MAX_TOKENS,
+    TASKPILOT_PREGATE_RECALL_THRESHOLD:
+      process.env.TASKPILOT_PREGATE_RECALL_THRESHOLD,
+    TASKPILOT_DECIDER_TIMEOUT_MS: process.env.TASKPILOT_DECIDER_TIMEOUT_MS,
+    TASKPILOT_DECISIONS_SHADOW: process.env.TASKPILOT_DECISIONS_SHADOW,
   },
 });
