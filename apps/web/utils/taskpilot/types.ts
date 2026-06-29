@@ -82,6 +82,15 @@ export interface TaskUpdatePatch {
   target_date?: string | null;
 }
 
+export interface CreateTaskDraft {
+  description_html: string;
+  labelNames: string[];
+  priority: Priority;
+  projectId: string;
+  targetDate?: string; // YYYY-MM-DD or undefined
+  title: string;
+}
+
 export interface RichCandidate {
   detail: TaskDetail;
   projectId: string;

@@ -28,14 +28,7 @@ export interface EnrichmentInput {
   ruleContext?: string;
 }
 
-export interface EnrichedTaskDraft {
-  description_html: string;
-  labelNames: string[];
-  priority: "urgent" | "high" | "medium" | "low" | "none";
-  projectId: string;
-  targetDate?: string;
-  title: string;
-}
+export type { CreateTaskDraft as EnrichedTaskDraft } from "@/utils/taskpilot/types";
 
 const draftSchema = z.object({
   projectId: z.string(),

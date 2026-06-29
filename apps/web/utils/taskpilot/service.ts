@@ -6,7 +6,6 @@ import {
   INBOX_LINK_PLACEHOLDER,
 } from "@/utils/ai/taskpilot/enrich";
 import type {
-  EnrichedTaskDraft,
   EnrichmentEmail,
   EnrichmentInput,
 } from "@/utils/ai/taskpilot/enrich";
@@ -17,8 +16,9 @@ import {
   getTaskpilotConfigStatus,
 } from "@/utils/taskpilot/config";
 import { classifyEmailIntent } from "@/utils/taskpilot/intent";
-import { findSimilarTasksTopK, indexTask } from "@/utils/taskpilot/similar";
-import type { Label, Project } from "@/utils/taskpilot/types";
+import { reindexTask } from "@/utils/taskpilot/reindex";
+import { findSimilarTasksTopK } from "@/utils/taskpilot/similar";
+import type { CreateTaskDraft, Label, Project } from "@/utils/taskpilot/types";
 
 const logger = createScopedLogger("taskpilot-service");
 
@@ -34,7 +34,7 @@ export interface DraftInput {
 
 export interface DraftResult {
   alreadyExisted: boolean;
-  draft?: EnrichedTaskDraft;
+  draft?: CreateTaskDraft;
   labelsByProject?: Record<string, Label[]>;
   link?: {
     taskpilotIdentifier: string;
@@ -97,7 +97,7 @@ export async function draftTaskFromEmail(
 
 export interface CommitInput {
   deepLink: string;
-  draft: EnrichedTaskDraft;
+  draft: CreateTaskDraft;
   emailAccountId: string;
   messageId: string;
   ruleId?: string | null;
@@ -203,14 +203,11 @@ export async function commitTask(input: CommitInput): Promise<CommitResult> {
   // Best-effort: index for cross-thread semantic dedupe on future emails.
   // Failure here is non-fatal — the task is already created and linked.
   if (!created.alreadyExisted) {
-    // Fire-and-forget. indexTask catches its own errors.
-    indexTask({
-      emailAccountId: input.emailAccountId,
+    reindexTask(client, input.emailAccountId, {
+      projectId: input.draft.projectId,
       taskpilotIssueId: created.id,
       taskpilotIdentifier: link.taskpilotIdentifier,
       workspaceSlug,
-      projectId: input.draft.projectId,
-      text: `${input.draft.title}\n\n${input.draft.description_html}`,
     }).catch(() => undefined);
   }
 
