@@ -27,18 +27,25 @@ vi.mock("@/utils/taskpilot/cache", () => ({
   },
 }));
 
-vi.mock("@/utils/taskpilot/llm", () => ({
-  buildTaskpilotChatCompletion: vi.fn(async () =>
-    vi.fn(async () => ({
-      object: {
+vi.mock("@/utils/taskpilot/decide", () => ({
+  decidePass1: vi.fn(async () => ({
+    ok: true,
+    decision: {
+      action: "CREATE",
+      draft: {
         projectId: "p1",
         title: "Stub title",
-        description_html: '<p>x</p><a href="{{INBOX_LINK}}">Open</a>',
+        descriptionHtml: "<p>x</p>",
         priority: "medium",
         labelNames: [],
+        targetDate: null,
       },
-    })),
-  ),
+    },
+    model: "stub",
+    effort: "low",
+    durationMs: 0,
+    usage: null,
+  })),
 }));
 
 vi.mock("@/utils/email/provider", () => ({
@@ -64,7 +71,7 @@ const ctx = {
 beforeEach(() => {
   vi.restoreAllMocks();
   prisma.emailAccount.findFirst.mockReset();
-  prisma.emailTaskLink.findUnique.mockReset();
+  prisma.emailTaskLink.findFirst.mockReset();
   prisma.emailTaskLink.upsert.mockReset();
 
   prisma.emailAccount.findFirst.mockResolvedValue({
@@ -89,7 +96,7 @@ beforeEach(() => {
 
 describe("convertToTaskpilotTask", () => {
   it("preview returns a draft without creating a task", async () => {
-    prisma.emailTaskLink.findUnique.mockResolvedValue(null);
+    prisma.emailTaskLink.findFirst.mockResolvedValue(null);
     const result = await convertToTaskpilotTask(ctx, {
       emailId: "msg-1",
       preview: true,
@@ -106,7 +113,7 @@ describe("convertToTaskpilotTask", () => {
   });
 
   it("commit creates the task and returns identifier", async () => {
-    prisma.emailTaskLink.findUnique.mockResolvedValue(null);
+    prisma.emailTaskLink.findFirst.mockResolvedValue(null);
     prisma.emailTaskLink.upsert.mockResolvedValue({
       id: "link-1",
       emailAccountId: "acc-1",

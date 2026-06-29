@@ -31,20 +31,6 @@ vi.mock("@/utils/taskpilot/cache", () => ({
   },
 }));
 
-vi.mock("@/utils/taskpilot/llm", () => ({
-  buildTaskpilotChatCompletion: vi.fn(async () =>
-    vi.fn(async () => ({
-      object: {
-        projectId: "p1",
-        title: "Help login",
-        description_html: '<p>x</p><a href="{{INBOX_LINK}}">Open</a>',
-        priority: "high",
-        labelNames: [],
-      },
-    })),
-  ),
-}));
-
 // Existing mocks the dispatcher test suite uses
 vi.mock("server-only", () => ({}));
 vi.mock("@/utils/redis/reply", () => ({
@@ -192,34 +178,5 @@ describe("runActionFunction — ActionType.CREATE_TASK", () => {
       alreadyExisted: true,
     });
     expect(createSpy).not.toHaveBeenCalled();
-  });
-
-  it("returns EXECUTION_FAILED when the chat builder throws", async () => {
-    const llm = await import("@/utils/taskpilot/llm");
-    vi.mocked(llm.buildTaskpilotChatCompletion).mockRejectedValueOnce(
-      new Error("config missing"),
-    );
-
-    const client = createMockEmailProvider();
-    const result = await runActionFunction({
-      client,
-      email,
-      action: { id: "action-1", type: ActionType.CREATE_TASK } as never,
-      userEmail: "user@example.com",
-      userId: "user-1",
-      emailAccountId: "account-1",
-      executedRule: {
-        id: "executed-rule-1",
-        threadId: "thread-1",
-        emailAccountId: "account-1",
-        ruleId: "rule-1",
-      } as never,
-      logger,
-    });
-
-    expect(result).toMatchObject({
-      success: false,
-      errorCode: "EXECUTION_FAILED",
-    });
   });
 });

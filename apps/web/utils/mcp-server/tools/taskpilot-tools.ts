@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { env } from "@/env";
 import { createEmailProvider } from "@/utils/email/provider";
 import { createScopedLogger } from "@/utils/logger";
 import type { McpResult } from "@/utils/mcp-server/envelope";
@@ -6,8 +7,12 @@ import { mapDomainError } from "@/utils/mcp-server/error-mapper";
 import { NotFoundError, ValidationError } from "@/utils/mcp-server/errors";
 import type { McpToolContext } from "@/utils/mcp-server/tools/registry";
 import prisma from "@/utils/prisma";
-import { buildTaskpilotChatCompletion } from "@/utils/taskpilot/llm";
-import { commitTask, draftTaskFromEmail } from "@/utils/taskpilot/service";
+import { taskpilotCache } from "@/utils/taskpilot/cache";
+import { TaskpilotClient } from "@/utils/taskpilot/client";
+import { getTaskpilotConfigForUser } from "@/utils/taskpilot/config";
+import { decidePass1 } from "@/utils/taskpilot/decide";
+import { commitTask } from "@/utils/taskpilot/service";
+import type { CreateTaskDraft } from "@/utils/taskpilot/types";
 import { getEmailUrlForMessage } from "@/utils/url";
 
 const logger = createScopedLogger("mcp-taskpilot-tools");
@@ -60,52 +65,80 @@ export async function convertToTaskpilotTask(
     });
     const message = await provider.getMessage(emailId);
 
-    const chatCompletionObject =
-      await buildTaskpilotChatCompletion(emailAccountId);
+    // Idempotency: if already linked, short-circuit.
+    const existing = await prisma.emailTaskLink.findFirst({
+      where: { emailAccountId, gmailMessageId: emailId },
+    });
+    if (existing) {
+      return {
+        ok: true,
+        data: {
+          alreadyExisted: true,
+          link: {
+            taskpilotIdentifier: existing.taskpilotIdentifier,
+            taskpilotIssueId: existing.taskpilotIssueId,
+            projectId: existing.projectId,
+          },
+        },
+      };
+    }
 
-    const draftResult = await draftTaskFromEmail({
-      userId: context.userId,
-      emailAccountId,
-      messageId: message.id,
+    // Build Pass 1 context.
+    const config = await getTaskpilotConfigForUser(context.userId);
+    const client = new TaskpilotClient(config);
+    const projects = await taskpilotCache.getProjects(context.userId, () =>
+      client.listProjects(),
+    );
+    const labelsByProject: Record<
+      string,
+      Array<{ id: string; name: string }>
+    > = {};
+    for (const p of projects) {
+      labelsByProject[p.id] = await taskpilotCache.getLabels(
+        context.userId,
+        p.id,
+        () => client.listLabels(p.id),
+      );
+    }
+
+    const pass1 = await decidePass1({
+      mode: "force_create",
       email: {
-        subject: message.headers.subject ?? "",
         from: message.headers.from ?? "",
-        snippet: message.snippet ?? "",
+        subject: message.headers.subject ?? "",
         bodyText: message.textPlain ?? "",
         receivedAt: new Date(Number(message.internalDate) || Date.now()),
       },
-      chatCompletionObject,
+      candidates: [],
+      canCreate: true,
+      projects,
+      labelsByProject,
+      todayISO: new Date().toISOString().slice(0, 10),
+      model: env.TASKPILOT_DECIDER_MODEL,
+      effort: env.TASKPILOT_DECIDER_REASONING_EFFORT,
+      maxTokens: env.TASKPILOT_DECIDER_MAX_TOKENS,
+      timeoutMs: env.TASKPILOT_DECIDER_TIMEOUT_MS,
     });
 
-    if (preview) {
-      if (draftResult.alreadyExisted) {
-        return {
-          ok: true,
-          data: { alreadyExisted: true, link: draftResult.link },
-        };
-      }
-      return {
-        ok: true,
-        data: {
-          alreadyExisted: false,
-          draft: draftResult.draft,
-          projects: draftResult.projects,
-        },
-      };
+    if (!pass1.ok || pass1.decision.action !== "CREATE") {
+      return mapDomainError(
+        new ValidationError("Pass 1 did not produce a CREATE decision", {
+          reason: pass1.ok ? "non-CREATE action" : pass1.errorMsg,
+        }),
+      );
     }
 
-    if (draftResult.alreadyExisted && draftResult.link) {
-      return {
-        ok: true,
-        data: {
-          taskpilotIdentifier: draftResult.link.taskpilotIdentifier,
-          taskpilotIssueId: draftResult.link.taskpilotIssueId,
-          alreadyExisted: true,
-        },
-      };
-    }
-    if (!draftResult.draft) {
-      throw new Error("Internal: draft missing in non-existing branch");
+    const draft: CreateTaskDraft = {
+      projectId: pass1.decision.draft.projectId,
+      title: pass1.decision.draft.title,
+      description_html: pass1.decision.draft.descriptionHtml,
+      priority: pass1.decision.draft.priority,
+      labelNames: pass1.decision.draft.labelNames,
+      targetDate: pass1.decision.draft.targetDate ?? undefined,
+    };
+
+    if (preview) {
+      return { ok: true, data: { alreadyExisted: false, draft, projects } };
     }
 
     const committed = await commitTask({
@@ -114,12 +147,12 @@ export async function convertToTaskpilotTask(
       messageId: message.id,
       threadId: message.threadId ?? null,
       deepLink: getEmailUrlForMessage(
-        message.id,
+        emailId,
         message.threadId ?? "",
         emailAccount.email,
         providerType,
       ),
-      draft: draftResult.draft,
+      draft,
       source: "CHAT",
     });
     return { ok: true, data: committed };
