@@ -223,7 +223,8 @@ model EmailAccount {
   // A2A Protocol
   a2aTasks A2aTask[] @relation("A2aTaskToEmailAccount")
 
-  taskpilotLinks EmailTaskLink[]
+  taskpilotLinks     EmailTaskLink[]
+  taskpilotDecisions TaskpilotDecision[]
 
   @@index([userId])
   @@index([lastSummaryEmailAt])
@@ -1550,9 +1551,52 @@ model EmailTaskLink {
   rule                Rule?               @relation(fields: [ruleId], references: [id], onDelete: SetNull)
   createdAt           DateTime            @default(now())
 
-  @@unique([emailAccountId, gmailMessageId])
+  @@unique([emailAccountId, gmailMessageId, taskpilotIssueId])
+  @@index([emailAccountId, gmailMessageId])
   @@index([emailAccountId, createdAt])
   @@index([ruleId])
+}
+
+model TaskpilotDecision {
+  id                  String       @id @default(cuid())
+  emailAccountId      String
+  emailAccount        EmailAccount @relation(fields: [emailAccountId], references: [id], onDelete: Cascade)
+  gmailMessageId      String
+  threadId            String?
+  ranAt               DateTime     @default(now())
+
+  preGateInvoked      Boolean
+  preGateSignals      Json
+
+  candidateIssueIds   String[]
+
+  pass1Model          String?
+  pass1Effort         String?
+  pass1DurationMs     Int?
+  pass1InputTokens    Int?
+  pass1OutputTokens   Int?
+  pass1Action         String?
+  pass1Decision       Json?
+  pass1Reason         String?
+
+  pass2Ran            Boolean      @default(false)
+  pass2Model          String?
+  pass2DurationMs     Int?
+  pass2InputTokens    Int?
+  pass2OutputTokens   Int?
+  pass2Updates        Json?
+
+  targetIssueIds      String[]
+  commentsPosted      Int          @default(0)
+  stateMovesApplied   Int          @default(0)
+  fieldUpdatesApplied Int          @default(0)
+
+  status              String
+  errorMsg            String?
+
+  @@index([emailAccountId, ranAt(sort: Desc)])
+  @@index([emailAccountId, status])
+  @@index([gmailMessageId])
 }
 
 enum Frequency {
