@@ -12,10 +12,12 @@ import { withError } from "@/utils/middleware";
  * Recommended schedule: every 5 minutes (cron: *\/5 * * * *)
  */
 
-export const POST = withError(async (request: Request) => {
+export const GET = withError(async (request: Request) => {
   if (!hasCronSecret(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const result = await sweepStaleRunningDecisions();
   return NextResponse.json(result);
 });
+
+export const POST = GET;

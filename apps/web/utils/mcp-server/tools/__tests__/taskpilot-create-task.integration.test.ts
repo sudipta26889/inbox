@@ -68,7 +68,7 @@ describe("runActionFunction — ActionType.CREATE_TASK", () => {
     prisma.rule.findUnique.mockResolvedValue({
       instructions: "Identify customer support; route to Acme Support",
     } as never);
-    prisma.emailTaskLink.findUnique.mockResolvedValue(null);
+    prisma.emailTaskLink.findFirst.mockResolvedValue(null);
     prisma.emailTaskLink.upsert.mockResolvedValue({
       id: "link-1",
       emailAccountId: "account-1",
@@ -140,7 +140,7 @@ describe("runActionFunction — ActionType.CREATE_TASK", () => {
   });
 
   it("short-circuits when the email is already linked", async () => {
-    prisma.emailTaskLink.findUnique.mockResolvedValue({
+    prisma.emailTaskLink.findFirst.mockResolvedValue({
       id: "existing",
       emailAccountId: "account-1",
       gmailMessageId: "message-1",

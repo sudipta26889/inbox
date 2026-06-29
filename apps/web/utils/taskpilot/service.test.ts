@@ -40,13 +40,13 @@ const emailAccountId = "acc-1";
 
 beforeEach(() => {
   vi.restoreAllMocks();
-  prisma.emailTaskLink.findUnique.mockReset();
+  prisma.emailTaskLink.findFirst.mockReset();
   prisma.emailTaskLink.upsert.mockReset();
 });
 
 describe("commitTask", () => {
   it("creates the work item and persists the link", async () => {
-    prisma.emailTaskLink.findUnique.mockResolvedValue(null);
+    prisma.emailTaskLink.findFirst.mockResolvedValue(null);
     prisma.emailTaskLink.upsert.mockResolvedValue({
       id: "link-1",
       emailAccountId,
@@ -116,7 +116,7 @@ describe("commitTask", () => {
   });
 
   it("short-circuits when a link already exists for this email", async () => {
-    prisma.emailTaskLink.findUnique.mockResolvedValue({
+    prisma.emailTaskLink.findFirst.mockResolvedValue({
       id: "link-existing",
       emailAccountId,
       gmailMessageId: "msg-existing",
@@ -156,7 +156,7 @@ describe("commitTask", () => {
   });
 
   it("treats remote 409 as success and writes the link", async () => {
-    prisma.emailTaskLink.findUnique.mockResolvedValue(null);
+    prisma.emailTaskLink.findFirst.mockResolvedValue(null);
     prisma.emailTaskLink.upsert.mockResolvedValue({
       id: "link-2",
       emailAccountId,
@@ -205,7 +205,7 @@ describe("commitTask", () => {
   });
 
   it("does not roll back when addLink fails", async () => {
-    prisma.emailTaskLink.findUnique.mockResolvedValue(null);
+    prisma.emailTaskLink.findFirst.mockResolvedValue(null);
     prisma.emailTaskLink.upsert.mockResolvedValue({
       id: "link-3",
       emailAccountId,

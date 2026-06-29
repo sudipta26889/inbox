@@ -31,12 +31,10 @@ export interface CommitResult {
 }
 
 export async function commitTask(input: CommitInput): Promise<CommitResult> {
-  const existing = await prisma.emailTaskLink.findUnique({
+  const existing = await prisma.emailTaskLink.findFirst({
     where: {
-      emailAccountId_gmailMessageId: {
-        emailAccountId: input.emailAccountId,
-        gmailMessageId: input.messageId,
-      },
+      emailAccountId: input.emailAccountId,
+      gmailMessageId: input.messageId,
     },
   });
   if (existing) {
@@ -95,9 +93,10 @@ export async function commitTask(input: CommitInput): Promise<CommitResult> {
 
   const link = await prisma.emailTaskLink.upsert({
     where: {
-      emailAccountId_gmailMessageId: {
+      emailAccountId_gmailMessageId_taskpilotIssueId: {
         emailAccountId: input.emailAccountId,
         gmailMessageId: input.messageId,
+        taskpilotIssueId: created.id,
       },
     },
     create: {
@@ -144,13 +143,9 @@ export async function getEmailTaskLink(
   url: string;
   workspaceSlug: string;
 } | null> {
-  const link = await prisma.emailTaskLink.findUnique({
-    where: {
-      emailAccountId_gmailMessageId: {
-        emailAccountId,
-        gmailMessageId: messageId,
-      },
-    },
+  const link = await prisma.emailTaskLink.findFirst({
+    where: { emailAccountId, gmailMessageId: messageId },
+    orderBy: { createdAt: "desc" },
   });
   if (!link) return null;
   return {

@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import React, { useState } from "react";
 import {
   Table,
   TableBody,
@@ -50,9 +50,8 @@ export function DecisionsTable({ rows }: { rows: Row[] }) {
         </TableHeader>
         <TableBody>
           {filtered.map((r) => (
-            <>
+            <React.Fragment key={r.id}>
               <TableRow
-                key={r.id}
                 onClick={() => setExpanded(expanded === r.id ? null : r.id)}
                 className="cursor-pointer"
               >
@@ -71,7 +70,7 @@ export function DecisionsTable({ rows }: { rows: Row[] }) {
                 <TableCell>${(r.pass1Cost + r.pass2Cost).toFixed(4)}</TableCell>
               </TableRow>
               {expanded === r.id && (
-                <TableRow key={`${r.id}-x`}>
+                <TableRow>
                   <TableCell colSpan={7}>
                     <pre className="text-xs overflow-x-auto">
                       {JSON.stringify(
@@ -90,7 +89,7 @@ export function DecisionsTable({ rows }: { rows: Row[] }) {
                   </TableCell>
                 </TableRow>
               )}
-            </>
+            </React.Fragment>
           ))}
         </TableBody>
       </Table>

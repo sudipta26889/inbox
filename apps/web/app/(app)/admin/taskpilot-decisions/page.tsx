@@ -1,8 +1,22 @@
 import prisma from "@/utils/prisma";
 import { computeCost } from "@/utils/taskpilot/pricing";
 import { DecisionsTable } from "./decisions-table";
+import { auth } from "@/utils/auth";
+import { isAdmin } from "@/utils/admin";
+import { ErrorPage } from "@/components/ErrorPage";
 
 export default async function TaskpilotDecisionsPage() {
+  const session = await auth();
+
+  if (!isAdmin({ email: session?.user.email })) {
+    return (
+      <ErrorPage
+        title="No Access"
+        description="You do not have permission to access this page."
+      />
+    );
+  }
+
   const rows = await prisma.taskpilotDecision.findMany({
     orderBy: { ranAt: "desc" },
     take: 200,
