@@ -33,7 +33,7 @@ import {
   CONVERSATION_STATUS_TYPES,
   isConversationStatusType,
 } from "@/utils/reply-tracker/conversation-status-config";
-import { maybeCommentOnRelatedTask } from "@/utils/taskpilot/service";
+import { maybeRouteToTaskPilot } from "@/utils/taskpilot/route";
 import { getEmailUrlForMessage } from "@/utils/url";
 import {
   determineConversationStatus,
@@ -248,14 +248,16 @@ export async function runRules({
     });
   }
 
-  // Rule-independent TaskPilot comment hook. Runs only in production
-  // (skipped in test/preview). NEVER creates a new task — that requires an
-  // explicit CREATE_TASK action on a matched rule. Comments on a thread- or
-  // semantic-neighbor task when one exists, and auto-resolves the task if
-  // the email signals resolution. Best-effort: swallows its own errors.
+  // Route to TaskPilot orchestrator. Runs only in production (skipped in
+  // test/preview). Receives canCreate flag from rule execution, then decides
+  // whether to create, link, or comment based on semantic similarity and
+  // thread continuity. Best-effort: swallows its own errors.
   if (!isTest) {
+    const canCreate = executedRules.some((er) =>
+      er.actionItems?.some((ai) => ai.type === ActionType.CREATE_TASK),
+    );
     after(() =>
-      maybeCommentOnRelatedTask({
+      maybeRouteToTaskPilot({
         userId: emailAccount.userId,
         emailAccountId: emailAccount.id,
         messageId: message.id,
@@ -273,6 +275,7 @@ export async function runRules({
           bodyText: message.textPlain ?? "",
           receivedAt: new Date(Number(message.internalDate) || Date.now()),
         },
+        canCreate,
       }),
     );
   }
