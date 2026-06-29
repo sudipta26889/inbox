@@ -6,7 +6,7 @@ const logger = createScopedLogger("taskpilot-similar");
 // ponytail: hardcoded knobs. promote to env if anyone needs to tune live.
 const COLLECTION = "taskpilot_tasks";
 const EMBED_MODEL = "nomic-embed-text"; // 768d, local via litellm
-const SIMILARITY_THRESHOLD = 0.75; // cosine, tune if false positives/negatives
+const SIMILARITY_THRESHOLD = 0.65; // cosine. nomic-embed-text is conservative — same-topic BPCL pair scores 0.67. tune up if false positives.
 
 export interface SimilarTaskHit {
   projectId: string;

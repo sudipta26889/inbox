@@ -7,11 +7,14 @@ const logger = createScopedLogger("taskpilot-intent");
 // IN_PROGRESS / ESCALATION state moves.
 export type EmailIntent = "RESOLVED" | "OTHER";
 
-const INTENT_MODEL = "kimi-k2.6"; // tiny classification, any chat model works
+// ponytail: non-reasoning model. Reasoning models (kimi-k2.6, gpt-oss-*, qwen3)
+// burn through max_tokens on internal thinking before emitting output.
+const INTENT_MODEL = "mistral-small-24b";
 const SYSTEM_PROMPT =
-  "You classify whether an email indicates a ticket can be marked RESOLVED " +
-  "(issue fixed, request fulfilled, complaint closed, distributor confirmed " +
-  "resolution, etc). Output a single token: RESOLVED or OTHER. Nothing else.";
+  "Output exactly one of: RESOLVED or OTHER. Nothing else. " +
+  "RESOLVED means the email confirms a ticket/complaint/issue has been fixed " +
+  "or closed. OTHER means anything else (acknowledgement, status update, " +
+  "escalation, new info).";
 
 /**
  * Classifies whether a new email about an existing task signals resolution.
@@ -44,7 +47,7 @@ export async function classifyEmailIntent(input: {
       },
       body: JSON.stringify({
         model: INTENT_MODEL,
-        max_tokens: 4,
+        max_tokens: 8,
         temperature: 0,
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
