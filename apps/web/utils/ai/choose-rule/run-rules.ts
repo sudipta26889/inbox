@@ -198,6 +198,31 @@ export async function runRules({
           }),
         { logger },
       );
+      // Rule-independent TaskPilot routing: even SKIPPED emails can be a
+      // reply to a thread-linked task or a semantic neighbour. canCreate is
+      // false because no CREATE_TASK action ran.
+      after(() =>
+        maybeRouteToTaskPilot({
+          userId: emailAccount.userId,
+          emailAccountId: emailAccount.id,
+          messageId: message.id,
+          threadId: message.threadId ?? null,
+          deepLink: getEmailUrlForMessage(
+            message.id,
+            message.threadId ?? "",
+            emailAccount.email,
+            provider.name,
+          ),
+          email: {
+            subject: message.headers.subject ?? "",
+            from: message.headers.from ?? "",
+            snippet: message.snippet ?? "",
+            bodyText: message.textPlain ?? "",
+            receivedAt: new Date(Number(message.internalDate) || Date.now()),
+          },
+          canCreate: false,
+        }),
+      );
     }
 
     return [
