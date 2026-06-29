@@ -75,3 +75,13 @@ export interface TaskUpdatePatch {
   state?: string; // stateId — same as moveTask, exposed for completeness
   target_date?: string | null;
 }
+
+export interface RichCandidate {
+  detail: TaskDetail;
+  projectId: string;
+  recentComments: TaskComment[];
+  score: number | null; // null = thread-link (no similarity score)
+  taskpilotIdentifier: string;
+  taskpilotIssueId: string;
+  workspaceSlug: string;
+}
