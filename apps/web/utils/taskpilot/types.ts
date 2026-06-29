@@ -48,3 +48,30 @@ export interface TaskState {
   id: string;
   name: string;
 }
+
+export interface TaskComment {
+  author_display_name: string;
+  comment_html: string;
+  created_at: string; // ISO
+  id: string;
+}
+
+export interface TaskDetail {
+  assignees: Array<{ id: string; display_name: string; email?: string }>;
+  description_html: string;
+  id: string;
+  identifier: string;
+  labels: Array<{ id: string; name: string }>;
+  name: string;
+  priority: Priority;
+  state: { id: string; name: string; group: StateGroup };
+  target_date?: string | null;
+}
+
+export interface TaskUpdatePatch {
+  assignee_ids?: string[]; // full replacement set
+  label_ids?: string[]; // full replacement set
+  priority?: Priority;
+  state?: string; // stateId — same as moveTask, exposed for completeness
+  target_date?: string | null;
+}

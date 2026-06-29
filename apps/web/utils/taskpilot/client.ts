@@ -10,7 +10,10 @@ import type {
   IssueLinkInput,
   Label,
   Project,
+  TaskComment,
+  TaskDetail,
   TaskState,
+  TaskUpdatePatch,
   WorkItemCreateInput,
   WorkItemCreateResult,
 } from "@/utils/taskpilot/types";
@@ -112,6 +115,40 @@ export class TaskpilotClient {
       "PATCH",
       `/workspaces/${this.workspaceSlug}/projects/${projectId}/work-items/${issueId}/`,
       { state: stateId },
+    );
+  }
+
+  async getTask(projectId: string, issueId: string): Promise<TaskDetail> {
+    const res = await this.request(
+      "GET",
+      `/workspaces/${this.workspaceSlug}/projects/${projectId}/work-items/${issueId}/`,
+    );
+    return (await res.json()) as TaskDetail;
+  }
+
+  async listComments(
+    projectId: string,
+    issueId: string,
+    limit: number,
+  ): Promise<TaskComment[]> {
+    const res = await this.request(
+      "GET",
+      `/workspaces/${this.workspaceSlug}/projects/${projectId}/work-items/${issueId}/comments/?limit=${limit}`,
+    );
+    const list = unwrapList<TaskComment>(await res.json());
+    // ponytail: stable sort oldest-first; TaskPilot returns newest-first by default
+    return [...list].sort((a, b) => a.created_at.localeCompare(b.created_at));
+  }
+
+  async updateTask(
+    projectId: string,
+    issueId: string,
+    patch: TaskUpdatePatch,
+  ): Promise<void> {
+    await this.request(
+      "PATCH",
+      `/workspaces/${this.workspaceSlug}/projects/${projectId}/work-items/${issueId}/`,
+      patch,
     );
   }
 
