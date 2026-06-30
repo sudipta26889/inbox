@@ -163,7 +163,9 @@ async function callOnce<T>(
         model: input.model,
         max_tokens: input.maxTokens,
         temperature: 0,
-        reasoning_effort: input.effort,
+        ...(modelSupportsReasoning(input.model)
+          ? { reasoning_effort: input.effort }
+          : {}),
         messages,
       }),
     });
@@ -229,6 +231,13 @@ function tryParse<T>(
     return { ok: false, error: result.error.message };
   }
   return { ok: true, value: result.data };
+}
+
+// ponytail: hardcoded prefixes. LiteLLM rejects reasoning_effort on models
+// that don't support thinking (mistral-small-24b returns HTTP 500). Add new
+// reasoning-capable model families here when the gateway routes them.
+function modelSupportsReasoning(model: string): boolean {
+  return /^(kimi|gpt-oss|qwen3|deepseek|minimax)/i.test(model);
 }
 
 function extractJsonBlock(raw: string): string {
