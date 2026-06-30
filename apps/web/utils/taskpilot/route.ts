@@ -22,6 +22,26 @@ const MAX_CANDIDATES = 3;
 const COMMENT_LIMIT_FOR_PASS1 = 5;
 const SENTINEL_STALE_MS = 60_000;
 
+// Per-account serialization. Gmail PubSub can deliver bursts of N emails to
+// the same account within milliseconds; without this, N concurrent Pass 1
+// calls saturate the LLM gateway and all time out together. The chain head
+// stays in memory per account — bounded by # of distinct accounts.
+const accountLocks = new Map<string, Promise<unknown>>();
+
+function withAccountLock<T>(
+  accountId: string,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const prev = accountLocks.get(accountId) ?? Promise.resolve();
+  const next = prev.then(fn, fn);
+  // Swallow errors on the chain head so one failure doesn't poison the queue.
+  accountLocks.set(
+    accountId,
+    next.catch(() => undefined),
+  );
+  return next;
+}
+
 export interface RouteInput {
   canCreate: boolean;
   deepLink: string;
@@ -146,10 +166,14 @@ export async function maybeRouteToTaskPilot(input: RouteInput): Promise<void> {
     decisionRowId = decisionRow.id;
 
     if (env.TASKPILOT_DECISIONS_SHADOW) {
-      await runShadow(input, decisionRow.id, threadLinkRow, similar);
+      await withAccountLock(input.emailAccountId, () =>
+        runShadow(input, decisionRow.id, threadLinkRow, similar),
+      );
       return;
     }
-    await runLive(input, decisionRow.id, threadLinkRow, similar);
+    await withAccountLock(input.emailAccountId, () =>
+      runLive(input, decisionRow.id, threadLinkRow, similar),
+    );
   } catch (err) {
     logger.error("route: unexpected error", { err, decisionRowId });
     if (decisionRowId) {
