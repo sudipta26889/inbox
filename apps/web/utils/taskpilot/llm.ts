@@ -43,8 +43,8 @@ export async function callDecider<T>(
     { role: "user", content: input.user },
   ];
 
-  // First attempt.
-  const first = await callOnce(baseUrl, input, messages);
+  // Stage 1: original prompt, with one timeout-retry (gateway hangs happen).
+  const first = await callWithTimeoutRetry(baseUrl, input, messages);
   if (first.kind === "http_error" || first.kind === "timeout") {
     return {
       parsed: null,
@@ -69,7 +69,7 @@ export async function callDecider<T>(
     error: parsed1.error,
   });
 
-  // One retry with the validation error appended.
+  // Stage 2: schema-error appended, again with one timeout-retry.
   const retryMessages = [
     ...messages,
     {
@@ -77,12 +77,12 @@ export async function callDecider<T>(
       content: `Your previous response failed validation: ${parsed1.error}. Reply with valid JSON matching the schema. Do NOT include any prose, only JSON.`,
     },
   ];
-  const second = await callOnce(baseUrl, input, retryMessages);
+  const second = await callWithTimeoutRetry(baseUrl, input, retryMessages);
   if (second.kind === "http_error" || second.kind === "timeout") {
     return {
       parsed: null,
       raw: cleaned1,
-      usage: first.usage,
+      usage: combineUsage(first.usage, second.usage),
       durationMs: Date.now() - start,
       errorMsg: second.errorMsg,
     };
@@ -106,6 +106,29 @@ export async function callDecider<T>(
     durationMs: Date.now() - start,
     errorMsg: `schema invalid after retry: ${parsed2.error}`,
   };
+}
+
+// Retry the same prompt ONCE on timeout. Gateway hangs (Ollama Cloud
+// occasionally stalls at 60s+) usually clear on the next attempt. http_error
+// is not retried — those signal config or auth problems where retry won't help.
+async function callWithTimeoutRetry<T>(
+  baseUrl: string,
+  input: CallDeciderInput<T>,
+  messages: Array<{ role: "system" | "user"; content: string }>,
+): Promise<OnceResult> {
+  const first = await callOnce(baseUrl, input, messages);
+  if (first.kind !== "timeout") return first;
+  logger.warn("LLM timeout; retrying same prompt once");
+  const second = await callOnce(baseUrl, input, messages);
+  // Combine usage so the audit row sees the cost of both attempts.
+  if (second.kind === "ok") {
+    return {
+      kind: "ok",
+      content: second.content,
+      usage: combineUsage(first.usage, second.usage),
+    };
+  }
+  return second;
 }
 
 // --- helpers ---
