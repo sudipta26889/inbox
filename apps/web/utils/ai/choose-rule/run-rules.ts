@@ -200,29 +200,29 @@ export async function runRules({
       );
       // Rule-independent TaskPilot routing: even SKIPPED emails can be a
       // reply to a thread-linked task or a semantic neighbour. canCreate is
-      // false because no CREATE_TASK action ran.
-      after(() =>
-        maybeRouteToTaskPilot({
-          userId: emailAccount.userId,
-          emailAccountId: emailAccount.id,
-          messageId: message.id,
-          threadId: message.threadId ?? null,
-          deepLink: getEmailUrlForMessage(
-            message.id,
-            message.threadId ?? "",
-            emailAccount.email,
-            provider.name,
-          ),
-          email: {
-            subject: message.headers.subject ?? "",
-            from: message.headers.from ?? "",
-            snippet: message.snippet ?? "",
-            bodyText: message.textPlain ?? "",
-            receivedAt: new Date(Number(message.internalDate) || Date.now()),
-          },
-          canCreate: false,
-        }),
-      );
+      // false because no CREATE_TASK action ran. ponytail: bypass after() —
+      // it silently dropped these callbacks in this runtime; fire-and-forget
+      // works because the orchestrator already swallows its own errors.
+      maybeRouteToTaskPilot({
+        userId: emailAccount.userId,
+        emailAccountId: emailAccount.id,
+        messageId: message.id,
+        threadId: message.threadId ?? null,
+        deepLink: getEmailUrlForMessage(
+          message.id,
+          message.threadId ?? "",
+          emailAccount.email,
+          provider.name,
+        ),
+        email: {
+          subject: message.headers.subject ?? "",
+          from: message.headers.from ?? "",
+          snippet: message.snippet ?? "",
+          bodyText: message.textPlain ?? "",
+          receivedAt: new Date(Number(message.internalDate) || Date.now()),
+        },
+        canCreate: false,
+      }).catch(() => undefined);
     }
 
     return [
@@ -281,28 +281,29 @@ export async function runRules({
     const canCreate = executedRules.some((er) =>
       er.actionItems?.some((ai) => ai.type === ActionType.CREATE_TASK),
     );
-    after(() =>
-      maybeRouteToTaskPilot({
-        userId: emailAccount.userId,
-        emailAccountId: emailAccount.id,
-        messageId: message.id,
-        threadId: message.threadId ?? null,
-        deepLink: getEmailUrlForMessage(
-          message.id,
-          message.threadId ?? "",
-          emailAccount.email,
-          provider.name,
-        ),
-        email: {
-          subject: message.headers.subject ?? "",
-          from: message.headers.from ?? "",
-          snippet: message.snippet ?? "",
-          bodyText: message.textPlain ?? "",
-          receivedAt: new Date(Number(message.internalDate) || Date.now()),
-        },
-        canCreate,
-      }),
-    );
+    // ponytail: bypass after() — it silently dropped these callbacks in this
+    // runtime; fire-and-forget works because the orchestrator already
+    // swallows its own errors. Orchestrator is intentionally non-blocking.
+    maybeRouteToTaskPilot({
+      userId: emailAccount.userId,
+      emailAccountId: emailAccount.id,
+      messageId: message.id,
+      threadId: message.threadId ?? null,
+      deepLink: getEmailUrlForMessage(
+        message.id,
+        message.threadId ?? "",
+        emailAccount.email,
+        provider.name,
+      ),
+      email: {
+        subject: message.headers.subject ?? "",
+        from: message.headers.from ?? "",
+        snippet: message.snippet ?? "",
+        bodyText: message.textPlain ?? "",
+        receivedAt: new Date(Number(message.internalDate) || Date.now()),
+      },
+      canCreate,
+    }).catch(() => undefined);
   }
 
   return executedRules;

@@ -59,6 +59,11 @@ export interface RouteInput {
 }
 
 export async function maybeRouteToTaskPilot(input: RouteInput): Promise<void> {
+  // Forensic: confirm whether after() is actually firing this callback.
+  // Remove once the silent-route bug is understood.
+  console.log(
+    `[taskpilot-route]: ENTRY messageId=${input.messageId} account=${input.emailAccountId} canCreate=${input.canCreate}`,
+  );
   let decisionRowId: string | null = null;
   try {
     // Step 0: bail if message is already linked (idempotency).
