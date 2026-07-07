@@ -561,21 +561,15 @@ function selectDefaultModel(
   userAi: UserAIFields,
   online = false,
 ): ResolvedModel {
-  let aiProvider: string;
-  let aiModel: string | null = null;
-  const aiApiKey = userAi.aiApiKey;
+  const aiApiKey = userAi.aiApiKey?.trim() ? userAi.aiApiKey : null;
 
   const providerOptions: Record<string, any> = {};
 
-  // If user has not api key set, then use default model
-  // If they do they can use the model of their choice
-  if (aiApiKey) {
-    aiProvider = userAi.aiProvider || env.DEFAULT_LLM_PROVIDER;
-    aiModel = userAi.aiModel || null;
-  } else {
-    aiProvider = env.DEFAULT_LLM_PROVIDER;
-    aiModel = env.DEFAULT_LLM_MODEL || null;
-  }
+  // Prefer the user's explicit choice regardless of whether they have an
+  // API key — LiteLLM and Ollama don't need one, and a blank aiApiKey used
+  // to silently fall back to env defaults, overriding a saved provider.
+  const aiProvider = userAi.aiProvider || env.DEFAULT_LLM_PROVIDER;
+  const aiModel = userAi.aiModel || env.DEFAULT_LLM_MODEL || null;
 
   if (aiProvider === Provider.OPENROUTER) {
     const openRouterOptions = createOpenRouterProviderOptions(

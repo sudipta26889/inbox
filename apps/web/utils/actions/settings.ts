@@ -72,7 +72,7 @@ export const updateAiSettingsAction = actionClientUser
         data:
           aiProvider === DEFAULT_PROVIDER
             ? { aiApiKey: null }
-            : { aiApiKey: aiApiKey ?? null },
+            : { aiApiKey: aiApiKey?.trim() ? aiApiKey : null },
       });
 
       // Clear AI-related error messages when user updates their settings
