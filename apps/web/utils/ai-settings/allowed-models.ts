@@ -20,6 +20,7 @@ export const ALLOWED_AI_PROVIDERS = [
   Provider.OPENROUTER,
   Provider.AI_GATEWAY,
   Provider.LITELLM,
+  Provider.OLLAMA,
 ] as const;
 
 export type AllowedAiProvider = (typeof ALLOWED_AI_PROVIDERS)[number];
