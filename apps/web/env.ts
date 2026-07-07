@@ -106,6 +106,9 @@ export const env = createEnv({
     LITELLM_BASE_URL: z.string().optional(),
 
     TASKPILOT_DECIDER_MODEL: z.string().default("kimi-k2.6"),
+    // Fallback model used when the primary model times out (Ollama Cloud cold
+    // starts). Should be a fast, reliable non-reasoning model.
+    TASKPILOT_DECIDER_FALLBACK_MODEL: z.string().optional(),
     TASKPILOT_FIELDS_MODEL: z.string().default("kimi-k2.6"),
     TASKPILOT_DECIDER_REASONING_EFFORT: z
       .enum(["low", "medium", "high"])
@@ -430,6 +433,8 @@ export const env = createEnv({
     NEXT_PUBLIC_TABS_EXTENSION_ID: process.env.NEXT_PUBLIC_TABS_EXTENSION_ID,
 
     TASKPILOT_DECIDER_MODEL: process.env.TASKPILOT_DECIDER_MODEL,
+    TASKPILOT_DECIDER_FALLBACK_MODEL:
+      process.env.TASKPILOT_DECIDER_FALLBACK_MODEL,
     TASKPILOT_FIELDS_MODEL: process.env.TASKPILOT_FIELDS_MODEL,
     TASKPILOT_DECIDER_REASONING_EFFORT:
       process.env.TASKPILOT_DECIDER_REASONING_EFFORT,

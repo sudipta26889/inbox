@@ -108,9 +108,11 @@ export async function callDecider<T>(
   };
 }
 
-// Retry the same prompt ONCE on timeout. Gateway hangs (Ollama Cloud
-// occasionally stalls at 60s+) usually clear on the next attempt. http_error
-// is not retried — those signal config or auth problems where retry won't help.
+// Retry ONCE on timeout, preferring a fallback model if configured.
+// Ollama Cloud cold-starts big models (gpt-oss-120b, etc.) on first request
+// after idle — those requests just hang past the timeout. Falling back to a
+// smaller warm model (mistral-small-24b) usually succeeds in <10s.
+// http_error is not retried — those signal config or auth problems.
 async function callWithTimeoutRetry<T>(
   baseUrl: string,
   input: CallDeciderInput<T>,
@@ -118,9 +120,16 @@ async function callWithTimeoutRetry<T>(
 ): Promise<OnceResult> {
   const first = await callOnce(baseUrl, input, messages);
   if (first.kind !== "timeout") return first;
-  logger.warn("LLM timeout; retrying same prompt once");
-  const second = await callOnce(baseUrl, input, messages);
-  // Combine usage so the audit row sees the cost of both attempts.
+  const fallback = env.TASKPILOT_DECIDER_FALLBACK_MODEL;
+  const retryInput =
+    fallback && fallback !== input.model
+      ? { ...input, model: fallback }
+      : input;
+  logger.warn("LLM timeout; retrying", {
+    primaryModel: input.model,
+    retryModel: retryInput.model,
+  });
+  const second = await callOnce(baseUrl, retryInput, messages);
   if (second.kind === "ok") {
     return {
       kind: "ok",
