@@ -231,7 +231,10 @@ function selectModel(
       return {
         provider: Provider.OLLAMA,
         modelName,
-        model: createOllama({ baseURL: env.OLLAMA_BASE_URL })(modelName),
+        model: createOllama({
+          baseURL: env.OLLAMA_BASE_URL,
+          fetch: ollamaFetchWithToolNameFix,
+        })(modelName),
       };
     }
     case Provider.OPENAI_COMPATIBLE: {
@@ -897,6 +900,26 @@ function parseFallbackConfig(
 function isSupportedProvider(provider: string): boolean {
   return Object.values(Provider).includes(provider);
 }
+
+// ponytail: some Ollama models (kimi, gpt-oss) emit tool_calls with names
+// prefixed "functions." — a leftover from an older OpenAI tool-format hack.
+// The AI SDK looks up tools by exact name and fails to match, so we strip
+// the prefix on the response before it hits the SDK's parser.
+const ollamaFetchWithToolNameFix: typeof fetch = async (input, init) => {
+  const res = await fetch(input, init);
+  const ct = res.headers.get("content-type") ?? "";
+  if (!ct.includes("application/json")) return res;
+  const text = await res.text();
+  const fixed = text.replaceAll(
+    /"name"\s*:\s*"functions\.([^"]+)"/g,
+    '"name":"$1"',
+  );
+  return new Response(fixed, {
+    status: res.status,
+    statusText: res.statusText,
+    headers: res.headers,
+  });
+};
 
 // ponytail: kimi-k2.6, gpt-oss-{20b,120b}, qwen3-*, minimax-m*, deepseek-* are
 // reasoning models on LiteLLM. mistral / glm / gemini families are not.
