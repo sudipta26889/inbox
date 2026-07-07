@@ -904,25 +904,36 @@ function isSupportedProvider(provider: string): boolean {
 // ponytail: some Ollama models (kimi, gpt-oss) emit tool_calls with names
 // prefixed "functions." — a leftover from an older OpenAI tool-format hack.
 // The AI SDK looks up tools by exact name and fails to match, so we strip
-// the prefix on the response body before it hits the SDK's parser. Works
-// for both non-streaming JSON and Ollama's NDJSON streaming — the target
-// pattern is safe to substitute anywhere it appears in the wire format.
+// the prefix on the response body before it hits the SDK's parser. Ollama's
+// streaming wire format is NDJSON — one JSON object per newline — so we
+// buffer until each newline, rewrite the complete line, then emit. Rewriting
+// per raw TCP chunk would miss matches split across chunk boundaries.
 const FUNCTIONS_PREFIX_RE = /"name"\s*:\s*"functions\.([^"]+)"/g;
 const ollamaFetchWithToolNameFix: typeof fetch = async (input, init) => {
   const res = await fetch(input, init);
   if (!res.body) return res;
   const decoder = new TextDecoder();
   const encoder = new TextEncoder();
+  let buffer = "";
   const stream = res.body.pipeThrough(
     new TransformStream<Uint8Array, Uint8Array>({
       transform(chunk, controller) {
-        const text = decoder.decode(chunk, { stream: true });
-        const fixed = text.replace(FUNCTIONS_PREFIX_RE, '"name":"$1"');
-        controller.enqueue(encoder.encode(fixed));
+        buffer += decoder.decode(chunk, { stream: true });
+        let nl = buffer.indexOf("\n");
+        while (nl !== -1) {
+          const line = buffer.slice(0, nl + 1);
+          const fixed = line.replace(FUNCTIONS_PREFIX_RE, '"name":"$1"');
+          controller.enqueue(encoder.encode(fixed));
+          buffer = buffer.slice(nl + 1);
+          nl = buffer.indexOf("\n");
+        }
       },
       flush(controller) {
-        const tail = decoder.decode();
-        if (tail) controller.enqueue(encoder.encode(tail));
+        buffer += decoder.decode();
+        if (buffer) {
+          const fixed = buffer.replace(FUNCTIONS_PREFIX_RE, '"name":"$1"');
+          controller.enqueue(encoder.encode(fixed));
+        }
       },
     }),
   );
