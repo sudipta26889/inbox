@@ -86,7 +86,9 @@ export const POST = withEmailAccount("chat", async (request) => {
     : chat.messages;
 
   const uiMessages = [
-    ...convertToUIMessages({ ...chat, messages: messagesForModel }),
+    ...dropOrphanToolCalls(
+      convertToUIMessages({ ...chat, messages: messagesForModel }),
+    ),
     ...(hiddenInlineActionMessage ? [hiddenInlineActionMessage] : []),
     message,
   ];
@@ -285,4 +287,24 @@ function buildHiddenInlineActionMessage(
     role: "system" as const,
     parts: [{ type: "text" as const, text }],
   } satisfies UIMessage;
+}
+
+// ponytail: strip assistant tool-call parts whose tool never resolved. Happens
+// when a stream crashes mid-turn (Ollama Cloud drops, SDK errors, etc.) —
+// the tool_call is persisted with state "input-available" but no matching
+// tool_result. Reloading such a chat throws AI_MissingToolResultsError before
+// the model is ever called, permanently bricking the conversation. Drop the
+// orphan part so the assistant turn either has other content or becomes empty
+// (which convertToModelMessages tolerates).
+function dropOrphanToolCalls(messages: UIMessage[]): UIMessage[] {
+  return messages.map((m) => {
+    if (m.role !== "assistant") return m;
+    const parts = m.parts.filter((p) => {
+      const type = (p as { type?: string }).type ?? "";
+      if (!type.startsWith("tool-")) return true;
+      const state = (p as { state?: string }).state;
+      return state === "output-available" || state === "output-error";
+    });
+    return { ...m, parts };
+  });
 }
