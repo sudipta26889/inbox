@@ -373,13 +373,15 @@ function selectModel(
         ...(isReasoning
           ? {
               providerOptions: {
-                // ponytail: openai-compatible provider forwards keys under
-                // provider name (from createOpenAICompatible name: "litellm")
-                // into the request body. reasoning_effort tells the reasoning
-                // model to budget its <think> tokens instead of running open-
-                // ended, which is what breaks tool sequences.
-                litellm: {
-                  reasoning_effort: "medium",
+                // AI SDK openai-compatible provider reads reasoningEffort
+                // under the "openaiCompatible" key (see
+                // openai-compatible-chat-language-model.ts line 148, 230:
+                // "reasoning_effort: compatibleOptions.reasoningEffort").
+                // This budgets the model's <think> tokens instead of letting
+                // them run open-ended, which is what breaks tool sequences
+                // on multi-step chains via LiteLLM.
+                openaiCompatible: {
+                  reasoningEffort: "medium",
                 },
               },
             }
