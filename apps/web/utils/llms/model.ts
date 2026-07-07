@@ -364,10 +364,26 @@ function selectModel(
         ...(litellmApiKey ? { apiKey: litellmApiKey } : {}),
       });
 
+      const isReasoning = isLiteLLMReasoningModel(modelName);
+
       return {
         provider: Provider.LITELLM,
         modelName,
         model: litellm(modelName),
+        ...(isReasoning
+          ? {
+              providerOptions: {
+                // ponytail: openai-compatible provider forwards keys under
+                // provider name (from createOpenAICompatible name: "litellm")
+                // into the request body. reasoning_effort tells the reasoning
+                // model to budget its <think> tokens instead of running open-
+                // ended, which is what breaks tool sequences.
+                litellm: {
+                  reasoning_effort: "medium",
+                },
+              },
+            }
+          : {}),
       };
     }
     default: {
@@ -884,4 +900,23 @@ function parseFallbackConfig(
 
 function isSupportedProvider(provider: string): boolean {
   return Object.values(Provider).includes(provider);
+}
+
+// ponytail: kimi-k2.6, gpt-oss-{20b,120b}, qwen3-*, minimax-m*, deepseek-* are
+// reasoning models on LiteLLM. mistral / glm / gemini families are not.
+// Extend when new reasoning families land on the gateway.
+function isLiteLLMReasoningModel(modelName: string): boolean {
+  const m = modelName.toLowerCase();
+  return (
+    m.startsWith("kimi") ||
+    m.startsWith("gpt-oss") ||
+    m.startsWith("qwen3") ||
+    m.startsWith("minimax") ||
+    m.startsWith("deepseek") ||
+    m.includes("/minimax") ||
+    m.includes("/kimi") ||
+    m.includes("/gpt-oss") ||
+    m.includes("/qwen3") ||
+    m.includes("/deepseek")
+  );
 }
