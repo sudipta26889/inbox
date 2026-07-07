@@ -909,8 +909,27 @@ function isSupportedProvider(provider: string): boolean {
 // buffer until each newline, rewrite the complete line, then emit. Rewriting
 // per raw TCP chunk would miss matches split across chunk boundaries.
 const FUNCTIONS_PREFIX_RE = /"name"\s*:\s*"functions\.([^"]+)"/g;
+// ponytail: Ollama Cloud (`*.cloud` models) can hold the TCP socket open for
+// 60-120s and then send a RST — nothing arrives, the assistant UI hangs on
+// "Thinking...". Kill the fetch at 30s so the SDK surfaces a real error to
+// the client instead of an indefinite spin. Non-cloud (local NUC) models
+// finish well under this ceiling in practice.
+const OLLAMA_FETCH_TIMEOUT_MS = 30_000;
 const ollamaFetchWithToolNameFix: typeof fetch = async (input, init) => {
-  const res = await fetch(input, init);
+  const timeoutController = new AbortController();
+  const timer = setTimeout(
+    () => timeoutController.abort(),
+    OLLAMA_FETCH_TIMEOUT_MS,
+  );
+  const signal = init?.signal
+    ? AbortSignal.any([init.signal, timeoutController.signal])
+    : timeoutController.signal;
+  let res: Response;
+  try {
+    res = await fetch(input, { ...init, signal });
+  } finally {
+    clearTimeout(timer);
+  }
   if (!res.body) return res;
   const decoder = new TextDecoder();
   const encoder = new TextEncoder();
