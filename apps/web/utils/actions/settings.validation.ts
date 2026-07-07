@@ -65,6 +65,13 @@ export const saveAiSettingsBody = z
         path: ["aiApiKey"],
       });
     }
+    if (val.aiProvider !== DEFAULT_PROVIDER && !val.aiModel.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "You must pick a model for this provider",
+        path: ["aiModel"],
+      });
+    }
   });
 export type SaveAiSettingsBody = z.infer<typeof saveAiSettingsBody>;
 
