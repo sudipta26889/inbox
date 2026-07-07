@@ -17,6 +17,7 @@ import {
 } from "@/utils/actions/settings.validation";
 import { Select } from "@/components/Select";
 import type { OpenAiModelsResponse } from "@/app/api/ai/models/route";
+import type { OllamaModelsResponse } from "@/app/api/ai/ollama-models/route";
 import { AlertBasic, AlertError } from "@/components/Alert";
 import {
   DEFAULT_PROVIDER,
@@ -39,15 +40,24 @@ export function ModelSection() {
         : null,
     );
 
+  const { data: dataOllamaModels, isLoading: isLoadingOllamaModels } =
+    useSWR<OllamaModelsResponse>(
+      data?.aiProvider === Provider.OLLAMA ? "/api/ai/ollama-models" : null,
+    );
+
   return (
     <SettingsSection>
-      <LoadingContent loading={isLoading || isLoadingModels} error={error}>
+      <LoadingContent
+        loading={isLoading || isLoadingModels || isLoadingOllamaModels}
+        error={error}
+      >
         {data && (
           <ModelSectionForm
             aiProvider={data.aiProvider}
             aiModel={data.aiModel}
             aiApiKey={data.aiApiKey}
             models={dataModels}
+            ollamaModels={dataOllamaModels}
             refetchUser={mutate}
             emailAccountId={emailAccountId}
           />
@@ -62,6 +72,7 @@ function ModelSectionForm(props: {
   aiModel: SaveAiSettingsBody["aiModel"] | null;
   aiApiKey: SaveAiSettingsBody["aiApiKey"] | null;
   models?: OpenAiModelsResponse;
+  ollamaModels?: OllamaModelsResponse;
   refetchUser: () => void;
   emailAccountId: string;
 }) {
@@ -111,7 +122,12 @@ function ModelSectionForm(props: {
           label: model.id,
           value: model.id,
         })) || []
-      : [];
+      : aiProvider === Provider.OLLAMA
+        ? props.ollamaModels?.models.map((name) => ({
+            label: name,
+            value: name,
+          })) || []
+        : [];
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="max-w-sm space-y-4">

@@ -47,6 +47,7 @@ export const saveAiSettingsBody = z
       Provider.OPENROUTER,
       Provider.AI_GATEWAY,
       Provider.LITELLM,
+      Provider.OLLAMA,
     ]),
     aiModel: z.string(),
     aiApiKey: z.string().optional(),
@@ -55,7 +56,8 @@ export const saveAiSettingsBody = z
     if (
       !val.aiApiKey &&
       val.aiProvider !== DEFAULT_PROVIDER &&
-      val.aiProvider !== Provider.LITELLM
+      val.aiProvider !== Provider.LITELLM &&
+      val.aiProvider !== Provider.OLLAMA
     ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
