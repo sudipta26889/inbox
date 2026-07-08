@@ -213,8 +213,16 @@ export async function parseAttachment(
     isPdf: mimeType === "application/pdf",
   });
 
-  // PDF - handle both small and large files with streaming
-  if (mimeType === "application/pdf" && opts.parsePdf) {
+  // PDF - handle both small and large files with streaming.
+  // Detect by magic bytes / extension too: senders (esp. banks) frequently
+  // mislabel PDFs as application/octet-stream, which would otherwise fall
+  // through to "unsupported" and drop the content.
+  const isPdf =
+    mimeType === "application/pdf" ||
+    attachment.filename.toLowerCase().endsWith(".pdf") ||
+    buffer.subarray(0, 5).toString("latin1") === "%PDF-";
+
+  if (isPdf && opts.parsePdf) {
     // For PDFs, we don't enforce maxSizeBytes strictly - streaming handles large files
     // But we still have a sanity limit to prevent abuse
     const ABSOLUTE_MAX_SIZE = 50 * 1024 * 1024; // 50MB absolute max
