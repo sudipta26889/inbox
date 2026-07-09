@@ -15,6 +15,12 @@ type ErrorMessageEntry = {
 
 type ErrorMessages = Record<string, ErrorMessageEntry>;
 
+// A user can have several accounts, so EMAIL_WATCH_LAPSED is keyed per account
+// rather than per errorType.
+export function watchLapsedErrorKey(emailAccountId: string): string {
+  return `${ErrorType.EMAIL_WATCH_LAPSED}:${emailAccountId}`;
+}
+
 export async function getUserErrorMessages(
   userId: string,
 ): Promise<ErrorMessages | null> {
@@ -77,7 +83,7 @@ export async function clearSpecificErrorMessages({
   logger,
 }: {
   userId: string;
-  errorTypes: (typeof ErrorType)[keyof typeof ErrorType][];
+  errorTypes: string[];
   logger: Logger;
 }): Promise<void> {
   try {
@@ -116,11 +122,29 @@ export const ErrorType = {
   AI_QUOTA_ERROR: "AI quota error",
   INSUFFICIENT_CREDITS: "Insufficient AI credits",
   ACCOUNT_DISCONNECTED: "Account disconnected",
+  EMAIL_WATCH_LAPSED: "Email automation stopped",
   // Legacy keys kept for clearing old stored errors
   INCORRECT_OPENAI_API_KEY: "Incorrect OpenAI API key",
   OPENAI_API_KEY_DEACTIVATED: "OpenAI API key deactivated",
   ANTHROPIC_INSUFFICIENT_BALANCE: "Anthropic insufficient balance",
 };
+
+// Callers must confirm the account's watch is healthy before calling this.
+export async function clearWatchLapsedErrorIfResolved({
+  userId,
+  emailAccountId,
+  logger,
+}: {
+  userId: string;
+  emailAccountId: string;
+  logger: Logger;
+}): Promise<void> {
+  await clearSpecificErrorMessages({
+    userId,
+    errorTypes: [watchLapsedErrorKey(emailAccountId)],
+    logger,
+  });
+}
 
 const errorTypeConfig: Record<
   (typeof ErrorType)[keyof typeof ErrorType],
@@ -156,6 +180,11 @@ const errorTypeConfig: Record<
     actionUrl: "/accounts",
     actionLabel: "Reconnect Account",
   },
+  [ErrorType.EMAIL_WATCH_LAPSED]: {
+    label: "Email Automation Stopped",
+    actionUrl: "/accounts",
+    actionLabel: "Reconnect Account",
+  },
   // Legacy keys — only needed so old stored errors can still render
   [ErrorType.INCORRECT_OPENAI_API_KEY]: {
     label: "API Key Issue",
@@ -180,6 +209,7 @@ export async function addUserErrorMessageWithNotification({
   emailAccountId,
   errorType,
   errorMessage,
+  storageKey = errorType,
   logger,
 }: {
   userId: string;
@@ -187,6 +217,7 @@ export async function addUserErrorMessageWithNotification({
   emailAccountId: string;
   errorType: (typeof ErrorType)[keyof typeof ErrorType];
   errorMessage: string;
+  storageKey?: string;
   logger: Logger;
 }): Promise<void> {
   try {
@@ -201,8 +232,11 @@ export async function addUserErrorMessageWithNotification({
     }
 
     const currentErrorMessages = (user.errorMessages as ErrorMessages) || {};
-    const existingEntry = currentErrorMessages[errorType];
+    const existingEntry = currentErrorMessages[storageKey];
     const shouldSendEmail = !existingEntry?.emailSentAt;
+
+    // Nothing changed since the last write - skip it.
+    if (!shouldSendEmail && existingEntry?.message === errorMessage) return;
 
     const newEntry: ErrorMessageEntry = {
       message: errorMessage,
@@ -243,7 +277,7 @@ export async function addUserErrorMessageWithNotification({
 
     const newErrorMessages = {
       ...currentErrorMessages,
-      [errorType]: newEntry,
+      [storageKey]: newEntry,
     };
 
     await prisma.user.update({
