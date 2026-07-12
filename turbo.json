@@ -100,6 +100,7 @@
 
         "DISABLE_LOG_ZOD_ERRORS",
         "ENABLE_DEBUG_LOGS",
+        "WEBHOOK_ALLOW_PRIVATE_IPS",
         "DIGEST_MAX_SUMMARIES_PER_24H",
 
         "LEMON_SQUEEZY_SIGNING_SECRET",
@@ -222,6 +223,7 @@
         "VERCEL_ENV",
         "VERCEL_URL",
         "NODE_ENV",
+        "WEBHOOK_ALLOW_PRIVATE_IPS",
         "DATABASE_URL",
         "AUTH_SECRET",
         "GOOGLE_CLIENT_ID",
