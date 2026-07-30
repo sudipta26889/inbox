@@ -453,6 +453,28 @@ describe("isKnownApiError", () => {
 describe("checkCommonErrors", () => {
   const logger = createScopedLogger("error-test");
 
+  it("maps wrapped Gmail rate-limit errors to a safe 429 response", () => {
+    const error = new Error("User-rate limit exceeded");
+    error.cause = {
+      code: 429,
+      errors: [
+        {
+          reason: "rateLimitExceeded",
+          message: "User-rate limit exceeded",
+        },
+      ],
+      message: "User-rate limit exceeded",
+      status: "RESOURCE_EXHAUSTED",
+    };
+
+    expect(checkCommonErrors(error, "/api/messages", logger)).toEqual({
+      type: "Gmail Rate Limit Exceeded",
+      message:
+        "Gmail is temporarily limiting requests. Please try again shortly.",
+      code: 429,
+    });
+  });
+
   it("maps provider rate-limit mode errors for Gmail", () => {
     const error = Object.assign(new Error("Rate-limit mode active"), {
       name: "ProviderRateLimitModeError",

@@ -9,6 +9,7 @@ import {
   getProviderRateLimitMessageLabel,
   isProviderRateLimitModeError,
 } from "@/utils/email/rate-limit-mode-error";
+import { extractErrorInfo } from "@/utils/gmail/retry";
 import { createScopedLogger, type Logger } from "@/utils/logger";
 
 export type ErrorMessage = { error: string; data?: any };
@@ -110,11 +111,16 @@ export function isGmailInsufficientPermissionsError(error: unknown): boolean {
 }
 
 export function isGmailRateLimitExceededError(error: unknown): boolean {
-  return (error as any)?.errors?.[0]?.reason === "rateLimitExceeded";
+  const errorInfo = extractErrorInfo(error);
+  return (
+    errorInfo.reason === "rateLimitExceeded" ||
+    errorInfo.reason === "userRateLimitExceeded" ||
+    /user-rate limit exceeded/i.test(errorInfo.errorMessage)
+  );
 }
 
 export function isGmailQuotaExceededError(error: unknown): boolean {
-  return (error as any)?.errors?.[0]?.reason === "quotaExceeded";
+  return extractErrorInfo(error).reason === "quotaExceeded";
 }
 
 export function isIncorrectAPIKeyError(error: APICallError): boolean {
@@ -309,11 +315,9 @@ export function checkCommonErrors(
 
   if (isGmailRateLimitExceededError(error)) {
     logger.warn("Gmail rate limit exceeded for url", { url });
-    const errorMessage =
-      (error as any)?.errors?.[0]?.message ?? "Unknown error";
     return {
       type: getProviderRateLimitApiErrorType("google"),
-      message: `Gmail error: ${errorMessage}`,
+      message: RATE_LIMIT_MESSAGE_TEMPLATE.replace("{provider}", "Gmail"),
       code: 429,
     };
   }
