@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { withAuth, type RequestWithAuth } from "@/utils/middleware";
 import { SafeError } from "@/utils/error";
 import { generateSecureToken } from "@/utils/mcp-server/pkce";
+import { validateRedirectUri } from "@/utils/mcp-server/redirect-uri";
 import { validateScopes } from "@/utils/mcp-server/tokens";
 import prisma from "@/utils/prisma";
 
@@ -58,10 +59,8 @@ export const POST = withAuth(
       throw new SafeError("Unknown client");
     }
 
-    // Verify redirect URI is registered
-    if (!client.redirectUris.includes(redirectUri)) {
-      throw new SafeError("Invalid redirect_uri");
-    }
+    // Format-only check, same as /authorize — MCP clients use ephemeral localhost ports
+    validateRedirectUri(redirectUri);
 
     // Verify email account belongs to user
     const emailAccount = await prisma.emailAccount.findFirst({

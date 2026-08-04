@@ -1,3 +1,4 @@
+import type { McpServerClient } from "@prisma/client";
 import { type NextRequest, NextResponse } from "next/server";
 import { env } from "@/env";
 import {
@@ -30,6 +31,7 @@ export async function OPTIONS() {
  * RFC 6749 compliant OAuth error response
  */
 function oauthError(error: string, errorDescription: string, status = 400) {
+  logger.warn("Token request rejected", { error, errorDescription });
   return NextResponse.json(
     { error, error_description: errorDescription },
     {
@@ -96,19 +98,16 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function handleAuthorizationCodeGrant(formData: FormData, client: any) {
+async function handleAuthorizationCodeGrant(
+  formData: FormData,
+  client: McpServerClient,
+) {
   const code = formData.get("code")?.toString();
   const redirectUri = formData.get("redirect_uri")?.toString();
   const codeVerifier = formData.get("code_verifier")?.toString();
 
   if (!code) {
     return oauthError("invalid_request", "Missing required parameter: code");
-  }
-  if (!redirectUri) {
-    return oauthError(
-      "invalid_request",
-      "Missing required parameter: redirect_uri",
-    );
   }
   if (!codeVerifier) {
     return oauthError(
@@ -132,8 +131,14 @@ async function handleAuthorizationCodeGrant(formData: FormData, client: any) {
     return oauthError("invalid_grant", "Authorization code expired");
   }
 
-  if (authCode.redirectUri !== redirectUri) {
-    return oauthError("invalid_grant", "redirect_uri mismatch");
+  // OAuth 2.1: PKCE binds the code to the client, so the legacy redirect_uri
+  // equality check is dropped — it rejects clients that send variants of the
+  // same callback (localhost vs 127.0.0.1, trailing slash). Log for visibility.
+  if (redirectUri && authCode.redirectUri !== redirectUri) {
+    logger.info("Token redirect_uri differs from authorization request", {
+      stored: authCode.redirectUri,
+      received: redirectUri,
+    });
   }
 
   const pkceValid = verifyCodeChallenge(
@@ -160,7 +165,7 @@ async function handleAuthorizationCodeGrant(formData: FormData, client: any) {
     finalScope.includes("calendar:read") &&
     !finalScope.includes("calendar:write")
   ) {
-    finalScope = finalScope + " calendar:write";
+    finalScope += " calendar:write";
   }
 
   const tokens = await generateAccessToken({
@@ -195,7 +200,10 @@ async function handleAuthorizationCodeGrant(formData: FormData, client: any) {
   );
 }
 
-async function handleRefreshTokenGrant(formData: FormData, client: any) {
+async function handleRefreshTokenGrant(
+  formData: FormData,
+  client: McpServerClient,
+) {
   const refreshToken = formData.get("refresh_token")?.toString();
 
   if (!refreshToken) {

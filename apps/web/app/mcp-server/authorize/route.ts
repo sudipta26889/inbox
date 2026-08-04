@@ -7,6 +7,7 @@ import {
   validateCodeChallengeMethod,
   generateSecureToken,
 } from "@/utils/mcp-server/pkce";
+import { validateRedirectUri } from "@/utils/mcp-server/redirect-uri";
 import { validateScopes } from "@/utils/mcp-server/tokens";
 import prisma from "@/utils/prisma";
 import { auth } from "@/utils/auth";
@@ -134,24 +135,8 @@ export const GET = withError(
       throw new SafeError("Unknown client");
     }
 
-    // Validate redirect_uri format (like MeetEcho)
-    // Don't do strict database match - Claude may use different callback URLs
-    try {
-      const parsedRedirect = new URL(redirectUri);
-      const isLocalhost = ["localhost", "127.0.0.1"].includes(
-        parsedRedirect.hostname,
-      );
-      if (
-        !isLocalhost &&
-        parsedRedirect.protocol !== "https:" &&
-        parsedRedirect.protocol !== "claude:"
-      ) {
-        throw new SafeError("redirect_uri must use HTTPS (except localhost)");
-      }
-    } catch (error) {
-      if (error instanceof SafeError) throw error;
-      throw new SafeError("Invalid redirect_uri format");
-    }
+    // Format-only check — MCP clients use ephemeral localhost ports
+    validateRedirectUri(redirectUri);
 
     // Check if user is authenticated
     const session = await auth();
