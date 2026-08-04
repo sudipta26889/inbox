@@ -12,9 +12,9 @@ services:
       NEXT_PUBLIC_BASE_URL: "https://inbox.sudiptadhara.in"
       NEXT_PUBLIC_BYPASS_PREMIUM_CHECKS: "true"
       NEXT_PUBLIC_MCP_SERVER_ENABLED: "true"
-      DATABASE_URL: "postgresql://inbox_zero_user:fdJ5GJ6IYEwdar9gd94jAoFY@nuc.lan:5432/inbox_zero_db?schema=public"
-      DIRECT_URL: "postgresql://inbox_zero_user:fdJ5GJ6IYEwdar9gd94jAoFY@nuc.lan:5432/inbox_zero_db?schema=public"
-      REDIS_URL: "redis://:YyD0Tp54vIhmH9gyrbtDu7vDtv8zc5gL@nuc.lan:6379/3"
+      DATABASE_URL: "postgresql://inbox_zero_user:fdJ5GJ6IYEwdar9gd94jAoFY@192.168.11.118:5432/inbox_zero_db?schema=public"
+      DIRECT_URL: "postgresql://inbox_zero_user:fdJ5GJ6IYEwdar9gd94jAoFY@192.168.11.118:5432/inbox_zero_db?schema=public"
+      REDIS_URL: "redis://:YyD0Tp54vIhmH9gyrbtDu7vDtv8zc5gL@192.168.11.118:6379/3"
       INTERNAL_API_URL: "http://web:5500"
     volumes:
       # Mount source code for hot reload - code changes reflect immediately

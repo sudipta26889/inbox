@@ -168,7 +168,7 @@ export function HomeAssistantSection() {
                   <Input
                     id="ha-url"
                     type="url"
-                    placeholder="https://homeassistant.lan:8123"
+                    placeholder="https://homeassistant.local:8123"
                     value={homeAssistantUrl}
                     onChange={(e) => setHomeAssistantUrl(e.target.value)}
                     disabled={isSaving}

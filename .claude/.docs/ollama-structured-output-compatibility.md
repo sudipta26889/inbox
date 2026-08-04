@@ -554,7 +554,7 @@ ECONOMY_LLM_PROVIDER=openai-compatible
 ECONOMY_LLM_MODEL=kimi-k2
 
 # LiteLLM Proxy Configuration
-OPENAI_COMPATIBLE_BASE_URL=http://192.168.11.118:4000/v1
+OPENAI_COMPATIBLE_BASE_URL=http://nuc.lan:4000/v1
 LLM_API_KEY=your-litellm-api-key
 ```
 
@@ -691,13 +691,13 @@ When `format: json` is in the request body, the model is forced to emit everythi
 - model_name: kimi-k2
   litellm_params:
     model: ollama/kimi-k2:1t-cloud
-    api_base: http://192.168.11.118:11434
+    api_base: http://nuc.lan:11434
 
 # AFTER (working)
 - model_name: kimi-k2
   litellm_params:
     model: ollama_chat/kimi-k2:1t-cloud    # /api/chat endpoint
-    api_base: http://192.168.11.118:11434
+    api_base: http://nuc.lan:11434
     timeout: 600
     stream_timeout: 120
   model_info:
@@ -741,7 +741,7 @@ Direct API test confirmed tool calling works in both streaming and non-streaming
 
 ```bash
 # Non-streaming — tool_calls in message
-curl -X POST http://192.168.11.118:4000/v1/chat/completions \
+curl -X POST http://nuc.lan:4000/v1/chat/completions \
   -d '{"model": "kimi-k2", "messages": [...], "tools": [...], "stream": false}'
 # Response: "finish_reason": "tool_calls", "tool_calls": [{"function": {"name": "get_weather"}}]
 
