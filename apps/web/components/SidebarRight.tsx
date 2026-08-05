@@ -11,7 +11,7 @@ export function SidebarRight({
   name: string;
   className?: string;
 }) {
-  const { state, openMobile, isMobile } = useSidebar();
+  const { state, openMobile, isMobile, toggleSidebar } = useSidebar();
   const isOpen = isMobile ? openMobile.includes(name) : state.includes(name);
 
   return (
@@ -24,7 +24,7 @@ export function SidebarRight({
       )}
     >
       <div className="flex h-full w-full flex-col overflow-hidden">
-        <Chat open={isOpen} />
+        <Chat open={isOpen} onClose={() => toggleSidebar([name])} />
       </div>
     </div>
   );
