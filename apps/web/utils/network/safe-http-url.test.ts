@@ -144,7 +144,7 @@ describe("allowPrivateIps option (webhook sender opt-in only)", () => {
   it("allows hostnames resolving to private IPs (incl. Tailscale CGNAT) when set", async () => {
     vi.mocked(dns.lookup).mockResolvedValue([
       { address: "100.100.100.100", family: 4 },
-    ] as Awaited<ReturnType<typeof dns.lookup>>);
+    ] as unknown as Awaited<ReturnType<typeof dns.lookup>>);
 
     await expect(
       resolveSafeExternalHttpUrl("https://host.tailnet.ts.net/webhook", {
