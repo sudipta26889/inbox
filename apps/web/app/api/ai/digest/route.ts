@@ -69,7 +69,8 @@ export const POST = withError(
           },
         });
 
-        if (!summary?.content) {
+        const summaryContent = summary?.content;
+        if (!summaryContent) {
           logger.info(
             "Skipping digest item because it is not worth summarizing",
           );
@@ -81,7 +82,7 @@ export const POST = withError(
           threadId: message.threadId || "",
           emailAccountId,
           actionId,
-          content: summary,
+          content: { content: summaryContent },
           logger,
         });
 

@@ -11,7 +11,10 @@ import { PROMPT_SECURITY_INSTRUCTIONS } from "@/utils/ai/security";
 const logger = createScopedLogger("summarize-digest-email");
 
 const schema = z.object({
-  content: z.string().describe("The content of the summary text"),
+  content: z
+    .string()
+    .nullable()
+    .describe("The summary text, or null when the email should be skipped"),
 });
 type AISummarizeResult = z.infer<typeof schema>;
 
@@ -30,7 +33,8 @@ export async function aiSummarizeEmailForDigest({
   const userMessageForPrompt = messageToSummarize;
 
   const system = `You are an AI assistant that processes emails for inclusion in a daily digest.
-Your task is to summarize the content accordingly using the provided schema.
+Your task is to summarize the content.
+Respond with a JSON object with the following shape: {"content": "<summary text>"}
 
 ${PROMPT_SECURITY_INSTRUCTIONS}
 
@@ -40,7 +44,7 @@ I will provide you with:
 - The email content
 
 Guidelines for summarizing the email:
-- If the email is spam, promotional, or irrelevant, return "null".
+- If the email is spam, promotional, or irrelevant, return {"content": null}.
 - Do NOT mention the sender's name or start with phrases like "This is a message from X" or "This email from Y" - the sender information is already displayed separately.
 - DO NOT use meta-commentary like "highlights", "discusses", "reflects on", "mentions", or "talks about" - just state the content directly.
 - Lead with the most interesting or important point - the hook, main insight, or key takeaway.
