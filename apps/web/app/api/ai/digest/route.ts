@@ -9,6 +9,7 @@ import type { StoredDigestContent } from "@/app/api/resend/digest/validation";
 import { withError } from "@/utils/middleware";
 import { env } from "@/env";
 import { withQstashOrInternal } from "@/utils/qstash";
+import { isOwnSendingAddress } from "@/utils/digest/is-from-us";
 import {
   releaseDigestSummarySlot,
   reserveDigestSummarySlot,
@@ -31,7 +32,7 @@ export const POST = withError(
       }
 
       // Don't summarize Digest emails (this will actually block all emails that we send, but that's okay)
-      if (message.from === env.SMTP_FROM_EMAIL || env.RESEND_FROM_EMAIL) {
+      if (isOwnSendingAddress(message.from)) {
         logger.info("Skipping digest item because it is from us");
         return new NextResponse("OK", { status: 200 });
       }
