@@ -15,6 +15,7 @@ import {
   SendIcon,
   ShieldCheckIcon,
   TagIcon,
+  Trash2Icon,
   WebhookIcon,
 } from "lucide-react";
 import { truncate } from "@/utils/string";
@@ -88,6 +89,8 @@ export function getActionDisplay(
       return "A2A Notify";
     case ActionType.CREATE_TASK:
       return "TaskPilot";
+    case ActionType.DELETE:
+      return "Delete";
     default: {
       const exhaustiveCheck: never = action.type;
       return exhaustiveCheck;
@@ -127,6 +130,8 @@ export function getActionIcon(actionType: ActionType) {
       return RadioTowerIcon;
     case ActionType.CREATE_TASK:
       return ListChecksIcon;
+    case ActionType.DELETE:
+      return Trash2Icon;
     default: {
       const exhaustiveCheck: never = actionType;
       return exhaustiveCheck;

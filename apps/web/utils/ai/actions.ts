@@ -33,6 +33,7 @@ import {
   getRemoteAgentUrls,
 } from "@/utils/a2a-client";
 import { executeCreateTaskAction } from "@/utils/ai/actions/create-task";
+import { isDeleteEmailActionEnabled } from "@/utils/delete-email-action";
 
 const MODULE = "ai-actions";
 
@@ -107,6 +108,14 @@ export const runActionFunction = async (options: {
       return a2a_notify(opts);
     case ActionType.CREATE_TASK:
       return create_task(opts);
+    case ActionType.DELETE:
+      if (!isDeleteEmailActionEnabled()) {
+        log.info(
+          "Skipping delete action because delete email actions are disabled",
+        );
+        return;
+      }
+      return delete_email(opts);
     default:
       throw new Error(`Unknown action: ${action}`);
   }
@@ -360,6 +369,14 @@ const mark_spam: ActionFunction<Record<string, unknown>> = async ({
   email,
 }) => {
   await client.markSpam(email.threadId);
+};
+
+const delete_email: ActionFunction<Record<string, unknown>> = async ({
+  client,
+  email,
+  userEmail,
+}) => {
+  await client.trashThread(email.threadId, userEmail, "automation");
 };
 
 const call_webhook: ActionFunction<{ url?: string | null }> = async ({

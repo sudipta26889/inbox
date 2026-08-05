@@ -345,6 +345,9 @@ export const env = createEnv({
     NEXT_PUBLIC_EXTERNAL_API_ENABLED: booleanString.optional().default(false),
     NEXT_PUBLIC_MCP_SERVER_ENABLED: booleanString.optional().default(false),
     NEXT_PUBLIC_AUTO_DRAFT_DISABLED: booleanString.optional(),
+    NEXT_PUBLIC_DELETE_EMAIL_ACTION_ENABLED: booleanString
+      .optional()
+      .default(false),
     NEXT_PUBLIC_IS_RESEND_CONFIGURED: booleanString.optional(),
     NEXT_PUBLIC_TABS_EXTENSION_ID: z
       .string()
@@ -428,6 +431,8 @@ export const env = createEnv({
     NEXT_PUBLIC_MCP_SERVER_ENABLED: process.env.NEXT_PUBLIC_MCP_SERVER_ENABLED,
     NEXT_PUBLIC_AUTO_DRAFT_DISABLED:
       process.env.NEXT_PUBLIC_AUTO_DRAFT_DISABLED,
+    NEXT_PUBLIC_DELETE_EMAIL_ACTION_ENABLED:
+      process.env.NEXT_PUBLIC_DELETE_EMAIL_ACTION_ENABLED,
     NEXT_PUBLIC_IS_RESEND_CONFIGURED:
       process.env.NEXT_PUBLIC_IS_RESEND_CONFIGURED,
     NEXT_PUBLIC_TABS_EXTENSION_ID: process.env.NEXT_PUBLIC_TABS_EXTENSION_ID,

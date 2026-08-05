@@ -1524,6 +1524,7 @@ enum ActionType {
   HOME_ASSISTANT // Integrates with Home Assistant (webhook, MQTT, service calls)
   A2A_NOTIFY     // Send A2A message to remote agent (e.g., OpenClaw Mitra)
   CREATE_TASK
+  DELETE // Moves the thread to trash. Gated behind NEXT_PUBLIC_DELETE_EMAIL_ACTION_ENABLED.
   // SUMMARIZE
   // SNOOZE
   // ADD_TO_DO

@@ -158,6 +158,9 @@ export const actionInputs: Record<
   [ActionType.A2A_NOTIFY]: {
     fields: [],
   },
+  [ActionType.DELETE]: {
+    fields: [],
+  },
   [ActionType.CREATE_TASK]: {
     fields: [],
   },
@@ -259,6 +262,7 @@ export function sanitizeActionFields(
     case ActionType.MARK_SPAM:
     case ActionType.MARK_READ:
     case ActionType.DIGEST:
+    case ActionType.DELETE:
       return base;
     case ActionType.MOVE_FOLDER: {
       return {

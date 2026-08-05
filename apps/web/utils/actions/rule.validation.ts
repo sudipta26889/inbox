@@ -11,6 +11,10 @@ import { NINETY_DAYS_MINUTES } from "@/utils/date";
 import { validateLabelNameBasic } from "@/utils/gmail/label-validation";
 import { addMissingRecipientIssue } from "@/utils/rule/recipient-validation";
 import { attachmentSourceInputSchema } from "@/utils/attachments/source-schema";
+import {
+  DELETE_EMAIL_ACTION_DISABLED_MESSAGE,
+  isDeleteEmailActionEnabled,
+} from "@/utils/delete-email-action";
 
 export const delayInMinutesSchema = z
   .number()
@@ -51,6 +55,7 @@ const zodActionType = z.enum([
   ActionType.MOVE_FOLDER,
   ActionType.NOTIFY_SENDER,
   ActionType.CREATE_TASK,
+  ActionType.DELETE,
 ]);
 
 const zodConditionType = z.enum([ConditionType.AI, ConditionType.STATIC]);
@@ -122,6 +127,14 @@ const zodAction = z
     haEntityId: z.string().nullish(),
   })
   .superRefine((data, ctx) => {
+    if (data.type === ActionType.DELETE && !isDeleteEmailActionEnabled()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: DELETE_EMAIL_ACTION_DISABLED_MESSAGE,
+        path: ["type"],
+      });
+      return;
+    }
     if (data.type === ActionType.LABEL) {
       const labelValue =
         data.labelId?.value?.trim() || data.labelId?.name?.trim();
@@ -377,6 +390,14 @@ const importedAction = z
     delayInMinutes: delayInMinutesSchema,
   })
   .superRefine((data, ctx) => {
+    if (data.type === ActionType.DELETE && !isDeleteEmailActionEnabled()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: DELETE_EMAIL_ACTION_DISABLED_MESSAGE,
+        path: ["type"],
+      });
+      return;
+    }
     if (data.type === ActionType.LABEL) {
       const labelValue = data.label?.trim();
 
