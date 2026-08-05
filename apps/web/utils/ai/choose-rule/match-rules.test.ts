@@ -777,6 +777,87 @@ describe("matchesStaticRule", () => {
     });
     expect(matchesStaticRule(rule, message2, logger)).toBe(false);
   });
+
+  it("does not match a full-address pattern against a spoofed suffix domain", () => {
+    const rule = getStaticRule({ from: "boss@company.com" });
+    const message = getMessage({
+      headers: getHeaders({ from: "boss@company.com.evil.com" }),
+    });
+
+    expect(matchesStaticRule(rule, message, logger)).toBe(false);
+  });
+
+  it("does not match a full-address pattern against a prefixed local part", () => {
+    const rule = getStaticRule({ from: "boss@company.com" });
+    const message = getMessage({
+      headers: getHeaders({ from: "xboss@company.com" }),
+    });
+
+    expect(matchesStaticRule(rule, message, logger)).toBe(false);
+  });
+
+  it("does not match a domain pattern against a spoofed suffix domain", () => {
+    const rule = getStaticRule({ from: "@company.com" });
+    const message = getMessage({
+      headers: getHeaders({ from: "user@company.com.evil.com" }),
+    });
+
+    expect(matchesStaticRule(rule, message, logger)).toBe(false);
+  });
+
+  it("does not match a wildcard-local pattern against a spoofed suffix domain", () => {
+    const rule = getStaticRule({ from: "*@gmail.com" });
+    const message = getMessage({
+      headers: getHeaders({ from: "test@gmail.com.evil.com" }),
+    });
+
+    expect(matchesStaticRule(rule, message, logger)).toBe(false);
+  });
+
+  it("does not match a bare-domain pattern against a lookalike domain", () => {
+    const rule = getStaticRule({ from: "example.com" });
+    const message = getMessage({
+      headers: getHeaders({ from: "user@myexample.com" }),
+    });
+
+    expect(matchesStaticRule(rule, message, logger)).toBe(false);
+  });
+
+  it("still matches a bare-domain pattern against an address at that domain", () => {
+    const rule = getStaticRule({ from: "example.com" });
+    const message = getMessage({
+      headers: getHeaders({ from: "user@example.com" }),
+    });
+
+    expect(matchesStaticRule(rule, message, logger)).toBe(true);
+  });
+
+  it("still matches a bare-domain pattern against a subdomain of that domain", () => {
+    const rule = getStaticRule({ from: "example.com" });
+    const message = getMessage({
+      headers: getHeaders({ from: "user@mail.example.com" }),
+    });
+
+    expect(matchesStaticRule(rule, message, logger)).toBe(true);
+  });
+
+  it("treats the @domain form as an exact domain (no subdomain match)", () => {
+    const rule = getStaticRule({ from: "@example.com" });
+    const message = getMessage({
+      headers: getHeaders({ from: "user@mail.example.com" }),
+    });
+
+    expect(matchesStaticRule(rule, message, logger)).toBe(false);
+  });
+
+  it("matches the address, not the display name, for address-like patterns", () => {
+    const rule = getStaticRule({ from: "boss@company.com" });
+    const message = getMessage({
+      headers: getHeaders({ from: '"boss@company.com" <attacker@evil.com>' }),
+    });
+
+    expect(matchesStaticRule(rule, message, logger)).toBe(false);
+  });
 });
 
 describe("findMatchingRule", () => {

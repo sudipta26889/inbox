@@ -20,7 +20,12 @@ import type {
   MatchReason,
   MatchingRuleResult,
 } from "@/utils/ai/choose-rule/types";
-import { extractEmailAddress } from "@/utils/email";
+import {
+  extractEmailAddress,
+  extractEmailAddresses,
+  extractNameFromEmail,
+  splitRecipientList,
+} from "@/utils/email";
 import { isCalendarInvite } from "@/utils/parse/calender-event";
 import { checkSenderReplyHistory } from "@/utils/reply-tracker/check-sender-reply-history";
 import type { EmailProvider } from "@/utils/email/types";
@@ -462,48 +467,36 @@ export function matchesStaticRule(
 
   if (!from && !to && !subject && !body) return false;
 
-  const safeRegexTest = (
-    pattern: string,
-    text: string,
-    allowPipeAsOr = false,
-  ) => {
-    try {
-      // Split by pipe, comma, or " OR " to handle OR conditions only for email fields (from/to)
-      // Supports: "@a.com|@b.com", "@a.com, @b.com", "@a.com OR @b.com"
-      const patterns = allowPipeAsOr ? splitEmailPatterns(pattern) : [pattern];
-
-      // Test each pattern individually
-      for (const individualPattern of patterns) {
-        // Escape regex special characters except for * which we want to support as wildcards
-        const escapedPattern = individualPattern.replace(
-          /[.+?^${}()[\]\\]/g,
-          "\\$&",
-        );
-
-        // Convert all * to .* for wildcard matching
-        const regexPattern = escapedPattern.replace(/\*/g, ".*");
-
-        if (new RegExp(regexPattern).test(text)) {
-          return true;
-        }
-      }
-
-      return false;
-    } catch (error) {
-      log.error("Invalid regex pattern", { pattern, error });
-      return false;
-    }
-  };
+  const {
+    fromAddressHeader,
+    toAddressHeader,
+    fromDisplayNameHeader,
+    toDisplayNameHeader,
+  } = getNormalizedEmailMatchHeaders(message);
 
   const fromMatch = from
-    ? safeRegexTest(from, message.headers.from, true)
+    ? matchesEmailFieldPattern({
+        pattern: from,
+        addressText: fromAddressHeader.toLowerCase(),
+        displayNameText: fromDisplayNameHeader.toLowerCase(),
+        logInvalidPattern: (pattern, error) =>
+          logInvalidEmailMatchPattern({ logger: log, pattern, error }),
+      })
     : true;
-  const toMatch = to ? safeRegexTest(to, message.headers.to, true) : true;
+  const toMatch = to
+    ? matchesEmailFieldPattern({
+        pattern: to,
+        addressText: toAddressHeader.toLowerCase(),
+        displayNameText: toDisplayNameHeader.toLowerCase(),
+        logInvalidPattern: (pattern, error) =>
+          logInvalidEmailMatchPattern({ logger: log, pattern, error }),
+      })
+    : true;
   const subjectMatch = subject
-    ? safeRegexTest(subject, message.headers.subject, false)
+    ? matchesTextPattern(subject, message.headers.subject, log)
     : true;
   const bodyMatch = body
-    ? safeRegexTest(body, message.textPlain || "", false)
+    ? matchesTextPattern(body, message.textPlain || "", log)
     : true;
 
   return fromMatch && toMatch && subjectMatch && bodyMatch;
@@ -663,4 +656,146 @@ async function getPreviouslyExecutedRuleIds({
   return new Set(
     previousRules.map((r) => r.ruleId).filter((id): id is string => !!id),
   );
+}
+
+function matchesTextPattern(pattern: string, text: string, logger: Logger) {
+  try {
+    return createRulePatternRegex(pattern).test(text);
+  } catch (error) {
+    logger.error("Invalid regex pattern", { pattern, error });
+    return false;
+  }
+}
+
+// Escape regex metacharacters, then turn the `*` glob into `.*`.
+function globToRegexSource(pattern: string) {
+  return pattern.replace(/[.+?^${}()[\]\\]/g, "\\$&").replace(/\*/g, ".*");
+}
+
+// Unanchored: intended for subject/body keyword and display-name substring matching.
+function createRulePatternRegex(pattern: string) {
+  return new RegExp(globToRegexSource(pattern));
+}
+
+// Anchored: for from/to address patterns, so a pattern matches a whole address
+// boundary and cannot be satisfied by a spoofed prefix/suffix (e.g. a rule for
+// `boss@company.com` must not match `boss@company.com.evil.com`).
+function createAnchoredAddressRegex(pattern: string) {
+  // `@domain` → any local part, exact domain (no subdomain), e.g. user@domain.
+  if (pattern.startsWith("@")) {
+    return new RegExp(`^.*${globToRegexSource(pattern)}$`);
+  }
+  // `local@domain` → exact address (local part may contain `*` wildcards).
+  if (pattern.includes("@")) {
+    return new RegExp(`^${globToRegexSource(pattern)}$`);
+  }
+  // Bare domain → addresses at that domain or a subdomain (`@domain`/`.domain`),
+  // but not a lookalike domain (e.g. `example.com` must not match myexample.com).
+  return new RegExp(`^.*[@.]${globToRegexSource(pattern)}$`);
+}
+
+/** True if the pattern is email- or domain-shaped (not display-name-only). */
+function isAddressLikeEmailPattern(pattern: string): boolean {
+  const normalized = pattern.trim().toLowerCase();
+  return normalized.includes("@") || /^[^\s@]+\.[^\s@]+$/.test(normalized);
+}
+
+function matchesEmailFieldPattern({
+  pattern,
+  addressText,
+  displayNameText,
+  logInvalidPattern,
+}: {
+  pattern: string;
+  addressText: string;
+  displayNameText: string;
+  logInvalidPattern: (pattern: string, error: unknown) => void;
+}) {
+  try {
+    const patterns = splitEmailPatterns(pattern);
+
+    for (const patternPart of patterns) {
+      const normalizedPattern = patternPart.trim().toLowerCase();
+      const regex = createRulePatternRegex(normalizedPattern);
+
+      if (isAddressLikeEmailPattern(patternPart)) {
+        // `addressText` may hold several recipients joined as "a@x, b@y"; the
+        // anchored regex must be tested against each address individually.
+        const addressRegex = createAnchoredAddressRegex(normalizedPattern);
+        const addresses = addressText.split(", ").filter(Boolean);
+        if (addresses.some((address) => addressRegex.test(address)))
+          return true;
+        continue;
+      }
+
+      if (displayNameText && regex.test(displayNameText)) return true;
+      if (regex.test(addressText)) return true;
+    }
+
+    return false;
+  } catch (error) {
+    logInvalidPattern(pattern, error);
+    return false;
+  }
+}
+
+function logInvalidEmailMatchPattern({
+  logger,
+  pattern,
+  error,
+}: {
+  logger: Logger;
+  pattern: string;
+  error: unknown;
+}) {
+  logger.error("Invalid email match pattern");
+  logger.trace("Invalid email match pattern details", { pattern, error });
+}
+
+function normalizeEmailHeaderForRuleMatching(
+  header: string,
+  allowMultiple = false,
+) {
+  if (!header) return "";
+
+  if (allowMultiple) {
+    return extractEmailAddresses(header).join(", ");
+  }
+
+  return extractEmailAddress(header);
+}
+
+function normalizeEmailDisplayNameHeaderForRuleMatching(header: string) {
+  if (!header) return "";
+
+  return splitRecipientList(header)
+    .map((part) => {
+      const name = extractNameFromEmail(part).trim();
+      const email = extractEmailAddress(part).trim().toLowerCase();
+
+      if (!name) return "";
+      if (email && name.toLowerCase() === email) return "";
+
+      return name;
+    })
+    .filter(Boolean)
+    .join(", ");
+}
+
+function getNormalizedEmailMatchHeaders(message: ParsedMessage) {
+  return {
+    fromAddressHeader: normalizeEmailHeaderForRuleMatching(
+      message.headers.from,
+    ),
+    toAddressHeader: normalizeEmailHeaderForRuleMatching(
+      message.headers.to,
+      true,
+    ),
+    fromDisplayNameHeader: normalizeEmailDisplayNameHeaderForRuleMatching(
+      message.headers.from,
+    ),
+    toDisplayNameHeader: normalizeEmailDisplayNameHeaderForRuleMatching(
+      message.headers.to,
+    ),
+  };
 }
