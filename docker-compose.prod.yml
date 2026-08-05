@@ -14,6 +14,7 @@ services:
         NEXT_PUBLIC_MEETING_BRIEFS_ENABLED: "false"
         NEXT_PUBLIC_INTEGRATIONS_ENABLED: "false"
         NEXT_PUBLIC_DIGEST_ENABLED: "true"
+        NEXT_PUBLIC_DELETE_EMAIL_ACTION_ENABLED: "false"
     image: inbox-prod:latest
     env_file:
       - ./apps/web/.env
@@ -25,6 +26,8 @@ services:
       NEXT_PUBLIC_BYPASS_PREMIUM_CHECKS: "true"
       NEXT_PUBLIC_MCP_SERVER_ENABLED: "true"
       NEXT_PUBLIC_EMAIL_SEND_ENABLED: "true"
+      NEXT_PUBLIC_DELETE_EMAIL_ACTION_ENABLED: "false"
+      WEBHOOK_ALLOW_PRIVATE_IPS: "false"
       NEXT_PUBLIC_DHARAHIL_ENABLED: "true"
       DHARAHIL_BASE_URL: "https://dharahil-gateway.sudiptadhara.in"
       DHARAHIL_API_KEY: "dhara_sk_12f85b7abc1d1e23b83dd85c67e049271b91680edbc4d2787c59b42d8f83b6c9"

@@ -414,6 +414,15 @@ export function RuleForm({
             },
           ]
         : []),
+      ...(env.NEXT_PUBLIC_DELETE_EMAIL_ACTION_ENABLED
+        ? [
+            {
+              label: "Delete",
+              value: ActionType.DELETE,
+              icon: getActionIcon(ActionType.DELETE),
+            },
+          ]
+        : []),
       // NOTIFY_SENDER is only available for cold email rules
       ...(rule.systemType === SystemType.COLD_EMAIL &&
       env.NEXT_PUBLIC_IS_RESEND_CONFIGURED
