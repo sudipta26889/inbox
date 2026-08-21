@@ -965,19 +965,19 @@ const ollamaFetchWithToolNameFix: typeof fetch = async (input, init) => {
 
 // ponytail: kimi-k2.6, gpt-oss-{20b,120b}, qwen3-*, minimax-m*, deepseek-* are
 // reasoning models on LiteLLM. mistral / glm / gemini families are not.
+// Substring, not prefix: gateway aliases wrap the family name on either side
+// (illama-kimi-k2.6, ollama/kimi-k2.6), and a missed match silently drops the
+// reasoning budget that keeps multi-step tool chains from derailing.
 // Extend when new reasoning families land on the gateway.
+const LITELLM_REASONING_FAMILIES = [
+  "kimi",
+  "gpt-oss",
+  "qwen3",
+  "minimax",
+  "deepseek",
+];
+
 function isLiteLLMReasoningModel(modelName: string): boolean {
   const m = modelName.toLowerCase();
-  return (
-    m.startsWith("kimi") ||
-    m.startsWith("gpt-oss") ||
-    m.startsWith("qwen3") ||
-    m.startsWith("minimax") ||
-    m.startsWith("deepseek") ||
-    m.includes("/minimax") ||
-    m.includes("/kimi") ||
-    m.includes("/gpt-oss") ||
-    m.includes("/qwen3") ||
-    m.includes("/deepseek")
-  );
+  return LITELLM_REASONING_FAMILIES.some((family) => m.includes(family));
 }

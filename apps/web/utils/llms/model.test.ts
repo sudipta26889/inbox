@@ -518,6 +518,31 @@ describe("Models", () => {
       expect(result.model).toBeDefined();
     });
 
+    it("should budget reasoning for LiteLLM gateway aliases of reasoning models", () => {
+      const userAi: UserAIFields = {
+        aiApiKey: null,
+        aiProvider: Provider.LITELLM,
+        aiModel: "illama-kimi-k2.6",
+      };
+
+      const result = getModel(userAi);
+      expect(result.provider).toBe(Provider.LITELLM);
+      expect(result.providerOptions?.openaiCompatible?.reasoningEffort).toBe(
+        "medium",
+      );
+    });
+
+    it("should not budget reasoning for non-reasoning LiteLLM models", () => {
+      const userAi: UserAIFields = {
+        aiApiKey: null,
+        aiProvider: Provider.LITELLM,
+        aiModel: "mistral-small-24b",
+      };
+
+      const result = getModel(userAi);
+      expect(result.providerOptions?.openaiCompatible).toBeUndefined();
+    });
+
     it("should configure Anthropic model correctly without Bedrock credentials", () => {
       const userAi: UserAIFields = {
         aiApiKey: "user-api-key",
