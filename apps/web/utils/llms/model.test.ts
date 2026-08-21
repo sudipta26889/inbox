@@ -522,7 +522,7 @@ describe("Models", () => {
       const userAi: UserAIFields = {
         aiApiKey: null,
         aiProvider: Provider.LITELLM,
-        aiModel: "illama-kimi-k2.6",
+        aiModel: "ollama-kimi-k2.6",
       };
 
       const result = getModel(userAi);
