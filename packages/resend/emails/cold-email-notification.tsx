@@ -21,7 +21,7 @@ type ColdEmailNotificationComponent = FC<ColdEmailNotificationProps> & {
 };
 
 const ColdEmailNotification: ColdEmailNotificationComponent = ({
-  baseUrl = "https://www.inbox.sudiptadhara.in",
+  baseUrl = "https://inbox.sudiptadhara.in",
 }: ColdEmailNotificationProps) => {
   return (
     <Html>
@@ -32,7 +32,7 @@ const ColdEmailNotification: ColdEmailNotificationComponent = ({
             <Section className="p-8 text-center">
               <Link href={baseUrl} className="text-[15px]">
                 <Img
-                  src={"https://www.inbox.sudiptadhara.in/icon.png"}
+                  src={`${baseUrl}/icon.png`}
                   width="40"
                   height="40"
                   alt="Inbox"
@@ -83,5 +83,5 @@ const ColdEmailNotification: ColdEmailNotificationComponent = ({
 export default ColdEmailNotification;
 
 ColdEmailNotification.PreviewProps = {
-  baseUrl: "https://www.inbox.sudiptadhara.in",
+  baseUrl: "https://inbox.sudiptadhara.in",
 };

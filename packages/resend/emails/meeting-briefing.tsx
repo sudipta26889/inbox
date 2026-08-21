@@ -72,7 +72,7 @@ function renderInternalTeamNote(internalTeamMembers: InternalTeamMember[]) {
 }
 
 export default function MeetingBriefingEmail({
-  baseUrl = "https://www.inbox.sudiptadhara.in",
+  baseUrl = "https://inbox.sudiptadhara.in",
   emailAccountId,
   meetingTitle,
   formattedTime,
@@ -155,7 +155,7 @@ export default function MeetingBriefingEmail({
 }
 
 MeetingBriefingEmail.PreviewProps = {
-  baseUrl: "https://www.inbox.sudiptadhara.in",
+  baseUrl: "https://inbox.sudiptadhara.in",
   unsubscribeToken: "test-token",
   emailAccountId: "test-account",
   meetingTitle: "Product Strategy Review with Acme Corp",

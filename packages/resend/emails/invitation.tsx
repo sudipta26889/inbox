@@ -26,7 +26,7 @@ type InvitationEmailComponent = FC<InvitationEmailProps> & {
 };
 
 const InvitationEmail: InvitationEmailComponent = ({
-  baseUrl = "https://www.inbox.sudiptadhara.in",
+  baseUrl = "https://inbox.sudiptadhara.in",
   organizationName,
   inviterName,
   invitationId,
@@ -44,7 +44,7 @@ const InvitationEmail: InvitationEmailComponent = ({
             <Section className="p-4 text-center">
               <Link href={baseUrl} className="text-[15px]">
                 <Img
-                  src={"https://www.inbox.sudiptadhara.in/icon.png"}
+                  src={`${baseUrl}/icon.png`}
                   width="40"
                   height="40"
                   alt="Inbox"
@@ -129,7 +129,7 @@ function Footer({
 }
 
 InvitationEmail.PreviewProps = {
-  baseUrl: "https://www.inbox.sudiptadhara.in",
+  baseUrl: "https://inbox.sudiptadhara.in",
   organizationName: "Apple Inc.",
   inviterName: "Eduardo Lelis",
   invitationId: "cmf5pzul7000lf1zrlatybrr7",

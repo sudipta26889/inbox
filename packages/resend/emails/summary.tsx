@@ -36,7 +36,7 @@ export interface SummaryEmailProps {
 
 export default function SummaryEmail(props: SummaryEmailProps) {
   const {
-    baseUrl = "https://www.inbox.sudiptadhara.in",
+    baseUrl = "https://inbox.sudiptadhara.in",
     coldEmailers,
     needsReplyCount,
     awaitingReplyCount,
@@ -59,7 +59,7 @@ export default function SummaryEmail(props: SummaryEmailProps) {
             <Section className="p-8 text-center">
               <Link href={baseUrl} className="text-[15px]">
                 <Img
-                  src={"https://www.inbox.sudiptadhara.in/icon.png"}
+                  src={`${baseUrl}/icon.png`}
                   width="40"
                   height="40"
                   alt="Inbox"
@@ -100,7 +100,7 @@ export default function SummaryEmail(props: SummaryEmailProps) {
 }
 
 SummaryEmail.PreviewProps = {
-  baseUrl: "https://www.inbox.sudiptadhara.in",
+  baseUrl: "https://inbox.sudiptadhara.in",
   coldEmailers: [
     {
       from: "James <james@example.com>",

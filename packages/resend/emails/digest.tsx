@@ -86,7 +86,7 @@ export type DigestEmailProps = {
 };
 export default function DigestEmail(props: DigestEmailProps) {
   const {
-    baseUrl = "https://www.inbox.sudiptadhara.in",
+    baseUrl = "https://inbox.sudiptadhara.in",
     unsubscribeToken,
     ruleNames,
     emailAccountId,
@@ -245,7 +245,7 @@ export default function DigestEmail(props: DigestEmailProps) {
             <Section className="p-4 text-center">
               <Link href={baseUrl} className="text-[15px]">
                 <Img
-                  src={"https://www.inbox.sudiptadhara.in/icon.png"}
+                  src={`${baseUrl}/icon.png`}
                   width="40"
                   height="40"
                   alt="Inbox"
@@ -305,7 +305,7 @@ export default function DigestEmail(props: DigestEmailProps) {
 }
 
 DigestEmail.PreviewProps = {
-  baseUrl: "https://www.inbox.sudiptadhara.in",
+  baseUrl: "https://inbox.sudiptadhara.in",
   unsubscribeToken: "123",
   emailAccountId: "123",
   ruleNames: {

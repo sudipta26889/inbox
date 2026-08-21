@@ -28,7 +28,7 @@ type ActionRequiredEmailComponent = FC<ActionRequiredEmailProps> & {
 };
 
 const ActionRequiredEmail: ActionRequiredEmailComponent = ({
-  baseUrl = "https://www.inbox.sudiptadhara.in",
+  baseUrl = "https://inbox.sudiptadhara.in",
   email,
   unsubscribeToken,
   errorType,
@@ -50,7 +50,7 @@ const ActionRequiredEmail: ActionRequiredEmailComponent = ({
             <Section className="p-4 text-center">
               <Link href={baseUrl} className="text-[15px]">
                 <Img
-                  src={"https://www.inbox.sudiptadhara.in/icon.png"}
+                  src={`${baseUrl}/icon.png`}
                   width="40"
                   height="40"
                   alt="Inbox"
@@ -148,7 +148,7 @@ function Footer({
 }
 
 ActionRequiredEmail.PreviewProps = {
-  baseUrl: "https://www.inbox.sudiptadhara.in",
+  baseUrl: "https://inbox.sudiptadhara.in",
   email: "user@example.com",
   unsubscribeToken: "preview-token-123",
   errorType: "API Key Issue",
