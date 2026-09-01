@@ -253,6 +253,7 @@ describe("calendar write tools", () => {
 
     await updateCalendarEvent(context, {
       eventId: "evt-1",
+      title: "Renamed",
       addAttendees: ["new@x.com"],
       removeAttendees: ["old@x.com"],
     });
@@ -265,6 +266,36 @@ describe("calendar write tools", () => {
       { add: ["new@x.com"], remove: ["old@x.com"] },
       { notify: "all" },
     );
+  });
+
+  it("skips updateEvent entirely for an attendee-only update, avoiding a second notification email", async () => {
+    // An empty-bodied updateEvent call still triggers Google's per-request
+    // sendUpdates, so adding a guest would otherwise mail everyone twice.
+    provider.updateEvent = vi.fn();
+    provider.changeAttendees = vi.fn().mockResolvedValue({
+      id: "evt-1",
+      title: "Sync",
+      startTime: new Date(),
+      endTime: new Date(),
+      attendees: [],
+    });
+
+    const result = await updateCalendarEvent(context, {
+      eventId: "evt-1",
+      addAttendees: ["new@x.com"],
+    });
+
+    expect(provider.updateEvent).not.toHaveBeenCalled();
+    expect(provider.changeAttendees).toHaveBeenCalledWith(
+      "evt-1",
+      { add: ["new@x.com"], remove: undefined },
+      { notify: "all" },
+    );
+    expect(result).toEqual({
+      success: true,
+      eventId: "evt-1",
+      eventUrl: "",
+    });
   });
 
   it("defaults delete notify to all so cancellations are delivered", async () => {

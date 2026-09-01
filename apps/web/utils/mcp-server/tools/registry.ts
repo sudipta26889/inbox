@@ -552,7 +552,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
   list_calendars: {
     name: "list_calendars",
     description:
-      "List the calendars available on the caller's connected account, including each calendar's accessRole (e.g. 'owner', 'writer', 'reader') so you can predict whether a write to it will be accepted.",
+      "List the calendars on the caller's connected account, including each calendar's timezone and accessRole (e.g. 'owner', 'writer', 'reader'). Note: create/update/delete tools currently always act on the primary calendar; only respond_to_calendar_event accepts a calendarId.",
     inputSchema: {
       type: "object",
       properties: {
@@ -628,7 +628,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
           type: "string",
           enum: ["this", "all"],
           description:
-            "For recurring events: 'this' changes only one occurrence, 'all' (default) changes the whole series. 'thisAndFollowing' is not supported.",
+            "For recurring events, pass the per-occurrence eventId from list_calendar_event_instances to change a single occurrence, or the series id to change the whole series — the id you pass is what determines the scope. 'thisAndFollowing' is not supported and will be rejected.",
           default: "all",
         },
         notify: {
@@ -661,7 +661,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
   delete_calendar_event: {
     name: "delete_calendar_event",
     description:
-      "Delete a calendar event, or cancel a single occurrence of a recurring event. Cancellation emails are sent to attendees by default. For a recurring event, pass scope: 'this' to cancel only one occurrence — the default removes the entire series. scope: 'thisAndFollowing' is not supported by the provider and will fail.",
+      "Delete a calendar event, or cancel a single occurrence of a recurring event. Cancellation emails are sent to attendees by default. For a recurring event, pass scope: 'this' to cancel only one occurrence — the default removes the entire series. scope: 'thisAndFollowing' is not supported by the provider and will fail. REQUIRES HUMAN APPROVAL via WhatsApp/Telegram before the event is deleted.",
     inputSchema: {
       type: "object",
       properties: {
@@ -676,7 +676,8 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
         notify: {
           type: "string",
           enum: ["all", "external", "none"],
-          description: "Who receives a cancellation email. Defaults to all.",
+          description:
+            "Who receives a cancellation email. Defaults to all. Use 'none' only when you are sure no one should be notified — Google warns it can also prevent the event syncing to external calendars.",
           default: "all",
         },
         from: {

@@ -449,6 +449,8 @@ export async function updateCalendarEvent(
   if (env.NEXT_PUBLIC_DHARAHIL_ENABLED) {
     logger.info("DharaHIL: Requesting approval for calendar event update", {
       eventId: params.eventId,
+    });
+    logger.trace("DharaHIL: calendar event update title", {
       title: params.title,
     });
 
@@ -506,35 +508,54 @@ export async function updateCalendarEvent(
       ? resolveTimeZone(params.timeZone, account)
       : "";
 
-  const event = await providers[0]!.updateEvent(
-    params.eventId,
-    {
-      ...(params.title === undefined ? {} : { title: params.title }),
-      ...(params.description === undefined
-        ? {}
-        : { description: params.description }),
-      ...(params.location === undefined ? {} : { location: params.location }),
-      ...(params.startTime === undefined
-        ? {}
-        : { start: toEventTime(params.startTime, timeZone) }),
-      ...(params.endTime === undefined
-        ? {}
-        : { end: toEventTime(params.endTime, timeZone) }),
-    },
-    { notify: params.notify ?? "all", scope: params.scope },
-  );
+  const hasFieldChanges =
+    params.title !== undefined ||
+    params.description !== undefined ||
+    params.location !== undefined ||
+    params.startTime !== undefined ||
+    params.endTime !== undefined;
+
+  let event: { id: string; eventUrl?: string } | undefined;
+
+  // Skip the patch entirely when only attendee deltas were requested — an
+  // empty-bodied updateEvent call still triggers Google's per-request
+  // sendUpdates, which would mail everyone a second time for one logical
+  // change.
+  if (hasFieldChanges) {
+    event = await providers[0]!.updateEvent(
+      params.eventId,
+      {
+        ...(params.title === undefined ? {} : { title: params.title }),
+        ...(params.description === undefined
+          ? {}
+          : { description: params.description }),
+        ...(params.location === undefined ? {} : { location: params.location }),
+        ...(params.startTime === undefined
+          ? {}
+          : { start: toEventTime(params.startTime, timeZone) }),
+        ...(params.endTime === undefined
+          ? {}
+          : { end: toEventTime(params.endTime, timeZone) }),
+      },
+      { notify: params.notify ?? "all", scope: params.scope },
+    );
+  }
 
   // Attendee edits are a separate, read-modify-write call: folding them into
   // the patch above would discard every guest not named in this request.
   if (params.addAttendees || params.removeAttendees) {
-    await providers[0]!.changeAttendees(
+    event = await providers[0]!.changeAttendees(
       params.eventId,
       { add: params.addAttendees, remove: params.removeAttendees },
       { notify: params.notify ?? "all" },
     );
   }
 
-  return { success: true, eventId: event.id, eventUrl: event.eventUrl ?? "" };
+  return {
+    success: true,
+    eventId: event?.id ?? params.eventId,
+    eventUrl: event?.eventUrl ?? "",
+  };
 }
 
 /**
