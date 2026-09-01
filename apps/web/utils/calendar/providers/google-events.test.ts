@@ -11,6 +11,7 @@ const client = {
     delete: vi.fn(),
     get: vi.fn(),
     instances: vi.fn(),
+    list: vi.fn(),
   },
   calendarList: { list: vi.fn() },
 };
@@ -368,6 +369,48 @@ describe("GoogleCalendarEventProvider.listEventInstances", () => {
       title: "Sync",
       recurringEventId: "evt-1",
     });
+  });
+});
+
+describe("GoogleCalendarEventProvider.fetchEvents", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("maps query, maxResults and pageToken onto the Google API call", async () => {
+    client.events.list.mockResolvedValue({
+      data: { items: [], nextPageToken: null },
+    });
+
+    await makeProvider().fetchEvents({
+      query: "standup",
+      maxResults: 10,
+      pageToken: "tok-1",
+    });
+
+    expect(client.events.list.mock.calls[0][0]).toMatchObject({
+      q: "standup",
+      maxResults: 10,
+      pageToken: "tok-1",
+      singleEvents: true,
+      orderBy: "startTime",
+    });
+  });
+
+  it("returns nextPageToken from the API response", async () => {
+    client.events.list.mockResolvedValue({
+      data: { items: [], nextPageToken: "tok-2" },
+    });
+
+    const result = await makeProvider().fetchEvents({});
+
+    expect(result.nextPageToken).toBe("tok-2");
+  });
+
+  it("returns null nextPageToken when the API omits one", async () => {
+    client.events.list.mockResolvedValue({ data: { items: [] } });
+
+    const result = await makeProvider().fetchEvents({});
+
+    expect(result.nextPageToken).toBeNull();
   });
 });
 

@@ -76,6 +76,31 @@ describe("createCalendarEvent", () => {
     expect(provider.createEvent.mock.calls[0][1].notify).toBe("all");
   });
 
+  it("honours sendInvite: false so no one is emailed against an explicit instruction", async () => {
+    await createCalendarEvent(context, {
+      title: "Sync",
+      startTime: "2026-09-02T14:00:00",
+      endTime: "2026-09-02T15:00:00",
+      attendees: ["a@x.com"],
+      sendInvite: false,
+    });
+
+    expect(provider.createEvent.mock.calls[0][1].notify).toBe("none");
+  });
+
+  it("lets an explicit notify win over sendInvite: false", async () => {
+    await createCalendarEvent(context, {
+      title: "Sync",
+      startTime: "2026-09-02T14:00:00",
+      endTime: "2026-09-02T15:00:00",
+      attendees: ["a@x.com"],
+      sendInvite: false,
+      notify: "external",
+    });
+
+    expect(provider.createEvent.mock.calls[0][1].notify).toBe("external");
+  });
+
   it("fails clearly when no timezone can be resolved", async () => {
     resolve.mockResolvedValue({
       account: { id: "acct-1", email: "me@x.com", timezone: null },

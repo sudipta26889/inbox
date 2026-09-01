@@ -343,6 +343,12 @@ export async function createCalendarEvent(
 
   const timeZone = resolveTimeZone(params.timeZone, account);
 
+  // `notify` is the richer control; `sendInvite` is the tool's original
+  // boolean and must keep working — ignoring it mails attendees against an
+  // explicit instruction.
+  const notify: NotifyLevel =
+    params.notify ?? (params.sendInvite === false ? "none" : "all");
+
   const event = await providers[0]!.createEvent(
     {
       title: params.title,
@@ -354,7 +360,7 @@ export async function createCalendarEvent(
       recurrence: params.recurrence,
     },
     {
-      notify: params.notify ?? "all",
+      notify,
       idempotencyKey: params.idempotencyKey,
     },
   );

@@ -383,7 +383,8 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
 
   search_calendar: {
     name: "search_calendar",
-    description: "Search calendar events by date range or query text.",
+    description:
+      "Search calendar events by date range or query text. Results are paginated — pass the returned nextPageToken back in to fetch more.",
     inputSchema: {
       type: "object",
       properties: {
@@ -398,6 +399,21 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
         query: {
           type: "string",
           description: "Optional search query for event title/description",
+        },
+        maxResults: {
+          type: "number",
+          description: "Maximum events to return (default: 50, max: 2500).",
+          default: 50,
+        },
+        pageToken: {
+          type: "string",
+          description:
+            "Optional: token from a previous response's nextPageToken to fetch the next page. An empty page does not mean the end — keep paging while nextPageToken is present.",
+        },
+        from: {
+          type: "string",
+          description:
+            "Optional: email address of the account whose calendar to use. Defaults to the authorized account. Use list_email_accounts to see available addresses.",
         },
       },
       required: ["startDate", "endDate"],
@@ -420,6 +436,11 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
           type: "string",
           description:
             "The event ID or full Google Calendar URL (e.g., https://calendar.google.com/calendar/event?eid=ABC123xyz)",
+        },
+        from: {
+          type: "string",
+          description:
+            "Optional: email address of the account whose calendar to use. Defaults to the authorized account. Use list_email_accounts to see available addresses.",
         },
       },
       required: ["eventId"],
@@ -445,6 +466,11 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
         endDate: {
           type: "string",
           description: "End date/time (ISO 8601 format)",
+        },
+        from: {
+          type: "string",
+          description:
+            "Optional: email address of the account whose calendar to use. Defaults to the authorized account. Use list_email_accounts to see available addresses.",
         },
       },
       required: ["startDate", "endDate"],
@@ -495,6 +521,23 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
           type: "boolean",
           description:
             "Whether to send calendar invites to attendees (default: true)",
+        },
+        timeZone: {
+          type: "string",
+          description:
+            "Optional: IANA timezone name (e.g. 'Asia/Kolkata') for startTime/endTime. Defaults to the account's configured timezone. Required if the account has none.",
+        },
+        notify: {
+          type: "string",
+          enum: ["all", "external", "none"],
+          description:
+            "Who receives an invitation email. Defaults to all. Use 'none' only when you are sure no one should be notified — Google warns it can also prevent the event syncing to external calendars.",
+          default: "all",
+        },
+        from: {
+          type: "string",
+          description:
+            "Optional: email address of the account whose calendar to use. Defaults to the authorized account. Use list_email_accounts to see available addresses.",
         },
       },
       required: ["title", "startTime", "endTime"],
