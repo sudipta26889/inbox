@@ -27,7 +27,7 @@ describe("toEventTime", () => {
   it("never routes a wall-clock time through a Date", () => {
     // Regression guard: a Date round-trip in Asia/Kolkata would emit 08:30Z.
     const result = toEventTime("2026-09-02T14:00:00", "Asia/Kolkata");
-    expect(JSON.stringify(result)).not.toContain("z");
+    expect((result as { dateTime: string }).dateTime).not.toMatch(/Z$/);
     expect(JSON.stringify(result)).not.toContain("08:30");
   });
 
