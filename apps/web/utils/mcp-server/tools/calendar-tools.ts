@@ -701,6 +701,10 @@ export async function listCalendarEventInstances(
   logger.info("MCP tool: list_calendar_event_instances", {
     userId: context.userId,
   });
+  logger.trace("list_calendar_event_instances params", {
+    eventId: params.eventId,
+    from: params.from,
+  });
 
   const { providers } = await resolveCalendarAccount({
     userId: context.userId,
@@ -710,7 +714,7 @@ export async function listCalendarEventInstances(
   });
 
   const instances = await providers[0]!.listEventInstances(params.eventId, {
-    maxResults: Math.min(params.maxResults ?? 25, 250),
+    maxResults: Math.min(Math.max(params.maxResults ?? 25, 1), 250),
     timeMin: params.timeMin,
     timeMax: params.timeMax,
   });

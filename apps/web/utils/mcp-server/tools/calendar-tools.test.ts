@@ -382,6 +382,29 @@ describe("listCalendarEventInstances", () => {
       eventId: "evt-1_20260902T083000Z",
       seriesId: "evt-1",
       originalStartTime: "2026-09-02T14:00:00+05:30",
+      title: "Standup",
+      start: "2026-09-02T08:30:00.000Z",
+      end: "2026-09-02T09:00:00.000Z",
     });
+    expect(result.count).toBe(1);
+  });
+
+  it("clamps maxResults to [1, 250] and defaults it to 25", async () => {
+    provider.listEventInstances = vi.fn().mockResolvedValue([]);
+
+    await listCalendarEventInstances(context, { eventId: "evt-1" });
+    expect(provider.listEventInstances.mock.calls[0][1].maxResults).toBe(25);
+
+    await listCalendarEventInstances(context, {
+      eventId: "evt-1",
+      maxResults: 9999,
+    });
+    expect(provider.listEventInstances.mock.calls[1][1].maxResults).toBe(250);
+
+    await listCalendarEventInstances(context, {
+      eventId: "evt-1",
+      maxResults: 0,
+    });
+    expect(provider.listEventInstances.mock.calls[2][1].maxResults).toBe(1);
   });
 });
