@@ -21,7 +21,7 @@ describe("resolveCalendarAccount", () => {
   });
 
   it("defaults to the caller's own account, not a hardcoded one", async () => {
-    prisma.emailAccount.findUnique.mockResolvedValue({
+    prisma.emailAccount.findFirst.mockResolvedValue({
       id: "acct-1",
       email: "me@example.com",
       timezone: "Asia/Kolkata",
@@ -33,8 +33,8 @@ describe("resolveCalendarAccount", () => {
       logger,
     });
 
-    expect(prisma.emailAccount.findUnique).toHaveBeenCalledWith({
-      where: { id: "acct-1" },
+    expect(prisma.emailAccount.findFirst).toHaveBeenCalledWith({
+      where: { id: "acct-1", userId: "user-1" },
       select: { id: true, email: true, timezone: true },
     });
     expect(result.account.email).toBe("me@example.com");
@@ -74,10 +74,18 @@ describe("resolveCalendarAccount", () => {
         logger,
       }),
     ).rejects.toThrow("someone@else.com");
+
+    // Assert the scoping, not just the rejection: without userId in the where
+    // clause this test would pass while leaking other users' accounts, since
+    // EmailAccount.email is globally unique.
+    expect(prisma.emailAccount.findFirst).toHaveBeenCalledWith({
+      where: { userId: "user-1", email: "someone@else.com" },
+      select: { id: true, email: true, timezone: true },
+    });
   });
 
   it("names the accounts that do have a calendar when this one does not", async () => {
-    prisma.emailAccount.findUnique.mockResolvedValue({
+    prisma.emailAccount.findFirst.mockResolvedValue({
       id: "acct-1",
       email: "me@example.com",
       timezone: null,

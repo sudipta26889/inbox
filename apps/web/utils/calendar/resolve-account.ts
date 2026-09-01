@@ -28,14 +28,17 @@ export async function resolveCalendarAccount({
         where: { userId, email: from },
         select: { id: true, email: true, timezone: true },
       })
-    : await prisma.emailAccount.findUnique({
-        where: { id: emailAccountId },
+    : // Scoped by userId even on the default path: this module is the ownership
+      // boundary for calendar access, so it defends itself rather than trusting
+      // every caller to have composed emailAccountId safely.
+      await prisma.emailAccount.findFirst({
+        where: { id: emailAccountId, userId },
         select: { id: true, email: true, timezone: true },
       });
 
   if (!account) {
     throw new CalendarNotConnectedError(
-      from ?? emailAccountId,
+      from ?? "the authorized account",
       await calendarConnectedEmails(userId),
     );
   }
