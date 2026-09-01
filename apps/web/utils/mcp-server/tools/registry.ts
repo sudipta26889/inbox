@@ -1684,7 +1684,7 @@ export function getAllTools(userScopes?: string[]): Tool[] {
     .map(({ handler, requiredScope, ...tool }) => ({
       ...tool,
       annotations: {
-        ...toolAnnotations(requiredScope),
+        ...toolAnnotations(tool.name, requiredScope),
         ...tool.annotations,
       },
     }));
@@ -1704,10 +1704,37 @@ export function hasRequiredScope(
   );
 }
 
+// The `admin` scope covers reads and writes alike, so unlike `*:read` it says
+// nothing about whether a tool mutates. Each name below was checked to reach
+// only a get*/list* domain function or a Prisma find*; a tool missing from this
+// set falls through to the fail-safe default of destructive, so the cost of
+// forgetting one is an over-restriction rather than a wrongly-approved write.
+const READ_ONLY_ADMIN_TOOLS = new Set([
+  "admin_account_get",
+  "admin_ai_get_settings",
+  "admin_categories_list",
+  "admin_cleanup_list_jobs",
+  "admin_cold_email_get_settings",
+  "admin_cold_email_list_blocked",
+  "admin_digest_get",
+  "admin_follow_ups_list",
+  "admin_groups_get",
+  "admin_groups_list",
+  "admin_knowledge_get",
+  "admin_knowledge_list",
+  "admin_reply_tracker_get_settings",
+  "admin_rules_get",
+  "admin_rules_list",
+  "admin_senders_list",
+  "admin_unsubscribe_list",
+]);
+
 // MCP annotation defaults are already fail-safe (destructiveHint defaults to
 // true), so only claim something narrower than the default where it's certain.
-// Read scopes are the one case we can derive; anything else must opt in
-// explicitly on the tool.
-function toolAnnotations(requiredScope: string) {
-  return requiredScope.endsWith(":read") ? { readOnlyHint: true } : {};
+// Consumers read these to decide what a human is asked to approve, so a wrong
+// readOnlyHint gets a mutating tool auto-approved.
+function toolAnnotations(name: string, requiredScope: string) {
+  return requiredScope.endsWith(":read") || READ_ONLY_ADMIN_TOOLS.has(name)
+    ? { readOnlyHint: true }
+    : {};
 }

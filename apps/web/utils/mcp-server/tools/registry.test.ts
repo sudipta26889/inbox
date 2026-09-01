@@ -66,6 +66,52 @@ describe("tool annotations", () => {
   });
 });
 
+describe("admin tool annotations", () => {
+  const byName = () =>
+    Object.fromEntries(getAllTools().map((tool) => [tool.name, tool]));
+
+  it("marks verified read-only admin tools as read-only", () => {
+    const tools = byName();
+    for (const name of [
+      "admin_rules_list",
+      "admin_rules_get",
+      "admin_knowledge_list",
+      "admin_account_get",
+      "admin_digest_get",
+      "admin_unsubscribe_list",
+    ]) {
+      expect(tools[name]?.annotations?.readOnlyHint).toBe(true);
+    }
+  });
+
+  it("leaves mutating admin tools at the fail-safe default", () => {
+    const tools = byName();
+    for (const name of [
+      "admin_rules_delete",
+      "admin_rules_create",
+      "admin_knowledge_delete",
+      "admin_groups_delete",
+      "admin_cleanup_create_job",
+      "admin_unsubscribe_request",
+    ]) {
+      expect(tools[name]?.annotations?.readOnlyHint).toBeUndefined();
+    }
+  });
+
+  it("never marks a tool read-only that can write", () => {
+    // A write tool claiming readOnlyHint gets auto-approved by consumers.
+    const readOnly = getAllTools()
+      .filter((tool) => tool.annotations?.readOnlyHint)
+      .map((tool) => tool.name);
+
+    for (const name of readOnly) {
+      expect(name).not.toMatch(
+        /_(create|update|delete|remove|add|set|reorder|categorize|mark|request)(_|$)/,
+      );
+    }
+  });
+});
+
 describe("getTool", () => {
   it("returns undefined for an unknown tool", () => {
     expect(getTool("nope")).toBeUndefined();
