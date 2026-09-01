@@ -132,11 +132,253 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       },
       required: ["to", "subject", "body"],
     },
+    annotations: {
+      // Irreversible once it leaves the mailbox.
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
     handler: async (context, params) => {
       const { sendEmail } = await import("./email-tools");
       return sendEmail(context, params);
     },
     requiredScope: "email:write",
+  },
+
+  create_draft: {
+    name: "create_draft",
+    description:
+      "Create an unsent draft email in one of your configured email accounts. Nothing is sent — a human opens the returned webUrl to review, edit and send it. Prefer this over send_email whenever a person should see the message before it goes out. Mirrors send_email's parameters. IMPORTANT: 'from' must exactly match one of your linked accounts (check with list_email_accounts).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        to: {
+          type: "array",
+          items: { type: "string" },
+          description: "Recipient email addresses",
+        },
+        subject: {
+          type: "string",
+          description: "Email subject",
+        },
+        body: {
+          type: "string",
+          description: "Email body (plain text or HTML)",
+        },
+        from: {
+          type: "string",
+          description:
+            "Sender email address (REQUIRED when you have multiple accounts). MUST be one of your configured account emails. Use list_email_accounts tool to see available emails.",
+        },
+        cc: {
+          type: "array",
+          items: { type: "string" },
+          description: "CC recipients (optional)",
+        },
+        bcc: {
+          type: "array",
+          items: { type: "string" },
+          description: "BCC recipients (optional)",
+        },
+        isHtml: {
+          type: "boolean",
+          description:
+            "Set true when body is already HTML. When false (default), plain-text line breaks are converted to <br>.",
+          default: false,
+        },
+        threadId: {
+          type: "string",
+          description:
+            "Optional: existing thread to attach the draft to, making it a reply draft. Gmail only — on Outlook use inReplyTo.",
+        },
+        inReplyTo: {
+          type: "string",
+          description:
+            "Optional: ID of the message being replied to. Sets the reply threading headers (Gmail) or creates the draft via createReply (Outlook).",
+        },
+        attachments: {
+          type: "array",
+          description: "Files to attach (optional)",
+          items: {
+            type: "object",
+            properties: {
+              filename: { type: "string", description: "File name" },
+              content: {
+                type: "string",
+                description: "File contents, base64 encoded",
+              },
+              contentType: {
+                type: "string",
+                description:
+                  "MIME type (optional, defaults to application/octet-stream)",
+              },
+            },
+            required: ["filename", "content"],
+          },
+        },
+      },
+      required: ["to", "subject", "body"],
+    },
+    annotations: {
+      // Additive: nothing leaves the mailbox, and the draft can be deleted.
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+    handler: async (context, params) => {
+      const { createDraft } = await import("./email-tools");
+      return createDraft(context, params);
+    },
+    requiredScope: "email:draft",
+  },
+
+  update_draft: {
+    name: "update_draft",
+    description:
+      "Revise an existing unsent draft in place, so acting on human feedback doesn't leave duplicate drafts behind. Only the fields you pass change; everything else (including attachments) is kept. Use list_drafts or the draftId returned by create_draft to identify it.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        draftId: {
+          type: "string",
+          description:
+            "ID of the draft to revise, from create_draft/list_drafts",
+        },
+        subject: {
+          type: "string",
+          description: "New subject (optional, unchanged if omitted)",
+        },
+        body: {
+          type: "string",
+          description: "New body (optional, unchanged if omitted)",
+        },
+        to: {
+          type: "array",
+          items: { type: "string" },
+          description: "Replacement recipients (optional)",
+        },
+        cc: {
+          type: "array",
+          items: { type: "string" },
+          description: "Replacement CC recipients (optional)",
+        },
+        bcc: {
+          type: "array",
+          items: { type: "string" },
+          description: "Replacement BCC recipients (optional)",
+        },
+        isHtml: {
+          type: "boolean",
+          description: "Set true when body is already HTML",
+          default: false,
+        },
+        from: {
+          type: "string",
+          description:
+            "Email account holding the draft (REQUIRED when you have multiple accounts).",
+        },
+      },
+      required: ["draftId"],
+    },
+    annotations: {
+      // Overwrites the draft's current contents, but nothing is sent.
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    handler: async (context, params) => {
+      const { updateDraft } = await import("./email-tools");
+      return updateDraft(context, params);
+    },
+    requiredScope: "email:draft",
+  },
+
+  list_drafts: {
+    name: "list_drafts",
+    description:
+      "List unsent drafts in an email account, with the draftId needed by get_draft, update_draft and delete_draft. A draft you created that no longer appears here has been sent or deleted.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        maxResults: {
+          type: "number",
+          description: "Maximum drafts to return (default: 20, max: 50)",
+          default: 20,
+        },
+        from: {
+          type: "string",
+          description:
+            "Email account to list drafts for (REQUIRED when you have multiple accounts).",
+        },
+      },
+    },
+    handler: async (context, params) => {
+      const { listDrafts } = await import("./email-tools");
+      return listDrafts(context, params);
+    },
+    requiredScope: "email:read",
+  },
+
+  get_draft: {
+    name: "get_draft",
+    description:
+      "Get the full current contents of one draft, including any edits a human made to it. If the draft is gone, returns found: false with a 'status' of 'sent' (a human sent it — 'messageId' identifies the sent message), 'deleted' (a human binned it without sending), or 'unknown'. Use this to close the loop on a draft you created.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        draftId: {
+          type: "string",
+          description: "ID of the draft, from create_draft/list_drafts",
+        },
+        threadId: {
+          type: "string",
+          description:
+            "Optional but recommended: the threadId returned by create_draft. On Gmail, a sent draft's record is sometimes removed entirely; supplying the thread lets us still tell 'sent' from 'deleted' instead of returning 'unknown'. Not needed on Outlook.",
+        },
+        from: {
+          type: "string",
+          description:
+            "Email account holding the draft (REQUIRED when you have multiple accounts).",
+        },
+      },
+      required: ["draftId"],
+    },
+    handler: async (context, params) => {
+      const { getDraftDetail } = await import("./email-tools");
+      return getDraftDetail(context, params);
+    },
+    requiredScope: "email:read",
+  },
+
+  delete_draft: {
+    name: "delete_draft",
+    description:
+      "Delete an unsent draft, for cleaning up drafts that have been superseded. Only ever removes unsent mail — a draft that has already been sent is no longer a draft and cannot be deleted with this tool.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        draftId: {
+          type: "string",
+          description: "ID of the draft to delete, from list_drafts",
+        },
+        from: {
+          type: "string",
+          description:
+            "Email account holding the draft (REQUIRED when you have multiple accounts).",
+        },
+      },
+      required: ["draftId"],
+    },
+    annotations: {
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    handler: async (context, params) => {
+      const { deleteDraft } = await import("./email-tools");
+      return deleteDraft(context, params);
+    },
+    requiredScope: "email:draft",
   },
 
   search_calendar: {
@@ -1422,13 +1664,30 @@ export function getTool(name: string): McpToolDefinition | undefined {
   return MCP_TOOLS[name];
 }
 
+// A broader scope implies the narrower ones it contains, per the MCP
+// authorization spec. `email:write` predates `email:draft` and already granted
+// draft writes, so tokens issued before the split keep working.
+const IMPLIED_SCOPES: Record<string, string[]> = {
+  "email:write": ["email:draft"],
+};
+
 /**
- * Get all tool definitions (without handlers)
+ * Get tool definitions (without handlers) the caller is allowed to call.
+ *
+ * Advertising a tool the token can't invoke just burns agent turns on calls
+ * that come back as errors, so an agent granted drafting but not sending
+ * should not see `send_email` at all.
  */
-export function getAllTools(): Tool[] {
-  return Object.values(MCP_TOOLS).map(
-    ({ handler, requiredScope, ...tool }) => tool,
-  );
+export function getAllTools(userScopes?: string[]): Tool[] {
+  return Object.values(MCP_TOOLS)
+    .filter((tool) => !userScopes || hasRequiredScope(tool, userScopes))
+    .map(({ handler, requiredScope, ...tool }) => ({
+      ...tool,
+      annotations: {
+        ...toolAnnotations(requiredScope),
+        ...tool.annotations,
+      },
+    }));
 }
 
 /**
@@ -1438,5 +1697,17 @@ export function hasRequiredScope(
   tool: McpToolDefinition,
   userScopes: string[],
 ): boolean {
-  return userScopes.includes(tool.requiredScope);
+  return userScopes.some(
+    (scope) =>
+      scope === tool.requiredScope ||
+      IMPLIED_SCOPES[scope]?.includes(tool.requiredScope),
+  );
+}
+
+// MCP annotation defaults are already fail-safe (destructiveHint defaults to
+// true), so only claim something narrower than the default where it's certain.
+// Read scopes are the one case we can derive; anything else must opt in
+// explicitly on the tool.
+function toolAnnotations(requiredScope: string) {
+  return requiredScope.endsWith(":read") ? { readOnlyHint: true } : {};
 }

@@ -1,8 +1,12 @@
 import prisma from "@/utils/prisma";
 import { getGmailClientWithRefresh } from "@/utils/gmail/client";
 import { createOutlookClient } from "@/utils/outlook/client";
+import type { Attachment as MailAttachment } from "nodemailer/lib/mailer";
 import { isGoogleProvider } from "@/utils/email/provider-types";
+import { createEmailProvider } from "@/utils/email/provider";
+import { getEmailUrl } from "@/utils/url";
 import { createScopedLogger } from "@/utils/logger";
+import type { DraftStatus, ParsedMessage } from "@/utils/types";
 import type { McpToolContext } from "./registry";
 import { sendEmailWithHtml as gmailSendEmail } from "@/utils/gmail/mail";
 import { sendEmailWithHtml as outlookSendEmail } from "@/utils/outlook/mail";
@@ -19,6 +23,12 @@ import {
 } from "@/utils/gmail/attachment";
 
 const logger = createScopedLogger("mcp-email-tools");
+
+type DraftAttachmentInput = {
+  filename: string;
+  content: string; // base64
+  contentType?: string;
+};
 
 /**
  * Decode HTML entities in a string
@@ -579,87 +589,20 @@ export async function sendEmail(
   logger.info("MCP tool: send_email", {
     userId: context.userId,
     emailAccountId: context.emailAccountId,
+  });
+  logger.trace("send_email params", {
     to: params.to,
     subject: params.subject,
     from: params.from,
   });
 
-  // Validate required parameters
-  if (!params.to || !Array.isArray(params.to) || params.to.length === 0) {
-    throw new Error(
-      "Missing required parameter 'to'. Must be a non-empty array of email addresses.",
-    );
-  }
-  if (!params.subject || typeof params.subject !== "string") {
-    throw new Error(
-      "Missing required parameter 'subject'. Must be a non-empty string.",
-    );
-  }
-  if (!params.body || typeof params.body !== "string") {
-    throw new Error(
-      "Missing required parameter 'body'. Must be a non-empty string.",
-    );
-  }
+  assertMessageParams(params);
 
-  // If 'from' is specified, look up the email account by email address
-  let emailAccountId = context.emailAccountId;
-
-  if (params.from) {
-    // Validate that 'from' looks like an email address
-    if (!params.from.includes("@")) {
-      const allAccounts = await prisma.emailAccount.findMany({
-        where: { userId: context.userId },
-        select: { email: true },
-      });
-      const availableEmails = allAccounts.map((a) => a.email).join(", ");
-      throw new Error(
-        `Invalid 'from' parameter: "${params.from}". The 'from' must be a valid email address. ` +
-          `Available accounts: ${availableEmails}`,
-      );
-    }
-
-    const fromAccount = await prisma.emailAccount.findFirst({
-      where: {
-        userId: context.userId,
-        email: params.from,
-      },
-      select: { id: true, email: true },
-    });
-
-    if (!fromAccount) {
-      const allAccounts = await prisma.emailAccount.findMany({
-        where: { userId: context.userId },
-        select: { email: true },
-      });
-      const availableEmails = allAccounts.map((a) => a.email).join(", ");
-      throw new Error(
-        `Email account '${params.from}' not found. ` +
-          `You must use one of your configured accounts: ${availableEmails}`,
-      );
-    }
-
-    emailAccountId = fromAccount.id;
-    logger.info("Using specified email account", {
-      from: params.from,
-      emailAccountId: fromAccount.id,
-    });
-  }
-
-  const emailAccount = await prisma.emailAccount.findUnique({
-    where: { id: emailAccountId },
-    include: { account: true },
-  });
-
-  if (!emailAccount) {
-    throw new Error("Email account not found");
-  }
+  const emailAccount = await resolveFromAccount(context, params.from);
 
   const isGmail = isGoogleProvider(emailAccount.account?.provider);
 
-  // Convert body to HTML if it's plain text
-  const messageHtml = params.body.includes("<")
-    ? params.body
-    : params.body.replace(/\n/g, "<br>");
+  const messageHtml = toMessageHtml(params.body);
 
   if (isGmail) {
     const gmail = await getGmailClientWithRefresh({
@@ -708,4 +651,380 @@ export async function sendEmail(
       messageId: result.id,
     };
   }
+}
+
+/**
+ * Create an unsent draft. Same shape as sendEmail, but nothing leaves the
+ * mailbox until a human opens `webUrl` and sends it.
+ */
+export async function createDraft(
+  context: McpToolContext,
+  params: {
+    to: string[];
+    subject: string;
+    body: string;
+    from?: string;
+    cc?: string[];
+    bcc?: string[];
+    isHtml?: boolean;
+    threadId?: string;
+    inReplyTo?: string;
+    attachments?: DraftAttachmentInput[];
+  },
+) {
+  logger.info("MCP tool: create_draft", {
+    userId: context.userId,
+    emailAccountId: context.emailAccountId,
+    attachmentCount: params.attachments?.length ?? 0,
+  });
+  logger.trace("create_draft params", {
+    to: params.to,
+    subject: params.subject,
+    from: params.from,
+  });
+
+  assertMessageParams(params);
+
+  const { provider, emailAccount } = await getDraftProvider(
+    context,
+    params.from,
+  );
+
+  const draft = await provider.createDraft({
+    to: params.to.join(", "),
+    subject: params.subject,
+    messageHtml: toMessageHtml(params.body, params.isHtml),
+    cc: params.cc?.join(", "),
+    bcc: params.bcc?.join(", "),
+    threadId: params.threadId,
+    replyToMessageId: params.inReplyTo,
+    attachments: toMailAttachments(params.attachments),
+  });
+
+  return {
+    success: true,
+    draftId: draft.id,
+    threadId: draft.threadId,
+    webUrl: draftWebUrl(emailAccount, draft.threadId || draft.id),
+  };
+}
+
+/**
+ * Revise an existing draft in place. Omitted fields keep their current value,
+ * so an agent can fix wording after human feedback without making a duplicate.
+ */
+export async function updateDraft(
+  context: McpToolContext,
+  params: {
+    draftId: string;
+    subject?: string;
+    body?: string;
+    to?: string[];
+    cc?: string[];
+    bcc?: string[];
+    isHtml?: boolean;
+    from?: string;
+  },
+) {
+  logger.info("MCP tool: update_draft", {
+    userId: context.userId,
+    emailAccountId: context.emailAccountId,
+  });
+
+  assertDraftId(params.draftId);
+
+  const { provider, emailAccount } = await getDraftProvider(
+    context,
+    params.from,
+  );
+
+  await provider.updateDraft(params.draftId, {
+    subject: params.subject,
+    messageHtml:
+      params.body === undefined
+        ? undefined
+        : toMessageHtml(params.body, params.isHtml),
+    to: params.to?.join(", "),
+    cc: params.cc?.join(", "),
+    bcc: params.bcc?.join(", "),
+  });
+
+  const updated = await provider.getDraft(params.draftId);
+
+  return {
+    success: true,
+    draftId: params.draftId,
+    threadId: updated?.threadId ?? "",
+    webUrl: draftWebUrl(emailAccount, updated?.threadId || params.draftId),
+  };
+}
+
+/**
+ * List unsent drafts, newest first.
+ */
+export async function listDrafts(
+  context: McpToolContext,
+  params: { maxResults?: number; from?: string },
+) {
+  logger.info("MCP tool: list_drafts", {
+    userId: context.userId,
+    emailAccountId: context.emailAccountId,
+  });
+
+  const { provider, emailAccount } = await getDraftProvider(
+    context,
+    params.from,
+  );
+
+  const maxResults = Math.min(params.maxResults || 20, 50);
+  const drafts = await provider.getDrafts({ maxResults });
+
+  return {
+    drafts: drafts.map((draft) => summarizeDraft(draft, emailAccount)),
+    count: drafts.length,
+    account: emailAccount.email,
+  };
+}
+
+/**
+ * Fetch one draft and what became of it. "sent" and "deleted" are opposite
+ * outcomes for a review loop, so they are reported distinctly rather than
+ * collapsing into a single "not found".
+ */
+export async function getDraftDetail(
+  context: McpToolContext,
+  params: { draftId: string; threadId?: string; from?: string },
+) {
+  logger.info("MCP tool: get_draft", {
+    userId: context.userId,
+    emailAccountId: context.emailAccountId,
+  });
+
+  assertDraftId(params.draftId);
+
+  const { provider, emailAccount } = await getDraftProvider(
+    context,
+    params.from,
+  );
+
+  const draft = await provider.getDraft(params.draftId);
+
+  if (draft) {
+    return {
+      found: true,
+      status: "draft" as const,
+      ...summarizeDraft(draft, emailAccount),
+      body: draft.textPlain ?? draft.textHtml ?? "",
+    };
+  }
+
+  const outcome = await provider.getDraftStatus(
+    params.draftId,
+    params.threadId,
+  );
+
+  return {
+    found: false,
+    status: outcome.status,
+    draftId: params.draftId,
+    threadId: outcome.threadId,
+    messageId: outcome.messageId,
+    webUrl:
+      outcome.threadId || outcome.messageId
+        ? draftWebUrl(emailAccount, outcome.threadId || outcome.messageId!)
+        : undefined,
+    message: DRAFT_OUTCOME_MESSAGE[outcome.status],
+  };
+}
+
+const DRAFT_OUTCOME_MESSAGE: Record<DraftStatus["status"], string> = {
+  draft: "Draft still unsent.",
+  sent: "A human reviewed and sent this draft. See messageId for the sent message.",
+  deleted: "A human deleted this draft without sending it.",
+  unknown:
+    "Draft is gone but the outcome could not be determined. Pass the threadId returned by create_draft to resolve whether it was sent.",
+};
+
+/**
+ * Delete a superseded draft. Unsent mail only — a draft that has already been
+ * sent is no longer a draft, and the provider read returns nothing for it.
+ */
+export async function deleteDraft(
+  context: McpToolContext,
+  params: { draftId: string; from?: string },
+) {
+  logger.info("MCP tool: delete_draft", {
+    userId: context.userId,
+    emailAccountId: context.emailAccountId,
+  });
+
+  assertDraftId(params.draftId);
+
+  const { provider } = await getDraftProvider(context, params.from);
+
+  const existing = await provider.getDraft(params.draftId);
+  if (!existing) {
+    return {
+      success: false,
+      draftId: params.draftId,
+      message:
+        "Draft not found. It was either already sent, already deleted, or belongs to a different account.",
+    };
+  }
+
+  await provider.deleteDraft(params.draftId);
+
+  return { success: true, draftId: params.draftId };
+}
+
+function assertMessageParams(params: {
+  to: string[];
+  subject: string;
+  body: string;
+}) {
+  if (!params.to || !Array.isArray(params.to) || params.to.length === 0) {
+    throw new Error(
+      "Missing required parameter 'to'. Must be a non-empty array of email addresses.",
+    );
+  }
+  if (!params.subject || typeof params.subject !== "string") {
+    throw new Error(
+      "Missing required parameter 'subject'. Must be a non-empty string.",
+    );
+  }
+  if (!params.body || typeof params.body !== "string") {
+    throw new Error(
+      "Missing required parameter 'body'. Must be a non-empty string.",
+    );
+  }
+}
+
+function toMessageHtml(body: string, isHtml?: boolean) {
+  return isHtml || body.includes("<") ? body : body.replace(/\n/g, "<br>");
+}
+
+function assertDraftId(draftId: string) {
+  if (!draftId || typeof draftId !== "string") {
+    throw new Error(
+      "Missing required parameter 'draftId'. Use list_drafts to find it.",
+    );
+  }
+}
+
+function toMailAttachments(
+  attachments?: DraftAttachmentInput[],
+): MailAttachment[] | undefined {
+  if (!attachments?.length) return undefined;
+
+  return attachments.map((attachment) => {
+    if (!attachment.filename || !attachment.content) {
+      throw new Error(
+        "Each attachment requires 'filename' and base64 'content'.",
+      );
+    }
+
+    return {
+      filename: attachment.filename,
+      contentType: attachment.contentType || "application/octet-stream",
+      content: Buffer.from(attachment.content, "base64"),
+    };
+  });
+}
+
+async function getDraftProvider(context: McpToolContext, from?: string) {
+  const emailAccount = await resolveFromAccount(context, from);
+
+  const provider = await createEmailProvider({
+    emailAccountId: emailAccount.id,
+    provider: emailAccount.account?.provider ?? "",
+    logger,
+  });
+
+  return { provider, emailAccount };
+}
+
+function draftWebUrl(
+  emailAccount: { email: string; account: { provider: string | null } | null },
+  id: string,
+) {
+  return getEmailUrl(
+    id,
+    emailAccount.email,
+    emailAccount.account?.provider ?? undefined,
+  );
+}
+
+function summarizeDraft(
+  draft: ParsedMessage,
+  emailAccount: { email: string; account: { provider: string | null } | null },
+) {
+  // Gmail's draft id is not the message id; every draft tool needs the former.
+  const draftId = draft.draftId ?? draft.id;
+
+  return {
+    draftId,
+    threadId: draft.threadId,
+    subject: draft.subject,
+    to: draft.headers?.to ?? "",
+    cc: draft.headers?.cc,
+    bcc: draft.headers?.bcc,
+    date: draft.date,
+    snippet: draft.snippet,
+    attachments: (draft.attachments ?? []).map((attachment) => ({
+      filename: attachment.filename,
+      mimeType: attachment.mimeType,
+      size: attachment.size,
+    })),
+    webUrl: draftWebUrl(emailAccount, draft.threadId || draftId),
+  };
+}
+
+/**
+ * Resolve which linked account to write from. `from` must match one of the
+ * user's own accounts exactly — this is the trust boundary for both send and
+ * draft, so failures name the valid accounts rather than falling back.
+ */
+async function resolveFromAccount(context: McpToolContext, from?: string) {
+  let emailAccountId = context.emailAccountId;
+
+  if (from) {
+    if (!from.includes("@")) {
+      throw new Error(
+        `Invalid 'from' parameter: "${from}". The 'from' must be a valid email address. ` +
+          `Available accounts: ${await listAccountEmails(context.userId)}`,
+      );
+    }
+
+    const fromAccount = await prisma.emailAccount.findFirst({
+      where: { userId: context.userId, email: from },
+      select: { id: true },
+    });
+
+    if (!fromAccount) {
+      throw new Error(
+        `Email account '${from}' not found. ` +
+          `You must use one of your configured accounts: ${await listAccountEmails(context.userId)}`,
+      );
+    }
+
+    emailAccountId = fromAccount.id;
+    logger.trace("Using specified email account", { from, emailAccountId });
+  }
+
+  const emailAccount = await prisma.emailAccount.findUnique({
+    where: { id: emailAccountId },
+    include: { account: true },
+  });
+
+  if (!emailAccount) throw new Error("Email account not found");
+
+  return emailAccount;
+}
+
+async function listAccountEmails(userId: string) {
+  const accounts = await prisma.emailAccount.findMany({
+    where: { userId },
+    select: { email: true },
+  });
+  return accounts.map((a) => a.email).join(", ");
 }

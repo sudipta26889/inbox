@@ -163,12 +163,16 @@ export function createLocalBypassEmailProvider(logger?: Logger): EmailProvider {
     markRead: async () => {},
     markReadThread: async () => {},
     getDraft: async () => null,
+    getDraftStatus: async () => ({ status: "unknown" as const }),
     deleteDraft: async () => {},
     sendDraft: async () => ({
       messageId: "local-bypass-message-id",
       threadId: "local-bypass-thread-id",
     }),
-    createDraft: async () => ({ id: "local-bypass-draft-id" }),
+    createDraft: async () => ({
+      id: "local-bypass-draft-id",
+      threadId: "local-bypass-thread-id",
+    }),
     updateDraft: async () => {},
     createLabel: async (name) => getOrCreateUserLabel(name),
     deleteLabel: async (labelId) => {

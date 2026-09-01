@@ -68,7 +68,7 @@ export const POST = withError(
       // Try Bearer token authentication first
       const authHeader = request.headers.get("Authorization");
 
-      if (authHeader && authHeader.startsWith("Bearer ")) {
+      if (authHeader?.startsWith("Bearer ")) {
         const token = authHeader.substring(7);
         const jwtSecret = env.AUTH_SECRET || env.NEXTAUTH_SECRET || "";
         const tokenPayload = await validateAccessToken(token, jwtSecret);
@@ -179,11 +179,14 @@ export const POST = withError(
               `- "search_emails" searches across ALL accounts by default.\n` +
               `- To filter to one account, pass "emailAccountId" parameter.\n` +
               `- Results include "accountEmail" and "accountId" showing which account each email came from.\n\n` +
-              "Sending Emails:\n" +
-              `- When sending with "send_email", you MUST specify the "from" parameter.\n` +
+              "Writing Emails:\n" +
+              `- Prefer "create_draft" over "send_email". It writes an unsent draft and returns a "webUrl" a person can open to review and send. Post that link when you report back.\n` +
+              `- Use "send_email" only when the user has explicitly asked for the message to go out without review.\n` +
+              `- Revise a draft with "update_draft" rather than creating a second one; "list_drafts" and "get_draft" show what a human has since edited or sent.\n` +
+              `- For any write, you MUST specify the "from" parameter.\n` +
               `- The "from" value MUST be one of these EXACT email addresses: ${emailsList}\n` +
               `- Example: { "from": "${emailAccounts[0]?.email}", "to": ["user@example.com"], ... }\n` +
-              `- If "from" doesn't match a configured account exactly, the send will fail.`
+              `- If "from" doesn't match a configured account exactly, the write will fail.`
             : "No email accounts linked. Please connect an email account first.";
 
         return NextResponse.json(
@@ -228,7 +231,7 @@ export const POST = withError(
 
       // Handle tools/list
       if (message.method === "tools/list") {
-        const tools = getAllTools();
+        const tools = getAllTools(scopes);
         return NextResponse.json(
           {
             jsonrpc: "2.0",
@@ -326,7 +329,7 @@ export const POST = withError(
           id: null,
           error: {
             code: -32_700,
-            message: "Parse error: " + (error.message || "Invalid JSON"),
+            message: `Parse error: ${error.message || "Invalid JSON"}`,
           },
         },
         { status: 400, headers: CORS_HEADERS },

@@ -6,26 +6,126 @@ import { GmailProvider } from "./google";
 
 vi.mock("server-only", () => ({}));
 
-const { envMock, gmailMailMock } = vi.hoisted(() => ({
-  envMock: {
-    NEXT_PUBLIC_AUTO_DRAFT_DISABLED: false,
-    EMAIL_ENCRYPT_SECRET: "test-encrypt-secret",
-    EMAIL_ENCRYPT_SALT: "test-encrypt-salt",
-  },
-  gmailMailMock: {
-    draftEmail: vi.fn().mockResolvedValue({ data: { id: "draft-1" } }),
-    forwardEmail: vi.fn(),
-    replyToEmail: vi.fn(),
-    sendEmailWithPlainText: vi.fn(),
-    sendEmailWithHtml: vi.fn(),
-  },
-}));
+const { envMock, gmailMailMock, gmailDraftMock, gmailAttachmentMock } =
+  vi.hoisted(() => ({
+    envMock: {
+      NEXT_PUBLIC_AUTO_DRAFT_DISABLED: false,
+      EMAIL_ENCRYPT_SECRET: "test-encrypt-secret",
+      EMAIL_ENCRYPT_SALT: "test-encrypt-salt",
+    },
+    gmailMailMock: {
+      draftEmail: vi.fn().mockResolvedValue({ data: { id: "draft-1" } }),
+      forwardEmail: vi.fn(),
+      replyToEmail: vi.fn(),
+      sendEmailWithPlainText: vi.fn(),
+      sendEmailWithHtml: vi.fn(),
+      createRawMailMessage: vi.fn().mockResolvedValue("raw-message"),
+      htmlToMessageText: vi.fn((html: string) => html),
+    },
+    gmailDraftMock: {
+      getDraft: vi.fn(),
+      sendDraft: vi.fn(),
+      deleteDraft: vi.fn(),
+    },
+    gmailAttachmentMock: {
+      downloadGmailAttachment: vi.fn(),
+      getGmailAttachment: vi.fn(),
+    },
+  }));
 
 vi.mock("@/env", () => ({
   env: envMock,
 }));
 
 vi.mock("@/utils/gmail/mail", () => gmailMailMock);
+vi.mock("@/utils/gmail/draft", () => gmailDraftMock);
+vi.mock("@/utils/gmail/attachment", () => gmailAttachmentMock);
+
+describe("GmailProvider.updateDraft", () => {
+  it("carries existing attachments across the rebuilt message", async () => {
+    const update = vi.fn().mockResolvedValue({ data: {} });
+    const provider = new GmailProvider({
+      users: { drafts: { update } },
+    } as any);
+
+    gmailDraftMock.getDraft.mockResolvedValue({
+      ...createParsedMessage({ id: "msg-1", internalDate: "1000" }),
+      attachments: [
+        {
+          attachmentId: "att-1",
+          filename: "contract.pdf",
+          mimeType: "application/pdf",
+          size: 1024,
+        },
+      ],
+    });
+    gmailAttachmentMock.downloadGmailAttachment.mockResolvedValue(
+      Buffer.from("pdf-bytes"),
+    );
+
+    await provider.updateDraft("r-1", { messageHtml: "revised" });
+
+    expect(gmailAttachmentMock.downloadGmailAttachment).toHaveBeenCalledWith(
+      "msg-1",
+      "att-1",
+      expect.anything(),
+      expect.anything(),
+    );
+    const composed = gmailMailMock.createRawMailMessage.mock.calls.at(-1)![0];
+    expect(composed.attachments).toEqual([
+      {
+        filename: "contract.pdf",
+        contentType: "application/pdf",
+        content: Buffer.from("pdf-bytes"),
+      },
+    ]);
+    // The draft must stay in its thread after the rebuild.
+    expect(update.mock.calls[0]![0].requestBody.message.threadId).toBe(
+      "thread-1",
+    );
+  });
+
+  it("keeps the current recipients and subject when only the body changes", async () => {
+    const update = vi.fn().mockResolvedValue({ data: {} });
+    const provider = new GmailProvider({
+      users: { drafts: { update } },
+    } as any);
+
+    gmailDraftMock.getDraft.mockResolvedValue({
+      ...createParsedMessage({ id: "msg-1", internalDate: "1000" }),
+      subject: "Original subject",
+      headers: {
+        subject: "Original subject",
+        from: "sender@example.com",
+        to: "a@example.com",
+        cc: "c@example.com",
+        date: "Mon, 01 Jan 2026 00:00:00 +0000",
+      },
+    });
+
+    await provider.updateDraft("r-1", { messageHtml: "revised" });
+
+    const composed = gmailMailMock.createRawMailMessage.mock.calls.at(-1)![0];
+    expect(composed).toMatchObject({
+      to: "a@example.com",
+      cc: "c@example.com",
+      subject: "Original subject",
+      messageHtml: "revised",
+    });
+  });
+
+  it("throws rather than creating a new draft when the id is unknown", async () => {
+    const provider = new GmailProvider({
+      users: { drafts: { update: vi.fn() } },
+    } as any);
+
+    gmailDraftMock.getDraft.mockResolvedValue(null);
+
+    await expect(provider.updateDraft("r-missing", {})).rejects.toThrow(
+      "Draft r-missing not found",
+    );
+  });
+});
 
 describe("GmailProvider.getLatestMessageInThread", () => {
   afterEach(() => {

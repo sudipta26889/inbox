@@ -1,6 +1,6 @@
 import type { Message } from "@microsoft/microsoft-graph-types";
 import type { OutlookClient } from "@/utils/outlook/client";
-import type { ParsedMessage } from "@/utils/types";
+import type { DraftStatus, ParsedMessage } from "@/utils/types";
 import type { Attachment as MailAttachment } from "nodemailer/lib/mailer";
 import {
   getMessage,
@@ -24,6 +24,8 @@ import type { ThreadsQuery } from "@/app/api/threads/validation";
 import { getLatestNonDraftMessage } from "@/utils/email/latest-message";
 import { getMessageTimestamp } from "@/utils/email/message-timestamp";
 import {
+  addAttachmentsToDraft,
+  buildGraphRecipients,
   draftEmail,
   forwardEmail,
   replyToEmail,
@@ -45,7 +47,12 @@ import {
   getThreadsFromSenderWithSubject,
 } from "@/utils/outlook/thread";
 import { getOutlookAttachment } from "@/utils/outlook/attachment";
-import { getDraft, deleteDraft, sendDraft } from "@/utils/outlook/draft";
+import {
+  getDraft,
+  getDraftStatus,
+  deleteDraft,
+  sendDraft,
+} from "@/utils/outlook/draft";
 import {
   getFiltersList,
   createFilter,
@@ -509,7 +516,20 @@ export class OutlookProvider implements EmailProvider {
   }
 
   async getDraft(draftId: string): Promise<ParsedMessage | null> {
-    return getDraft({ client: this.client, draftId, logger: this.logger });
+    const message = await getDraft({
+      client: this.client,
+      draftId,
+      logger: this.logger,
+    });
+    return message && { ...message, draftId };
+  }
+
+  async getDraftStatus(draftId: string): Promise<DraftStatus> {
+    return getDraftStatus({
+      client: this.client,
+      draftId,
+      logger: this.logger,
+    });
   }
 
   async deleteDraft(draftId: string): Promise<void> {
@@ -526,13 +546,27 @@ export class OutlookProvider implements EmailProvider {
     to: string;
     subject: string;
     messageHtml: string;
+    cc?: string;
+    bcc?: string;
+    threadId?: string;
     replyToMessageId?: string;
-  }): Promise<{ id: string }> {
+    attachments?: MailAttachment[];
+  }): Promise<{ id: string; threadId: string }> {
     this.logger.info("Creating draft", {
       replyToMessageId: params.replyToMessageId,
     });
 
-    // For threading, use createReply on the replyToMessageId
+    const ccRecipients = buildGraphRecipients(params.cc);
+    const bccRecipients = buildGraphRecipients(params.bcc);
+    const recipients = {
+      toRecipients: buildGraphRecipients(params.to) ?? [],
+      ...(ccRecipients ? { ccRecipients } : {}),
+      ...(bccRecipients ? { bccRecipients } : {}),
+    };
+
+    // For threading, use createReply on the replyToMessageId.
+    // ponytail: Graph has no "create a draft in conversation X" call, so a bare
+    // threadId can't thread on Outlook — only replyToMessageId can.
     if (params.replyToMessageId) {
       const draft = await withOutlookRetry(
         () =>
@@ -552,13 +586,15 @@ export class OutlookProvider implements EmailProvider {
             .patch({
               body: { contentType: "html", content: params.messageHtml },
               subject: params.subject,
-              toRecipients: [{ emailAddress: { address: params.to } }],
+              ...recipients,
             }),
         this.logger,
       );
 
+      await this.attachToDraft(draft.id, params.attachments);
+
       this.logger.info("Created threaded draft", { draftId: draft.id });
-      return { id: draft.id };
+      return { id: draft.id, threadId: draft.conversationId ?? "" };
     }
 
     // Otherwise create standalone draft
@@ -570,13 +606,15 @@ export class OutlookProvider implements EmailProvider {
           .post({
             subject: params.subject,
             body: { contentType: "html", content: params.messageHtml },
-            toRecipients: [{ emailAddress: { address: params.to } }],
+            ...recipients,
           }),
       this.logger,
     );
 
+    await this.attachToDraft(draft.id, params.attachments);
+
     this.logger.info("Created standalone draft", { draftId: draft.id });
-    return { id: draft.id };
+    return { id: draft.id, threadId: draft.conversationId ?? "" };
   }
 
   async updateDraft(
@@ -584,10 +622,15 @@ export class OutlookProvider implements EmailProvider {
     params: {
       messageHtml?: string;
       subject?: string;
+      to?: string;
+      cc?: string;
+      bcc?: string;
     },
   ): Promise<void> {
     this.logger.info("Updating draft", { draftId });
 
+    // A PATCH only replaces the fields it names, so attachments on the draft
+    // survive untouched.
     const body: Record<string, unknown> = {};
     if (params.messageHtml) {
       body.body = { contentType: "html", content: params.messageHtml };
@@ -595,6 +638,12 @@ export class OutlookProvider implements EmailProvider {
     if (params.subject) {
       body.subject = params.subject;
     }
+    const toRecipients = buildGraphRecipients(params.to);
+    const ccRecipients = buildGraphRecipients(params.cc);
+    const bccRecipients = buildGraphRecipients(params.bcc);
+    if (toRecipients) body.toRecipients = toRecipients;
+    if (ccRecipients) body.ccRecipients = ccRecipients;
+    if (bccRecipients) body.bccRecipients = bccRecipients;
 
     await withOutlookRetry(
       () => this.client.getClient().api(`/me/messages/${draftId}`).patch(body),
@@ -602,6 +651,20 @@ export class OutlookProvider implements EmailProvider {
     );
 
     this.logger.info("Draft updated", { draftId });
+  }
+
+  private async attachToDraft(
+    draftId: string,
+    attachments?: MailAttachment[],
+  ): Promise<void> {
+    if (!attachments?.length) return;
+
+    await addAttachmentsToDraft({
+      client: this.client,
+      draftId,
+      attachments,
+      logger: this.logger,
+    });
   }
 
   async draftEmail(
@@ -1338,7 +1401,11 @@ export class OutlookProvider implements EmailProvider {
       .top(options?.maxResults || 50)
       .get();
 
-    return response.value.map((msg) => convertMessage(msg));
+    // On Graph the draft id is the message id, unlike Gmail.
+    return response.value.map((msg) => {
+      const message = convertMessage(msg);
+      return { ...message, draftId: message.id };
+    });
   }
 
   async getMessagesBatch(messageIds: string[]): Promise<ParsedMessage[]> {

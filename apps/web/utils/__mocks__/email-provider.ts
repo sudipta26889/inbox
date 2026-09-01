@@ -94,6 +94,7 @@ export const createMockEmailProvider = (
   markRead: vi.fn().mockResolvedValue(undefined),
   markReadThread: vi.fn().mockResolvedValue(undefined),
   getDraft: vi.fn().mockResolvedValue(null),
+  getDraftStatus: vi.fn().mockResolvedValue({ status: "unknown" }),
   deleteDraft: vi.fn().mockResolvedValue(undefined),
   sendDraft: vi
     .fn()

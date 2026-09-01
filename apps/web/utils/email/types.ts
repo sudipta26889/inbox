@@ -1,4 +1,4 @@
-import type { ParsedMessage } from "@/utils/types";
+import type { DraftStatus, ParsedMessage } from "@/utils/types";
 import type { InboxZeroLabel } from "@/utils/label";
 import type { ThreadsQuery } from "@/app/api/threads/validation";
 import type { OutlookFolder } from "@/utils/outlook/folders";
@@ -76,8 +76,12 @@ export interface EmailProvider {
     to: string;
     subject: string;
     messageHtml: string;
+    cc?: string;
+    bcc?: string;
+    threadId?: string; // For proper threading
     replyToMessageId?: string; // For proper threading
-  }): Promise<{ id: string }>;
+    attachments?: MailAttachment[];
+  }): Promise<{ id: string; threadId: string }>;
   createFilter(options: {
     from: string;
     addLabelIds?: string[];
@@ -110,6 +114,7 @@ export interface EmailProvider {
     attachmentId: string,
   ): Promise<{ data: string; size: number }>;
   getDraft(draftId: string): Promise<ParsedMessage | null>;
+  getDraftStatus(draftId: string, threadId?: string): Promise<DraftStatus>;
   getDrafts(options?: { maxResults?: number }): Promise<ParsedMessage[]>;
   getFiltersList(): Promise<EmailFilter[]>;
   getFolders(): Promise<OutlookFolder[]>;
@@ -295,6 +300,9 @@ export interface EmailProvider {
     params: {
       messageHtml?: string;
       subject?: string;
+      to?: string;
+      cc?: string;
+      bcc?: string;
     },
   ): Promise<void>;
   watchEmails(): Promise<{

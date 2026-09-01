@@ -1,6 +1,10 @@
 import type { gmail_v1 } from "@googleapis/gmail";
 import type { Attachment as MailAttachment } from "nodemailer/lib/mailer";
-import type { MessageWithPayload, ParsedMessage } from "@/utils/types";
+import type {
+  DraftStatus,
+  MessageWithPayload,
+  ParsedMessage,
+} from "@/utils/types";
 import { parseMessage } from "@/utils/gmail/message";
 import {
   getMessage,
@@ -27,8 +31,10 @@ import type { InboxZeroLabel } from "@/utils/label";
 import type { ThreadsQuery } from "@/app/api/threads/validation";
 import { getMessageByRfc822Id } from "@/utils/gmail/message";
 import {
+  createRawMailMessage,
   draftEmail,
   forwardEmail,
+  htmlToMessageText,
   replyToEmail,
   sendEmailWithPlainText,
   sendEmailWithHtml,
@@ -49,13 +55,21 @@ import {
 } from "@/utils/gmail/thread";
 import { getMessagesBatch } from "@/utils/gmail/message";
 import { getAccessTokenFromClient } from "@/utils/gmail/client";
-import { getGmailAttachment } from "@/utils/gmail/attachment";
+import {
+  downloadGmailAttachment,
+  getGmailAttachment,
+} from "@/utils/gmail/attachment";
 import {
   getThreadsBatch,
   getThreadsWithNextPageToken,
 } from "@/utils/gmail/thread";
 import { decodeSnippet } from "@/utils/gmail/decode";
-import { getDraft, deleteDraft, sendDraft } from "@/utils/gmail/draft";
+import {
+  getDraft,
+  getDraftStatus,
+  deleteDraft,
+  sendDraft,
+} from "@/utils/gmail/draft";
 import { extractErrorInfo, withGmailRetry } from "@/utils/gmail/retry";
 import { getLatestNonDraftMessage } from "@/utils/email/latest-message";
 import { getMessageTimestamp } from "@/utils/email/message-timestamp";
@@ -78,18 +92,6 @@ import { createScopedLogger, type Logger } from "@/utils/logger";
 import { getGmailSignatures } from "@/utils/gmail/signature-settings";
 import { withRateLimitRecording } from "@/utils/email/rate-limit";
 import { shouldSkipAutoDraft } from "@/utils/auto-draft";
-
-/**
- * Build a raw RFC 2822 message and encode it as base64url for Gmail API
- */
-function buildRawMessageBase64(headers: string[], body: string): string {
-  const rawMessage = `${headers.join("\r\n")}\r\n\r\n${body}`;
-  return Buffer.from(rawMessage)
-    .toString("base64")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
-}
 
 export class GmailProvider implements EmailProvider {
   readonly name = "google";
@@ -651,7 +653,15 @@ export class GmailProvider implements EmailProvider {
   }
 
   async getDraft(draftId: string): Promise<ParsedMessage | null> {
-    return getDraft(draftId, this.client);
+    const message = await getDraft(draftId, this.client);
+    return message && { ...message, draftId };
+  }
+
+  async getDraftStatus(
+    draftId: string,
+    threadId?: string,
+  ): Promise<DraftStatus> {
+    return getDraftStatus(this.client, draftId, threadId);
   }
 
   async deleteDraft(draftId: string): Promise<void> {
@@ -668,49 +678,50 @@ export class GmailProvider implements EmailProvider {
     to: string;
     subject: string;
     messageHtml: string;
+    cc?: string;
+    bcc?: string;
+    threadId?: string;
     replyToMessageId?: string;
-  }): Promise<{ id: string }> {
+    attachments?: MailAttachment[];
+  }): Promise<{ id: string; threadId: string }> {
     this.logger.info("Creating Gmail draft", {
       replyToMessageId: params.replyToMessageId,
+      threadId: params.threadId,
     });
 
-    // Build the raw email message
-    const headers = [
-      `To: ${params.to}`,
-      `Subject: ${params.subject}`,
-      "Content-Type: text/html; charset=utf-8",
-    ];
+    const replyToEmail = params.replyToMessageId
+      ? await this.getReplyThreadingInfo(params.replyToMessageId)
+      : undefined;
 
-    // Add threading headers if replying
-    if (params.replyToMessageId) {
-      try {
-        const originalMessage = await this.getMessage(params.replyToMessageId);
-        const messageIdHeader = originalMessage.headers?.["message-id"];
-        if (messageIdHeader) {
-          headers.push(`In-Reply-To: ${messageIdHeader}`);
-          headers.push(`References: ${messageIdHeader}`);
-        }
-      } catch {
-        this.logger.warn("Could not get original message for threading");
-      }
-    }
+    const raw = await createRawMailMessage({
+      to: params.to,
+      cc: params.cc,
+      bcc: params.bcc,
+      subject: params.subject,
+      messageHtml: params.messageHtml,
+      messageText: htmlToMessageText(params.messageHtml),
+      attachments: params.attachments,
+      replyToEmail,
+    });
 
-    const encodedMessage = buildRawMessageBase64(headers, params.messageHtml);
+    // Gmail threads on In-Reply-To/References; an explicit threadId pins the
+    // draft to that thread even when the subject differs.
+    const threadId = params.threadId ?? replyToEmail?.threadId;
 
     const result = await withGmailRetry(() =>
       this.client.users.drafts.create({
         userId: "me",
         requestBody: {
-          message: {
-            raw: encodedMessage,
-            // Threading is handled by In-Reply-To/References headers, not threadId
-          },
+          message: { raw, ...(threadId ? { threadId } : {}) },
         },
       }),
     );
 
     this.logger.info("Gmail draft created", { draftId: result.data.id });
-    return { id: result.data.id || "" };
+    return {
+      id: result.data.id || "",
+      threadId: result.data.message?.threadId || "",
+    };
   }
 
   async updateDraft(
@@ -718,50 +729,94 @@ export class GmailProvider implements EmailProvider {
     params: {
       messageHtml?: string;
       subject?: string;
+      to?: string;
+      cc?: string;
+      bcc?: string;
     },
   ): Promise<void> {
     this.logger.info("Updating Gmail draft", { draftId });
 
-    // Get the current draft to preserve some fields
     const currentDraft = await getDraft(draftId, this.client);
     if (!currentDraft) {
       throw new Error(`Draft ${draftId} not found`);
     }
 
-    // Build updated message
-    const subject = params.subject || currentDraft.subject || "";
-    const content = params.messageHtml || currentDraft.textHtml || "";
+    const messageHtml = params.messageHtml ?? currentDraft.textHtml ?? "";
 
-    // Get the To address from the current draft headers
-    const toAddress = currentDraft.headers?.to || "";
+    // drafts.update replaces the whole MIME message, so every field that isn't
+    // rebuilt here is destroyed — attachments included. Carry them over.
+    const attachments = await this.downloadDraftAttachments(currentDraft);
 
-    const headers = [
-      `To: ${toAddress}`,
-      `Subject: ${subject}`,
-      "Content-Type: text/html; charset=utf-8",
-    ];
-
-    // Preserve threading headers for reply drafts
     const inReplyTo = currentDraft.headers?.["in-reply-to"];
-    const references = currentDraft.headers?.references;
-    if (inReplyTo) headers.push(`In-Reply-To: ${inReplyTo}`);
-    if (references) headers.push(`References: ${references}`);
 
-    const encodedMessage = buildRawMessageBase64(headers, content);
+    const raw = await createRawMailMessage({
+      to: params.to ?? currentDraft.headers?.to ?? "",
+      cc: params.cc ?? currentDraft.headers?.cc,
+      bcc: params.bcc ?? currentDraft.headers?.bcc,
+      subject: params.subject ?? currentDraft.subject ?? "",
+      messageHtml,
+      messageText: htmlToMessageText(messageHtml),
+      attachments,
+      replyToEmail: inReplyTo
+        ? {
+            threadId: currentDraft.threadId,
+            headerMessageId: inReplyTo,
+            references: currentDraft.headers?.references,
+          }
+        : undefined,
+    });
 
     await withGmailRetry(() =>
       this.client.users.drafts.update({
         userId: "me",
         id: draftId,
         requestBody: {
-          message: {
-            raw: encodedMessage,
-          },
+          message: { raw, threadId: currentDraft.threadId },
         },
       }),
     );
 
-    this.logger.info("Gmail draft updated", { draftId });
+    this.logger.info("Gmail draft updated", {
+      draftId,
+      attachmentsPreserved: attachments.length,
+    });
+  }
+
+  private async getReplyThreadingInfo(replyToMessageId: string) {
+    try {
+      const originalMessage = await this.getMessage(replyToMessageId);
+      const headerMessageId = originalMessage.headers?.["message-id"];
+      if (!headerMessageId) return undefined;
+
+      return {
+        threadId: originalMessage.threadId,
+        headerMessageId,
+        references: originalMessage.headers?.references,
+      };
+    } catch {
+      this.logger.warn("Could not get original message for threading");
+      return undefined;
+    }
+  }
+
+  private async downloadDraftAttachments(
+    draft: ParsedMessage,
+  ): Promise<MailAttachment[]> {
+    const attachments = draft.attachments ?? [];
+    if (!attachments.length) return [];
+
+    return Promise.all(
+      attachments.map(async (attachment) => ({
+        filename: attachment.filename,
+        contentType: attachment.mimeType,
+        content: await downloadGmailAttachment(
+          draft.id,
+          attachment.attachmentId,
+          this.client,
+          this.logger,
+        ),
+      })),
+    );
   }
 
   async draftEmail(
@@ -1220,8 +1275,13 @@ export class GmailProvider implements EmailProvider {
 
     const drafts = response.data.drafts || [];
     const messagePromises = drafts
-      .filter((draft) => draft.message?.id)
-      .map((draft) => this.getMessage(draft.message!.id!));
+      .filter((draft) => draft.message?.id && draft.id)
+      // The drafts API only accepts the draft id, which is not the message id.
+      // Carry it through or callers can't act on what they list.
+      .map(async (draft) => ({
+        ...(await this.getMessage(draft.message!.id!)),
+        draftId: draft.id!,
+      }));
 
     return Promise.all(messagePromises);
   }

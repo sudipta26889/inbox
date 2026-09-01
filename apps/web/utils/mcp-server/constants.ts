@@ -9,6 +9,7 @@ export const MCP_SCOPES = {
   "mcp:read": "Read-only access to MCP tools",
   "mcp:write": "Read-write access to MCP tools",
   "email:read": "Read email data",
+  "email:draft": "Create and edit unsent drafts (cannot send)",
   "email:write": "Send and manage emails",
   "calendar:read": "Read calendar data",
   "calendar:write": "Create and manage calendar events",
@@ -20,6 +21,13 @@ export const MCP_SCOPES = {
 } as const;
 
 export type McpScope = keyof typeof MCP_SCOPES;
+
+/**
+ * Scopes advertised by OAuth discovery. Derived so the four `.well-known`
+ * routes can't drift from what the server actually enforces — a scope missing
+ * here is one no discovering client will ever request.
+ */
+export const MCP_SCOPES_SUPPORTED = Object.keys(MCP_SCOPES);
 
 /**
  * Token configuration

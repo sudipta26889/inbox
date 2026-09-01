@@ -121,6 +121,7 @@ export function createMockEmailProvider(
     // Drafts and sending
     draftEmail: vi.fn().mockResolvedValue({ draftId: "draft-123" }),
     getDraft: vi.fn().mockResolvedValue(null),
+    getDraftStatus: vi.fn().mockResolvedValue({ status: "unknown" }),
     deleteDraft: vi.fn().mockResolvedValue(undefined),
     createDraft: vi.fn().mockResolvedValue({ id: "draft-new" }),
     updateDraft: vi.fn().mockResolvedValue(undefined),

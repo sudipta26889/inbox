@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { env } from "@/env";
+import { MCP_SCOPES_SUPPORTED } from "@/utils/mcp-server/constants";
 
 /**
  * RFC 8414: OAuth 2.0 Authorization Server Metadata
@@ -31,16 +32,7 @@ export async function GET() {
     revocation_endpoint: `${baseUrl}/mcp-server/revoke`,
 
     // Scopes supported by this authorization server
-    scopes_supported: [
-      "mcp:read", // Read-only MCP access
-      "mcp:write", // Read-write MCP access
-      "email:read", // Read email data
-      "email:write", // Send and manage emails
-      "calendar:read", // Read calendar data
-      "stats:read", // Read analytics
-      "rules:read", // Read automation rules
-      "rules:write", // Modify automation rules
-    ],
+    scopes_supported: MCP_SCOPES_SUPPORTED,
 
     // Response types supported (OAuth 2.1 uses "code" for authorization code flow)
     response_types_supported: ["code"],

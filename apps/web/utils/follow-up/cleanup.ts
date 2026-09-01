@@ -76,8 +76,10 @@ export async function cleanupStaleDrafts({
         (draft) => draft.threadId === tracker.threadId,
       );
 
+      // followUpDraftId is the drafts-API id, which on Gmail is not the message
+      // id — match on draftId or tracked drafts never get cleaned up.
       const trackedThreadDrafts = threadDrafts.filter((draft) =>
-        trackedDraftIds.has(draft.id),
+        trackedDraftIds.has(draft.draftId ?? draft.id),
       );
 
       const skippedCount = threadDrafts.length - trackedThreadDrafts.length;
@@ -88,12 +90,13 @@ export async function cleanupStaleDrafts({
       }
 
       for (const draft of trackedThreadDrafts) {
+        const draftId = draft.draftId ?? draft.id;
         try {
-          await provider.deleteDraft(draft.id);
-          trackerLogger.info("Deleted stale draft", { draftId: draft.id });
+          await provider.deleteDraft(draftId);
+          trackerLogger.info("Deleted stale draft", { draftId });
         } catch (error) {
           trackerLogger.warn("Failed to delete stale draft", {
-            draftId: draft.id,
+            draftId,
             error,
           });
         }

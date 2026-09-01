@@ -530,7 +530,7 @@ async function sendReplyUsingCreateReply(
   };
 }
 
-function buildGraphRecipients(
+export function buildGraphRecipients(
   recipientList?: string,
 ): GraphRecipient[] | undefined {
   if (!recipientList) return undefined;
@@ -564,7 +564,7 @@ function buildGraphRecipients(
   });
 }
 
-async function addAttachmentsToDraft({
+export async function addAttachmentsToDraft({
   client,
   draftId,
   attachments,

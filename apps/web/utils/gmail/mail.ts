@@ -68,7 +68,21 @@ const createMail = async (options: Mail.Options) => {
   return encodeMessage(message);
 };
 
-const createRawMailMessage = async ({
+export function htmlToMessageText(messageHtml: string): string {
+  try {
+    return convertEmailHtmlToText({ htmlText: messageHtml });
+  } catch (error) {
+    logger.error("Error converting email html to text", { error });
+    // Strip HTML tags as a fallback. Keep new lines.
+    return messageHtml
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/p>/gi, "\n")
+      .replace(/<[^>]*>/g, "")
+      .trim();
+  }
+}
+
+export const createRawMailMessage = async ({
   to,
   from,
   cc,
@@ -120,20 +134,7 @@ export async function sendEmailWithHtml(
 ) {
   ensureEmailSendingEnabled();
 
-  let messageText: string;
-
-  try {
-    messageText = convertEmailHtmlToText({ htmlText: body.messageHtml });
-  } catch (error) {
-    logger.error("Error converting email html to text", { error });
-    // Strip HTML tags as a fallback
-    // Keep new lines
-    messageText = body.messageHtml
-      .replace(/<br\s*\/?>/gi, "\n")
-      .replace(/<\/p>/gi, "\n")
-      .replace(/<[^>]*>/g, "")
-      .trim();
-  }
+  const messageText = htmlToMessageText(body.messageHtml);
 
   // DharaHIL approval gate for ALL email sends
   if (env.NEXT_PUBLIC_DHARAHIL_ENABLED) {

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { env } from "@/env";
+import { MCP_SCOPES_SUPPORTED } from "@/utils/mcp-server/constants";
 
 /**
  * RFC 9728: OAuth 2.0 Protected Resource Metadata
@@ -29,16 +30,7 @@ export async function GET() {
     resource_documentation: `${baseUrl}/docs`,
 
     // Optional: Scopes required to access this resource
-    scopes_supported: [
-      "mcp:read", // Read-only access to MCP tools (search, get)
-      "mcp:write", // Write access to MCP tools (send, create, update)
-      "email:read", // Read email data
-      "email:write", // Send and manage emails
-      "calendar:read", // Read calendar data
-      "stats:read", // Read analytics and statistics
-      "rules:read", // Read automation rules
-      "rules:write", // Create and modify automation rules
-    ],
+    scopes_supported: MCP_SCOPES_SUPPORTED,
 
     // Token types supported (default is Bearer)
     token_types_supported: ["Bearer"],

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { env } from "@/env";
+import { MCP_SCOPES_SUPPORTED } from "@/utils/mcp-server/constants";
 
 /**
  * Middleware to handle OAuth 2.1 discovery endpoints for MCP server
@@ -22,16 +23,7 @@ export function middleware(request: NextRequest) {
       resource_documentation: `${baseUrl}/docs`,
       resource_type: "mcp-server",
       mcp_protocol_version: "2024-11-05",
-      scopes_supported: [
-        "mcp:read",
-        "mcp:write",
-        "email:read",
-        "email:write",
-        "calendar:read",
-        "stats:read",
-        "rules:read",
-        "rules:write",
-      ],
+      scopes_supported: MCP_SCOPES_SUPPORTED,
       token_types_supported: ["Bearer"],
     };
 
@@ -55,16 +47,7 @@ export function middleware(request: NextRequest) {
       token_endpoint: `${baseUrl}/mcp-server/token`,
       registration_endpoint: `${baseUrl}/mcp-server/register`,
       revocation_endpoint: `${baseUrl}/mcp-server/revoke`,
-      scopes_supported: [
-        "mcp:read",
-        "mcp:write",
-        "email:read",
-        "email:write",
-        "calendar:read",
-        "stats:read",
-        "rules:read",
-        "rules:write",
-      ],
+      scopes_supported: MCP_SCOPES_SUPPORTED,
       response_types_supported: ["code"],
       response_modes_supported: ["query"],
       grant_types_supported: ["authorization_code", "refresh_token"],
