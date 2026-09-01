@@ -2,7 +2,7 @@ import { createScopedLogger } from "@/utils/logger";
 import type { McpToolContext } from "./registry";
 import { resolveCalendarAccount } from "@/utils/calendar/resolve-account";
 import { toEventTime, allDayEndDate } from "@/utils/calendar/event-time";
-import type { NotifyLevel } from "@/utils/calendar/event-time";
+import type { EventTime, NotifyLevel } from "@/utils/calendar/event-time";
 import type {
   CalendarEvent,
   CalendarEventProvider,
@@ -50,7 +50,9 @@ export async function searchCalendar(
     logger,
   });
 
-  const results = await Promise.all(
+  // One provider throwing (e.g. a transient Outlook error) must not fail the
+  // whole search when another provider would have answered fine.
+  const settled = await Promise.allSettled(
     providers.map((provider) =>
       provider.fetchEvents({
         timeMin: new Date(params.startDate),
@@ -62,16 +64,28 @@ export async function searchCalendar(
     ),
   );
 
-  const events = results.flatMap(
+  const fulfilled = settled.flatMap((result, index) => {
+    if (result.status === "fulfilled") return [result.value];
+    logger.warn("Provider failed to search calendar events", {
+      providerType: providers[index]!.constructor.name,
+      error:
+        result.reason instanceof Error
+          ? { message: result.reason.message, stack: result.reason.stack }
+          : result.reason,
+    });
+    return [];
+  });
+
+  const events = fulfilled.flatMap(
     ({ events: providerEvents = [] }) => providerEvents,
   );
   // A page token belongs to whichever single provider issued it. With two
   // providers merged into one page, presenting either one's token as "the"
   // search's token would silently desync the other provider's paging on the
-  // next call, so only surface it when there is exactly one provider to
-  // attribute it to.
+  // next call, so only surface it when exactly one provider actually
+  // succeeded (and thus is the one to attribute it to).
   const nextPageToken =
-    providers.length === 1 ? (results[0]?.nextPageToken ?? null) : null;
+    fulfilled.length === 1 ? (fulfilled[0]?.nextPageToken ?? null) : null;
 
   return {
     events: events.map((event) => ({
@@ -184,7 +198,9 @@ export async function getCalendarAvailability(
     logger,
   });
 
-  const results = await Promise.all(
+  // One provider throwing must not fail availability for every other
+  // connected provider — same reasoning as list_calendars and search_calendar.
+  const settled = await Promise.allSettled(
     providers.map((provider) =>
       fetchAllEventsForAvailability(provider, {
         timeMin: new Date(params.startDate),
@@ -193,7 +209,17 @@ export async function getCalendarAvailability(
     ),
   );
 
-  const events = results.flat();
+  const events = settled.flatMap((result, index) => {
+    if (result.status === "fulfilled") return result.value;
+    logger.warn("Provider failed to fetch events for availability", {
+      providerType: providers[index]!.constructor.name,
+      error:
+        result.reason instanceof Error
+          ? { message: result.reason.message, stack: result.reason.stack }
+          : result.reason,
+    });
+    return [];
+  });
 
   // Calculate busy periods (all events block time by default)
   const busyPeriods = events
@@ -370,15 +396,11 @@ export async function createCalendarEvent(
   const notify: NotifyLevel =
     params.notify ?? (params.sendInvite === false ? "none" : "all");
 
-  const start = toEventTime(params.startTime, timeZone);
-  const end = toEventTime(params.endTime, timeZone);
-
-  // Google's all-day end date is exclusive; callers give the inclusive last
-  // day (startTime === endTime for a one-day event), so bump it forward one
-  // day when both sides are date-only. Sending start.date === end.date is
-  // rejected by Google.
-  const eventEnd =
-    "date" in start && "date" in end ? { date: allDayEndDate(end.date) } : end;
+  const { start, end } = toEventTimeRange(
+    params.startTime,
+    params.endTime,
+    timeZone,
+  );
 
   const event = await providers[0]!.createEvent(
     {
@@ -386,7 +408,7 @@ export async function createCalendarEvent(
       description: params.description,
       location: params.location,
       start,
-      end: eventEnd,
+      end,
       attendees: params.attendees,
       recurrence: params.recurrence,
     },
@@ -575,6 +597,22 @@ export async function updateCalendarEvent(
   // sendUpdates, which would mail everyone a second time for one logical
   // change.
   if (hasFieldChanges) {
+    // The all-day exclusive-end-date bump (see toEventTimeRange) only makes
+    // sense when both sides are being set together, same as createEvent — a
+    // partial update touching just one side has no other side to compare
+    // against.
+    const timeFields =
+      params.startTime === undefined || params.endTime === undefined
+        ? {
+            ...(params.startTime === undefined
+              ? {}
+              : { start: toEventTime(params.startTime, timeZone) }),
+            ...(params.endTime === undefined
+              ? {}
+              : { end: toEventTime(params.endTime, timeZone) }),
+          }
+        : toEventTimeRange(params.startTime, params.endTime, timeZone);
+
     event = await providers[0]!.updateEvent(
       eventId,
       {
@@ -583,12 +621,7 @@ export async function updateCalendarEvent(
           ? {}
           : { description: params.description }),
         ...(params.location === undefined ? {} : { location: params.location }),
-        ...(params.startTime === undefined
-          ? {}
-          : { start: toEventTime(params.startTime, timeZone) }),
-        ...(params.endTime === undefined
-          ? {}
-          : { end: toEventTime(params.endTime, timeZone) }),
+        ...timeFields,
       },
       { notify: params.notify ?? "all", scope: params.scope },
     );
@@ -846,6 +879,23 @@ function isExternalDomain(email: string, accountEmail: string): boolean {
   if (domain === "localhost") return false;
   const accountDomain = accountEmail.split("@")[1]?.toLowerCase();
   return domain !== accountDomain;
+}
+
+// Google's all-day end date is exclusive; callers give the inclusive last
+// day (startTime === endTime for a one-day event), so bump it forward one
+// day when both sides resolve to date-only. Sending start.date === end.date
+// is rejected by Google. Shared by createCalendarEvent (always both sides)
+// and updateCalendarEvent (only when both sides are being set together).
+function toEventTimeRange(
+  startTime: string,
+  endTime: string,
+  timeZone: string,
+): { start: EventTime; end: EventTime } {
+  const start = toEventTime(startTime, timeZone);
+  const end = toEventTime(endTime, timeZone);
+  const eventEnd =
+    "date" in start && "date" in end ? { date: allDayEndDate(end.date) } : end;
+  return { start, end: eventEnd };
 }
 
 function resolveTimeZone(

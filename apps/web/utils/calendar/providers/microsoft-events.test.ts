@@ -70,6 +70,27 @@ describe("MicrosoftCalendarEventProvider.fetchEvents", () => {
     expect(result.events.map((e) => e.id)).toEqual(["1"]);
   });
 
+  it("matches an attendee's email, since Google's server-side q does too", async () => {
+    api.get.mockResolvedValue({
+      value: [
+        {
+          id: "1",
+          subject: "Planning",
+          attendees: [
+            { emailAddress: { address: "alice@example.com", name: "Alice" } },
+          ],
+        },
+        { id: "2", subject: "Other" },
+      ],
+    });
+
+    const result = await makeProvider().fetchEvents({
+      query: "alice@example.com",
+    });
+
+    expect(result.events.map((e) => e.id)).toEqual(["1"]);
+  });
+
   it("returns every event when no query is given", async () => {
     api.get.mockResolvedValue({
       value: [

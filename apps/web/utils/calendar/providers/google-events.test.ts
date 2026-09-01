@@ -164,6 +164,23 @@ describe("GoogleCalendarEventProvider.deleteEvent", () => {
     expect(client.events.delete).not.toHaveBeenCalled();
   });
 
+  it("accepts the all-day per-occurrence id form (date only, no time)", async () => {
+    // Google formats per-occurrence ids for all-day recurring events as
+    // `<seriesId>_YYYYMMDD`, with no time component. The timed-only regex
+    // used to reject this legitimate id from list_calendar_event_instances.
+    client.events.patch.mockResolvedValue({ data: {} });
+
+    await makeProvider().deleteEvent("evt-1_20260902", {
+      notify: "none",
+      scope: "this",
+    });
+
+    expect(client.events.delete).not.toHaveBeenCalled();
+    expect(client.events.patch.mock.calls[0][0].requestBody.status).toBe(
+      "cancelled",
+    );
+  });
+
   it("deletes the series when scope is all", async () => {
     client.events.delete.mockResolvedValue({ data: {} });
 
@@ -260,6 +277,21 @@ describe("GoogleCalendarEventProvider.updateEvent", () => {
       dateTime: "2026-09-02T14:00:00",
       timeZone: "Asia/Kolkata",
     });
+  });
+
+  it("rejects scope 'this' with a master id instead of patching the whole series", async () => {
+    // A master id passed with scope 'this' would have Google patch every
+    // occurrence, not just one — the approval prompt promises "one
+    // occurrence", so this must fail loudly rather than silently comply.
+    await expect(
+      makeProvider().updateEvent(
+        "evt-1",
+        { title: "Renamed" },
+        { notify: "none", scope: "this" },
+      ),
+    ).rejects.toThrow("per-occurrence eventId");
+
+    expect(client.events.patch).not.toHaveBeenCalled();
   });
 
   it("rejects thisAndFollowing instead of patching the whole series", async () => {

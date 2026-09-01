@@ -25,6 +25,7 @@ type MicrosoftEvent = {
     emailAddress?: { address?: string; name?: string };
     status?: { response?: string };
   }>;
+  organizer?: { emailAddress?: { address?: string; name?: string } };
   location?: { displayName?: string };
   webLink?: string;
   onlineMeeting?: { joinUrl?: string };
@@ -208,7 +209,20 @@ export class MicrosoftCalendarEventProvider implements CalendarEventProvider {
 
 function matchesQuery(event: MicrosoftEvent, query: string): boolean {
   const needle = query.toLowerCase();
-  return [event.subject, event.bodyPreview, event.location?.displayName].some(
-    (field) => field?.toLowerCase().includes(needle),
-  );
+  // Google's server-side `q`, which this client-side filter stands in for,
+  // also matches attendee and organizer name/email, not just subject/body/
+  // location — otherwise searching for an attendee finds the event on
+  // Google and silently misses it on Outlook.
+  const fields = [
+    event.subject,
+    event.bodyPreview,
+    event.location?.displayName,
+    event.organizer?.emailAddress?.name,
+    event.organizer?.emailAddress?.address,
+    ...(event.attendees?.flatMap((a) => [
+      a.emailAddress?.name,
+      a.emailAddress?.address,
+    ]) ?? []),
+  ];
+  return fields.some((field) => field?.toLowerCase().includes(needle));
 }

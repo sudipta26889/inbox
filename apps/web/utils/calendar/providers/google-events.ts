@@ -19,6 +19,13 @@ export interface GoogleCalendarConnectionParams {
   refreshToken: string | null;
 }
 
+// Google formats a per-occurrence instance id as `<seriesId>_<suffix>`: a
+// bare `YYYYMMDD` for all-day events, or `YYYYMMDDTHHMMSSZ` for timed ones.
+// A series master id has neither suffix. Used to guard scope: "this" in both
+// updateEvent and deleteEvent, since Google acts on whatever id it is given
+// and a master id there would hit the whole series.
+const INSTANCE_ID_PATTERN = /_\d{8}(T\d{6}Z)?$/;
+
 export class GoogleCalendarEventProvider implements CalendarEventProvider {
   // Google accepts base32hex ids only: lowercase a-v and 0-9, 5-1024 chars.
   private static readonly ID_PATTERN = /^[a-v0-9]{5,1024}$/;
@@ -105,6 +112,15 @@ export class GoogleCalendarEventProvider implements CalendarEventProvider {
     if (options.scope === "thisAndFollowing") {
       throw new Error(
         "scope 'thisAndFollowing' is not supported for updateEvent. Use list_calendar_event_instances and update each occurrence with scope 'this'.",
+      );
+    }
+
+    // Same hazard as deleteEvent: Google patches whatever id it is given. A
+    // master id here would rewrite the entire series instead of one
+    // occurrence, so require the per-occurrence form.
+    if (options.scope === "this" && !INSTANCE_ID_PATTERN.test(eventId)) {
+      throw new Error(
+        "scope 'this' requires a per-occurrence eventId from list_calendar_event_instances, not a series id. Pass scope 'all' to update the whole series.",
       );
     }
 
@@ -196,7 +212,7 @@ export class GoogleCalendarEventProvider implements CalendarEventProvider {
     if (options.scope === "this") {
       // Google cancels whatever id it is given. A master id here would cancel
       // the entire series, so require the per-occurrence form.
-      if (!/_\d{8}T\d{6}Z$/.test(eventId)) {
+      if (!INSTANCE_ID_PATTERN.test(eventId)) {
         throw new Error(
           "scope 'this' requires a per-occurrence eventId from list_calendar_event_instances, not a series id. Pass scope 'all' to remove the whole series.",
         );

@@ -259,6 +259,42 @@ describe("searchCalendar", () => {
 
     expect(result.nextPageToken).toBeNull();
   });
+
+  it("returns the working provider's events when another provider throws", async () => {
+    // Promise.all would make one throwing provider fail the whole search,
+    // even though the other provider would have answered fine.
+    const workingProvider = {
+      fetchEvents: vi.fn().mockResolvedValue({
+        events: [
+          {
+            id: "e1",
+            title: "Standup",
+            startTime: new Date("2026-09-02T08:30:00Z"),
+            endTime: new Date("2026-09-02T09:00:00Z"),
+            attendees: [],
+          },
+        ],
+        nextPageToken: "tok-1",
+      }),
+    };
+    const brokenProvider = {
+      fetchEvents: vi.fn().mockRejectedValue(new Error("transient error")),
+    };
+    resolve.mockResolvedValue({
+      account: { id: "acct-1", email: "me@x.com", timezone: "Asia/Kolkata" },
+      providers: [brokenProvider, workingProvider],
+    });
+
+    const result = await searchCalendar(context, {
+      startDate: "2026-09-01T00:00:00Z",
+      endDate: "2026-09-30T00:00:00Z",
+    });
+
+    expect(result.count).toBe(1);
+    expect(result.events[0]).toMatchObject({ id: "e1" });
+    // Exactly one provider succeeded, so its token is still attributable.
+    expect(result.nextPageToken).toBe("tok-1");
+  });
 });
 
 describe("getCalendarAvailability", () => {
@@ -334,6 +370,39 @@ describe("getCalendarAvailability", () => {
 
     expect(provider.fetchEvents).toHaveBeenCalledTimes(10);
   });
+
+  it("returns busy periods from the working provider when another provider throws", async () => {
+    // Promise.all would make one throwing provider fail availability
+    // entirely, even though the other provider would have answered fine.
+    const workingProvider = {
+      fetchEvents: vi.fn().mockResolvedValue({
+        events: [
+          {
+            id: "e1",
+            title: "Standup",
+            startTime: new Date("2026-09-01T01:00:00Z"),
+            endTime: new Date("2026-09-01T02:00:00Z"),
+            attendees: [],
+          },
+        ],
+        nextPageToken: null,
+      }),
+    };
+    const brokenProvider = {
+      fetchEvents: vi.fn().mockRejectedValue(new Error("transient error")),
+    };
+    resolve.mockResolvedValue({
+      account: { id: "acct-1", email: "me@x.com", timezone: "Asia/Kolkata" },
+      providers: [brokenProvider, workingProvider],
+    });
+
+    const result = await getCalendarAvailability(context, {
+      startDate: "2026-09-01T00:00:00Z",
+      endDate: "2026-09-01T23:00:00Z",
+    });
+
+    expect(result.busy.map((b) => b.summary)).toEqual(["Standup"]);
+  });
 });
 
 describe("calendar write tools", () => {
@@ -377,6 +446,29 @@ describe("calendar write tools", () => {
     });
 
     expect(provider.updateEvent.mock.calls[0][2].notify).toBe("none");
+  });
+
+  it("makes the all-day end date exclusive on update too, mirroring create", async () => {
+    // An agent moving a one-day all-day event sets startTime and endTime to
+    // the same new bare date. Without the same exclusive-end-date bump as
+    // createCalendarEvent, Google rejects start.date === end.date.
+    provider.updateEvent = vi.fn().mockResolvedValue({
+      id: "evt-1",
+      title: "Offsite",
+      startTime: new Date(),
+      endTime: new Date(),
+      attendees: [],
+    });
+
+    await updateCalendarEvent(context, {
+      eventId: "evt-1",
+      startTime: "2026-09-10",
+      endTime: "2026-09-10",
+    });
+
+    const [, patch] = provider.updateEvent.mock.calls[0];
+    expect(patch.start).toEqual({ date: "2026-09-10" });
+    expect(patch.end).toEqual({ date: "2026-09-11" });
   });
 
   it("routes attendee changes through changeAttendees, never through the patch", async () => {
