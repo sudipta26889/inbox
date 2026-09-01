@@ -248,6 +248,22 @@ describe("GoogleCalendarEventProvider.updateEvent", () => {
       timeZone: "Asia/Kolkata",
     });
   });
+
+  it("rejects thisAndFollowing instead of patching the whole series", async () => {
+    // Same hazard as deleteEvent: patching a series master with scope
+    // 'thisAndFollowing' would rewrite every occurrence, past included.
+    await expect(
+      makeProvider().updateEvent(
+        "evt-1",
+        {
+          start: { dateTime: "2026-09-02T14:00:00", timeZone: "Asia/Kolkata" },
+        },
+        { notify: "none", scope: "thisAndFollowing" },
+      ),
+    ).rejects.toThrow("thisAndFollowing");
+
+    expect(client.events.patch).not.toHaveBeenCalled();
+  });
 });
 
 describe("GoogleCalendarEventProvider.respondToEvent", () => {
@@ -282,6 +298,38 @@ describe("GoogleCalendarEventProvider.respondToEvent", () => {
         comment: undefined,
       },
       { email: "other@x.com", responseStatus: "tentative" },
+    ]);
+  });
+
+  it("keeps a previously-set RSVP comment when no new comment is given", async () => {
+    // An unconditional `comment: options.comment` write would wipe a prior
+    // comment any time the caller only changes the responseStatus.
+    client.events.get.mockResolvedValue({
+      data: {
+        attendees: [
+          {
+            email: "me@x.com",
+            self: true,
+            responseStatus: "tentative",
+            comment: "running late",
+          },
+        ],
+      },
+    });
+    client.events.patch.mockResolvedValue({ data: {} });
+
+    await makeProvider().respondToEvent("evt-1", {
+      responseStatus: "accepted",
+    });
+
+    const sent = client.events.patch.mock.calls[0][0].requestBody.attendees;
+    expect(sent).toEqual([
+      {
+        email: "me@x.com",
+        self: true,
+        responseStatus: "accepted",
+        comment: "running late",
+      },
     ]);
   });
 });

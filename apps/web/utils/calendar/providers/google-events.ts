@@ -100,6 +100,14 @@ export class GoogleCalendarEventProvider implements CalendarEventProvider {
       scope?: RecurrenceScope;
     },
   ): Promise<CalendarEvent> {
+    // Same hazard as deleteEvent: patching a series master with
+    // scope 'thisAndFollowing' rewrites every occurrence, past included.
+    if (options.scope === "thisAndFollowing") {
+      throw new Error(
+        "scope 'thisAndFollowing' is not supported for updateEvent. Use list_calendar_event_instances and update each occurrence with scope 'this'.",
+      );
+    }
+
     const client = await this.getClient();
     const response = await client.events.patch({
       calendarId: options.calendarId ?? "primary",
@@ -235,7 +243,11 @@ export class GoogleCalendarEventProvider implements CalendarEventProvider {
             ? {
                 ...a,
                 responseStatus: options.responseStatus,
-                comment: options.comment,
+                // Only overwrite the comment when one was supplied — an
+                // unconditional write erases a prior RSVP comment.
+                ...(options.comment === undefined
+                  ? {}
+                  : { comment: options.comment }),
               }
             : a,
         ),
