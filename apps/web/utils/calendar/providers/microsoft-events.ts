@@ -141,7 +141,7 @@ export class MicrosoftCalendarEventProvider implements CalendarEventProvider {
   }
 
   async listCalendars(): Promise<CalendarSummary[]> {
-    throw new CalendarWriteUnsupportedError("Outlook", "calendar listing");
+    throw new CalendarWriteUnsupportedError("Outlook", "listing");
   }
 
   async createEvent(): Promise<CalendarEvent> {
@@ -165,7 +165,7 @@ export class MicrosoftCalendarEventProvider implements CalendarEventProvider {
   }
 
   async changeAttendees(): Promise<CalendarEvent> {
-    throw new CalendarWriteUnsupportedError("Outlook", "attendee changes");
+    throw new CalendarWriteUnsupportedError("Outlook", "attendee change");
   }
 
   private parseEvent(event: MicrosoftEvent) {
