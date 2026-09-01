@@ -152,6 +152,18 @@ describe("GoogleCalendarEventProvider.deleteEvent", () => {
     );
   });
 
+  it("rejects scope 'this' with a master id instead of cancelling the whole series", async () => {
+    // A master id passed with scope 'this' would have Google cancel every
+    // occurrence, not just one — the approval prompt promises "one
+    // occurrence", so this must fail loudly rather than silently comply.
+    await expect(
+      makeProvider().deleteEvent("evt-1", { notify: "none", scope: "this" }),
+    ).rejects.toThrow("per-occurrence eventId");
+
+    expect(client.events.patch).not.toHaveBeenCalled();
+    expect(client.events.delete).not.toHaveBeenCalled();
+  });
+
   it("deletes the series when scope is all", async () => {
     client.events.delete.mockResolvedValue({ data: {} });
 

@@ -1,14 +1,26 @@
 import { createScopedLogger } from "@/utils/logger";
 import type { McpToolContext } from "./registry";
 import { resolveCalendarAccount } from "@/utils/calendar/resolve-account";
-import { toEventTime } from "@/utils/calendar/event-time";
+import { toEventTime, allDayEndDate } from "@/utils/calendar/event-time";
 import type { NotifyLevel } from "@/utils/calendar/event-time";
-import type { RecurrenceScope } from "@/utils/calendar/event-types";
+import type {
+  CalendarEvent,
+  CalendarEventProvider,
+  RecurrenceScope,
+} from "@/utils/calendar/event-types";
 import { dharahilClient } from "@/utils/dharahil/client";
 import { env } from "@/env";
 import { extractEventId } from "./url-parser";
 
 const logger = createScopedLogger("mcp-calendar-tools");
+
+// Safety cap on availability paging: results come back ordered by start
+// time, so an unbounded loop against a provider bug (a token that never
+// clears) could hang forever. 10 pages * 250/page = 2500, matching Google's
+// own per-call maximum.
+const AVAILABILITY_PAGE_SIZE = 250;
+const AVAILABILITY_MAX_PAGES = 10;
+const AVAILABILITY_MAX_EVENTS = 2500;
 
 /**
  * Search calendar events in a date range
@@ -53,7 +65,13 @@ export async function searchCalendar(
   const events = results.flatMap(
     ({ events: providerEvents = [] }) => providerEvents,
   );
-  const nextPageToken = results[0]?.nextPageToken ?? null;
+  // A page token belongs to whichever single provider issued it. With two
+  // providers merged into one page, presenting either one's token as "the"
+  // search's token would silently desync the other provider's paging on the
+  // next call, so only surface it when there is exactly one provider to
+  // attribute it to.
+  const nextPageToken =
+    providers.length === 1 ? (results[0]?.nextPageToken ?? null) : null;
 
   return {
     events: events.map((event) => ({
@@ -168,17 +186,14 @@ export async function getCalendarAvailability(
 
   const results = await Promise.all(
     providers.map((provider) =>
-      provider.fetchEvents({
+      fetchAllEventsForAvailability(provider, {
         timeMin: new Date(params.startDate),
         timeMax: new Date(params.endDate),
-        maxResults: 100,
       }),
     ),
   );
 
-  const events = results.flatMap(
-    ({ events: providerEvents = [] }) => providerEvents,
-  );
+  const events = results.flat();
 
   // Calculate busy periods (all events block time by default)
   const busyPeriods = events
@@ -275,6 +290,10 @@ export async function createCalendarEvent(
     logger,
   });
 
+  // Resolved before the approval gate: an account with no timezone must
+  // fail fast, not burn a real human approval and then throw.
+  const timeZone = resolveTimeZone(params.timeZone, account);
+
   const hasExternalAttendees = params.attendees?.some((email) =>
     isExternalDomain(email),
   );
@@ -288,7 +307,8 @@ export async function createCalendarEvent(
 
   // DharaHIL approval gate for ALL calendar event creates
   if (env.NEXT_PUBLIC_DHARAHIL_ENABLED) {
-    logger.info("DharaHIL: Requesting approval for calendar event creation", {
+    logger.info("DharaHIL: Requesting approval for calendar event creation");
+    logger.trace("DharaHIL: calendar event creation details", {
       title: params.title,
       attendees: params.attendees,
     });
@@ -337,12 +357,12 @@ export async function createCalendarEvent(
     }
 
     logger.info("DharaHIL: Calendar event creation approved", {
-      title: params.title,
       action: decision.action,
     });
+    logger.trace("DharaHIL: calendar event creation approved details", {
+      title: params.title,
+    });
   }
-
-  const timeZone = resolveTimeZone(params.timeZone, account);
 
   // `notify` is the richer control; `sendInvite` is the tool's original
   // boolean and must keep working — ignoring it mails attendees against an
@@ -350,13 +370,23 @@ export async function createCalendarEvent(
   const notify: NotifyLevel =
     params.notify ?? (params.sendInvite === false ? "none" : "all");
 
+  const start = toEventTime(params.startTime, timeZone);
+  const end = toEventTime(params.endTime, timeZone);
+
+  // Google's all-day end date is exclusive; callers give the inclusive last
+  // day (startTime === endTime for a one-day event), so bump it forward one
+  // day when both sides are date-only. Sending start.date === end.date is
+  // rejected by Google.
+  const eventEnd =
+    "date" in start && "date" in end ? { date: allDayEndDate(end.date) } : end;
+
   const event = await providers[0]!.createEvent(
     {
       title: params.title,
       description: params.description,
       location: params.location,
-      start: toEventTime(params.startTime, timeZone),
-      end: toEventTime(params.endTime, timeZone),
+      start,
+      end: eventEnd,
       attendees: params.attendees,
       recurrence: params.recurrence,
     },
@@ -399,9 +429,23 @@ export async function listCalendars(
     logger,
   });
 
-  const calendars = (
-    await Promise.all(providers.map((p) => p.listCalendars()))
-  ).flat();
+  // One provider (typically Outlook, which doesn't support listing) throwing
+  // must not take down discovery for every other connected provider.
+  const settled = await Promise.allSettled(
+    providers.map((p) => p.listCalendars()),
+  );
+
+  const calendars = settled.flatMap((result, index) => {
+    if (result.status === "fulfilled") return result.value;
+    logger.warn("Provider failed to list calendars", {
+      providerType: providers[index]!.constructor.name,
+      error:
+        result.reason instanceof Error
+          ? { message: result.reason.message, stack: result.reason.stack }
+          : result.reason,
+    });
+    return [];
+  });
 
   return { calendars, count: calendars.length, account: account.email };
 }
@@ -444,6 +488,13 @@ export async function updateCalendarEvent(
     from: params.from,
     logger,
   });
+
+  // Resolved before the approval gate: an account with no timezone must
+  // fail fast, not burn a real human approval and then throw.
+  const timeZone =
+    params.startTime || params.endTime
+      ? resolveTimeZone(params.timeZone, account)
+      : "";
 
   // DharaHIL approval gate for ALL calendar event updates
   if (env.NEXT_PUBLIC_DHARAHIL_ENABLED) {
@@ -502,11 +553,6 @@ export async function updateCalendarEvent(
       action: decision.action,
     });
   }
-
-  const timeZone =
-    params.startTime || params.endTime
-      ? resolveTimeZone(params.timeZone, account)
-      : "";
 
   const hasFieldChanges =
     params.title !== undefined ||
@@ -600,7 +646,7 @@ export async function deleteCalendarEvent(
         agentId: "inbox-calendar-provider",
         runId: context.userId,
         stepId: "delete_event",
-        contextSummary: `Delete calendar event ${params.eventId}${params.scope === "this" ? " (one occurrence)" : ""}`,
+        contextSummary: `Delete calendar event ${params.eventId} (scope: ${params.scope ?? "all"})`,
         riskLevel: "HIGH",
         tags: ["calendar", "google", "delete"],
         idempotencyKey: `calendar_delete_${params.eventId}_${Date.now()}`,
@@ -730,6 +776,49 @@ export async function listCalendarEventInstances(
     })),
     count: instances.length,
   };
+}
+
+/**
+ * Page through a provider's events until nextPageToken runs out or a safety
+ * cap is hit. Results are ordered by start time, so stopping early at a flat
+ * maxResults (as this used to) silently reports the tail of a busy range as
+ * free — an agent booking against that double-books.
+ */
+async function fetchAllEventsForAvailability(
+  provider: CalendarEventProvider,
+  options: { timeMin: Date; timeMax: Date },
+): Promise<CalendarEvent[]> {
+  const events: CalendarEvent[] = [];
+  let pageToken: string | undefined;
+  let pages = 0;
+
+  do {
+    const page = await provider.fetchEvents({
+      timeMin: options.timeMin,
+      timeMax: options.timeMax,
+      maxResults: AVAILABILITY_PAGE_SIZE,
+      pageToken,
+    });
+    events.push(...page.events);
+    pageToken = page.nextPageToken ?? undefined;
+    pages += 1;
+
+    if (pageToken && events.length >= AVAILABILITY_MAX_EVENTS) {
+      logger.warn("get_calendar_availability hit the event safety cap", {
+        eventCount: events.length,
+        pages,
+      });
+      break;
+    }
+    if (pageToken && pages >= AVAILABILITY_MAX_PAGES) {
+      logger.warn("get_calendar_availability hit the page safety cap", {
+        pages,
+      });
+      break;
+    }
+  } while (pageToken);
+
+  return events;
 }
 
 // Helper to determine if email domain is external

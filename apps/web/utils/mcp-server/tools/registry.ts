@@ -496,12 +496,12 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
         startTime: {
           type: "string",
           description:
-            "Start date/time (ISO 8601 format, e.g., '2026-03-20T14:00:00Z')",
+            "Start date/time (ISO 8601 format, e.g., '2026-03-20T14:00:00Z'). For an all-day event, pass a bare date (YYYY-MM-DD) for both startTime and endTime.",
         },
         endTime: {
           type: "string",
           description:
-            "End date/time (ISO 8601 format, e.g., '2026-03-20T15:00:00Z')",
+            "End date/time (ISO 8601 format, e.g., '2026-03-20T15:00:00Z'). For an all-day event, pass a bare date (YYYY-MM-DD) — this is the inclusive last day, e.g. startTime and endTime both '2026-09-02' creates a one-day all-day event.",
         },
         attendees: {
           type: "array",
@@ -715,7 +715,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
           type: "string",
           enum: ["this", "thisAndFollowing", "all"],
           description:
-            "For recurring events: 'this' cancels one occurrence, 'all' (default) removes the whole series. 'thisAndFollowing' is not supported and will fail.",
+            "'this' cancels a single occurrence and REQUIRES the per-occurrence eventId from list_calendar_event_instances. 'all' (default) removes the entire series. 'thisAndFollowing' is not supported and will be rejected.",
           default: "all",
         },
         notify: {

@@ -93,11 +93,12 @@ export class MicrosoftCalendarEventProvider implements CalendarEventProvider {
     timeMin = new Date(),
     timeMax,
     maxResults,
+    query,
   }: {
     maxResults?: number;
-    // ponytail: Outlook query/pagination not implemented (calendarView has no
-    // free-text search and paginates via @odata.nextLink, not an opaque
-    // token). Add $search + nextLink support if Outlook calendars need it.
+    // ponytail: Outlook pagination not implemented (calendarView paginates
+    // via @odata.nextLink, not an opaque token). Add nextLink support if
+    // Outlook calendars need paging beyond `top`.
     pageToken?: string;
     query?: string;
     timeMax?: Date;
@@ -122,8 +123,16 @@ export class MicrosoftCalendarEventProvider implements CalendarEventProvider {
 
     const events: MicrosoftEvent[] = response.value || [];
 
+    // ponytail: calendarView has no free-text search parameter (unlike
+    // Google's server-side `q`), so filter client-side on title/description
+    // /location. Without this, `query` is silently ignored and every event
+    // in range is returned as a "match".
+    const matched = query
+      ? events.filter((event) => matchesQuery(event, query))
+      : events;
+
     return {
-      events: events.map((event) => this.parseEvent(event)),
+      events: matched.map((event) => this.parseEvent(event)),
       nextPageToken: null,
     };
   }
@@ -195,4 +204,11 @@ export class MicrosoftCalendarEventProvider implements CalendarEventProvider {
         })) || [],
     };
   }
+}
+
+function matchesQuery(event: MicrosoftEvent, query: string): boolean {
+  const needle = query.toLowerCase();
+  return [event.subject, event.bodyPreview, event.location?.displayName].some(
+    (field) => field?.toLowerCase().includes(needle),
+  );
 }

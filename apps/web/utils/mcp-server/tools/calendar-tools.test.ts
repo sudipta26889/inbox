@@ -1,7 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   createCalendarEvent,
   deleteCalendarEvent,
+  getCalendarAvailability,
   listCalendarEventInstances,
   listCalendars,
   respondToCalendarEvent,
@@ -9,10 +10,28 @@ import {
   updateCalendarEvent,
 } from "./calendar-tools";
 import type { McpToolContext } from "./registry";
+import { env } from "@/env";
+import { dharahilClient } from "@/utils/dharahil/client";
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/utils/prisma");
 vi.mock("@/env", () => ({ env: { NEXT_PUBLIC_DHARAHIL_ENABLED: false } }));
+vi.mock("@/utils/dharahil/client", () => ({
+  dharahilClient: {
+    runApprovalLoop: vi.fn(),
+    wasDenied: vi.fn(() => false),
+    shouldRevise: vi.fn(() => false),
+  },
+}));
+
+// `env`'s real type is readonly (t3-env); the mock above is a plain mutable
+// object at runtime, so route the flip through a cast rather than fighting
+// the type in every test.
+function setDharahilEnabled(value: boolean) {
+  (
+    env as { NEXT_PUBLIC_DHARAHIL_ENABLED: boolean }
+  ).NEXT_PUBLIC_DHARAHIL_ENABLED = value;
+}
 
 const provider = {
   createEvent: vi.fn(),
@@ -115,6 +134,34 @@ describe("createCalendarEvent", () => {
     expect(provider.createEvent.mock.calls[0][1].notify).toBe("external");
   });
 
+  it("makes the all-day end date exclusive so Google does not reject start === end", async () => {
+    // toEventTime passes bare dates through untouched, so a one-day all-day
+    // event's start.date and end.date arrive equal — Google rejects that.
+    await createCalendarEvent(context, {
+      title: "Offsite",
+      startTime: "2026-09-02",
+      endTime: "2026-09-02",
+    });
+
+    const [input] = provider.createEvent.mock.calls[0];
+    expect(input.start).toEqual({ date: "2026-09-02" });
+    expect(input.end).toEqual({ date: "2026-09-03" });
+  });
+
+  it("leaves timed events untouched by the all-day end-date bump", async () => {
+    await createCalendarEvent(context, {
+      title: "Sync",
+      startTime: "2026-09-02T14:00:00",
+      endTime: "2026-09-02T15:00:00",
+    });
+
+    const [input] = provider.createEvent.mock.calls[0];
+    expect(input.end).toEqual({
+      dateTime: "2026-09-02T15:00:00",
+      timeZone: "Asia/Kolkata",
+    });
+  });
+
   it("fails clearly when no timezone can be resolved", async () => {
     resolve.mockResolvedValue({
       account: { id: "acct-1", email: "me@x.com", timezone: null },
@@ -188,6 +235,104 @@ describe("searchCalendar", () => {
     });
 
     expect(provider.fetchEvents.mock.calls[0][0].pageToken).toBe("tok-2");
+  });
+
+  it("suppresses nextPageToken when two providers ran, since the token belongs to only one of them", async () => {
+    const secondProvider = { fetchEvents: vi.fn() };
+    resolve.mockResolvedValue({
+      account: { id: "acct-1", email: "me@x.com", timezone: "Asia/Kolkata" },
+      providers: [provider, secondProvider],
+    });
+    provider.fetchEvents.mockResolvedValue({
+      events: [],
+      nextPageToken: "google-tok",
+    });
+    secondProvider.fetchEvents.mockResolvedValue({
+      events: [],
+      nextPageToken: null,
+    });
+
+    const result = await searchCalendar(context, {
+      startDate: "2026-09-01T00:00:00Z",
+      endDate: "2026-09-30T00:00:00Z",
+    });
+
+    expect(result.nextPageToken).toBeNull();
+  });
+});
+
+describe("getCalendarAvailability", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resolve.mockResolvedValue({
+      account: { id: "acct-1", email: "me@x.com", timezone: "Asia/Kolkata" },
+      providers: [provider],
+    });
+  });
+
+  it("pages through nextPageToken so later pages are not reported as free", async () => {
+    // Results come back ordered by start time. A hardcoded single-page fetch
+    // would silently drop this second page's busy block, reporting that
+    // slot as free.
+    provider.fetchEvents = vi
+      .fn()
+      .mockResolvedValueOnce({
+        events: [
+          {
+            id: "e1",
+            title: "Early meeting",
+            startTime: new Date("2026-09-01T01:00:00Z"),
+            endTime: new Date("2026-09-01T02:00:00Z"),
+            attendees: [],
+          },
+        ],
+        nextPageToken: "tok-2",
+      })
+      .mockResolvedValueOnce({
+        events: [
+          {
+            id: "e2",
+            title: "Late meeting",
+            startTime: new Date("2026-09-01T10:00:00Z"),
+            endTime: new Date("2026-09-01T11:00:00Z"),
+            attendees: [],
+          },
+        ],
+        nextPageToken: null,
+      });
+
+    const result = await getCalendarAvailability(context, {
+      startDate: "2026-09-01T00:00:00Z",
+      endDate: "2026-09-01T23:00:00Z",
+    });
+
+    expect(provider.fetchEvents).toHaveBeenCalledTimes(2);
+    expect(result.busy.map((b) => b.summary)).toEqual([
+      "Early meeting",
+      "Late meeting",
+    ]);
+  });
+
+  it("stops at the page safety cap and warns rather than looping forever", async () => {
+    provider.fetchEvents = vi.fn().mockResolvedValue({
+      events: [
+        {
+          id: "e",
+          title: "Busy",
+          startTime: new Date("2026-09-01T01:00:00Z"),
+          endTime: new Date("2026-09-01T02:00:00Z"),
+          attendees: [],
+        },
+      ],
+      nextPageToken: "keeps-going",
+    });
+
+    await getCalendarAvailability(context, {
+      startDate: "2026-09-01T00:00:00Z",
+      endDate: "2026-09-01T23:00:00Z",
+    });
+
+    expect(provider.fetchEvents).toHaveBeenCalledTimes(10);
   });
 });
 
@@ -350,6 +495,38 @@ describe("calendar write tools", () => {
       accessRole: "owner",
     });
   });
+
+  it("returns the working provider's calendars when another provider throws", async () => {
+    // Promise.all would make one throwing provider (e.g. Outlook, which
+    // doesn't support listing) fail this read-only discovery tool entirely,
+    // even though Google would have answered fine.
+    const workingProvider = {
+      listCalendars: vi.fn().mockResolvedValue([
+        {
+          id: "c1",
+          summary: "Me",
+          timeZone: "Asia/Kolkata",
+          primary: true,
+          accessRole: "owner",
+        },
+      ]),
+    };
+    const brokenProvider = {
+      listCalendars: vi
+        .fn()
+        .mockRejectedValue(new Error("listing not supported for Outlook")),
+    };
+    resolve.mockResolvedValue({
+      account: { id: "acct-1", email: "me@x.com", timezone: "Asia/Kolkata" },
+      providers: [brokenProvider, workingProvider],
+    });
+
+    const result = await listCalendars(context, {});
+
+    expect(result.calendars).toHaveLength(1);
+    expect(result.calendars[0]).toMatchObject({ id: "c1" });
+    expect(result.count).toBe(1);
+  });
 });
 
 describe("listCalendarEventInstances", () => {
@@ -406,5 +583,48 @@ describe("listCalendarEventInstances", () => {
       maxResults: 0,
     });
     expect(provider.listEventInstances.mock.calls[2][1].maxResults).toBe(1);
+  });
+});
+
+describe("resolveTimeZone runs before the DharaHIL approval gate", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resolve.mockResolvedValue({
+      account: { id: "acct-1", email: "me@x.com", timezone: null },
+      providers: [provider],
+    });
+  });
+
+  afterEach(() => {
+    // This is a shared mutable mock object — every other test in this file
+    // assumes DharaHIL is off, so it must not leak past this describe block.
+    setDharahilEnabled(false);
+  });
+
+  it("createCalendarEvent fails fast on a missing timezone instead of spending a real human approval", async () => {
+    setDharahilEnabled(true);
+
+    await expect(
+      createCalendarEvent(context, {
+        title: "Sync",
+        startTime: "2026-09-02T14:00:00",
+        endTime: "2026-09-02T15:00:00",
+      }),
+    ).rejects.toThrow("Timezone");
+
+    expect(dharahilClient.runApprovalLoop).not.toHaveBeenCalled();
+  });
+
+  it("updateCalendarEvent fails fast on a missing timezone instead of spending a real human approval", async () => {
+    setDharahilEnabled(true);
+
+    await expect(
+      updateCalendarEvent(context, {
+        eventId: "evt-1",
+        startTime: "2026-09-02T14:00:00",
+      }),
+    ).rejects.toThrow("Timezone");
+
+    expect(dharahilClient.runApprovalLoop).not.toHaveBeenCalled();
   });
 });

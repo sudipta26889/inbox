@@ -194,6 +194,14 @@ export class GoogleCalendarEventProvider implements CalendarEventProvider {
     // Cancelling one occurrence is a patch on the instance, not a delete of
     // the series. A delete here would silently remove every occurrence.
     if (options.scope === "this") {
+      // Google cancels whatever id it is given. A master id here would cancel
+      // the entire series, so require the per-occurrence form.
+      if (!/_\d{8}T\d{6}Z$/.test(eventId)) {
+        throw new Error(
+          "scope 'this' requires a per-occurrence eventId from list_calendar_event_instances, not a series id. Pass scope 'all' to remove the whole series.",
+        );
+      }
+
       await client.events.patch({
         calendarId,
         eventId,
