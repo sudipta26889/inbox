@@ -295,7 +295,7 @@ export async function createCalendarEvent(
   const timeZone = resolveTimeZone(params.timeZone, account);
 
   const hasExternalAttendees = params.attendees?.some((email) =>
-    isExternalDomain(email),
+    isExternalDomain(email, account.email),
   );
   const sendInvite = params.sendInvite ?? true;
 
@@ -474,9 +474,11 @@ export async function updateCalendarEvent(
     title?: string;
   },
 ) {
+  const eventId = extractEventId(params.eventId);
+
   logger.info("MCP tool: update_calendar_event", { userId: context.userId });
   logger.trace("MCP tool: update_calendar_event details", {
-    eventId: params.eventId,
+    eventId,
     title: params.title,
     addAttendees: params.addAttendees,
     removeAttendees: params.removeAttendees,
@@ -499,7 +501,7 @@ export async function updateCalendarEvent(
   // DharaHIL approval gate for ALL calendar event updates
   if (env.NEXT_PUBLIC_DHARAHIL_ENABLED) {
     logger.info("DharaHIL: Requesting approval for calendar event update", {
-      eventId: params.eventId,
+      eventId,
     });
     logger.trace("DharaHIL: calendar event update title", {
       title: params.title,
@@ -508,26 +510,31 @@ export async function updateCalendarEvent(
     const decision = await dharahilClient.runApprovalLoop({
       toolName: "update_calendar_event",
       toolArgs: {
-        eventId: params.eventId,
+        eventId,
         title: params.title,
         startTime: params.startTime,
         endTime: params.endTime,
-        addAttendees: params.addAttendees || [],
-        removeAttendees: params.removeAttendees || [],
+        addAttendeesCount: params.addAttendees?.length ?? 0,
+        removeAttendeesCount: params.removeAttendees?.length ?? 0,
         description: params.description,
         location: params.location,
+        // Resolved defaults, not raw params: the approver needs to see
+        // whether this hits one occurrence or the whole series, and whether
+        // every attendee gets emailed — not "undefined".
+        scope: params.scope ?? "all",
+        notify: params.notify ?? "all",
       },
       context: {
         agentId: "inbox-calendar-provider",
         runId: context.userId,
         stepId: "update_event",
-        contextSummary: `Update calendar event ${params.eventId}${params.title ? `: ${params.title}` : ""}`,
+        contextSummary: `Update calendar event ${eventId}${params.title ? `: ${params.title}` : ""}`,
         riskLevel: "MEDIUM",
         tags: ["calendar", "google", "update"],
-        idempotencyKey: `calendar_update_${params.eventId}_${Date.now()}`,
+        idempotencyKey: `calendar_update_${eventId}_${Date.now()}`,
         metadata: {
           provider: "google",
-          eventId: params.eventId,
+          eventId,
           add_attendee_count: String(params.addAttendees?.length || 0),
           remove_attendee_count: String(params.removeAttendees?.length || 0),
         },
@@ -549,7 +556,7 @@ export async function updateCalendarEvent(
     }
 
     logger.info("DharaHIL: Calendar event update approved", {
-      eventId: params.eventId,
+      eventId,
       action: decision.action,
     });
   }
@@ -569,7 +576,7 @@ export async function updateCalendarEvent(
   // change.
   if (hasFieldChanges) {
     event = await providers[0]!.updateEvent(
-      params.eventId,
+      eventId,
       {
         ...(params.title === undefined ? {} : { title: params.title }),
         ...(params.description === undefined
@@ -591,7 +598,7 @@ export async function updateCalendarEvent(
   // the patch above would discard every guest not named in this request.
   if (params.addAttendees || params.removeAttendees) {
     event = await providers[0]!.changeAttendees(
-      params.eventId,
+      eventId,
       { add: params.addAttendees, remove: params.removeAttendees },
       { notify: params.notify ?? "all" },
     );
@@ -599,7 +606,7 @@ export async function updateCalendarEvent(
 
   return {
     success: true,
-    eventId: event?.id ?? params.eventId,
+    eventId: event?.id ?? eventId,
     eventUrl: event?.eventUrl ?? "",
   };
 }
@@ -617,9 +624,11 @@ export async function deleteCalendarEvent(
     scope?: RecurrenceScope;
   },
 ) {
+  const eventId = extractEventId(params.eventId);
+
   logger.info("MCP tool: delete_calendar_event", { userId: context.userId });
   logger.trace("MCP tool: delete_calendar_event details", {
-    eventId: params.eventId,
+    eventId,
   });
 
   const { providers } = await resolveCalendarAccount({
@@ -632,27 +641,31 @@ export async function deleteCalendarEvent(
   // DharaHIL approval gate for ALL calendar event deletes
   if (env.NEXT_PUBLIC_DHARAHIL_ENABLED) {
     logger.info("DharaHIL: Requesting approval for calendar event deletion", {
-      eventId: params.eventId,
+      eventId,
       scope: params.scope,
     });
 
     const decision = await dharahilClient.runApprovalLoop({
       toolName: "delete_calendar_event",
       toolArgs: {
-        eventId: params.eventId,
-        scope: params.scope,
+        eventId,
+        // Resolved defaults, not raw params: the approver needs to see
+        // whether this hits one occurrence or the whole series, and whether
+        // every attendee gets a cancellation email — not "undefined".
+        scope: params.scope ?? "all",
+        notify: params.notify ?? "all",
       },
       context: {
         agentId: "inbox-calendar-provider",
         runId: context.userId,
         stepId: "delete_event",
-        contextSummary: `Delete calendar event ${params.eventId} (scope: ${params.scope ?? "all"})`,
+        contextSummary: `Delete calendar event ${eventId} (scope: ${params.scope ?? "all"})`,
         riskLevel: "HIGH",
         tags: ["calendar", "google", "delete"],
-        idempotencyKey: `calendar_delete_${params.eventId}_${Date.now()}`,
+        idempotencyKey: `calendar_delete_${eventId}_${Date.now()}`,
         metadata: {
           provider: "google",
-          eventId: params.eventId,
+          eventId,
           scope: params.scope ?? "all",
         },
       },
@@ -673,17 +686,17 @@ export async function deleteCalendarEvent(
     }
 
     logger.info("DharaHIL: Calendar event deletion approved", {
-      eventId: params.eventId,
+      eventId,
       action: decision.action,
     });
   }
 
-  await providers[0]!.deleteEvent(params.eventId, {
+  await providers[0]!.deleteEvent(eventId, {
     notify: params.notify ?? "all",
     scope: params.scope,
   });
 
-  return { success: true, eventId: params.eventId };
+  return { success: true, eventId };
 }
 
 /**
@@ -700,11 +713,13 @@ export async function respondToCalendarEvent(
     responseStatus: "accepted" | "declined" | "tentative";
   },
 ) {
+  const eventId = extractEventId(params.eventId);
+
   logger.info("MCP tool: respond_to_calendar_event", {
     userId: context.userId,
   });
   logger.trace("MCP tool: respond_to_calendar_event details", {
-    eventId: params.eventId,
+    eventId,
     responseStatus: params.responseStatus,
   });
 
@@ -715,7 +730,7 @@ export async function respondToCalendarEvent(
     logger,
   });
 
-  await providers[0]!.respondToEvent(params.eventId, {
+  await providers[0]!.respondToEvent(eventId, {
     responseStatus: params.responseStatus,
     comment: params.comment,
     calendarId: params.calendarId,
@@ -723,7 +738,7 @@ export async function respondToCalendarEvent(
 
   return {
     success: true,
-    eventId: params.eventId,
+    eventId,
     responseStatus: params.responseStatus,
   };
 }
@@ -744,11 +759,13 @@ export async function listCalendarEventInstances(
     timeMin?: string;
   },
 ) {
+  const eventId = extractEventId(params.eventId);
+
   logger.info("MCP tool: list_calendar_event_instances", {
     userId: context.userId,
   });
   logger.trace("list_calendar_event_instances params", {
-    eventId: params.eventId,
+    eventId,
     from: params.from,
   });
 
@@ -759,7 +776,7 @@ export async function listCalendarEventInstances(
     logger,
   });
 
-  const instances = await providers[0]!.listEventInstances(params.eventId, {
+  const instances = await providers[0]!.listEventInstances(eventId, {
     maxResults: Math.min(Math.max(params.maxResults ?? 25, 1), 250),
     timeMin: params.timeMin,
     timeMax: params.timeMax,
@@ -768,7 +785,7 @@ export async function listCalendarEventInstances(
   return {
     instances: instances.map((instance) => ({
       eventId: instance.id,
-      seriesId: instance.recurringEventId ?? params.eventId,
+      seriesId: instance.recurringEventId ?? eventId,
       originalStartTime: instance.originalStartTime,
       title: instance.title,
       start: instance.startTime.toISOString(),
@@ -821,11 +838,14 @@ async function fetchAllEventsForAvailability(
   return events;
 }
 
-// Helper to determine if email domain is external
-function isExternalDomain(email: string): boolean {
-  const internalDomains = ["sudiptadhara.in", "localhost"];
+// Helper to determine if an attendee's email domain is external to the
+// resolved account's own domain, rather than a single hardcoded org domain.
+function isExternalDomain(email: string, accountEmail: string): boolean {
   const domain = email.split("@")[1]?.toLowerCase();
-  return !internalDomains.some((internal) => domain?.includes(internal));
+  // ponytail: local dev accounts use @localhost, not a real org domain.
+  if (domain === "localhost") return false;
+  const accountDomain = accountEmail.split("@")[1]?.toLowerCase();
+  return domain !== accountDomain;
 }
 
 function resolveTimeZone(

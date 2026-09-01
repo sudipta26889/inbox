@@ -112,6 +112,41 @@ describe("admin tool annotations", () => {
   });
 });
 
+describe("calendar tool annotations", () => {
+  const byName = () =>
+    Object.fromEntries(getAllTools().map((tool) => [tool.name, tool]));
+
+  it("marks create_calendar_event as additive, not destructive", () => {
+    // create_calendar_event only ever adds a new event; consumers read
+    // destructiveHint to decide human-approval policy, so a wrong claim
+    // here either scares off a safe call or waves through a risky one.
+    const tools = byName();
+    expect(tools.create_calendar_event?.annotations?.destructiveHint).toBe(
+      false,
+    );
+  });
+
+  it("leaves update and delete calendar events at the fail-safe destructive default", () => {
+    // update overwrites fields and can uninvite attendees; delete removes
+    // an event outright — neither may claim destructiveHint: false.
+    const tools = byName();
+    expect(tools.update_calendar_event?.annotations?.destructiveHint).not.toBe(
+      false,
+    );
+    expect(tools.delete_calendar_event?.annotations?.destructiveHint).toBe(
+      true,
+    );
+  });
+
+  it("does not claim delete_calendar_event is idempotent", () => {
+    // A second delete of the same event 410s from Google and throws.
+    const tools = byName();
+    expect(tools.delete_calendar_event?.annotations?.idempotentHint).not.toBe(
+      true,
+    );
+  });
+});
+
 describe("getTool", () => {
   it("returns undefined for an unknown tool", () => {
     expect(getTool("nope")).toBeUndefined();

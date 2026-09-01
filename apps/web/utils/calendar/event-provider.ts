@@ -13,11 +13,15 @@ export async function createCalendarEventProviders(
   emailAccountId: string,
   logger: Logger,
 ): Promise<CalendarEventProvider[]> {
+  // Write tools (create/update/delete/RSVP) always act on providers[0] — order
+  // this deterministically so "first connection" means the oldest one, not
+  // whatever order Postgres happens to return for two connected calendars.
   const connections = await prisma.calendarConnection.findMany({
     where: {
       emailAccountId,
       isConnected: true,
     },
+    orderBy: { createdAt: "asc" },
     select: {
       id: true,
       provider: true,

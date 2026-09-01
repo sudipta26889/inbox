@@ -496,12 +496,12 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
         startTime: {
           type: "string",
           description:
-            "Start date/time (ISO 8601 format, e.g., '2026-03-20T14:00:00Z'). For an all-day event, pass a bare date (YYYY-MM-DD) for both startTime and endTime.",
+            "Start time as a naive wall-clock string, e.g. '2026-03-20T14:00:00' — interpreted in the timeZone parameter or the account's timezone. Pass a bare date ('2026-03-20') for an all-day event. If you include an explicit UTC offset it is honoured as given.",
         },
         endTime: {
           type: "string",
           description:
-            "End date/time (ISO 8601 format, e.g., '2026-03-20T15:00:00Z'). For an all-day event, pass a bare date (YYYY-MM-DD) — this is the inclusive last day, e.g. startTime and endTime both '2026-09-02' creates a one-day all-day event.",
+            "End time as a naive wall-clock string, e.g. '2026-03-20T15:00:00' — interpreted in the timeZone parameter or the account's timezone. Pass a bare date ('2026-03-20') for an all-day event — this is the inclusive last day, e.g. startTime and endTime both '2026-09-02' creates a one-day all-day event (the server converts it to Google's exclusive end-date form). If you include an explicit UTC offset it is honoured as given.",
         },
         attendees: {
           type: "array",
@@ -534,6 +534,17 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
             "Who receives an invitation email. Defaults to all. Use 'none' only when you are sure no one should be notified — Google warns it can also prevent the event syncing to external calendars.",
           default: "all",
         },
+        recurrence: {
+          type: "array",
+          items: { type: "string" },
+          description:
+            'Optional: RFC 5545 recurrence lines, e.g. ["RRULE:FREQ=WEEKLY;BYDAY=MO"]. Do not include DTSTART/DTEND — the event\'s own start/end define those.',
+        },
+        idempotencyKey: {
+          type: "string",
+          description:
+            "Optional: a caller-chosen event id used to avoid creating duplicates if a request is retried. Must be 5-1024 characters using only a-v and 0-9. Reduces duplicate risk but Google does not guarantee collision detection.",
+        },
         from: {
           type: "string",
           description:
@@ -541,6 +552,12 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
         },
       },
       required: ["title", "startTime", "endTime"],
+    },
+    annotations: {
+      // Genuinely additive: creates a new event, never overwrites one.
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
     },
     handler: async (context, params) => {
       const { createCalendarEvent } = await import("./calendar-tools");
@@ -563,9 +580,6 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
         },
       },
       required: [],
-    },
-    annotations: {
-      readOnlyHint: true,
     },
     handler: async (context, params) => {
       const { listCalendars } = await import("./calendar-tools");
@@ -609,9 +623,6 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       },
       required: ["eventId"],
     },
-    annotations: {
-      readOnlyHint: true,
-    },
     handler: async (context, params) => {
       const { listCalendarEventInstances } = await import("./calendar-tools");
       return listCalendarEventInstances(context, params);
@@ -645,12 +656,12 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
         startTime: {
           type: "string",
           description:
-            "New start date/time (ISO 8601 format). Provide endTime too if you change this.",
+            "New start time as a naive wall-clock string, e.g. '2026-03-20T14:00:00' — interpreted in the timeZone parameter or the account's timezone. Pass a bare date ('2026-03-20') for an all-day event. If you include an explicit UTC offset it is honoured as given. Provide endTime too if you change this.",
         },
         endTime: {
           type: "string",
           description:
-            "New end date/time (ISO 8601 format). Provide startTime too if you change this.",
+            "New end time as a naive wall-clock string, e.g. '2026-03-20T15:00:00' — interpreted in the timeZone parameter or the account's timezone. Pass a bare date ('2026-03-20') for an all-day event — the inclusive last day (the server converts it to Google's exclusive end-date form). If you include an explicit UTC offset it is honoured as given. Provide startTime too if you change this.",
         },
         timeZone: {
           type: "string",
@@ -692,7 +703,6 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       required: ["eventId"],
     },
     annotations: {
-      destructiveHint: false,
       idempotentHint: true,
       openWorldHint: true,
     },
@@ -735,7 +745,6 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     annotations: {
       destructiveHint: true,
-      idempotentHint: true,
       openWorldHint: true,
     },
     handler: async (context, params) => {

@@ -586,6 +586,190 @@ describe("listCalendarEventInstances", () => {
   });
 });
 
+describe("Calendar URL support beyond get_calendar_event", () => {
+  // getCalendarEvent already ran extractEventId; these four handlers gained
+  // it in the same pass, so a pasted Google Calendar URL now works on them
+  // too instead of 404ing against the provider.
+  const url = "https://calendar.google.com/calendar/event?eid=ABC123xyz";
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resolve.mockResolvedValue({
+      account: { id: "acct-1", email: "me@x.com", timezone: "Asia/Kolkata" },
+      providers: [provider],
+    });
+  });
+
+  it("updateCalendarEvent extracts the eventId from a Calendar URL", async () => {
+    provider.updateEvent = vi.fn().mockResolvedValue({
+      id: "ABC123xyz",
+      title: "Renamed",
+      startTime: new Date(),
+      endTime: new Date(),
+      attendees: [],
+    });
+
+    const result = await updateCalendarEvent(context, {
+      eventId: url,
+      title: "Renamed",
+    });
+
+    expect(provider.updateEvent.mock.calls[0][0]).toBe("ABC123xyz");
+    expect(result.eventId).toBe("ABC123xyz");
+  });
+
+  it("deleteCalendarEvent extracts the eventId from a Calendar URL", async () => {
+    provider.deleteEvent = vi.fn().mockResolvedValue(undefined);
+
+    const result = await deleteCalendarEvent(context, { eventId: url });
+
+    expect(provider.deleteEvent.mock.calls[0][0]).toBe("ABC123xyz");
+    expect(result.eventId).toBe("ABC123xyz");
+  });
+
+  it("respondToCalendarEvent extracts the eventId from a Calendar URL", async () => {
+    provider.respondToEvent = vi.fn().mockResolvedValue(undefined);
+
+    const result = await respondToCalendarEvent(context, {
+      eventId: url,
+      responseStatus: "accepted",
+    });
+
+    expect(provider.respondToEvent.mock.calls[0][0]).toBe("ABC123xyz");
+    expect(result.eventId).toBe("ABC123xyz");
+  });
+
+  it("listCalendarEventInstances extracts the eventId from a Calendar URL", async () => {
+    provider.listEventInstances = vi.fn().mockResolvedValue([]);
+
+    await listCalendarEventInstances(context, { eventId: url });
+
+    expect(provider.listEventInstances.mock.calls[0][0]).toBe("ABC123xyz");
+  });
+});
+
+describe("DharaHIL approval gate content", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resolve.mockResolvedValue({
+      account: { id: "acct-1", email: "me@x.com", timezone: "Asia/Kolkata" },
+      providers: [provider],
+    });
+    (
+      dharahilClient.runApprovalLoop as ReturnType<typeof vi.fn>
+    ).mockResolvedValue({ action: "APPROVED" });
+  });
+
+  afterEach(() => {
+    // Shared mutable mock object — every other test in this file assumes
+    // DharaHIL is off, so it must not leak past this describe block.
+    setDharahilEnabled(false);
+  });
+
+  it("shows the resolved scope and notify default, not raw undefined, on update", async () => {
+    setDharahilEnabled(true);
+    provider.updateEvent = vi.fn().mockResolvedValue({
+      id: "evt-1",
+      title: "Renamed",
+      startTime: new Date(),
+      endTime: new Date(),
+      attendees: [],
+    });
+
+    await updateCalendarEvent(context, { eventId: "evt-1", title: "Renamed" });
+
+    const [{ toolArgs }] = (
+      dharahilClient.runApprovalLoop as ReturnType<typeof vi.fn>
+    ).mock.calls[0];
+    expect(toolArgs.scope).toBe("all");
+    expect(toolArgs.notify).toBe("all");
+  });
+
+  it("shows attendee counts rather than raw arrays on update", async () => {
+    setDharahilEnabled(true);
+    provider.changeAttendees = vi.fn().mockResolvedValue({
+      id: "evt-1",
+      title: "Sync",
+      startTime: new Date(),
+      endTime: new Date(),
+      attendees: [],
+    });
+
+    await updateCalendarEvent(context, {
+      eventId: "evt-1",
+      addAttendees: ["a@x.com", "b@x.com"],
+      removeAttendees: ["c@x.com"],
+    });
+
+    const [{ toolArgs }] = (
+      dharahilClient.runApprovalLoop as ReturnType<typeof vi.fn>
+    ).mock.calls[0];
+    expect(toolArgs.addAttendeesCount).toBe(2);
+    expect(toolArgs.removeAttendeesCount).toBe(1);
+  });
+
+  it("shows the resolved scope and notify default, not raw undefined, on delete", async () => {
+    setDharahilEnabled(true);
+    provider.deleteEvent = vi.fn().mockResolvedValue(undefined);
+
+    await deleteCalendarEvent(context, { eventId: "evt-1" });
+
+    const [{ toolArgs }] = (
+      dharahilClient.runApprovalLoop as ReturnType<typeof vi.fn>
+    ).mock.calls[0];
+    expect(toolArgs.scope).toBe("all");
+    expect(toolArgs.notify).toBe("all");
+  });
+
+  it("classifies an attendee on the account's own domain as internal", async () => {
+    setDharahilEnabled(true);
+    provider.createEvent = vi.fn().mockResolvedValue({
+      id: "evt-1",
+      title: "Sync",
+      startTime: new Date(),
+      endTime: new Date(),
+      attendees: [],
+    });
+
+    await createCalendarEvent(context, {
+      title: "Sync",
+      startTime: "2026-09-02T14:00:00",
+      endTime: "2026-09-02T15:00:00",
+      attendees: ["colleague@x.com"], // same domain as account email me@x.com
+    });
+
+    const [{ context: dharahilContext }] = (
+      dharahilClient.runApprovalLoop as ReturnType<typeof vi.fn>
+    ).mock.calls[0];
+    expect(dharahilContext.metadata.has_external_attendees).toBe("false");
+    expect(dharahilContext.riskLevel).toBe("MEDIUM");
+  });
+
+  it("classifies an attendee on a different domain as external, not a hardcoded org domain", async () => {
+    setDharahilEnabled(true);
+    provider.createEvent = vi.fn().mockResolvedValue({
+      id: "evt-1",
+      title: "Sync",
+      startTime: new Date(),
+      endTime: new Date(),
+      attendees: [],
+    });
+
+    await createCalendarEvent(context, {
+      title: "Sync",
+      startTime: "2026-09-02T14:00:00",
+      endTime: "2026-09-02T15:00:00",
+      attendees: ["outsider@other.com"], // different domain than account email me@x.com
+    });
+
+    const [{ context: dharahilContext }] = (
+      dharahilClient.runApprovalLoop as ReturnType<typeof vi.fn>
+    ).mock.calls[0];
+    expect(dharahilContext.metadata.has_external_attendees).toBe("true");
+    expect(dharahilContext.riskLevel).toBe("HIGH");
+  });
+});
+
 describe("resolveTimeZone runs before the DharaHIL approval gate", () => {
   beforeEach(() => {
     vi.clearAllMocks();

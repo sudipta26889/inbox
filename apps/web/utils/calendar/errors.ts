@@ -1,7 +1,10 @@
+// Despite the name, this also covers unsupported reads (e.g. Outlook's
+// listing/instance-listing) reached through calendar:read tools — keep the
+// message provider-agnostic about read vs. write.
 export class CalendarWriteUnsupportedError extends Error {
   constructor(provider: string, operation: string) {
     super(
-      `Calendar ${operation} is not supported for ${provider} yet. Only Google calendars can be modified.`,
+      `Calendar ${operation} is not supported for ${provider} yet. Only Google calendars support this operation.`,
     );
     this.name = "CalendarWriteUnsupportedError";
   }
