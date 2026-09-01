@@ -682,6 +682,52 @@ export async function respondToCalendarEvent(
   };
 }
 
+/**
+ * List the individual occurrences of a recurring calendar event. The
+ * returned per-occurrence eventId is what update_calendar_event and
+ * delete_calendar_event accept with scope: "this" to act on one occurrence
+ * without touching the rest of the series.
+ */
+export async function listCalendarEventInstances(
+  context: McpToolContext,
+  params: {
+    eventId: string;
+    from?: string;
+    maxResults?: number;
+    timeMax?: string;
+    timeMin?: string;
+  },
+) {
+  logger.info("MCP tool: list_calendar_event_instances", {
+    userId: context.userId,
+  });
+
+  const { providers } = await resolveCalendarAccount({
+    userId: context.userId,
+    emailAccountId: context.emailAccountId,
+    from: params.from,
+    logger,
+  });
+
+  const instances = await providers[0]!.listEventInstances(params.eventId, {
+    maxResults: Math.min(params.maxResults ?? 25, 250),
+    timeMin: params.timeMin,
+    timeMax: params.timeMax,
+  });
+
+  return {
+    instances: instances.map((instance) => ({
+      eventId: instance.id,
+      seriesId: instance.recurringEventId ?? params.eventId,
+      originalStartTime: instance.originalStartTime,
+      title: instance.title,
+      start: instance.startTime.toISOString(),
+      end: instance.endTime.toISOString(),
+    })),
+    count: instances.length,
+  };
+}
+
 // Helper to determine if email domain is external
 function isExternalDomain(email: string): boolean {
   const internalDomains = ["sudiptadhara.in", "localhost"];

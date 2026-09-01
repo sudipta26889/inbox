@@ -574,6 +574,51 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     requiredScope: "calendar:read",
   },
 
+  list_calendar_event_instances: {
+    name: "list_calendar_event_instances",
+    description:
+      "List the individual occurrences of a recurring calendar event. Returns a per-occurrence eventId that update_calendar_event and delete_calendar_event accept with scope: 'this', which is how you change one occurrence without touching the rest of the series.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        eventId: {
+          type: "string",
+          description:
+            "ID of the recurring event series (the master event's id, e.g. from search_calendar or get_calendar_event).",
+        },
+        timeMin: {
+          type: "string",
+          description:
+            "Optional: only return occurrences starting on or after this date/time (ISO 8601).",
+        },
+        timeMax: {
+          type: "string",
+          description:
+            "Optional: only return occurrences starting before this date/time (ISO 8601).",
+        },
+        maxResults: {
+          type: "number",
+          description: "Maximum occurrences to return (default: 25, max: 250).",
+          default: 25,
+        },
+        from: {
+          type: "string",
+          description:
+            "Optional: email address of the account whose calendar to use. Defaults to the authorized account. Use list_email_accounts to see available addresses.",
+        },
+      },
+      required: ["eventId"],
+    },
+    annotations: {
+      readOnlyHint: true,
+    },
+    handler: async (context, params) => {
+      const { listCalendarEventInstances } = await import("./calendar-tools");
+      return listCalendarEventInstances(context, params);
+    },
+    requiredScope: "calendar:read",
+  },
+
   update_calendar_event: {
     name: "update_calendar_event",
     description:

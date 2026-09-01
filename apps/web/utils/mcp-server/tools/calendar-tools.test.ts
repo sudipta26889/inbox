@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   createCalendarEvent,
   deleteCalendarEvent,
+  listCalendarEventInstances,
   listCalendars,
   respondToCalendarEvent,
   searchCalendar,
@@ -21,6 +22,7 @@ const provider = {
   changeAttendees: vi.fn(),
   respondToEvent: vi.fn(),
   listCalendars: vi.fn(),
+  listEventInstances: vi.fn(),
 };
 const resolve = vi.fn();
 vi.mock("@/utils/calendar/resolve-account", () => ({
@@ -346,6 +348,40 @@ describe("calendar write tools", () => {
       id: "c1",
       primary: true,
       accessRole: "owner",
+    });
+  });
+});
+
+describe("listCalendarEventInstances", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resolve.mockResolvedValue({
+      account: { id: "acct-1", email: "me@x.com", timezone: "Asia/Kolkata" },
+      providers: [provider],
+    });
+  });
+
+  it("returns per-occurrence ids that the edit tools accept", async () => {
+    provider.listEventInstances = vi.fn().mockResolvedValue([
+      {
+        id: "evt-1_20260902T083000Z",
+        title: "Standup",
+        startTime: new Date("2026-09-02T08:30:00Z"),
+        endTime: new Date("2026-09-02T09:00:00Z"),
+        attendees: [],
+        recurringEventId: "evt-1",
+        originalStartTime: "2026-09-02T14:00:00+05:30",
+      },
+    ]);
+
+    const result = await listCalendarEventInstances(context, {
+      eventId: "evt-1",
+    });
+
+    expect(result.instances[0]).toMatchObject({
+      eventId: "evt-1_20260902T083000Z",
+      seriesId: "evt-1",
+      originalStartTime: "2026-09-02T14:00:00+05:30",
     });
   });
 });
