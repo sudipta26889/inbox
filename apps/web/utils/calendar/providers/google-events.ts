@@ -315,25 +315,34 @@ export class GoogleCalendarEventProvider implements CalendarEventProvider {
     timeMin = new Date(),
     timeMax,
     maxResults,
+    pageToken,
+    query,
   }: {
-    timeMin?: Date;
-    timeMax?: Date;
     maxResults?: number;
-  }): Promise<CalendarEvent[]> {
+    pageToken?: string;
+    query?: string;
+    timeMax?: Date;
+    timeMin?: Date;
+  }): Promise<{ events: CalendarEvent[]; nextPageToken: string | null }> {
     const client = await this.getClient();
 
     const response = await client.events.list({
       calendarId: "primary",
       timeMin: timeMin?.toISOString(),
       timeMax: timeMax?.toISOString(),
-      maxResults: maxResults || 10,
+      maxResults: Math.min(maxResults || 50, 2500),
+      pageToken,
+      q: query,
       singleEvents: true,
       orderBy: "startTime",
     });
 
     const events = response.data.items || [];
 
-    return events.map((event) => this.parseEvent(event));
+    return {
+      events: events.map((event) => this.parseEvent(event)),
+      nextPageToken: response.data.nextPageToken ?? null,
+    };
   }
 
   async fetchEventById(eventId: string): Promise<CalendarEvent | null> {

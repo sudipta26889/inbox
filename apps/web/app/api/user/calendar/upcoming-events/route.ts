@@ -31,7 +31,8 @@ async function getData({
 
   const providerEvents = await Promise.all(
     providers.map(async (provider) => {
-      return provider.fetchEvents({ maxResults: 3 });
+      const { events } = await provider.fetchEvents({ maxResults: 3 });
+      return events;
     }),
   );
 

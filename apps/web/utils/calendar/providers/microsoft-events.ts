@@ -94,10 +94,15 @@ export class MicrosoftCalendarEventProvider implements CalendarEventProvider {
     timeMax,
     maxResults,
   }: {
-    timeMin?: Date;
-    timeMax?: Date;
     maxResults?: number;
-  }): Promise<CalendarEvent[]> {
+    // ponytail: Outlook query/pagination not implemented (calendarView has no
+    // free-text search and paginates via @odata.nextLink, not an opaque
+    // token). Add $search + nextLink support if Outlook calendars need it.
+    pageToken?: string;
+    query?: string;
+    timeMax?: Date;
+    timeMin?: Date;
+  }): Promise<{ events: CalendarEvent[]; nextPageToken: string | null }> {
     const client = await this.getClient();
 
     // calendarView requires both start and end times, default to 30 days from timeMin
@@ -117,7 +122,10 @@ export class MicrosoftCalendarEventProvider implements CalendarEventProvider {
 
     const events: MicrosoftEvent[] = response.value || [];
 
-    return events.map((event) => this.parseEvent(event));
+    return {
+      events: events.map((event) => this.parseEvent(event)),
+      nextPageToken: null,
+    };
   }
 
   async fetchEventById(eventId: string): Promise<CalendarEvent | null> {

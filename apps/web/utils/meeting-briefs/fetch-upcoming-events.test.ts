@@ -84,7 +84,7 @@ describe("fetchUpcomingEvents", () => {
 
 function createProvider(events: CalendarEvent[]): CalendarEventProvider {
   return {
-    fetchEvents: vi.fn().mockResolvedValue(events),
+    fetchEvents: vi.fn().mockResolvedValue({ events, nextPageToken: null }),
     fetchEventsWithAttendee: vi.fn().mockResolvedValue([]),
   };
 }

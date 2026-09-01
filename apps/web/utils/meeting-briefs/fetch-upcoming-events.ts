@@ -35,10 +35,14 @@ export async function fetchUpcomingEvents({
 
   const events = results
     .filter(
-      (result): result is PromiseFulfilledResult<CalendarEvent[]> =>
-        result.status === "fulfilled",
+      (
+        result,
+      ): result is PromiseFulfilledResult<{
+        events: CalendarEvent[];
+        nextPageToken: string | null;
+      }> => result.status === "fulfilled",
     )
-    .flatMap((result) => result.value)
+    .flatMap((result) => result.value.events)
     .sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
 
   const filteredEvents = events.filter(

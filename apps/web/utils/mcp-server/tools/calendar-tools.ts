@@ -1,8 +1,8 @@
-import prisma from "@/utils/prisma";
 import { createScopedLogger } from "@/utils/logger";
 import type { McpToolContext } from "./registry";
-import { createCalendarEventProviders } from "@/utils/calendar/event-provider";
-import { getCalendarClientWithRefresh } from "@/utils/calendar/client";
+import { resolveCalendarAccount } from "@/utils/calendar/resolve-account";
+import { toEventTime } from "@/utils/calendar/event-time";
+import type { NotifyLevel } from "@/utils/calendar/event-time";
 import { dharahilClient } from "@/utils/dharahil/client";
 import { env } from "@/env";
 import { extractEventId } from "./url-parser";
@@ -11,11 +11,17 @@ const logger = createScopedLogger("mcp-calendar-tools");
 
 /**
  * Search calendar events in a date range
- * Always uses sudiptai26.889@gmail.com for calendar operations
  */
 export async function searchCalendar(
   context: McpToolContext,
-  params: { startDate: string; endDate: string; query?: string },
+  params: {
+    startDate: string;
+    endDate: string;
+    query?: string;
+    maxResults?: number;
+    pageToken?: string;
+    from?: string;
+  },
 ) {
   logger.info("MCP tool: search_calendar", {
     userId: context.userId,
@@ -24,58 +30,32 @@ export async function searchCalendar(
     endDate: params.endDate,
   });
 
-  // IMPORTANT: Calendar events are always in sudiptai26.889@gmail.com account
-  const CALENDAR_EMAIL = "sudiptai26.889@gmail.com";
-  const calendarEmailAccount = await prisma.emailAccount.findFirst({
-    where: {
-      userId: context.userId,
-      email: CALENDAR_EMAIL,
-    },
+  const { providers } = await resolveCalendarAccount({
+    userId: context.userId,
+    emailAccountId: context.emailAccountId,
+    from: params.from,
+    logger,
   });
 
-  if (!calendarEmailAccount) {
-    throw new Error(
-      `Calendar account (${CALENDAR_EMAIL}) not found. Please connect this Google account with calendar permissions.`,
-    );
-  }
-
-  const providers = await createCalendarEventProviders(
-    calendarEmailAccount.id,
-    logger,
-  );
-
-  if (providers.length === 0) {
-    throw new Error("No calendar connection found for this email account");
-  }
-
-  // Fetch events from all providers
-  const allEvents = await Promise.all(
+  const results = await Promise.all(
     providers.map((provider) =>
       provider.fetchEvents({
         timeMin: new Date(params.startDate),
         timeMax: new Date(params.endDate),
-        maxResults: 50,
+        query: params.query,
+        maxResults: params.maxResults,
+        pageToken: params.pageToken,
       }),
     ),
   );
 
-  // Flatten and deduplicate events
-  const events = allEvents.flat();
-
-  // Filter by query if provided
-  let filteredEvents = events;
-  if (params.query) {
-    const queryLower = params.query.toLowerCase();
-    filteredEvents = events.filter(
-      (event) =>
-        event.title?.toLowerCase().includes(queryLower) ||
-        event.description?.toLowerCase().includes(queryLower) ||
-        event.location?.toLowerCase().includes(queryLower),
-    );
-  }
+  const events = results.flatMap(
+    ({ events: providerEvents = [] }) => providerEvents,
+  );
+  const nextPageToken = results[0]?.nextPageToken ?? null;
 
   return {
-    events: filteredEvents.map((event) => ({
+    events: events.map((event) => ({
       id: event.id,
       summary: event.title,
       description: event.description || "",
@@ -89,7 +69,8 @@ export async function searchCalendar(
         })) || [],
       htmlLink: event.eventUrl || "",
     })),
-    count: filteredEvents.length,
+    count: events.length,
+    nextPageToken,
   };
 }
 
@@ -98,7 +79,7 @@ export async function searchCalendar(
  */
 export async function getCalendarEvent(
   context: McpToolContext,
-  params: { eventId: string },
+  params: { eventId: string; from?: string },
 ) {
   // Extract event ID from Calendar URL if provided
   const eventId = extractEventId(params.eventId);
@@ -110,47 +91,19 @@ export async function getCalendarEvent(
     originalInput: params.eventId !== eventId ? params.eventId : undefined,
   });
 
-  // IMPORTANT: Calendar events are always created in sudiptai26.889@gmail.com account
-  // So we need to look up events in that calendar, not the current email account's calendar
-  const CALENDAR_EMAIL = "sudiptai26.889@gmail.com";
-  const calendarEmailAccount = await prisma.emailAccount.findFirst({
-    where: {
-      userId: context.userId,
-      email: CALENDAR_EMAIL,
-    },
-  });
-
-  if (!calendarEmailAccount) {
-    throw new Error(
-      `Calendar account (${CALENDAR_EMAIL}) not found. Please connect this Google account with calendar permissions.`,
-    );
-  }
-
-  logger.info("Using calendar account for event lookup", {
-    requestedEmailAccountId: context.emailAccountId,
-    calendarEmailAccountId: calendarEmailAccount.id,
-    calendarEmail: CALENDAR_EMAIL,
-  });
-
-  const providers = await createCalendarEventProviders(
-    calendarEmailAccount.id, // Use calendar account, not context.emailAccountId
+  const { providers } = await resolveCalendarAccount({
+    userId: context.userId,
+    emailAccountId: context.emailAccountId,
+    from: params.from,
     logger,
-  );
-
-  if (providers.length === 0) {
-    throw new Error("No calendar connection found for this email account");
-  }
+  });
 
   // Try to fetch the event from each provider
   for (const provider of providers) {
     try {
-      logger.info("Attempting to fetch event from provider", {
-        eventId,
-        providerType: provider.constructor.name,
-      });
       const event = await provider.fetchEventById(eventId);
       if (event) {
-        logger.info("Event found successfully", {
+        logger.trace("Event found successfully", {
           eventId,
           title: event.title,
         });
@@ -193,11 +146,10 @@ export async function getCalendarEvent(
 
 /**
  * Get calendar availability (free/busy)
- * Always uses sudiptai26.889@gmail.com for calendar operations
  */
 export async function getCalendarAvailability(
   context: McpToolContext,
-  params: { startDate: string; endDate: string },
+  params: { startDate: string; endDate: string; from?: string },
 ) {
   logger.info("MCP tool: get_calendar_availability", {
     userId: context.userId,
@@ -206,32 +158,14 @@ export async function getCalendarAvailability(
     endDate: params.endDate,
   });
 
-  // IMPORTANT: Calendar events are always in sudiptai26.889@gmail.com account
-  const CALENDAR_EMAIL = "sudiptai26.889@gmail.com";
-  const calendarEmailAccount = await prisma.emailAccount.findFirst({
-    where: {
-      userId: context.userId,
-      email: CALENDAR_EMAIL,
-    },
+  const { providers } = await resolveCalendarAccount({
+    userId: context.userId,
+    emailAccountId: context.emailAccountId,
+    from: params.from,
+    logger,
   });
 
-  if (!calendarEmailAccount) {
-    throw new Error(
-      `Calendar account (${CALENDAR_EMAIL}) not found. Please connect this Google account with calendar permissions.`,
-    );
-  }
-
-  const providers = await createCalendarEventProviders(
-    calendarEmailAccount.id,
-    logger,
-  );
-
-  if (providers.length === 0) {
-    throw new Error("No calendar connection found for this email account");
-  }
-
-  // Fetch events from all providers
-  const allEvents = await Promise.all(
+  const results = await Promise.all(
     providers.map((provider) =>
       provider.fetchEvents({
         timeMin: new Date(params.startDate),
@@ -241,8 +175,9 @@ export async function getCalendarAvailability(
     ),
   );
 
-  // Flatten events
-  const events = allEvents.flat();
+  const events = results.flatMap(
+    ({ events: providerEvents = [] }) => providerEvents,
+  );
 
   // Calculate busy periods (all events block time by default)
   const busyPeriods = events
@@ -303,7 +238,6 @@ export async function getCalendarAvailability(
 
 /**
  * Create a new calendar event with DharaHIL approval
- * Always uses sudiptai26.889@gmail.com for calendar operations
  */
 export async function createCalendarEvent(
   context: McpToolContext,
@@ -315,36 +249,29 @@ export async function createCalendarEvent(
     description?: string;
     location?: string;
     sendInvite?: boolean;
+    timeZone?: string;
+    notify?: NotifyLevel;
+    idempotencyKey?: string;
+    recurrence?: string[];
+    from?: string;
   },
 ) {
   logger.info("MCP tool: create_calendar_event", {
     userId: context.userId,
     emailAccountId: context.emailAccountId,
-    title: params.title,
     startTime: params.startTime,
     endTime: params.endTime,
+  });
+  logger.trace("MCP tool: create_calendar_event details", {
+    title: params.title,
     attendees: params.attendees,
   });
 
-  // Always use sudiptai26.889@gmail.com for calendar operations
-  const CALENDAR_EMAIL = "sudiptai26.889@gmail.com";
-  const calendarEmailAccount = await prisma.emailAccount.findFirst({
-    where: {
-      userId: context.userId,
-      email: CALENDAR_EMAIL,
-    },
-    include: { account: true },
-  });
-
-  if (!calendarEmailAccount) {
-    throw new Error(
-      `Calendar account (${CALENDAR_EMAIL}) not found. Please connect this Google account with calendar permissions.`,
-    );
-  }
-
-  logger.info("Using calendar account", {
-    email: calendarEmailAccount.email,
-    hasRefreshToken: !!calendarEmailAccount.account?.refresh_token,
+  const { account, providers } = await resolveCalendarAccount({
+    userId: context.userId,
+    emailAccountId: context.emailAccountId,
+    from: params.from,
+    logger,
   });
 
   const hasExternalAttendees = params.attendees?.some((email) =>
@@ -414,52 +341,35 @@ export async function createCalendarEvent(
     });
   }
 
-  // Get Google Calendar client
-  const calendar = await getCalendarClientWithRefresh({
-    accessToken: calendarEmailAccount.account?.access_token || null,
-    refreshToken: calendarEmailAccount.account?.refresh_token || null,
-    expiresAt: calendarEmailAccount.account?.expires_at
-      ? new Date(calendarEmailAccount.account.expires_at).getTime()
-      : null,
-    emailAccountId: calendarEmailAccount.id,
-    logger,
-  });
+  const timeZone = resolveTimeZone(params.timeZone, account);
 
-  // Create the event
-  const eventResource = {
-    summary: params.title,
-    description: params.description,
-    location: params.location,
-    start: {
-      dateTime: params.startTime,
-      timeZone: "UTC",
+  const event = await providers[0]!.createEvent(
+    {
+      title: params.title,
+      description: params.description,
+      location: params.location,
+      start: toEventTime(params.startTime, timeZone),
+      end: toEventTime(params.endTime, timeZone),
+      attendees: params.attendees,
+      recurrence: params.recurrence,
     },
-    end: {
-      dateTime: params.endTime,
-      timeZone: "UTC",
+    {
+      notify: params.notify ?? "all",
+      idempotencyKey: params.idempotencyKey,
     },
-    attendees: params.attendees?.map((email) => ({ email })),
-  };
+  );
 
-  const result = await calendar.events.insert({
-    calendarId: "primary",
-    sendNotifications: sendInvite,
-    requestBody: eventResource,
-  });
-
-  logger.info("Calendar event created successfully", {
-    eventId: result.data.id,
-    title: params.title,
-  });
+  logger.info("Calendar event created successfully", { eventId: event.id });
+  logger.trace("Calendar event created", { title: params.title });
 
   return {
     success: true,
-    eventId: result.data.id || "",
-    eventUrl: result.data.htmlLink || "",
-    summary: result.data.summary || "",
-    start: result.data.start?.dateTime || "",
-    end: result.data.end?.dateTime || "",
-    attendees: result.data.attendees?.map((a) => ({
+    eventId: event.id,
+    eventUrl: event.eventUrl || "",
+    summary: event.title,
+    start: event.startTime.toISOString(),
+    end: event.endTime.toISOString(),
+    attendees: event.attendees.map((a) => ({
       email: a.email,
       responseStatus: a.responseStatus,
     })),
@@ -471,4 +381,17 @@ function isExternalDomain(email: string): boolean {
   const internalDomains = ["sudiptadhara.in", "localhost"];
   const domain = email.split("@")[1]?.toLowerCase();
   return !internalDomains.some((internal) => domain?.includes(internal));
+}
+
+function resolveTimeZone(
+  explicit: string | undefined,
+  account: { timezone: string | null },
+): string {
+  const zone = explicit ?? account.timezone ?? "";
+  if (!zone) {
+    throw new Error(
+      "Timezone could not be resolved. Pass timeZone as an IANA name (e.g. 'Asia/Kolkata'), or set a timezone on the account.",
+    );
+  }
+  return zone;
 }

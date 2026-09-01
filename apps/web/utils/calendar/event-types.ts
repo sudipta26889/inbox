@@ -78,10 +78,12 @@ export interface CalendarEventProvider {
   ): Promise<void>;
   fetchEventById(eventId: string): Promise<CalendarEvent | null>;
   fetchEvents(options: {
-    timeMin?: Date;
-    timeMax?: Date;
     maxResults?: number;
-  }): Promise<CalendarEvent[]>;
+    pageToken?: string;
+    query?: string;
+    timeMax?: Date;
+    timeMin?: Date;
+  }): Promise<{ events: CalendarEvent[]; nextPageToken: string | null }>;
   fetchEventsWithAttendee(options: {
     attendeeEmail: string;
     timeMin: Date;

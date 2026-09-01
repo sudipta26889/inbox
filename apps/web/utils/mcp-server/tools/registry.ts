@@ -459,7 +459,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
   create_calendar_event: {
     name: "create_calendar_event",
     description:
-      "Create a new calendar event with attendees on sudiptai26.889@gmail.com (Sudipta's personal Google Calendar). REQUIRES HUMAN APPROVAL via WhatsApp/Telegram before the event is created.",
+      "Create a new calendar event with attendees on the caller's connected Google Calendar. REQUIRES HUMAN APPROVAL via WhatsApp/Telegram before the event is created.",
     inputSchema: {
       type: "object",
       properties: {
