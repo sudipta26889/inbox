@@ -3,7 +3,9 @@ import { getCalendarClientWithRefresh } from "@/utils/outlook/calendar-client";
 import type {
   CalendarEvent,
   CalendarEventProvider,
+  CalendarSummary,
 } from "@/utils/calendar/event-types";
+import { CalendarWriteUnsupportedError } from "@/utils/calendar/errors";
 import type { Logger } from "@/utils/logger";
 
 export interface MicrosoftCalendarConnectionParams {
@@ -136,6 +138,34 @@ export class MicrosoftCalendarEventProvider implements CalendarEventProvider {
       });
       return null;
     }
+  }
+
+  async listCalendars(): Promise<CalendarSummary[]> {
+    throw new CalendarWriteUnsupportedError("Outlook", "calendar listing");
+  }
+
+  async createEvent(): Promise<CalendarEvent> {
+    throw new CalendarWriteUnsupportedError("Outlook", "event creation");
+  }
+
+  async updateEvent(): Promise<CalendarEvent> {
+    throw new CalendarWriteUnsupportedError("Outlook", "event update");
+  }
+
+  async deleteEvent(): Promise<void> {
+    throw new CalendarWriteUnsupportedError("Outlook", "event deletion");
+  }
+
+  async respondToEvent(): Promise<void> {
+    throw new CalendarWriteUnsupportedError("Outlook", "RSVP");
+  }
+
+  async listEventInstances(): Promise<CalendarEvent[]> {
+    throw new CalendarWriteUnsupportedError("Outlook", "instance listing");
+  }
+
+  async changeAttendees(): Promise<CalendarEvent> {
+    throw new CalendarWriteUnsupportedError("Outlook", "attendee changes");
   }
 
   private parseEvent(event: MicrosoftEvent) {
