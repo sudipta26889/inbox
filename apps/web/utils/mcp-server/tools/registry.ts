@@ -549,6 +549,201 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     requiredScope: "calendar:write",
   },
 
+  list_calendars: {
+    name: "list_calendars",
+    description:
+      "List the calendars available on the caller's connected account, including each calendar's accessRole (e.g. 'owner', 'writer', 'reader') so you can predict whether a write to it will be accepted.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        from: {
+          type: "string",
+          description:
+            "Optional: email address of the account whose calendars to list. Defaults to the authorized account. Use list_email_accounts to see available addresses.",
+        },
+      },
+      required: [],
+    },
+    annotations: {
+      readOnlyHint: true,
+    },
+    handler: async (context, params) => {
+      const { listCalendars } = await import("./calendar-tools");
+      return listCalendars(context, params);
+    },
+    requiredScope: "calendar:read",
+  },
+
+  update_calendar_event: {
+    name: "update_calendar_event",
+    description:
+      "Update fields on an existing calendar event on the caller's connected Google Calendar. Only the fields you pass change; everything else is kept. To add or remove attendees use addAttendees/removeAttendees — they are applied as a delta, not a replacement list, so existing guests are never dropped. For a recurring event, scope 'thisAndFollowing' is not supported by the provider and will fail; only 'this' (one occurrence) or 'all' (default, the whole series) work. REQUIRES HUMAN APPROVAL via WhatsApp/Telegram before the event is changed.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        eventId: {
+          type: "string",
+          description: "ID of the event to update",
+        },
+        title: {
+          type: "string",
+          description: "New event title/summary (optional)",
+        },
+        description: {
+          type: "string",
+          description: "New event description/notes (optional)",
+        },
+        location: {
+          type: "string",
+          description: "New event location (optional)",
+        },
+        startTime: {
+          type: "string",
+          description:
+            "New start date/time (ISO 8601 format). Provide endTime too if you change this.",
+        },
+        endTime: {
+          type: "string",
+          description:
+            "New end date/time (ISO 8601 format). Provide startTime too if you change this.",
+        },
+        timeZone: {
+          type: "string",
+          description:
+            "Optional: IANA timezone name (e.g. 'Asia/Kolkata') for startTime/endTime. Defaults to the account's configured timezone.",
+        },
+        addAttendees: {
+          type: "array",
+          items: { type: "string" },
+          description:
+            "Attendee email addresses to add, without affecting existing attendees.",
+        },
+        removeAttendees: {
+          type: "array",
+          items: { type: "string" },
+          description:
+            "Attendee email addresses to remove, without affecting the rest.",
+        },
+        scope: {
+          type: "string",
+          enum: ["this", "all"],
+          description:
+            "For recurring events: 'this' changes only one occurrence, 'all' (default) changes the whole series. 'thisAndFollowing' is not supported.",
+          default: "all",
+        },
+        notify: {
+          type: "string",
+          enum: ["all", "external", "none"],
+          description:
+            "Who receives an update email. Defaults to all. Use 'none' only when you are sure no one should be notified — Google warns it can also prevent the event syncing to external calendars, or lose it entirely.",
+          default: "all",
+        },
+        from: {
+          type: "string",
+          description:
+            "Optional: email address of the account whose calendar to use. Defaults to the authorized account. Use list_email_accounts to see available addresses.",
+        },
+      },
+      required: ["eventId"],
+    },
+    annotations: {
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
+    handler: async (context, params) => {
+      const { updateCalendarEvent } = await import("./calendar-tools");
+      return updateCalendarEvent(context, params);
+    },
+    requiredScope: "calendar:write",
+  },
+
+  delete_calendar_event: {
+    name: "delete_calendar_event",
+    description:
+      "Delete a calendar event, or cancel a single occurrence of a recurring event. Cancellation emails are sent to attendees by default. For a recurring event, pass scope: 'this' to cancel only one occurrence — the default removes the entire series. scope: 'thisAndFollowing' is not supported by the provider and will fail.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        eventId: { type: "string", description: "ID of the event to delete" },
+        scope: {
+          type: "string",
+          enum: ["this", "thisAndFollowing", "all"],
+          description:
+            "For recurring events: 'this' cancels one occurrence, 'all' (default) removes the whole series. 'thisAndFollowing' is not supported and will fail.",
+          default: "all",
+        },
+        notify: {
+          type: "string",
+          enum: ["all", "external", "none"],
+          description: "Who receives a cancellation email. Defaults to all.",
+          default: "all",
+        },
+        from: {
+          type: "string",
+          description:
+            "Email account owning the calendar. Defaults to the authorized account; use list_email_accounts to see options.",
+        },
+      },
+      required: ["eventId"],
+    },
+    annotations: {
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
+    handler: async (context, params) => {
+      const { deleteCalendarEvent } = await import("./calendar-tools");
+      return deleteCalendarEvent(context, params);
+    },
+    requiredScope: "calendar:write",
+  },
+
+  respond_to_calendar_event: {
+    name: "respond_to_calendar_event",
+    description:
+      "RSVP to a calendar invitation by setting your own response status (accepted, declined, tentative). Only your attendee row changes — everything else on the event is organizer-owned and untouched. Use update_calendar_event to change event details instead; this tool will not do that.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        eventId: {
+          type: "string",
+          description: "ID of the event to respond to",
+        },
+        responseStatus: {
+          type: "string",
+          enum: ["accepted", "declined", "tentative"],
+          description: "Your RSVP response.",
+        },
+        comment: {
+          type: "string",
+          description: "Optional comment to include with your response.",
+        },
+        calendarId: {
+          type: "string",
+          description:
+            "Optional: calendar ID the event lives on, if not the primary calendar.",
+        },
+        from: {
+          type: "string",
+          description:
+            "Optional: email address of the account whose calendar to use. Defaults to the authorized account. Use list_email_accounts to see available addresses.",
+        },
+      },
+      required: ["eventId", "responseStatus"],
+    },
+    annotations: {
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
+    handler: async (context, params) => {
+      const { respondToCalendarEvent } = await import("./calendar-tools");
+      return respondToCalendarEvent(context, params);
+    },
+    requiredScope: "calendar:write",
+  },
+
   get_email_stats: {
     name: "get_email_stats",
     description: "Get email statistics and analytics for a time period.",

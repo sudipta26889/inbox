@@ -3,6 +3,7 @@ import type { McpToolContext } from "./registry";
 import { resolveCalendarAccount } from "@/utils/calendar/resolve-account";
 import { toEventTime } from "@/utils/calendar/event-time";
 import type { NotifyLevel } from "@/utils/calendar/event-time";
+import type { RecurrenceScope } from "@/utils/calendar/event-types";
 import { dharahilClient } from "@/utils/dharahil/client";
 import { env } from "@/env";
 import { extractEventId } from "./url-parser";
@@ -379,6 +380,284 @@ export async function createCalendarEvent(
       email: a.email,
       responseStatus: a.responseStatus,
     })),
+  };
+}
+
+/**
+ * List calendars available to the account, across all connected providers.
+ */
+export async function listCalendars(
+  context: McpToolContext,
+  params: { from?: string },
+) {
+  logger.info("MCP tool: list_calendars", { userId: context.userId });
+
+  const { account, providers } = await resolveCalendarAccount({
+    userId: context.userId,
+    emailAccountId: context.emailAccountId,
+    from: params.from,
+    logger,
+  });
+
+  const calendars = (
+    await Promise.all(providers.map((p) => p.listCalendars()))
+  ).flat();
+
+  return { calendars, count: calendars.length, account: account.email };
+}
+
+/**
+ * Update an existing calendar event, with DharaHIL approval. Attendee edits
+ * are deltas (add/remove) applied via a separate changeAttendees call, never
+ * folded into the patch — Google's events.patch overwrites array fields
+ * wholesale, so a replacement write would silently uninvite every guest not
+ * named here.
+ */
+export async function updateCalendarEvent(
+  context: McpToolContext,
+  params: {
+    addAttendees?: string[];
+    removeAttendees?: string[];
+    description?: string;
+    endTime?: string;
+    eventId: string;
+    from?: string;
+    location?: string;
+    notify?: NotifyLevel;
+    scope?: RecurrenceScope;
+    startTime?: string;
+    timeZone?: string;
+    title?: string;
+  },
+) {
+  logger.info("MCP tool: update_calendar_event", { userId: context.userId });
+  logger.trace("MCP tool: update_calendar_event details", {
+    eventId: params.eventId,
+    title: params.title,
+    addAttendees: params.addAttendees,
+    removeAttendees: params.removeAttendees,
+  });
+
+  const { account, providers } = await resolveCalendarAccount({
+    userId: context.userId,
+    emailAccountId: context.emailAccountId,
+    from: params.from,
+    logger,
+  });
+
+  // DharaHIL approval gate for ALL calendar event updates
+  if (env.NEXT_PUBLIC_DHARAHIL_ENABLED) {
+    logger.info("DharaHIL: Requesting approval for calendar event update", {
+      eventId: params.eventId,
+      title: params.title,
+    });
+
+    const decision = await dharahilClient.runApprovalLoop({
+      toolName: "update_calendar_event",
+      toolArgs: {
+        eventId: params.eventId,
+        title: params.title,
+        startTime: params.startTime,
+        endTime: params.endTime,
+        addAttendees: params.addAttendees || [],
+        removeAttendees: params.removeAttendees || [],
+        description: params.description,
+        location: params.location,
+      },
+      context: {
+        agentId: "inbox-calendar-provider",
+        runId: context.userId,
+        stepId: "update_event",
+        contextSummary: `Update calendar event ${params.eventId}${params.title ? `: ${params.title}` : ""}`,
+        riskLevel: "MEDIUM",
+        tags: ["calendar", "google", "update"],
+        idempotencyKey: `calendar_update_${params.eventId}_${Date.now()}`,
+        metadata: {
+          provider: "google",
+          eventId: params.eventId,
+          add_attendee_count: String(params.addAttendees?.length || 0),
+          remove_attendee_count: String(params.removeAttendees?.length || 0),
+        },
+      },
+    });
+
+    if (dharahilClient.wasDenied(decision)) {
+      const errorMsg =
+        decision.action === "EXPIRED"
+          ? "Calendar event update request timed out. The human approval window expired before a response was received. Please try again."
+          : `Calendar event update denied by human reviewer: ${decision.action}${decision.reason ? ` - ${decision.reason}` : ""}`;
+      throw new Error(errorMsg);
+    }
+
+    if (dharahilClient.shouldRevise(decision)) {
+      throw new Error(
+        `Calendar event update revision requested: ${decision.revise_input || "No specific instructions provided"}`,
+      );
+    }
+
+    logger.info("DharaHIL: Calendar event update approved", {
+      eventId: params.eventId,
+      action: decision.action,
+    });
+  }
+
+  const timeZone =
+    params.startTime || params.endTime
+      ? resolveTimeZone(params.timeZone, account)
+      : "";
+
+  const event = await providers[0]!.updateEvent(
+    params.eventId,
+    {
+      ...(params.title === undefined ? {} : { title: params.title }),
+      ...(params.description === undefined
+        ? {}
+        : { description: params.description }),
+      ...(params.location === undefined ? {} : { location: params.location }),
+      ...(params.startTime === undefined
+        ? {}
+        : { start: toEventTime(params.startTime, timeZone) }),
+      ...(params.endTime === undefined
+        ? {}
+        : { end: toEventTime(params.endTime, timeZone) }),
+    },
+    { notify: params.notify ?? "all", scope: params.scope },
+  );
+
+  // Attendee edits are a separate, read-modify-write call: folding them into
+  // the patch above would discard every guest not named in this request.
+  if (params.addAttendees || params.removeAttendees) {
+    await providers[0]!.changeAttendees(
+      params.eventId,
+      { add: params.addAttendees, remove: params.removeAttendees },
+      { notify: params.notify ?? "all" },
+    );
+  }
+
+  return { success: true, eventId: event.id, eventUrl: event.eventUrl ?? "" };
+}
+
+/**
+ * Delete a calendar event, or cancel one occurrence of a recurring event,
+ * with DharaHIL approval.
+ */
+export async function deleteCalendarEvent(
+  context: McpToolContext,
+  params: {
+    eventId: string;
+    from?: string;
+    notify?: NotifyLevel;
+    scope?: RecurrenceScope;
+  },
+) {
+  logger.info("MCP tool: delete_calendar_event", { userId: context.userId });
+  logger.trace("MCP tool: delete_calendar_event details", {
+    eventId: params.eventId,
+  });
+
+  const { providers } = await resolveCalendarAccount({
+    userId: context.userId,
+    emailAccountId: context.emailAccountId,
+    from: params.from,
+    logger,
+  });
+
+  // DharaHIL approval gate for ALL calendar event deletes
+  if (env.NEXT_PUBLIC_DHARAHIL_ENABLED) {
+    logger.info("DharaHIL: Requesting approval for calendar event deletion", {
+      eventId: params.eventId,
+      scope: params.scope,
+    });
+
+    const decision = await dharahilClient.runApprovalLoop({
+      toolName: "delete_calendar_event",
+      toolArgs: {
+        eventId: params.eventId,
+        scope: params.scope,
+      },
+      context: {
+        agentId: "inbox-calendar-provider",
+        runId: context.userId,
+        stepId: "delete_event",
+        contextSummary: `Delete calendar event ${params.eventId}${params.scope === "this" ? " (one occurrence)" : ""}`,
+        riskLevel: "HIGH",
+        tags: ["calendar", "google", "delete"],
+        idempotencyKey: `calendar_delete_${params.eventId}_${Date.now()}`,
+        metadata: {
+          provider: "google",
+          eventId: params.eventId,
+          scope: params.scope ?? "all",
+        },
+      },
+    });
+
+    if (dharahilClient.wasDenied(decision)) {
+      const errorMsg =
+        decision.action === "EXPIRED"
+          ? "Calendar event deletion request timed out. The human approval window expired before a response was received. Please try again."
+          : `Calendar event deletion denied by human reviewer: ${decision.action}${decision.reason ? ` - ${decision.reason}` : ""}`;
+      throw new Error(errorMsg);
+    }
+
+    if (dharahilClient.shouldRevise(decision)) {
+      throw new Error(
+        `Calendar event deletion revision requested: ${decision.revise_input || "No specific instructions provided"}`,
+      );
+    }
+
+    logger.info("DharaHIL: Calendar event deletion approved", {
+      eventId: params.eventId,
+      action: decision.action,
+    });
+  }
+
+  await providers[0]!.deleteEvent(params.eventId, {
+    notify: params.notify ?? "all",
+    scope: params.scope,
+  });
+
+  return { success: true, eventId: params.eventId };
+}
+
+/**
+ * RSVP to a calendar invitation. Not gated by DharaHIL: this only changes
+ * the caller's own responseStatus row, nothing organizer-owned on the event.
+ */
+export async function respondToCalendarEvent(
+  context: McpToolContext,
+  params: {
+    calendarId?: string;
+    comment?: string;
+    eventId: string;
+    from?: string;
+    responseStatus: "accepted" | "declined" | "tentative";
+  },
+) {
+  logger.info("MCP tool: respond_to_calendar_event", {
+    userId: context.userId,
+  });
+  logger.trace("MCP tool: respond_to_calendar_event details", {
+    eventId: params.eventId,
+    responseStatus: params.responseStatus,
+  });
+
+  const { providers } = await resolveCalendarAccount({
+    userId: context.userId,
+    emailAccountId: context.emailAccountId,
+    from: params.from,
+    logger,
+  });
+
+  await providers[0]!.respondToEvent(params.eventId, {
+    responseStatus: params.responseStatus,
+    comment: params.comment,
+    calendarId: params.calendarId,
+  });
+
+  return {
+    success: true,
+    eventId: params.eventId,
+    responseStatus: params.responseStatus,
   };
 }
 

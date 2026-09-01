@@ -1,5 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { createCalendarEvent, searchCalendar } from "./calendar-tools";
+import {
+  createCalendarEvent,
+  deleteCalendarEvent,
+  listCalendars,
+  respondToCalendarEvent,
+  searchCalendar,
+  updateCalendarEvent,
+} from "./calendar-tools";
 import type { McpToolContext } from "./registry";
 
 vi.mock("server-only", () => ({}));
@@ -9,6 +16,11 @@ vi.mock("@/env", () => ({ env: { NEXT_PUBLIC_DHARAHIL_ENABLED: false } }));
 const provider = {
   createEvent: vi.fn(),
   fetchEvents: vi.fn(),
+  updateEvent: vi.fn(),
+  deleteEvent: vi.fn(),
+  changeAttendees: vi.fn(),
+  respondToEvent: vi.fn(),
+  listCalendars: vi.fn(),
 };
 const resolve = vi.fn();
 vi.mock("@/utils/calendar/resolve-account", () => ({
@@ -174,5 +186,135 @@ describe("searchCalendar", () => {
     });
 
     expect(provider.fetchEvents.mock.calls[0][0].pageToken).toBe("tok-2");
+  });
+});
+
+describe("calendar write tools", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resolve.mockResolvedValue({
+      account: { id: "acct-1", email: "me@x.com", timezone: "Asia/Kolkata" },
+      providers: [provider],
+    });
+  });
+
+  it("defaults update notify to all, never to the lossy 'none'", async () => {
+    // Google warns 'none' can stop events syncing or lose them entirely, so
+    // it must be an explicit agent choice rather than our default.
+    provider.updateEvent = vi.fn().mockResolvedValue({
+      id: "evt-1",
+      title: "Renamed",
+      startTime: new Date(),
+      endTime: new Date(),
+      attendees: [],
+    });
+
+    await updateCalendarEvent(context, { eventId: "evt-1", title: "Renamed" });
+
+    expect(provider.updateEvent.mock.calls[0][2].notify).toBe("all");
+  });
+
+  it("still lets the agent opt into silence", async () => {
+    provider.updateEvent = vi.fn().mockResolvedValue({
+      id: "evt-1",
+      title: "Renamed",
+      startTime: new Date(),
+      endTime: new Date(),
+      attendees: [],
+    });
+
+    await updateCalendarEvent(context, {
+      eventId: "evt-1",
+      title: "Renamed",
+      notify: "none",
+    });
+
+    expect(provider.updateEvent.mock.calls[0][2].notify).toBe("none");
+  });
+
+  it("routes attendee changes through changeAttendees, never through the patch", async () => {
+    // A whole-array write via updateEvent's patch would silently uninvite
+    // every attendee not named in this call, so add/remove must go through
+    // the dedicated delta call instead.
+    provider.updateEvent = vi.fn().mockResolvedValue({
+      id: "evt-1",
+      title: "Sync",
+      startTime: new Date(),
+      endTime: new Date(),
+      attendees: [],
+    });
+    provider.changeAttendees = vi.fn().mockResolvedValue({
+      id: "evt-1",
+      title: "Sync",
+      startTime: new Date(),
+      endTime: new Date(),
+      attendees: [],
+    });
+
+    await updateCalendarEvent(context, {
+      eventId: "evt-1",
+      addAttendees: ["new@x.com"],
+      removeAttendees: ["old@x.com"],
+    });
+
+    expect(provider.updateEvent.mock.calls[0][1]).not.toHaveProperty(
+      "attendees",
+    );
+    expect(provider.changeAttendees).toHaveBeenCalledWith(
+      "evt-1",
+      { add: ["new@x.com"], remove: ["old@x.com"] },
+      { notify: "all" },
+    );
+  });
+
+  it("defaults delete notify to all so cancellations are delivered", async () => {
+    provider.deleteEvent = vi.fn().mockResolvedValue(undefined);
+
+    await deleteCalendarEvent(context, { eventId: "evt-1" });
+
+    expect(provider.deleteEvent.mock.calls[0][1].notify).toBe("all");
+  });
+
+  it("passes recurrence scope through to the provider", async () => {
+    provider.deleteEvent = vi.fn().mockResolvedValue(undefined);
+
+    await deleteCalendarEvent(context, { eventId: "evt-1", scope: "this" });
+
+    expect(provider.deleteEvent.mock.calls[0][1].scope).toBe("this");
+  });
+
+  it("RSVPs without touching anything else on the event", async () => {
+    provider.respondToEvent = vi.fn().mockResolvedValue(undefined);
+
+    await respondToCalendarEvent(context, {
+      eventId: "evt-1",
+      responseStatus: "accepted",
+    });
+
+    expect(provider.respondToEvent).toHaveBeenCalledWith("evt-1", {
+      responseStatus: "accepted",
+      comment: undefined,
+      calendarId: undefined,
+    });
+  });
+
+  it("lists calendars with primary and accessRole", async () => {
+    provider.listCalendars = vi.fn().mockResolvedValue([
+      {
+        id: "c1",
+        summary: "Me",
+        timeZone: "Asia/Kolkata",
+        primary: true,
+        accessRole: "owner",
+      },
+    ]);
+
+    const result = await listCalendars(context, {});
+
+    expect(result.calendars[0]).toMatchObject({
+      id: "c1",
+      primary: true,
+      accessRole: "owner",
+    });
   });
 });
