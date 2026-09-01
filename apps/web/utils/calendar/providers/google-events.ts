@@ -1,8 +1,14 @@
 import type { calendar_v3 } from "@googleapis/calendar";
 import { getCalendarClientWithRefresh } from "@/utils/calendar/client";
+import { toSendUpdates } from "@/utils/calendar/event-time";
+import type { NotifyLevel } from "@/utils/calendar/event-time";
 import type {
+  AttendeeChange,
   CalendarEvent,
+  CalendarEventInput,
   CalendarEventProvider,
+  CalendarSummary,
+  RecurrenceScope,
 } from "@/utils/calendar/event-types";
 import type { Logger } from "@/utils/logger";
 
@@ -14,6 +20,9 @@ export interface GoogleCalendarConnectionParams {
 }
 
 export class GoogleCalendarEventProvider implements CalendarEventProvider {
+  // Google accepts base32hex ids only: lowercase a-v and 0-9, 5-1024 chars.
+  private static readonly ID_PATTERN = /^[a-v0-9]{5,1024}$/;
+
   private readonly connection: GoogleCalendarConnectionParams;
   private readonly logger: Logger;
 
@@ -30,6 +39,219 @@ export class GoogleCalendarEventProvider implements CalendarEventProvider {
       emailAccountId: this.connection.emailAccountId,
       logger: this.logger,
     });
+  }
+
+  async listCalendars(): Promise<CalendarSummary[]> {
+    const client = await this.getClient();
+    const response = await client.calendarList.list({ maxResults: 250 });
+
+    return (response.data.items ?? []).map((item) => ({
+      id: item.id ?? "",
+      summary: item.summary ?? "",
+      timeZone: item.timeZone ?? "",
+      primary: item.primary ?? false,
+      accessRole: item.accessRole ?? "",
+    }));
+  }
+
+  async createEvent(
+    input: CalendarEventInput,
+    options: {
+      calendarId?: string;
+      idempotencyKey?: string;
+      notify: NotifyLevel;
+    },
+  ): Promise<CalendarEvent> {
+    if (
+      options.idempotencyKey &&
+      !GoogleCalendarEventProvider.ID_PATTERN.test(options.idempotencyKey)
+    ) {
+      throw new Error(
+        "idempotencyKey must be 5-1024 characters using only a-v and 0-9 (Google's base32hex event id format).",
+      );
+    }
+
+    const client = await this.getClient();
+    const response = await client.events.insert({
+      calendarId: options.calendarId ?? "primary",
+      sendUpdates: toSendUpdates(options.notify),
+      requestBody: {
+        ...(options.idempotencyKey ? { id: options.idempotencyKey } : {}),
+        summary: input.title,
+        description: input.description,
+        location: input.location,
+        start: input.start,
+        end: input.end,
+        recurrence: input.recurrence,
+        attendees: input.attendees?.map((email) => ({ email })),
+      },
+    });
+
+    return toCalendarEvent(response.data);
+  }
+
+  async updateEvent(
+    eventId: string,
+    // `attendees` is deliberately excluded — use changeAttendees.
+    patch: Partial<Omit<CalendarEventInput, "attendees">>,
+    options: {
+      calendarId?: string;
+      notify: NotifyLevel;
+      scope?: RecurrenceScope;
+    },
+  ): Promise<CalendarEvent> {
+    const client = await this.getClient();
+    const response = await client.events.patch({
+      calendarId: options.calendarId ?? "primary",
+      eventId,
+      sendUpdates: toSendUpdates(options.notify),
+      requestBody: {
+        ...(patch.title === undefined ? {} : { summary: patch.title }),
+        ...(patch.description === undefined
+          ? {}
+          : { description: patch.description }),
+        ...(patch.location === undefined ? {} : { location: patch.location }),
+        ...(patch.start === undefined ? {} : { start: patch.start }),
+        ...(patch.end === undefined ? {} : { end: patch.end }),
+        ...(patch.recurrence === undefined
+          ? {}
+          : { recurrence: patch.recurrence }),
+      },
+    });
+
+    return toCalendarEvent(response.data);
+  }
+
+  /**
+   * Attendee changes are deltas, never a whole-array write.
+   *
+   * `events.patch` documents that "array fields, if specified, overwrite the
+   * existing arrays; this discards any previous array elements". Passing the
+   * attendees an agent happens to mention would silently uninvite everyone
+   * else on the event, so we read the current list and merge.
+   */
+  async changeAttendees(
+    eventId: string,
+    change: AttendeeChange,
+    options: { calendarId?: string; notify: NotifyLevel },
+  ): Promise<CalendarEvent> {
+    const client = await this.getClient();
+    const calendarId = options.calendarId ?? "primary";
+
+    const current = await client.events.get({ calendarId, eventId });
+    const existing = current.data.attendees ?? [];
+
+    const removals = new Set(
+      (change.remove ?? []).map((email) => email.toLowerCase()),
+    );
+    const kept = existing.filter(
+      (a) => !removals.has((a.email ?? "").toLowerCase()),
+    );
+    const present = new Set(kept.map((a) => (a.email ?? "").toLowerCase()));
+    const additions = (change.add ?? [])
+      .filter((email) => !present.has(email.toLowerCase()))
+      .map((email) => ({ email }));
+
+    const response = await client.events.patch({
+      calendarId,
+      eventId,
+      sendUpdates: toSendUpdates(options.notify),
+      requestBody: { attendees: [...kept, ...additions] },
+    });
+
+    return toCalendarEvent(response.data);
+  }
+
+  async deleteEvent(
+    eventId: string,
+    options: {
+      calendarId?: string;
+      notify: NotifyLevel;
+      scope?: RecurrenceScope;
+    },
+  ): Promise<void> {
+    const client = await this.getClient();
+    const calendarId = options.calendarId ?? "primary";
+
+    // Cancelling one occurrence is a patch on the instance, not a delete of
+    // the series. A delete here would silently remove every occurrence.
+    if (options.scope === "this") {
+      await client.events.patch({
+        calendarId,
+        eventId,
+        sendUpdates: toSendUpdates(options.notify),
+        requestBody: { status: "cancelled" },
+      });
+      return;
+    }
+
+    await client.events.delete({
+      calendarId,
+      eventId,
+      sendUpdates: toSendUpdates(options.notify),
+    });
+  }
+
+  async respondToEvent(
+    eventId: string,
+    options: {
+      calendarId?: string;
+      comment?: string;
+      responseStatus: "accepted" | "declined" | "tentative";
+    },
+  ): Promise<void> {
+    const client = await this.getClient();
+    const calendarId = options.calendarId ?? "primary";
+
+    // Google has no RSVP endpoint: an attendee patches their own row, found
+    // via attendees[].self. Everything else on the event is organizer-owned.
+    const current = await client.events.get({ calendarId, eventId });
+    const attendees = current.data.attendees ?? [];
+    const me = attendees.find((a) => a.self);
+
+    if (!me) {
+      throw new Error(
+        "You are not an attendee of this event, so you cannot RSVP to it.",
+      );
+    }
+
+    await client.events.patch({
+      calendarId,
+      eventId,
+      sendUpdates: "all",
+      requestBody: {
+        attendees: attendees.map((a) =>
+          a.self
+            ? {
+                ...a,
+                responseStatus: options.responseStatus,
+                comment: options.comment,
+              }
+            : a,
+        ),
+      },
+    });
+  }
+
+  async listEventInstances(
+    eventId: string,
+    options: {
+      calendarId?: string;
+      maxResults?: number;
+      timeMax?: string;
+      timeMin?: string;
+    },
+  ): Promise<CalendarEvent[]> {
+    const client = await this.getClient();
+    const response = await client.events.instances({
+      calendarId: options.calendarId ?? "primary",
+      eventId,
+      maxResults: options.maxResults ?? 50,
+      timeMin: options.timeMin,
+      timeMax: options.timeMax,
+    });
+
+    return (response.data.items ?? []).map(toCalendarEvent);
   }
 
   async fetchEventsWithAttendee({
@@ -167,4 +389,29 @@ export class GoogleCalendarEventProvider implements CalendarEventProvider {
         })) || [],
     };
   }
+}
+
+function toCalendarEvent(event: calendar_v3.Schema$Event): CalendarEvent {
+  return {
+    id: event.id ?? "",
+    title: event.summary ?? "",
+    description: event.description ?? undefined,
+    location: event.location ?? undefined,
+    // Kept as the API returned them; the caller decides how to render.
+    startTime: new Date(
+      event.start?.dateTime ?? `${event.start?.date}T00:00:00Z`,
+    ),
+    endTime: new Date(event.end?.dateTime ?? `${event.end?.date}T00:00:00Z`),
+    eventUrl: event.htmlLink ?? undefined,
+    attendees: (event.attendees ?? []).map((a) => ({
+      email: a.email ?? "",
+      name: a.displayName ?? undefined,
+      responseStatus: a.responseStatus ?? undefined,
+    })),
+    recurringEventId: event.recurringEventId ?? undefined,
+    originalStartTime:
+      event.originalStartTime?.dateTime ??
+      event.originalStartTime?.date ??
+      undefined,
+  };
 }
