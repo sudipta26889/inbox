@@ -106,6 +106,32 @@ describe("GoogleCalendarEventProvider.createEvent", () => {
       ),
     ).rejects.toThrow("idempotencyKey");
   });
+
+  it("carries the Meet link through when the API response includes one", async () => {
+    client.events.insert.mockResolvedValueOnce({
+      data: {
+        id: "evt-1",
+        summary: "Sync",
+        start: { dateTime: "2026-09-02T14:00:00+05:30" },
+        end: { dateTime: "2026-09-02T15:00:00+05:30" },
+        htmlLink: "https://calendar.google.com/x",
+        hangoutLink: "https://meet.google.com/abc-defg-hij",
+      },
+    });
+
+    const event = await makeProvider().createEvent(
+      {
+        title: "Sync",
+        start: { dateTime: "2026-09-02T14:00:00", timeZone: "Asia/Kolkata" },
+        end: { dateTime: "2026-09-02T15:00:00", timeZone: "Asia/Kolkata" },
+      },
+      { notify: "all" },
+    );
+
+    expect(event.videoConferenceLink).toBe(
+      "https://meet.google.com/abc-defg-hij",
+    );
+  });
 });
 
 describe("GoogleCalendarEventProvider.deleteEvent", () => {
@@ -132,6 +158,20 @@ describe("GoogleCalendarEventProvider.deleteEvent", () => {
 
     expect(client.events.delete).toHaveBeenCalled();
     expect(client.events.delete.mock.calls[0][0].sendUpdates).toBe("all");
+  });
+
+  it("rejects thisAndFollowing instead of deleting the whole series", async () => {
+    // Google has no single-call "this and following" delete. Falling through
+    // to events.delete would destroy every past occurrence too.
+    await expect(
+      makeProvider().deleteEvent("evt-1", {
+        notify: "none",
+        scope: "thisAndFollowing",
+      }),
+    ).rejects.toThrow("thisAndFollowing");
+
+    expect(client.events.delete).not.toHaveBeenCalled();
+    expect(client.events.patch).not.toHaveBeenCalled();
   });
 });
 
@@ -181,6 +221,105 @@ describe("GoogleCalendarEventProvider.changeAttendees", () => {
     expect(
       client.events.patch.mock.calls[0][0].requestBody.attendees,
     ).toHaveLength(1);
+  });
+});
+
+describe("GoogleCalendarEventProvider.updateEvent", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("passes a wall-clock start time through byte-identical, never through a Date", async () => {
+    client.events.patch.mockResolvedValue({
+      data: {
+        id: "evt-1",
+        summary: "Sync",
+        start: { dateTime: "2026-09-02T14:00:00", timeZone: "Asia/Kolkata" },
+        end: { dateTime: "2026-09-02T15:00:00", timeZone: "Asia/Kolkata" },
+      },
+    });
+
+    await makeProvider().updateEvent(
+      "evt-1",
+      { start: { dateTime: "2026-09-02T14:00:00", timeZone: "Asia/Kolkata" } },
+      { notify: "none" },
+    );
+
+    expect(client.events.patch.mock.calls[0][0].requestBody.start).toEqual({
+      dateTime: "2026-09-02T14:00:00",
+      timeZone: "Asia/Kolkata",
+    });
+  });
+});
+
+describe("GoogleCalendarEventProvider.respondToEvent", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("patches only the caller's own attendee row, keeping every other guest invited", async () => {
+    // A regression to "patch only my own attendee object" (dropping the
+    // rest) would silently uninvite every other guest on events.patch's
+    // whole-array write.
+    client.events.get.mockResolvedValue({
+      data: {
+        attendees: [
+          { email: "organizer@x.com", responseStatus: "needsAction" },
+          { email: "me@x.com", self: true, responseStatus: "needsAction" },
+          { email: "other@x.com", responseStatus: "tentative" },
+        ],
+      },
+    });
+    client.events.patch.mockResolvedValue({ data: {} });
+
+    await makeProvider().respondToEvent("evt-1", {
+      responseStatus: "accepted",
+    });
+
+    const sent = client.events.patch.mock.calls[0][0].requestBody.attendees;
+    expect(sent).toEqual([
+      { email: "organizer@x.com", responseStatus: "needsAction" },
+      {
+        email: "me@x.com",
+        self: true,
+        responseStatus: "accepted",
+        comment: undefined,
+      },
+      { email: "other@x.com", responseStatus: "tentative" },
+    ]);
+  });
+});
+
+describe("GoogleCalendarEventProvider.listEventInstances", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("passes eventId and the time bounds through and maps the returned items", async () => {
+    client.events.instances.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: "evt-1_20260902T083000Z",
+            summary: "Sync",
+            start: { dateTime: "2026-09-02T14:00:00+05:30" },
+            end: { dateTime: "2026-09-02T15:00:00+05:30" },
+            recurringEventId: "evt-1",
+          },
+        ],
+      },
+    });
+
+    const result = await makeProvider().listEventInstances("evt-1", {
+      timeMin: "2026-09-01T00:00:00Z",
+      timeMax: "2026-09-30T00:00:00Z",
+    });
+
+    expect(client.events.instances.mock.calls[0][0]).toMatchObject({
+      eventId: "evt-1",
+      timeMin: "2026-09-01T00:00:00Z",
+      timeMax: "2026-09-30T00:00:00Z",
+    });
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      id: "evt-1_20260902T083000Z",
+      title: "Sync",
+      recurringEventId: "evt-1",
+    });
   });
 });
 

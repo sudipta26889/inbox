@@ -87,7 +87,7 @@ export class GoogleCalendarEventProvider implements CalendarEventProvider {
       },
     });
 
-    return toCalendarEvent(response.data);
+    return this.parseEvent(response.data);
   }
 
   async updateEvent(
@@ -119,7 +119,7 @@ export class GoogleCalendarEventProvider implements CalendarEventProvider {
       },
     });
 
-    return toCalendarEvent(response.data);
+    return this.parseEvent(response.data);
   }
 
   /**
@@ -159,7 +159,7 @@ export class GoogleCalendarEventProvider implements CalendarEventProvider {
       requestBody: { attendees: [...kept, ...additions] },
     });
 
-    return toCalendarEvent(response.data);
+    return this.parseEvent(response.data);
   }
 
   async deleteEvent(
@@ -172,6 +172,16 @@ export class GoogleCalendarEventProvider implements CalendarEventProvider {
   ): Promise<void> {
     const client = await this.getClient();
     const calendarId = options.calendarId ?? "primary";
+
+    // Google has no single-call "this and following" delete — it needs a
+    // two-call RRULE trim plus re-insert. Falling through to events.delete
+    // would destroy the whole series when the caller asked to keep history,
+    // so refuse loudly instead.
+    if (options.scope === "thisAndFollowing") {
+      throw new Error(
+        "scope 'thisAndFollowing' is not supported for deleteEvent. Use list_calendar_event_instances and delete each occurrence with scope 'this', or scope 'all' to remove the series.",
+      );
+    }
 
     // Cancelling one occurrence is a patch on the instance, not a delete of
     // the series. A delete here would silently remove every occurrence.
@@ -251,7 +261,7 @@ export class GoogleCalendarEventProvider implements CalendarEventProvider {
       timeMax: options.timeMax,
     });
 
-    return (response.data.items ?? []).map(toCalendarEvent);
+    return (response.data.items ?? []).map((event) => this.parseEvent(event));
   }
 
   async fetchEventsWithAttendee({
@@ -387,31 +397,11 @@ export class GoogleCalendarEventProvider implements CalendarEventProvider {
           name: attendee.displayName ?? undefined,
           responseStatus: attendee.responseStatus ?? undefined,
         })) || [],
+      recurringEventId: event.recurringEventId ?? undefined,
+      originalStartTime:
+        event.originalStartTime?.dateTime ??
+        event.originalStartTime?.date ??
+        undefined,
     };
   }
-}
-
-function toCalendarEvent(event: calendar_v3.Schema$Event): CalendarEvent {
-  return {
-    id: event.id ?? "",
-    title: event.summary ?? "",
-    description: event.description ?? undefined,
-    location: event.location ?? undefined,
-    // Kept as the API returned them; the caller decides how to render.
-    startTime: new Date(
-      event.start?.dateTime ?? `${event.start?.date}T00:00:00Z`,
-    ),
-    endTime: new Date(event.end?.dateTime ?? `${event.end?.date}T00:00:00Z`),
-    eventUrl: event.htmlLink ?? undefined,
-    attendees: (event.attendees ?? []).map((a) => ({
-      email: a.email ?? "",
-      name: a.displayName ?? undefined,
-      responseStatus: a.responseStatus ?? undefined,
-    })),
-    recurringEventId: event.recurringEventId ?? undefined,
-    originalStartTime:
-      event.originalStartTime?.dateTime ??
-      event.originalStartTime?.date ??
-      undefined,
-  };
 }
