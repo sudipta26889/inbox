@@ -273,18 +273,27 @@ describe("adminKnowledgeDelete", () => {
 });
 
 describe("admin_knowledge_* registry integration", () => {
-  it("all five tools require the 'admin' scope", async () => {
+  it("the two read tools require the 'admin:read' scope", async () => {
+    const { MCP_TOOLS, hasRequiredScope } = await import("./registry");
+    for (const name of ["admin_knowledge_list", "admin_knowledge_get"]) {
+      const t = MCP_TOOLS[name];
+      expect(t, name).toBeDefined();
+      expect(t.requiredScope).toBe("admin:read");
+      expect(hasRequiredScope(t, ["rules:read"])).toBe(false);
+      expect(hasRequiredScope(t, ["admin"])).toBe(true);
+    }
+  });
+
+  it("the three mutating tools require the 'admin:write' scope", async () => {
     const { MCP_TOOLS, hasRequiredScope } = await import("./registry");
     for (const name of [
-      "admin_knowledge_list",
-      "admin_knowledge_get",
       "admin_knowledge_create",
       "admin_knowledge_update",
       "admin_knowledge_delete",
     ]) {
       const t = MCP_TOOLS[name];
       expect(t, name).toBeDefined();
-      expect(t.requiredScope).toBe("admin");
+      expect(t.requiredScope).toBe("admin:write");
       expect(hasRequiredScope(t, ["rules:read"])).toBe(false);
       expect(hasRequiredScope(t, ["admin"])).toBe(true);
     }

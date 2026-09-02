@@ -351,15 +351,25 @@ describe("admin_follow_ups_delete (destructive)", () => {
 describe("registry wiring", () => {
   it.each([
     "admin_reply_tracker_get_settings",
-    "admin_reply_tracker_update_settings",
     "admin_follow_ups_list",
-    "admin_follow_ups_update",
-    "admin_follow_ups_delete",
-  ])("registers %s with admin scope", async (name) => {
+  ])("registers %s with admin:read scope", async (name) => {
     const { getTool, hasRequiredScope } = await import("./registry");
     const tool = getTool(name);
     expect(tool).toBeDefined();
-    expect(tool!.requiredScope).toBe("admin");
+    expect(tool!.requiredScope).toBe("admin:read");
+    expect(hasRequiredScope(tool!, ["admin"])).toBe(true);
+    expect(hasRequiredScope(tool!, ["email:read"])).toBe(false);
+  });
+
+  it.each([
+    "admin_reply_tracker_update_settings",
+    "admin_follow_ups_update",
+    "admin_follow_ups_delete",
+  ])("registers %s with admin:write scope", async (name) => {
+    const { getTool, hasRequiredScope } = await import("./registry");
+    const tool = getTool(name);
+    expect(tool).toBeDefined();
+    expect(tool!.requiredScope).toBe("admin:write");
     expect(hasRequiredScope(tool!, ["admin"])).toBe(true);
     expect(hasRequiredScope(tool!, ["email:read"])).toBe(false);
   });

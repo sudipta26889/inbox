@@ -147,6 +147,59 @@ describe("calendar tool annotations", () => {
   });
 });
 
+describe("admin scope split", () => {
+  const ADMIN_TOOLS = Object.values(MCP_TOOLS).filter((t) =>
+    t.name.startsWith("admin_"),
+  );
+
+  it("reaches every admin tool through the granular scopes", () => {
+    // The original failure: `admin` was never advertised in OAuth discovery, so
+    // no client ever requested it and all 46 admin tools were uncallable from
+    // the day they shipped. Granting the split pair must reach all of them.
+    const granted = ["admin:read", "admin:write"];
+    for (const tool of ADMIN_TOOLS) {
+      expect(hasRequiredScope(tool, granted)).toBe(true);
+    }
+    expect(ADMIN_TOOLS.length).toBe(46);
+  });
+
+  it("gives admin:read the reads and none of the writes", () => {
+    const visible = getAllTools(["admin:read"]).map((t) => t.name);
+
+    expect(visible).toHaveLength(17);
+    expect(visible).toEqual(
+      expect.arrayContaining(["admin_rules_list", "admin_knowledge_get"]),
+    );
+    for (const name of visible) {
+      expect(name).not.toMatch(
+        /_(create|update|delete|set|add|remove|reorder|categorize|mark|request)(_|$)/,
+      );
+    }
+  });
+
+  it("does not let admin:read reach a mutating admin tool", () => {
+    expect(
+      hasRequiredScope(MCP_TOOLS.admin_rules_delete!, ["admin:read"]),
+    ).toBe(false);
+    expect(
+      hasRequiredScope(MCP_TOOLS.admin_knowledge_create!, ["admin:read"]),
+    ).toBe(false);
+  });
+
+  it("still honours the legacy omnibus admin scope", () => {
+    // No token has ever held it, but a client that hardcoded it must not break.
+    expect(getAllTools(["admin"])).toHaveLength(46);
+  });
+
+  it("marks admin reads read-only purely from the scope suffix", () => {
+    const byName = Object.fromEntries(getAllTools().map((t) => [t.name, t]));
+    expect(byName.admin_rules_list?.annotations?.readOnlyHint).toBe(true);
+    expect(
+      byName.admin_rules_delete?.annotations?.readOnlyHint,
+    ).toBeUndefined();
+  });
+});
+
 describe("getTool", () => {
   it("returns undefined for an unknown tool", () => {
     expect(getTool("nope")).toBeUndefined();

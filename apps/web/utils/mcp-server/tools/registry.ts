@@ -846,7 +846,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       const { adminRulesList } = await import("./admin-rules-tools");
       return adminRulesList(context, params);
     },
-    requiredScope: "admin",
+    requiredScope: "admin:read",
   },
 
   admin_rules_get: {
@@ -867,7 +867,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       const { adminRulesGet } = await import("./admin-rules-tools");
       return adminRulesGet(context, params);
     },
-    requiredScope: "admin",
+    requiredScope: "admin:read",
   },
 
   admin_rules_create: {
@@ -904,7 +904,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       const { adminRulesCreate } = await import("./admin-rules-tools");
       return adminRulesCreate(context, params);
     },
-    requiredScope: "admin",
+    requiredScope: "admin:write",
   },
 
   admin_rules_update: {
@@ -927,7 +927,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       const { adminRulesUpdate } = await import("./admin-rules-tools");
       return adminRulesUpdate(context, params);
     },
-    requiredScope: "admin",
+    requiredScope: "admin:write",
   },
 
   admin_rules_delete: {
@@ -950,7 +950,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       const { adminRulesDelete } = await import("./admin-rules-tools");
       return adminRulesDelete(context, params);
     },
-    requiredScope: "admin",
+    requiredScope: "admin:write",
   },
 
   admin_rules_set_enabled: {
@@ -969,7 +969,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       const { adminRulesSetEnabled } = await import("./admin-rules-tools");
       return adminRulesSetEnabled(context, params);
     },
-    requiredScope: "admin",
+    requiredScope: "admin:write",
   },
 
   admin_rules_reorder: {
@@ -991,7 +991,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       const { adminRulesReorder } = await import("./admin-rules-tools");
       return adminRulesReorder(context, params);
     },
-    requiredScope: "admin",
+    requiredScope: "admin:write",
   },
 
   admin_categories_list: {
@@ -1006,7 +1006,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       const { adminCategoriesList } = await import("./admin-categories-tools");
       return adminCategoriesList(context, params);
     },
-    requiredScope: "admin",
+    requiredScope: "admin:read",
   },
 
   admin_categories_update: {
@@ -1031,7 +1031,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       );
       return adminCategoriesUpdate(context, params);
     },
-    requiredScope: "admin",
+    requiredScope: "admin:write",
   },
 
   admin_categories_delete: {
@@ -1057,7 +1057,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       );
       return adminCategoriesDelete(context, params);
     },
-    requiredScope: "admin",
+    requiredScope: "admin:write",
   },
 
   admin_categories_create: {
@@ -1081,7 +1081,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       );
       return adminCategoriesCreate(context, params);
     },
-    requiredScope: "admin",
+    requiredScope: "admin:write",
   },
 
   admin_senders_list: {
@@ -1110,7 +1110,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       const { adminSendersList } = await import("./admin-categories-tools");
       return adminSendersList(context, params);
     },
-    requiredScope: "admin",
+    requiredScope: "admin:read",
   },
 
   admin_senders_categorize: {
@@ -1141,7 +1141,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       );
       return adminSendersCategorize(context, params);
     },
-    requiredScope: "admin",
+    requiredScope: "admin:write",
   },
 
   list_email_accounts: {
@@ -1168,7 +1168,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       const { adminGroupsList } = await import("./admin-groups-tools");
       return adminGroupsList(context, params);
     },
-    requiredScope: "admin",
+    requiredScope: "admin:read",
   },
 
   admin_groups_get: {
@@ -1186,7 +1186,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       const { adminGroupsGet } = await import("./admin-groups-tools");
       return adminGroupsGet(context, params);
     },
-    requiredScope: "admin",
+    requiredScope: "admin:read",
   },
 
   admin_groups_create: {
@@ -1207,7 +1207,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       const { adminGroupsCreate } = await import("./admin-groups-tools");
       return adminGroupsCreate(context, params);
     },
-    requiredScope: "admin",
+    requiredScope: "admin:write",
   },
 
   admin_groups_update: {
@@ -1226,7 +1226,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       const { adminGroupsUpdate } = await import("./admin-groups-tools");
       return adminGroupsUpdate(context, params);
     },
-    requiredScope: "admin",
+    requiredScope: "admin:write",
   },
 
   admin_groups_delete: {
@@ -1250,7 +1250,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       const { adminGroupsDelete } = await import("./admin-groups-tools");
       return adminGroupsDelete(context, params);
     },
-    requiredScope: "admin",
+    requiredScope: "admin:write",
   },
 
   admin_groups_add_item: {
@@ -1271,7 +1271,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       const { adminGroupsAddItem } = await import("./admin-groups-tools");
       return adminGroupsAddItem(context, params);
     },
-    requiredScope: "admin",
+    requiredScope: "admin:write",
   },
 
   admin_groups_remove_item: {
@@ -1288,7 +1288,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       const { adminGroupsRemoveItem } = await import("./admin-groups-tools");
       return adminGroupsRemoveItem(context, params);
     },
-    requiredScope: "admin",
+    requiredScope: "admin:write",
   },
 
   admin_knowledge_list: {
@@ -1312,7 +1312,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       const { adminKnowledgeList } = await import("./admin-knowledge-tools");
       return adminKnowledgeList(context, params);
     },
-    requiredScope: "admin",
+    requiredScope: "admin:read",
   },
 
   admin_knowledge_get: {
@@ -1329,7 +1329,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       const { adminKnowledgeGet } = await import("./admin-knowledge-tools");
       return adminKnowledgeGet(context, params);
     },
-    requiredScope: "admin",
+    requiredScope: "admin:read",
   },
 
   admin_knowledge_create: {
@@ -1350,7 +1350,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       const { adminKnowledgeCreate } = await import("./admin-knowledge-tools");
       return adminKnowledgeCreate(context, params);
     },
-    requiredScope: "admin",
+    requiredScope: "admin:write",
   },
 
   admin_knowledge_update: {
@@ -1369,7 +1369,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       const { adminKnowledgeUpdate } = await import("./admin-knowledge-tools");
       return adminKnowledgeUpdate(context, params);
     },
-    requiredScope: "admin",
+    requiredScope: "admin:write",
   },
 
   admin_knowledge_delete: {
@@ -1393,7 +1393,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       const { adminKnowledgeDelete } = await import("./admin-knowledge-tools");
       return adminKnowledgeDelete(context, params);
     },
-    requiredScope: "admin",
+    requiredScope: "admin:write",
   },
 
   admin_cold_email_get_settings: {
@@ -1407,7 +1407,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       );
       return adminColdEmailGetSettings(context, params);
     },
-    requiredScope: "admin",
+    requiredScope: "admin:read",
   },
 
   admin_cold_email_update_settings: {
@@ -1438,7 +1438,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       );
       return adminColdEmailUpdateSettings(context, params);
     },
-    requiredScope: "admin",
+    requiredScope: "admin:write",
   },
 
   admin_cold_email_list_blocked: {
@@ -1463,7 +1463,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       );
       return adminColdEmailListBlocked(context, params);
     },
-    requiredScope: "admin",
+    requiredScope: "admin:read",
   },
 
   admin_cold_email_mark: {
@@ -1486,7 +1486,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       const { adminColdEmailMark } = await import("./admin-cold-email-tools");
       return adminColdEmailMark(context, params);
     },
-    requiredScope: "admin",
+    requiredScope: "admin:write",
   },
 
   admin_reply_tracker_get_settings: {
@@ -1500,7 +1500,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       );
       return adminReplyTrackerGetSettings(context, params);
     },
-    requiredScope: "admin",
+    requiredScope: "admin:read",
   },
 
   admin_reply_tracker_update_settings: {
@@ -1524,7 +1524,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       );
       return adminReplyTrackerUpdateSettings(context, params);
     },
-    requiredScope: "admin",
+    requiredScope: "admin:write",
   },
 
   admin_follow_ups_list: {
@@ -1550,7 +1550,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       );
       return adminFollowUpsList(context, params);
     },
-    requiredScope: "admin",
+    requiredScope: "admin:read",
   },
 
   admin_follow_ups_update: {
@@ -1573,7 +1573,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       );
       return adminFollowUpsUpdate(context, params);
     },
-    requiredScope: "admin",
+    requiredScope: "admin:write",
   },
 
   admin_digest_get: {
@@ -1589,7 +1589,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       const { adminDigestGet } = await import("./admin-digest-tools");
       return adminDigestGet(context, params);
     },
-    requiredScope: "admin",
+    requiredScope: "admin:read",
   },
 
   admin_digest_update_schedule: {
@@ -1633,7 +1633,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       );
       return adminDigestUpdateSchedule(context, params);
     },
-    requiredScope: "admin",
+    requiredScope: "admin:write",
   },
 
   admin_digest_set_enabled: {
@@ -1656,7 +1656,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       const { adminDigestSetEnabled } = await import("./admin-digest-tools");
       return adminDigestSetEnabled(context, params);
     },
-    requiredScope: "admin",
+    requiredScope: "admin:write",
   },
 
   admin_digest_update_items: {
@@ -1679,7 +1679,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       const { adminDigestUpdateItems } = await import("./admin-digest-tools");
       return adminDigestUpdateItems(context, params);
     },
-    requiredScope: "admin",
+    requiredScope: "admin:write",
   },
 
   admin_follow_ups_delete: {
@@ -1701,7 +1701,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       );
       return adminFollowUpsDelete(context, params);
     },
-    requiredScope: "admin",
+    requiredScope: "admin:write",
   },
 
   admin_ai_get_settings: {
@@ -1717,7 +1717,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       const { adminAiGetSettings } = await import("./admin-ai-tools");
       return adminAiGetSettings(context, params);
     },
-    requiredScope: "admin",
+    requiredScope: "admin:read",
   },
 
   admin_ai_update_model: {
@@ -1745,7 +1745,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       const { adminAiUpdateModel } = await import("./admin-ai-tools");
       return adminAiUpdateModel(context, params);
     },
-    requiredScope: "admin",
+    requiredScope: "admin:write",
   },
 
   admin_account_get: {
@@ -1761,7 +1761,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       const { adminAccountGet } = await import("./admin-account-tools");
       return adminAccountGet(context, params);
     },
-    requiredScope: "admin",
+    requiredScope: "admin:read",
   },
 
   admin_cleanup_list_jobs: {
@@ -1781,7 +1781,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       const { adminCleanupListJobs } = await import("./admin-cleanup-tools");
       return adminCleanupListJobs(context, params);
     },
-    requiredScope: "admin",
+    requiredScope: "admin:read",
   },
 
   admin_cleanup_create_job: {
@@ -1815,7 +1815,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       const { adminCleanupCreateJob } = await import("./admin-cleanup-tools");
       return adminCleanupCreateJob(context, params);
     },
-    requiredScope: "admin",
+    requiredScope: "admin:write",
   },
 
   admin_unsubscribe_list: {
@@ -1838,7 +1838,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       );
       return adminUnsubscribeList(context, params);
     },
-    requiredScope: "admin",
+    requiredScope: "admin:read",
   },
 
   admin_unsubscribe_request: {
@@ -1861,7 +1861,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       );
       return adminUnsubscribeRequest(context, params);
     },
-    requiredScope: "admin",
+    requiredScope: "admin:write",
   },
 
   admin_account_update: {
@@ -1914,7 +1914,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       const { adminAccountUpdate } = await import("./admin-account-tools");
       return adminAccountUpdate(context, params);
     },
-    requiredScope: "admin",
+    requiredScope: "admin:write",
   },
 
   convert_to_taskpilot_task: {
@@ -1962,6 +1962,8 @@ export function getTool(name: string): McpToolDefinition | undefined {
 // draft writes, so tokens issued before the split keep working.
 const IMPLIED_SCOPES: Record<string, string[]> = {
   "email:write": ["email:draft"],
+  // Legacy omnibus grant. No token has ever held it, but honour it if one does.
+  admin: ["admin:read", "admin:write"],
 };
 
 /**
@@ -1977,7 +1979,7 @@ export function getAllTools(userScopes?: string[]): Tool[] {
     .map(({ handler, requiredScope, ...tool }) => ({
       ...tool,
       annotations: {
-        ...toolAnnotations(tool.name, requiredScope),
+        ...toolAnnotations(requiredScope),
         ...tool.annotations,
       },
     }));
@@ -1997,37 +1999,12 @@ export function hasRequiredScope(
   );
 }
 
-// The `admin` scope covers reads and writes alike, so unlike `*:read` it says
-// nothing about whether a tool mutates. Each name below was checked to reach
-// only a get*/list* domain function or a Prisma find*; a tool missing from this
-// set falls through to the fail-safe default of destructive, so the cost of
-// forgetting one is an over-restriction rather than a wrongly-approved write.
-const READ_ONLY_ADMIN_TOOLS = new Set([
-  "admin_account_get",
-  "admin_ai_get_settings",
-  "admin_categories_list",
-  "admin_cleanup_list_jobs",
-  "admin_cold_email_get_settings",
-  "admin_cold_email_list_blocked",
-  "admin_digest_get",
-  "admin_follow_ups_list",
-  "admin_groups_get",
-  "admin_groups_list",
-  "admin_knowledge_get",
-  "admin_knowledge_list",
-  "admin_reply_tracker_get_settings",
-  "admin_rules_get",
-  "admin_rules_list",
-  "admin_senders_list",
-  "admin_unsubscribe_list",
-]);
-
 // MCP annotation defaults are already fail-safe (destructiveHint defaults to
 // true), so only claim something narrower than the default where it's certain.
 // Consumers read these to decide what a human is asked to approve, so a wrong
-// readOnlyHint gets a mutating tool auto-approved.
-function toolAnnotations(name: string, requiredScope: string) {
-  return requiredScope.endsWith(":read") || READ_ONLY_ADMIN_TOOLS.has(name)
-    ? { readOnlyHint: true }
-    : {};
+// readOnlyHint gets a mutating tool auto-approved. Splitting `admin` into
+// admin:read / admin:write means the scope suffix now carries this for every
+// tool — no per-tool allowlist needed.
+function toolAnnotations(requiredScope: string) {
+  return requiredScope.endsWith(":read") ? { readOnlyHint: true } : {};
 }

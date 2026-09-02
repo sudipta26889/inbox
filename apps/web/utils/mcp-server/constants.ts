@@ -6,8 +6,6 @@
  * Supported OAuth scopes for MCP server
  */
 export const MCP_SCOPES = {
-  "mcp:read": "Read-only access to MCP tools",
-  "mcp:write": "Read-write access to MCP tools",
   "email:read": "Read email data",
   "email:draft": "Create and edit unsent drafts (cannot send)",
   "email:write": "Send and manage emails",
@@ -16,9 +14,25 @@ export const MCP_SCOPES = {
   "stats:read": "Read analytics and statistics",
   "rules:read": "Read automation rules",
   "rules:write": "Create and modify automation rules",
+  "admin:read":
+    "Read inbox settings: rules, categories, groups, knowledge, cold-email blocker, reply tracker, follow-ups, digest, AI model, account, cleanup jobs, unsubscribe candidates.",
+  "admin:write":
+    "Create, modify and delete inbox settings: rules, categories, groups, knowledge, cold-email blocker, reply tracker, follow-ups, digest, AI model, account settings, cleanup jobs, unsubscribe requests. Excludes API keys, webhooks, and MCP client registration.",
+  // Legacy scopes: still accepted so existing clients keep authorizing, but not
+  // advertised, so new clients discover the granular ones instead.
   admin:
-    "Read and write all inbox settings: rules, categories, knowledge, cold-email blocker, reply tracker, follow-ups, digest, AI model, account settings, cleanup, unsubscribe. Excludes API keys, webhooks, and MCP client registration.",
+    "Full inbox settings access (legacy — prefer admin:read / admin:write)",
+  "mcp:read": "Legacy no-op — gates no tool",
+  "mcp:write": "Legacy no-op — gates no tool",
 } as const;
+
+/**
+ * Accepted for backward compatibility but deliberately kept out of discovery.
+ * `admin` is an omnibus grant over 46 tools; advertising it invites clients to
+ * request everything in one prompt instead of the read/write split.
+ * `mcp:read`/`mcp:write` gate no tool at all and never have.
+ */
+const LEGACY_SCOPES = new Set(["admin", "mcp:read", "mcp:write"]);
 
 export type McpScope = keyof typeof MCP_SCOPES;
 
@@ -27,7 +41,9 @@ export type McpScope = keyof typeof MCP_SCOPES;
  * routes can't drift from what the server actually enforces — a scope missing
  * here is one no discovering client will ever request.
  */
-export const MCP_SCOPES_SUPPORTED = Object.keys(MCP_SCOPES);
+export const MCP_SCOPES_SUPPORTED = Object.keys(MCP_SCOPES).filter(
+  (scope) => !LEGACY_SCOPES.has(scope),
+);
 
 /**
  * Token configuration

@@ -142,15 +142,22 @@ describe("adminDigestUpdateItems", () => {
 });
 
 describe("admin digest tool registration", () => {
-  it("registers all three digest tools with admin scope", () => {
+  it("registers admin_digest_get with admin:read scope", () => {
+    for (const name of ["admin_digest_get"]) {
+      const tool = getTool(name);
+      expect(tool).toBeDefined();
+      expect(tool!.requiredScope).toBe("admin:read");
+    }
+  });
+
+  it("registers the digest mutation tools with admin:write scope", () => {
     for (const name of [
-      "admin_digest_get",
       "admin_digest_update_schedule",
       "admin_digest_update_items",
     ]) {
       const tool = getTool(name);
       expect(tool).toBeDefined();
-      expect(tool!.requiredScope).toBe("admin");
+      expect(tool!.requiredScope).toBe("admin:write");
     }
   });
 
@@ -192,10 +199,10 @@ describe("adminDigestSetEnabled", () => {
     expect(prisma.schedule.deleteMany).not.toHaveBeenCalled();
   });
 
-  it("is registered with admin scope", () => {
+  it("is registered with admin:write scope", () => {
     const tool = getTool("admin_digest_set_enabled");
     expect(tool).toBeDefined();
-    expect(tool!.requiredScope).toBe("admin");
+    expect(tool!.requiredScope).toBe("admin:write");
   });
 });
 

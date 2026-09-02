@@ -263,15 +263,24 @@ describe("registry integration", () => {
   it.each([
     "admin_groups_list",
     "admin_groups_get",
+  ])("registers %s with admin:read scope", (name) => {
+    const tool = getTool(name);
+    expect(tool).toBeDefined();
+    expect(tool?.requiredScope).toBe("admin:read");
+    expect(hasRequiredScope(tool!, ["admin"])).toBe(true);
+    expect(hasRequiredScope(tool!, ["email:read"])).toBe(false);
+  });
+
+  it.each([
     "admin_groups_create",
     "admin_groups_update",
     "admin_groups_delete",
     "admin_groups_add_item",
     "admin_groups_remove_item",
-  ])("registers %s with admin scope", (name) => {
+  ])("registers %s with admin:write scope", (name) => {
     const tool = getTool(name);
     expect(tool).toBeDefined();
-    expect(tool?.requiredScope).toBe("admin");
+    expect(tool?.requiredScope).toBe("admin:write");
     expect(hasRequiredScope(tool!, ["admin"])).toBe(true);
     expect(hasRequiredScope(tool!, ["email:read"])).toBe(false);
   });
