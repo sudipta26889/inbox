@@ -1,6 +1,9 @@
 /**
  * Format MCP tool responses as Markdown
  */
+import { convertEmailHtmlToText } from "@/utils/mail";
+
+const MAX_BODY_CHARS = 20_000;
 
 export function formatEmailAsMarkdown(email: {
   id: string;
@@ -10,6 +13,7 @@ export function formatEmailAsMarkdown(email: {
   subject: string;
   date: string;
   textPlain?: string;
+  textHtml?: string;
   snippet?: string;
   attachments?: Array<{
     filename: string;
@@ -31,10 +35,13 @@ export function formatEmailAsMarkdown(email: {
   md += `**Date:** ${email.date}\n`;
   md += `**ID:** \`${email.id}\`\n\n`;
 
-  if (email.textPlain) {
-    md += `### Body\n\n${email.textPlain}\n`;
+  const body = getBody(email);
+  if (body) {
+    md += `### Body\n\n${body}\n`;
   } else if (email.snippet) {
-    md += `### Snippet\n\n${email.snippet}\n`;
+    md += `### Body\n\n_Could not extract a body from this message (no text/plain or text/html part). Showing the provider snippet only._\n\n${email.snippet}\n`;
+  } else {
+    md += "### Body\n\n_Could not extract a body from this message._\n";
   }
 
   // Format attachments
@@ -278,4 +285,17 @@ export function formatToolResponse(toolName: string, result: any): string {
     // If markdown formatting fails, fallback to JSON
     return `\`\`\`json\n${JSON.stringify(result, null, 2)}\n\`\`\``;
   }
+}
+
+function getBody(email: { textPlain?: string; textHtml?: string }): string {
+  const text =
+    email.textPlain?.trim() ||
+    (email.textHtml
+      ? convertEmailHtmlToText({ htmlText: email.textHtml })
+      : "");
+
+  if (text.length <= MAX_BODY_CHARS) return text;
+
+  // ponytail: fixed cap so a huge marketing email can't flood the MCP response
+  return `${text.slice(0, MAX_BODY_CHARS)}\n\n_[truncated: ${text.length - MAX_BODY_CHARS} more characters]_`;
 }
