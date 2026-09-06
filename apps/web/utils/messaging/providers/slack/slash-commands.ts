@@ -5,7 +5,10 @@ import {
 } from "ai";
 import type { Prisma } from "@/generated/prisma/client";
 import { MessagingProvider } from "@/generated/prisma/enums";
-import { loadAgentContext } from "@/utils/ai/assistant/agent-context";
+import {
+  loadAgentContext,
+  memoryQueryFromParts,
+} from "@/utils/ai/assistant/agent-context";
 import { aiProcessAssistantChat } from "@/utils/ai/assistant/chat";
 import type { Logger } from "@/utils/logger";
 import { normalizeMessagingAssistantText } from "@/utils/messaging/chat-sdk/bot";
@@ -166,6 +169,7 @@ async function runSlackSlashCommandAi({
     emailAccountId,
     provider: emailAccountUser.account.provider,
     surface: "Slack chat",
+    query: memoryQueryFromParts(newUserMessage.parts),
     logger,
   });
 

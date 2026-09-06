@@ -1107,7 +1107,8 @@ describe("aiProcessAssistantChat", () => {
 
     expect(result.success).toBe(true);
     expect(result.content).toBe("User prefers concise responses");
-    expect(result.deduplicated).toBeUndefined();
+    // Always reported now, so the model can tell a fresh save from a no-op.
+    expect(result.deduplicated).toBe(false);
     expect(mockPrisma.chatMemory.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         content: "User prefers concise responses",

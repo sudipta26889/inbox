@@ -14,8 +14,10 @@ import {
   extractMemories,
   RECENT_MESSAGES_TO_KEEP,
 } from "@/utils/ai/assistant/compact";
-import { getInboxStatsForChatContext } from "@/utils/ai/assistant/get-inbox-stats-for-chat-context";
-import { formatUtcDate } from "@/utils/date";
+import {
+  loadAgentContext,
+  memoryQueryFromParts,
+} from "@/utils/ai/assistant/agent-context";
 import { mapUiMessagesToChatMessageRows } from "@/app/api/chat/chat-message-persistence";
 import {
   type AssistantInput,
@@ -31,12 +33,6 @@ export const POST = withEmailAccount("chat", async (request) => {
   const user = await getEmailAccountWithAi({ emailAccountId });
 
   if (!user) return NextResponse.json({ error: "Not authenticated" });
-
-  const inboxStatsPromise = getInboxStatsForChatContext({
-    emailAccountId,
-    provider: user.account.provider,
-    logger: request.logger,
-  });
 
   const json = await request.json();
   const { data, error } = assistantInputSchema.safeParse(json);
@@ -66,6 +62,14 @@ export const POST = withEmailAccount("chat", async (request) => {
   }
 
   const { message, context, inlineActions } = data;
+
+  const agentContextPromise = loadAgentContext({
+    emailAccountId,
+    provider: user.account.provider,
+    surface: "web chat",
+    query: memoryQueryFromParts(message.parts),
+    logger: request.logger,
+  });
 
   const hiddenInlineActionMessage =
     buildHiddenInlineActionMessage(inlineActions);
@@ -176,24 +180,8 @@ export const POST = withEmailAccount("chat", async (request) => {
     }
   }
 
-  let memories: { content: string; date: string }[] = [];
   try {
-    const recentMemories = await prisma.chatMemory.findMany({
-      where: { emailAccountId },
-      orderBy: { createdAt: "desc" },
-      take: 20,
-      select: { content: true, createdAt: true },
-    });
-    memories = recentMemories.map((m) => ({
-      content: m.content,
-      date: formatUtcDate(m.createdAt),
-    }));
-  } catch (error) {
-    request.logger.warn("Failed to load memories for chat", { error });
-  }
-
-  try {
-    const inboxStats = await inboxStatsPromise;
+    const { inboxStats, memories } = await agentContextPromise;
 
     const result = await aiProcessAssistantChat({
       messages: modelMessages,

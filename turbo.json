@@ -214,7 +214,10 @@
         "NEXT_PUBLIC_DELETE_EMAIL_ACTION_ENABLED",
 
         "A2A_REMOTE_AGENTS",
-        "A2A_REMOTE_AGENT_TOKEN"
+        "A2A_REMOTE_AGENT_TOKEN",
+
+        "LONGMEMORY_BASE_URL",
+        "LONGMEMORY_API_KEY"
       ],
       "outputs": [".next/**", "!.next/cache/**"]
     },
@@ -286,7 +289,10 @@
         "NEXT_PUBLIC_DELETE_EMAIL_ACTION_ENABLED",
 
         "A2A_REMOTE_AGENTS",
-        "A2A_REMOTE_AGENT_TOKEN"
+        "A2A_REMOTE_AGENT_TOKEN",
+
+        "LONGMEMORY_BASE_URL",
+        "LONGMEMORY_API_KEY"
       ],
       "outputs": [".next/**", "!.next/cache/**"]
     },

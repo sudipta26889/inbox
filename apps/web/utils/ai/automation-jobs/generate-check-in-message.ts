@@ -36,6 +36,7 @@ export async function aiGenerateAutomationCheckInMessage({
     emailAccountId,
     provider: emailAccount.account.provider,
     surface: "scheduled check-in",
+    query: trimmedPrompt,
     logger,
   });
 

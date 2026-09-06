@@ -98,7 +98,7 @@ export async function aiProcessAssistantChat({
   user: EmailAccountWithAI;
   context?: MessageContext;
   chatId?: string;
-  memories?: { content: string; date: string }[];
+  memories?: { content: string; date?: string }[];
   inboxStats?: { total: number; unread: number } | null;
   responseSurface?: "web" | "messaging";
   messagingPlatform?: MessagingPlatform;
@@ -376,7 +376,7 @@ Behavior anchors (minimal examples):
       ? [
           {
             role: "user" as const,
-            content: `Memories from previous conversations:\n${memories.map((m) => `- [${m.date}] ${m.content}`).join("\n")}`,
+            content: `Memories from previous conversations:\n${memories.map((m) => (m.date ? `- [${m.date}] ${m.content}` : `- ${m.content}`)).join("\n")}`,
           },
         ]
       : []),

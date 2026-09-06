@@ -49,6 +49,7 @@ export async function answerA2aMessage({
     emailAccountId,
     provider: user.account.provider,
     surface: "A2A peer message",
+    query: question,
     logger,
   });
 
@@ -58,7 +59,13 @@ export async function answerA2aMessage({
     parts: [
       {
         type: "text",
-        text: `${question}\n\nAnswer in at most ${MAX_ANSWER_CHARS} characters. You are replying to another agent, not a person — no greetings, no follow-up questions.`,
+        text: `${question}
+
+You are replying to another agent, not a person. Rules:
+- Use at most two tool calls, then answer from what you have.
+- Never repeat a search you have already run.
+- Always finish with a written answer, even if the data is incomplete: say what you found and what you could not determine.
+- No greetings, no follow-up questions. At most ${MAX_ANSWER_CHARS} characters.`,
       },
     ],
   };
@@ -91,7 +98,24 @@ export async function answerA2aMessage({
     .join("\n")
     .trim();
 
-  return text || null;
+  if (text) return text;
+
+  // The agent can spend its whole step budget on tools and stop without ever
+  // writing a reply — observed as seven consecutive search_inbox calls. Silence
+  // here is indistinguishable from the bug this path exists to fix, so say so.
+  const toolsUsed = [
+    ...new Set(
+      (assistant?.parts ?? []).flatMap((part) =>
+        typeof part.type === "string" && part.type.startsWith("tool-")
+          ? [part.type.slice("tool-".length)]
+          : [],
+      ),
+    ),
+  ];
+
+  logger.warn("A2A answer produced no text", { contextId, toolsUsed });
+
+  return `I could not produce an answer within my step budget. Tools attempted: ${toolsUsed.join(", ") || "none"}. Try a narrower question.`;
 }
 
 /** Pull the question out of whatever shape the peer sent. */

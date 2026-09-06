@@ -281,6 +281,10 @@ export const env = createEnv({
     // A2A Outbound Agent Notifications
     A2A_REMOTE_AGENTS: z.string().optional(),
     A2A_REMOTE_AGENT_TOKEN: z.string().optional(),
+
+    // Long-term agentic memory (MCP). Scoped per email account via project_id.
+    LONGMEMORY_BASE_URL: z.string().url().optional(),
+    LONGMEMORY_API_KEY: z.string().optional(),
   },
   client: {
     // stripe

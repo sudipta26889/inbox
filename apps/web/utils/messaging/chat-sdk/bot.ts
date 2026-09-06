@@ -38,8 +38,10 @@ import { MessagingProvider } from "@/generated/prisma/enums";
 import { confirmAssistantEmailActionForAccount } from "@/utils/actions/assistant-chat";
 import type { AssistantPendingEmailActionType } from "@/utils/actions/assistant-chat.validation";
 import { aiProcessAssistantChat } from "@/utils/ai/assistant/chat";
-import { getRecentChatMemories } from "@/utils/ai/assistant/get-recent-chat-memories";
-import { getInboxStatsForChatContext } from "@/utils/ai/assistant/get-inbox-stats-for-chat-context";
+import {
+  loadAgentContext,
+  memoryQueryFromParts,
+} from "@/utils/ai/assistant/agent-context";
 import { createScopedLogger, type Logger } from "@/utils/logger";
 import { consumeMessagingLinkCode } from "@/utils/messaging/chat-sdk/link-code-consume";
 import type { MessagingPlatform } from "@/utils/messaging/platforms";
@@ -627,16 +629,12 @@ async function processMessagingAssistantMessage({
       ...context.threadLogContext,
     });
 
-    const inboxStatsPromise = getInboxStatsForChatContext({
+    const agentContextPromise = loadAgentContext({
       emailAccountId: context.emailAccountId,
       provider: emailAccountUser.account.provider,
+      surface: "messaging chat",
+      query: memoryQueryFromParts(newUserMessage.parts),
       logger: threadLogger,
-    });
-
-    const memoriesPromise = getRecentChatMemories({
-      emailAccountId: context.emailAccountId,
-      logger: threadLogger,
-      logContext: "messaging chat",
     });
 
     try {
@@ -648,7 +646,7 @@ async function processMessagingAssistantMessage({
         // Ignore typing indicator failures
       }
 
-      const inboxStats = await inboxStatsPromise;
+      const { inboxStats, memories } = await agentContextPromise;
       const result = await aiProcessAssistantChat({
         messages: await convertToModelMessages([
           ...existingMessages,
@@ -657,7 +655,7 @@ async function processMessagingAssistantMessage({
         emailAccountId: context.emailAccountId,
         user: emailAccountUser,
         chatId: chat.id,
-        memories: await memoriesPromise,
+        memories,
         inboxStats,
         responseSurface: "messaging",
         messagingPlatform: context.provider,
