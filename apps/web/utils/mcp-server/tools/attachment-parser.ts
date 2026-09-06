@@ -144,7 +144,9 @@ async function parsePdf(
     }
 
     // Use fast extraction for small files
-    const { text, totalPages } = await extractText(uint8Array);
+    // extractText returns one entry per page; the caller wants one document.
+    const { text: pages, totalPages } = await extractText(uint8Array);
+    const text = Array.isArray(pages) ? pages.join("\n\n") : pages;
 
     logger.info("PDF parsed successfully", {
       filename,

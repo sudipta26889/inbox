@@ -1,5 +1,9 @@
 import { ActionType } from "@/generated/prisma/enums";
-import type { Action, ExecutedAction, Prisma } from "@/generated/prisma/client";
+import {
+  type Action,
+  type ExecutedAction,
+  Prisma,
+} from "@/generated/prisma/client";
 
 export const actionInputs: Record<
   ActionType,
@@ -217,11 +221,15 @@ type ActionFieldsSelection = Pick<
   | "haEntityId"
 >;
 
+// Callers pass rows read from the DB, where Json columns are JsonValue (null
+// included). The create-input type excludes null, so both Json fields are
+// overridden the same way.
 type SanitizableActionFields = Partial<
-  Omit<ActionFieldsSelection, "staticAttachments">
+  Omit<ActionFieldsSelection, "staticAttachments" | "haServiceData">
 > & {
   type: ActionType;
   staticAttachments?: Prisma.JsonValue | null;
+  haServiceData?: Prisma.JsonValue | null;
 };
 
 export function sanitizeActionFields(
@@ -253,7 +261,7 @@ export function sanitizeActionFields(
     haMqttTopic: null,
     haServiceDomain: null,
     haServiceName: null,
-    haServiceData: null,
+    haServiceData: Prisma.DbNull,
     haEntityId: null,
   };
 
@@ -332,7 +340,7 @@ export function sanitizeActionFields(
         haMqttTopic: action.haMqttTopic ?? null,
         haServiceDomain: action.haServiceDomain ?? null,
         haServiceName: action.haServiceName ?? null,
-        haServiceData: action.haServiceData ?? null,
+        haServiceData: action.haServiceData ?? Prisma.DbNull,
         haEntityId: action.haEntityId ?? null,
       };
     }

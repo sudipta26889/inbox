@@ -12,7 +12,7 @@ import { withError } from "@/utils/middleware";
  * Recommended schedule: every 5 minutes (cron: *\/5 * * * *)
  */
 
-export const GET = withError(async (request: Request) => {
+export const GET = withError("cron/taskpilot-janitor", async (request) => {
   if (!hasCronSecret(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

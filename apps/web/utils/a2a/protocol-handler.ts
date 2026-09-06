@@ -1,4 +1,5 @@
 import { createScopedLogger } from "@/utils/logger";
+import type { Prisma } from "@/generated/prisma/client";
 import prisma from "@/utils/prisma";
 import {
   A2A_SKILL_REGISTRY,
@@ -103,7 +104,7 @@ export async function handleMessageSend(
         id: messageId,
         contextId,
         role: "user",
-        content: content || {},
+        content: (content ?? {}) as Prisma.InputJsonValue,
         contentType: typeof content === "string" ? "text" : "structured_data",
         referenceTaskIds,
       },
@@ -150,7 +151,7 @@ export async function handleMessageSend(
       clientId: authContext.clientId,
       contextId,
       skill,
-      input: input || {},
+      input: (input ?? {}) as Prisma.InputJsonValue,
       state: initialState,
       requiresApproval,
       referenceTaskIds,
@@ -175,7 +176,7 @@ export async function handleMessageSend(
       data: {
         taskId: task.id,
         skill,
-        requestData: input || {},
+        requestData: (input ?? {}) as Prisma.InputJsonValue,
         requestReason: `External agent "${authContext.clientId}" requesting approval for ${skill}`,
         status: A2aApprovalStatus.pending,
       },
@@ -200,10 +201,10 @@ export async function handleMessageSend(
           error: error.message,
         });
       });
-    } catch (error: unknown) {
+    } catch (error) {
       logger.error("DharaHIL integration error", {
         taskId,
-        error: error.message,
+        error,
       });
     }
   } else {
@@ -365,7 +366,7 @@ export async function handleTaskCancel(
     A2aTaskState.canceled,
     A2aTaskState.rejected,
     A2aTaskState.unknown,
-  ];
+  ] as A2aTaskState[];
 
   if (terminalStates.includes(task.state)) {
     throw new Error(`Cannot cancel task in terminal state: ${task.state}`);

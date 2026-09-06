@@ -232,6 +232,10 @@ export function getActionColor(actionType: ActionType): Color {
       return "purple";
     case ActionType.A2A_NOTIFY:
       return "purple";
+    case ActionType.CREATE_TASK:
+      return "purple";
+    case ActionType.DELETE:
+      return "red";
     default: {
       const exhaustiveCheck: never = actionType;
       return exhaustiveCheck;

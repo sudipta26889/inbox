@@ -202,7 +202,7 @@ export async function processEmailsForAccount({
           await processHistoryItem(
             {
               messageId: message.id!,
-              threadId: message.threadId,
+              threadId: message.threadId ?? undefined,
             },
             {
               provider,

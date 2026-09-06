@@ -9,6 +9,7 @@
     "@react-email/components": "1.0.9",
     "@react-email/render": "2.0.4",
     "nanoid": "5.1.7",
+    "nodemailer": "8.0.2",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-email": "5.2.9",
@@ -17,6 +18,7 @@
   "devDependencies": {
     "@react-email/preview-server": "5.2.9",
     "@types/node": "24.10.1",
+    "@types/nodemailer": "7.0.11",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "tsconfig": "workspace:*",

@@ -213,7 +213,7 @@ export async function validateSkillAccess(
   context: A2aAuthContext,
   skillName: string,
   skillScope: string,
-): Promise<{ status: number; body: Record<string, unknown> } | null> {
+): Promise<ReturnType<typeof createForbiddenResponse> | null> {
   // Check if the client has the required scope
   if (!hasRequiredScope(context, skillScope)) {
     logger.warn("Insufficient scope for skill", {

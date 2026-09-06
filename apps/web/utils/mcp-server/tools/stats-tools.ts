@@ -21,12 +21,14 @@ export async function getEmailStats(
     period: params.period,
   });
 
-  // Use existing stats controller
+  // The controller takes epoch milliseconds (z.coerce.number()), not the ISO
+  // strings this tool accepts — passing them straight through produced NaN
+  // date bounds.
   const statsData = await getStatsByPeriod({
     emailAccountId: context.emailAccountId,
     period: params.period,
-    fromDate: params.fromDate,
-    toDate: params.toDate,
+    fromDate: toEpochMs(params.fromDate),
+    toDate: toEpochMs(params.toDate),
   });
 
   return {
@@ -47,4 +49,13 @@ export async function getEmailStats(
       totalUnread: statsData.allCount - statsData.readCount,
     },
   };
+}
+
+/** Accepts an ISO date string; returns epoch ms, or null when absent/invalid. */
+function toEpochMs(value: string | undefined): number | null {
+  if (!value) return null;
+
+  const parsed = new Date(value).getTime();
+
+  return Number.isNaN(parsed) ? null : parsed;
 }

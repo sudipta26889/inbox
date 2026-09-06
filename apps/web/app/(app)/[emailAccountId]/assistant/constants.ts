@@ -13,6 +13,9 @@ import {
   BellIcon,
   HomeIcon,
   RadioTowerIcon,
+  ListChecksIcon,
+  Trash2Icon,
+  type LucideIcon,
 } from "lucide-react";
 import { ActionType } from "@/generated/prisma/enums";
 
@@ -33,7 +36,7 @@ const ACTION_TYPE_COLORS = {
   [ActionType.A2A_NOTIFY]: "bg-cyan-500",
 } as const;
 
-export const ACTION_TYPE_TEXT_COLORS = {
+export const ACTION_TYPE_TEXT_COLORS: Record<ActionType, string> = {
   [ActionType.LABEL]: "text-blue-500",
   [ActionType.DRAFT_EMAIL]: "text-green-500",
   [ActionType.REPLY]: "text-green-500",
@@ -48,9 +51,11 @@ export const ACTION_TYPE_TEXT_COLORS = {
   [ActionType.NOTIFY_SENDER]: "text-amber-500",
   [ActionType.HOME_ASSISTANT]: "text-indigo-500",
   [ActionType.A2A_NOTIFY]: "text-cyan-500",
-} as const;
+  [ActionType.CREATE_TASK]: "text-sky-500",
+  [ActionType.DELETE]: "text-red-600",
+};
 
-export const ACTION_TYPE_ICONS = {
+export const ACTION_TYPE_ICONS: Record<ActionType, LucideIcon> = {
   [ActionType.LABEL]: TagIcon,
   [ActionType.DRAFT_EMAIL]: MailIcon,
   [ActionType.REPLY]: ReplyIcon,
@@ -65,7 +70,9 @@ export const ACTION_TYPE_ICONS = {
   [ActionType.NOTIFY_SENDER]: BellIcon,
   [ActionType.HOME_ASSISTANT]: HomeIcon,
   [ActionType.A2A_NOTIFY]: RadioTowerIcon,
-} as const;
+  [ActionType.CREATE_TASK]: ListChecksIcon,
+  [ActionType.DELETE]: Trash2Icon,
+};
 
 // Helper function to get action type from string (for RulesPrompt.tsx)
 export function getActionTypeColor(example: string): string {

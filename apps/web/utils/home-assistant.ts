@@ -27,7 +27,9 @@ type EmailData = {
 
 type RuleData = {
   id: string;
-  ruleId: string;
+  // ExecutedRule.ruleId is nullable in the schema; it is only forwarded into
+  // the payload, so null passes through as null rather than being rejected.
+  ruleId: string | null;
   ruleName?: string;
 };
 

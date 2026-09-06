@@ -1,14 +1,18 @@
-import prisma from "@/utils/prisma";
 import { createScopedLogger } from "@/utils/logger";
+import prisma from "@/utils/prisma";
 import type { McpToolContext } from "./registry";
-import { ActionType } from "@/generated/prisma/enums";
 
 const logger = createScopedLogger("mcp-rules-tools");
 
 /**
- * List all automation rules
+ * List all automation rules.
+ *
+ * Rule creation lives in admin-rules-tools (`admin_rules_create`), which is
+ * what the registry exposes. A second `createRule` here was never imported and
+ * could not have worked: it assigned `params.actions` straight to the `actions`
+ * relation, which Prisma rejects.
  */
-export async function listRules(context: McpToolContext, params: any) {
+export async function listRules(context: McpToolContext) {
   logger.info("MCP tool: list_rules", {
     userId: context.userId,
     emailAccountId: context.emailAccountId,
@@ -45,75 +49,5 @@ export async function listRules(context: McpToolContext, params: any) {
       updatedAt: rule.updatedAt.toISOString(),
     })),
     count: rules.length,
-  };
-}
-
-/**
- * Create a new automation rule
- */
-export async function createRule(
-  context: McpToolContext,
-  params: {
-    name: string;
-    instructions?: string;
-    actions: Array<{
-      type: string;
-      label?: string;
-      to?: string;
-      cc?: string;
-      bcc?: string;
-      subject?: string;
-      content?: string;
-      url?: string;
-    }>;
-    enabled?: boolean;
-    runOnThreads?: boolean;
-  },
-) {
-  logger.info("MCP tool: create_rule", {
-    userId: context.userId,
-    emailAccountId: context.emailAccountId,
-    name: params.name,
-  });
-
-  // Validate action types
-  const validActionTypes = Object.values(ActionType);
-  for (const action of params.actions) {
-    if (!validActionTypes.includes(action.type as ActionType)) {
-      throw new Error(
-        `Invalid action type: ${action.type}. Valid types: ${validActionTypes.join(", ")}`,
-      );
-    }
-  }
-
-  // Create the rule
-  const rule = await prisma.rule.create({
-    data: {
-      name: params.name,
-      instructions: params.instructions || null,
-      actions: params.actions,
-      enabled: params.enabled ?? true,
-      runOnThreads: params.runOnThreads ?? false,
-      emailAccountId: context.emailAccountId,
-    },
-  });
-
-  logger.info("Created automation rule", {
-    ruleId: rule.id,
-    ruleName: rule.name,
-    emailAccountId: context.emailAccountId,
-  });
-
-  return {
-    success: true,
-    rule: {
-      id: rule.id,
-      name: rule.name,
-      instructions: rule.instructions,
-      actions: rule.actions,
-      enabled: rule.enabled,
-      runOnThreads: rule.runOnThreads,
-      createdAt: rule.createdAt.toISOString(),
-    },
   };
 }

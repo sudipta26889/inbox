@@ -98,6 +98,7 @@ export function Rules({
 
       return {
         id: `placeholder-${systemType}`,
+        displayOrder: 0,
         name: ruleConfiguration.name,
         instructions: ruleConfiguration.instructions,
         enabled: false,

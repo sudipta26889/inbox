@@ -1,5 +1,6 @@
 import { DEFAULT_COLD_EMAIL_PROMPT } from "@/utils/cold-email/prompt";
 import { isMicrosoftProvider } from "@/utils/email/provider-types";
+import type { Action } from "@/generated/prisma/client";
 import { ActionType, SystemType } from "@/generated/prisma/enums";
 import { env } from "@/env";
 
@@ -166,47 +167,11 @@ export const SYSTEM_RULE_ORDER: SystemType[] = [
 export function getDefaultActions(
   systemType: SystemType,
   provider: string,
-): Array<{
-  id: string;
-  type: ActionType;
-  label: string | null;
-  labelId: string | null;
-  to: string | null;
-  subject: string | null;
-  content: string | null;
-  ruleId: string;
-  folderId: string | null;
-  folderName: string | null;
-  url: string | null;
-  cc: string | null;
-  bcc: string | null;
-  delayInMinutes: number | null;
-  staticAttachments: null;
-  createdAt: Date;
-  updatedAt: Date;
-}> {
+): Array<Action> {
   const config = getRuleConfig(systemType);
   const categoryAction = getCategoryAction(systemType, provider);
   const now = new Date();
-  const actions: Array<{
-    id: string;
-    type: ActionType;
-    label: string | null;
-    labelId: string | null;
-    to: string | null;
-    subject: string | null;
-    content: string | null;
-    ruleId: string;
-    folderId: string | null;
-    folderName: string | null;
-    url: string | null;
-    cc: string | null;
-    bcc: string | null;
-    delayInMinutes: number | null;
-    staticAttachments: null;
-    createdAt: Date;
-    updatedAt: Date;
-  }> = [];
+  const actions: Action[] = [];
 
   if (categoryAction === "move_folder") {
     actions.push({
@@ -225,6 +190,13 @@ export function getDefaultActions(
       bcc: null,
       delayInMinutes: null,
       staticAttachments: null,
+      haIntegrationType: null,
+      haWebhookId: null,
+      haMqttTopic: null,
+      haServiceDomain: null,
+      haServiceName: null,
+      haServiceData: null,
+      haEntityId: null,
       createdAt: now,
       updatedAt: now,
     });
@@ -245,6 +217,13 @@ export function getDefaultActions(
       bcc: null,
       delayInMinutes: null,
       staticAttachments: null,
+      haIntegrationType: null,
+      haWebhookId: null,
+      haMqttTopic: null,
+      haServiceDomain: null,
+      haServiceName: null,
+      haServiceData: null,
+      haEntityId: null,
       createdAt: now,
       updatedAt: now,
     });
@@ -267,6 +246,13 @@ export function getDefaultActions(
       bcc: null,
       delayInMinutes: null,
       staticAttachments: null,
+      haIntegrationType: null,
+      haWebhookId: null,
+      haMqttTopic: null,
+      haServiceDomain: null,
+      haServiceName: null,
+      haServiceData: null,
+      haEntityId: null,
       createdAt: now,
       updatedAt: now,
     });
@@ -289,6 +275,13 @@ export function getDefaultActions(
       bcc: null,
       delayInMinutes: null,
       staticAttachments: null,
+      haIntegrationType: null,
+      haWebhookId: null,
+      haMqttTopic: null,
+      haServiceDomain: null,
+      haServiceName: null,
+      haServiceData: null,
+      haEntityId: null,
       createdAt: now,
       updatedAt: now,
     });

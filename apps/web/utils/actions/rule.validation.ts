@@ -123,7 +123,10 @@ const zodAction = z
     haMqttTopic: z.string().nullish(),
     haServiceDomain: z.string().nullish(),
     haServiceName: z.string().nullish(),
-    haServiceData: z.record(z.any()).nullish(),
+    // The column is Json, so rules loaded from the DB can carry any JSON value
+    // here. Home Assistant needs an object to spread; that is enforced at
+    // execution (toServiceData in utils/ai/actions.ts), not at the form edge.
+    haServiceData: z.any().nullish(),
     haEntityId: z.string().nullish(),
   })
   .superRefine((data, ctx) => {

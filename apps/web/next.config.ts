@@ -17,6 +17,12 @@ const nextConfig: NextConfig = {
   output: process.env.DOCKER_BUILD === "true" ? "standalone" : undefined,
   // Skip TypeScript checking during E2E CI builds to save memory
   typescript: {
+    // Type-check the code that actually ships. Tests live in the root
+    // tsconfig and are held by scripts/typecheck-ratchet.mjs instead, so a
+    // fixture drifting cannot block a deploy — but a type error in shipped
+    // code now fails the build, which is how the DharaHIL rejection bug got
+    // to production with tsc pointing straight at it.
+    tsconfigPath: "tsconfig.build.json",
     ignoreBuildErrors: process.env.SKIP_TYPE_CHECK === "true",
   },
   serverExternalPackages: ["@sentry/nextjs", "@sentry/node"],

@@ -25,6 +25,7 @@ const actionNames: Record<ActionType, string> = {
   [ActionType.NOTIFY_SENDER]: "Notify sender",
   [ActionType.A2A_NOTIFY]: "A2A Notify",
   [ActionType.CREATE_TASK]: "TaskPilot",
+  [ActionType.DELETE]: "Delete",
 };
 
 const actionTooltips: Partial<Record<ActionType, string>> = {

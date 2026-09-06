@@ -248,7 +248,10 @@ function selectModel(
       const openAiCompatibleApiKey = resolveApiKey(aiApiKey, undefined);
 
       // Custom fetch to add format: "json" for Ollama models when using structured outputs
-      const customFetch = async (url: string, options?: RequestInit) => {
+      const customFetch = async (
+        url: URL | RequestInfo,
+        options?: RequestInit,
+      ) => {
         const isOllamaModel = modelName.startsWith("ollama/");
 
         logger.info("Custom fetch interceptor called", {

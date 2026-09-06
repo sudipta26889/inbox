@@ -1,5 +1,6 @@
 import { env } from "@/env";
 import { createScopedLogger } from "@/utils/logger";
+import { Prisma } from "@/generated/prisma/client";
 import prisma from "@/utils/prisma";
 import { taskpilotCache } from "@/utils/taskpilot/cache";
 import { TaskpilotClient } from "@/utils/taskpilot/client";
@@ -392,7 +393,9 @@ async function runShadow(
       pass1InputTokens: pass1.usage?.input ?? null,
       pass1OutputTokens: pass1.usage?.output ?? null,
       pass1Action: pass1.ok ? pass1.decision.action : null,
-      pass1Decision: pass1.ok ? (pass1.decision as object) : null,
+      pass1Decision: pass1.ok
+        ? (pass1.decision as Prisma.InputJsonValue)
+        : Prisma.DbNull,
       pass1Reason: pass1.ok ? pass1.decision.reason : null,
       status: pass1.ok ? "SHADOW" : "LLM_FAILED",
       errorMsg: pass1.ok ? null : pass1.errorMsg,
@@ -667,7 +670,9 @@ async function applyPass2(
       pass2DurationMs: pass2.durationMs,
       pass2InputTokens: pass2.usage?.input ?? null,
       pass2OutputTokens: pass2.usage?.output ?? null,
-      pass2Updates: pass2.ok ? (pass2.updates as object) : null,
+      pass2Updates: pass2.ok
+        ? (pass2.updates as Prisma.InputJsonValue)
+        : Prisma.DbNull,
       fieldUpdatesApplied: applied,
     },
   });

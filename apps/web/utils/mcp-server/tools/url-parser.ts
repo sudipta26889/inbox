@@ -155,15 +155,14 @@ export function decodeGmailThreadId(encodedId: string): string | null {
     const GMAIL_ALPHABET = "BCDFGHJKLMNPQRSTVWXZbcdfghjklmnpqrstvwxz";
 
     // Decode from base-40
-    let result = 0n;
-    for (let i = 0; i < encodedId.length; i++) {
-      const char = encodedId[i];
+    let result = BigInt(0);
+    for (const char of encodedId) {
       const value = GMAIL_ALPHABET.indexOf(char);
       if (value === -1) {
         // Not a Gmail-encoded ID, might be a regular hex ID
         return null;
       }
-      result = result * 40n + BigInt(value);
+      result = result * BigInt(40) + BigInt(value);
     }
 
     // Convert to hex string

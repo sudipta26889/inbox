@@ -26,7 +26,7 @@ const key = scryptSync(
  * Encrypts a string using AES-256-GCM
  * Returns a hex string containing: IV + Auth Tag + Encrypted content
  */
-export function encryptToken(text: string | null): string | null {
+export function encryptToken(text: string | null | undefined): string | null {
   if (text === null || text === undefined) return null;
 
   try {

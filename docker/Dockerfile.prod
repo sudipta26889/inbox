@@ -91,7 +91,10 @@ ENV QSTASH_TOKEN="dummy_qstash_token_for_build"
 ENV QSTASH_CURRENT_SIGNING_KEY="dummy_qstash_curr_key_for_build"
 ENV QSTASH_NEXT_SIGNING_KEY="dummy_qstash_next_key_for_build"
 ENV DOCKER_BUILD="true"
-ENV SKIP_TYPE_CHECK="true"
+# Type checking is ON for production builds. It is scoped to
+# apps/web/tsconfig.build.json (shipped code only); test fixtures are held by
+# the ratchet in apps/web/scripts/typecheck-ratchet.mjs.
+ENV SKIP_TYPE_CHECK="false"
 
 RUN cd apps/web \
  && pnpm exec next build \

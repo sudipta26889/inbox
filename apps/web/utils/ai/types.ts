@@ -1,3 +1,4 @@
+import type { Prisma } from "@/generated/prisma/client";
 import type { ParsedMessage } from "@/utils/types";
 import type { ExecutedAction } from "@/generated/prisma/client";
 
@@ -12,6 +13,9 @@ export type EmailForAction = Pick<
   | "attachments"
   | "internalDate"
   | "rawRecipients"
+  // Home Assistant payloads forward labels; without this the field was always
+  // undefined at the call site.
+  | "labelIds"
 >;
 
 export type ActionItem = {
@@ -35,6 +39,6 @@ export type ActionItem = {
   haMqttTopic?: string | null;
   haServiceDomain?: string | null;
   haServiceName?: string | null;
-  haServiceData?: Record<string, any> | null;
+  haServiceData?: Prisma.JsonValue | null;
   haEntityId?: string | null;
 };

@@ -8,7 +8,10 @@ export interface CallDeciderInput<T> {
   effort: "low" | "medium" | "high";
   maxTokens: number;
   model: string;
-  schema: z.ZodType<T>;
+  // Pin T to the schema's OUTPUT type. Bare z.ZodType<T> also matches the
+  // input type, which differs wherever a field uses .default() — that is how
+  // `reason` arrived as optional despite always being a string once parsed.
+  schema: z.ZodType<T, z.ZodTypeDef, unknown>;
   system: string;
   timeoutMs: number;
   user: string;
@@ -225,7 +228,7 @@ function stripThink(content: string): string {
 }
 
 function tryParse<T>(
-  schema: z.ZodType<T>,
+  schema: z.ZodType<T, z.ZodTypeDef, unknown>,
   raw: string,
 ): { ok: true; value: T } | { ok: false; error: string } {
   let json: unknown;

@@ -1,3 +1,4 @@
+import type { Prisma } from "@/generated/prisma/client";
 import { ActionType } from "@/generated/prisma/enums";
 import { sanitizeActionFields } from "@/utils/action-item";
 import { createEmailProvider } from "@/utils/email/provider";
@@ -31,7 +32,7 @@ export function mapActionToSanitizedFields(action: {
   haMqttTopic?: string | null;
   haServiceDomain?: string | null;
   haServiceName?: string | null;
-  haServiceData?: Record<string, any> | null;
+  haServiceData?: Prisma.JsonValue | null;
   haEntityId?: string | null;
 }) {
   const sanitized = sanitizeActionFields({

@@ -850,7 +850,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     handler: async (context, params) => {
       const { listRules } = await import("./rules-tools");
-      return listRules(context, toolParams(params));
+      return listRules(context);
     },
     requiredScope: "rules:read",
   },

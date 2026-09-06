@@ -44,7 +44,17 @@ export const redis = {
     if (opts?.nx) {
       args.push("NX");
     }
-    return ioRedisClient.set(key, serialized, ...args);
+    // ioredis types the final spread element as a Callback; these are
+    // command arguments (EX/NX), so the overload cannot be expressed.
+    // ioredis types a trailing string as a Callback, so this spread of
+    // command arguments (EX/NX) cannot be expressed through its overloads.
+    return (
+      ioRedisClient.set as unknown as (
+        key: string,
+        value: string,
+        ...args: string[]
+      ) => Promise<string | null>
+    )(key, serialized, ...args);
   },
 
   async del(...keys: string[]): Promise<number> {
@@ -165,7 +175,12 @@ export const redis = {
     if (opts?.count) {
       args.push("COUNT", opts.count);
     }
-    const [nextCursor, keys] = await ioRedisClient.scan(
+    const [nextCursor, keys] = await (
+      ioRedisClient.scan as unknown as (
+        cursor: number,
+        ...args: (string | number)[]
+      ) => Promise<[string, string[]]>
+    )(
       typeof cursor === "string" ? Number.parseInt(cursor, 10) : cursor,
       ...args,
     );

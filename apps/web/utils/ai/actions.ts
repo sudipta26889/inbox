@@ -1,3 +1,4 @@
+import type { Prisma } from "@/generated/prisma/client";
 import { after } from "next/server";
 import { ActionType } from "@/generated/prisma/enums";
 import type { ExecutedRule } from "@/generated/prisma/client";
@@ -522,7 +523,7 @@ const home_assistant: ActionFunction<{
   haMqttTopic?: string | null;
   haServiceDomain?: string | null;
   haServiceName?: string | null;
-  haServiceData?: Record<string, any> | null;
+  haServiceData?: Prisma.JsonValue | null;
   haEntityId?: string | null;
 }> = async ({ email, args, userId, executedRule, logger }) => {
   if (!args.haIntegrationType) {
@@ -536,7 +537,7 @@ const home_assistant: ActionFunction<{
     mqttTopic: args.haMqttTopic || undefined,
     serviceDomain: args.haServiceDomain || undefined,
     serviceName: args.haServiceName || undefined,
-    serviceData: args.haServiceData || undefined,
+    serviceData: toServiceData(args.haServiceData),
     entityId: args.haEntityId || undefined,
   };
 
@@ -816,4 +817,17 @@ function parseStaticAttachments(raw: unknown): SelectedAttachment[] {
       filename: item.name,
       mimeType: "application/pdf",
     }));
+}
+
+/**
+ * haServiceData is a Json column, so it may hold a scalar or array. Home
+ * Assistant spreads it into a service-call payload, which only makes sense for
+ * an object; anything else is dropped rather than spread into garbage.
+ */
+function toServiceData(value: unknown): Record<string, unknown> | undefined {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+
+  return undefined;
 }
