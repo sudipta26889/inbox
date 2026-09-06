@@ -820,6 +820,27 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     requiredScope: "stats:read",
   },
 
+  get_daily_digest: {
+    name: "get_daily_digest",
+    description:
+      "Get the stored cross-account morning digest: what is urgent, what is waiting on a reply, and what has gone quiet, per connected email account. Generated once each morning and kept for two days.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        date: {
+          type: "string",
+          description:
+            "Digest date as YYYY-MM-DD in the account's timezone. Defaults to today.",
+        },
+      },
+    },
+    handler: async (context, params) => {
+      const { getDailyDigestTool } = await import("./digest-tools");
+      return getDailyDigestTool(context, params as { date?: string });
+    },
+    requiredScope: "email:read",
+  },
+
   list_rules: {
     name: "list_rules",
     description: "List all automation rules configured for the email account.",

@@ -70,6 +70,11 @@ export const A2A_SKILL_REGISTRY: Record<string, A2aSkillDefinition> = {
     requiredScope: "calendar:write",
     requiresApproval: true,
   },
+  "digest.get": {
+    skill: "digest.get",
+    mcpTool: "get_daily_digest",
+    requiredScope: "email:read",
+  },
   "automation.list_rules": {
     skill: "automation.list_rules",
     mcpTool: "list_rules",

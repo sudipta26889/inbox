@@ -264,6 +264,25 @@ const AGENT_CARD = {
       outputModes: ["structured_data"],
       category: "automation",
     },
+    // -------- DIGEST SKILLS --------
+    {
+      name: "digest.get",
+      description:
+        "Get the stored cross-account morning digest: what is urgent, what is waiting on a reply, and what has gone quiet, per connected email account. Generated once each morning and kept for two days. Also pushed unprompted to agents on this instance's outbound allowlist.",
+      inputModes: ["structured_data"],
+      outputModes: ["structured_data"],
+      category: "email_management",
+      inputSchema: {
+        type: "object",
+        properties: {
+          date: {
+            type: "string",
+            description:
+              "Digest date as YYYY-MM-DD in the account's timezone. Defaults to today.",
+          },
+        },
+      },
+    },
     // -------- ANALYTICS SKILLS --------
     {
       name: "stats.email_analytics",
