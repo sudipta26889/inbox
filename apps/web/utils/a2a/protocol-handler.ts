@@ -10,6 +10,7 @@ import {
 import type { A2aAuthContext } from "./auth";
 import { validateSkillAccess } from "./auth";
 import { A2aApprovalStatus, A2aTaskState } from "@/generated/prisma/enums";
+import { canonicalActionKey } from "@/utils/dharahil/prior-decision";
 import { nanoid } from "nanoid";
 
 const logger = createScopedLogger("a2a-protocol");
@@ -231,6 +232,15 @@ export async function handleMessageSend(
         requestData: (input ?? {}) as Prisma.InputJsonValue,
         requestReason: `External agent "${authContext.clientId}" requesting approval for ${skill}`,
         status: A2aApprovalStatus.pending,
+        // Keyed on the MCP tool name and the same arguments the tool will
+        // receive, so the tool can recognise this decision when it runs and
+        // does not ask the human a second time for the same event.
+        actionKey: canonicalActionKey({
+          userId: authContext.userId,
+          emailAccountId: authContext.emailAccountId,
+          operation: skillDef.mcpTool,
+          args: input ?? {},
+        }),
       },
     });
 

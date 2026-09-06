@@ -2010,6 +2010,17 @@ model A2aApproval {
   dharahilChannel   String?         // slack, telegram
   dharahilMessageId String?         // Message ID for updates
 
+  /// Canonical identity of the action this decision authorizes: a hash of the
+  /// caller, the operation and its normalized arguments. Two requests to do the
+  /// same thing produce the same key, which is what lets the executing tool
+  /// recognise an action a human already approved instead of asking again.
+  actionKey String?
+
+  /// When this decision was spent. A human approval authorizes ONE execution;
+  /// without single-use consumption an approved task that retries — or a peer
+  /// resubmitting the identical action — inherits the earlier approval.
+  consumedAt DateTime?
+
   // ============ Timestamps ============
   requestedAt     DateTime          @default(now())
   respondedAt     DateTime?
@@ -2018,6 +2029,7 @@ model A2aApproval {
   @@index([status])
   @@index([requestedAt])
   @@index([taskId])
+  @@index([actionKey, status, consumedAt])
   @@map("a2a_approvals")
 }
 

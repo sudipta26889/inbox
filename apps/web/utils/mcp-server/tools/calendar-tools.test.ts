@@ -12,10 +12,11 @@ import {
 import type { McpToolContext } from "./registry";
 import { env } from "@/env";
 import { dharahilClient } from "@/utils/dharahil/client";
+import prisma from "@/utils/prisma";
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/utils/prisma");
-vi.mock("@/env", () => ({ env: { NEXT_PUBLIC_DHARAHIL_ENABLED: false } }));
+vi.mock("@/env", () => ({ env: {} }));
 vi.mock("@/utils/dharahil/client", () => ({
   dharahilClient: {
     runApprovalLoop: vi.fn(),
@@ -25,12 +26,16 @@ vi.mock("@/utils/dharahil/client", () => ({
 }));
 
 // `env`'s real type is readonly (t3-env); the mock above is a plain mutable
-// object at runtime, so route the flip through a cast rather than fighting
-// the type in every test.
+// The gate is armed by credentials being configured, not by a flag — so
+// arming it in a test means setting those. Routed through a cast rather than
+// fighting the env type in every test.
 function setDharahilEnabled(value: boolean) {
-  (
-    env as { NEXT_PUBLIC_DHARAHIL_ENABLED: boolean }
-  ).NEXT_PUBLIC_DHARAHIL_ENABLED = value;
+  const mutable = env as {
+    DHARAHIL_BASE_URL?: string;
+    DHARAHIL_API_KEY?: string;
+  };
+  mutable.DHARAHIL_BASE_URL = value ? "https://gateway.test" : undefined;
+  mutable.DHARAHIL_API_KEY = value ? "key" : undefined;
 }
 
 const provider = {
@@ -57,6 +62,9 @@ const context: McpToolContext = {
 
 describe("createCalendarEvent", () => {
   beforeEach(() => {
+    // No prior human decision exists in these tests, so the gate must ask.
+    vi.mocked(prisma.a2aApproval.updateMany).mockResolvedValue({ count: 0 });
+
     vi.clearAllMocks();
     resolve.mockResolvedValue({
       account: { id: "acct-1", email: "me@x.com", timezone: "Asia/Kolkata" },
@@ -743,6 +751,9 @@ describe("Calendar URL support beyond get_calendar_event", () => {
 describe("DharaHIL approval gate content", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // clearAllMocks above wipes the top-level stub, and the gate reads {count}
+    // off this call to decide whether a human already approved the action.
+    vi.mocked(prisma.a2aApproval.updateMany).mockResolvedValue({ count: 0 });
     resolve.mockResolvedValue({
       account: { id: "acct-1", email: "me@x.com", timezone: "Asia/Kolkata" },
       providers: [provider],
@@ -756,6 +767,59 @@ describe("DharaHIL approval gate content", () => {
     // Shared mutable mock object — every other test in this file assumes
     // DharaHIL is off, so it must not leak past this describe block.
     setDharahilEnabled(false);
+  });
+
+  /**
+   * The double-prompt this all exists to remove.
+   *
+   * A peer's calendar.create_event is approved once, by the A2A layer, before
+   * the task is released to run. This tool then ran its own independent gate,
+   * so one event asked the same human twice in the same gateway.
+   */
+  it("does not ask again when a human already approved this exact event", async () => {
+    setDharahilEnabled(true);
+    vi.mocked(prisma.a2aApproval.updateMany).mockResolvedValue({ count: 1 });
+    provider.createEvent = vi.fn().mockResolvedValue({
+      id: "evt-1",
+      title: "Quarterly review",
+      startTime: new Date(),
+      endTime: new Date(),
+      attendees: [],
+    });
+
+    await createCalendarEvent(context, {
+      title: "Quarterly review",
+      startTime: "2026-09-20T09:00:00Z",
+      endTime: "2026-09-20T10:00:00Z",
+    });
+
+    expect(dharahilClient.runApprovalLoop).not.toHaveBeenCalled();
+    expect(provider.createEvent).toHaveBeenCalled();
+  });
+
+  /**
+   * And the direction that must never break: no recorded decision means ask.
+   * The skip is a lookup of durable state, not a flag a caller can set, so a
+   * caller that never went through an approval still faces the gate.
+   */
+  it("still asks when no decision has been recorded for the event", async () => {
+    setDharahilEnabled(true);
+    vi.mocked(prisma.a2aApproval.updateMany).mockResolvedValue({ count: 0 });
+    provider.createEvent = vi.fn().mockResolvedValue({
+      id: "evt-1",
+      title: "Quarterly review",
+      startTime: new Date(),
+      endTime: new Date(),
+      attendees: [],
+    });
+
+    await createCalendarEvent(context, {
+      title: "Quarterly review",
+      startTime: "2026-09-20T09:00:00Z",
+      endTime: "2026-09-20T10:00:00Z",
+    });
+
+    expect(dharahilClient.runApprovalLoop).toHaveBeenCalledTimes(1);
   });
 
   it("shows the resolved scope and notify default, not raw undefined, on update", async () => {

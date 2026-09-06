@@ -10,6 +10,10 @@ import type {
 } from "@/utils/calendar/event-types";
 import { dharahilClient } from "@/utils/dharahil/client";
 import { isApprovalGateRequired } from "@/utils/dharahil/required";
+import {
+  canonicalActionKey,
+  consumeApprovedDecision,
+} from "@/utils/dharahil/prior-decision";
 import { extractEventId } from "./url-parser";
 
 const logger = createScopedLogger("mcp-calendar-tools");
@@ -331,8 +335,27 @@ export async function createCalendarEvent(
   const isExternal =
     !params.attendees || params.attendees.length === 0 || hasExternalAttendees;
 
-  // DharaHIL approval gate for ALL calendar event creates
-  if (isApprovalGateRequired()) {
+  // DharaHIL approval gate for ALL calendar event creates.
+  //
+  // A peer's request is approved once, by the A2A layer, before the task is
+  // released to run. Asking again here is the same human, the same gateway and
+  // the same event a second time — so consult the recorded decision first. This
+  // is a lookup of durable state keyed by the action itself, not a flag the
+  // caller can set, so the gate stays non-bypassable: the only way past it is
+  // for someone to have actually approved this exact event.
+  const alreadyApproved = isApprovalGateRequired()
+    ? await consumeApprovedDecision({
+        actionKey: canonicalActionKey({
+          userId: context.userId,
+          emailAccountId: context.emailAccountId,
+          operation: "create_calendar_event",
+          args: params,
+        }),
+        logger,
+      })
+    : false;
+
+  if (isApprovalGateRequired() && !alreadyApproved) {
     logger.info("DharaHIL: Requesting approval for calendar event creation");
     logger.trace("DharaHIL: calendar event creation details", {
       title: params.title,
