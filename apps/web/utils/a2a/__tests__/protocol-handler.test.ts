@@ -10,6 +10,8 @@ import { A2A_SKILL_REGISTRY } from "../skill-registry";
 import type { A2aAuthContext } from "../auth";
 import { A2aTaskState } from "@/generated/prisma/enums";
 
+vi.mock("server-only", () => ({}));
+
 // Mock dependencies
 vi.mock("@/utils/prisma", () => ({
   default: {
@@ -151,7 +153,7 @@ describe("A2A Protocol Handlers", () => {
       ).rejects.toThrow("Unknown skill: unknown.skill");
     });
 
-    it("should enforce scope requirements", async () => {
+    it("should enforce scope requirements (now denied earlier, at the peer policy)", async () => {
       const limitedAuthContext = {
         ...mockAuthContext,
         scopes: ["email:read"],
@@ -163,7 +165,7 @@ describe("A2A Protocol Handlers", () => {
           skill: "email.send",
           input: {},
         }),
-      ).rejects.toThrow("email:write");
+      ).rejects.toThrow("not available to external agents");
     });
 
     it("should mark task as auth_required for sensitive skills", async () => {

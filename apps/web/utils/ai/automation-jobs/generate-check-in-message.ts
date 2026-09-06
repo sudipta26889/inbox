@@ -3,9 +3,8 @@ import {
   readUIMessageStream,
   type UIMessage,
 } from "ai";
+import { loadAgentContext } from "@/utils/ai/assistant/agent-context";
 import { aiProcessAssistantChat } from "@/utils/ai/assistant/chat";
-import { getInboxStatsForChatContext } from "@/utils/ai/assistant/get-inbox-stats-for-chat-context";
-import { getRecentChatMemories } from "@/utils/ai/assistant/get-recent-chat-memories";
 import type { Logger } from "@/utils/logger";
 import { getEmailAccountWithAi } from "@/utils/user/get";
 
@@ -33,18 +32,12 @@ export async function aiGenerateAutomationCheckInMessage({
     throw new Error("Email account is not connected to a provider");
   }
 
-  const [inboxStats, memories] = await Promise.all([
-    getInboxStatsForChatContext({
-      emailAccountId,
-      provider: emailAccount.account.provider,
-      logger: aiLogger,
-    }),
-    getRecentChatMemories({
-      emailAccountId,
-      logger: aiLogger,
-      logContext: "scheduled check-in",
-    }),
-  ]);
+  const { inboxStats, memories } = await loadAgentContext({
+    emailAccountId,
+    provider: emailAccount.account.provider,
+    surface: "scheduled check-in",
+    logger,
+  });
 
   const userMessage: UIMessage = {
     id: `check-in-${emailAccountId}`,

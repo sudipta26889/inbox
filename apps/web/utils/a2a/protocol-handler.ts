@@ -1,5 +1,7 @@
 import { createScopedLogger } from "@/utils/logger";
 import type { Prisma } from "@/generated/prisma/client";
+import { isPeerReachableSkill } from "@/utils/a2a/peer-tool-policy";
+import { answerA2aMessage, extractQuestion } from "@/utils/a2a/answer-message";
 import prisma from "@/utils/prisma";
 import {
   A2A_SKILL_REGISTRY,
@@ -43,8 +45,10 @@ export interface MessageSendParams {
  * Message.send response
  */
 export interface MessageSendResponse {
+  answer?: string;
   contextId: string;
   messageId?: string;
+  replyMessageId?: string;
   state?: A2aTaskState;
   taskId?: string;
 }
@@ -112,6 +116,42 @@ export async function handleMessageSend(
 
     logger.info("Created A2A message", { contextId, messageId });
 
+    // A peer that sent text asked a question. Answer it rather than returning
+    // a bare messageId, which is what made every plain-text message a silent
+    // no-op behind an HTTP 200.
+    const question = extractQuestion(content);
+
+    if (question) {
+      try {
+        const answer = await answerA2aMessage({
+          emailAccountId: authContext.emailAccountId,
+          question,
+          contextId,
+          logger,
+        });
+
+        if (answer) {
+          const replyId = nanoid();
+          await prisma.a2aMessage.create({
+            data: {
+              id: replyId,
+              contextId,
+              role: "agent",
+              content: answer as Prisma.InputJsonValue,
+              contentType: "text",
+              referenceTaskIds: [],
+            },
+          });
+
+          return { contextId, messageId, replyMessageId: replyId, answer };
+        }
+      } catch (error) {
+        // A failed answer must not lose the peer's message, which is already
+        // stored above.
+        logger.error("Failed to answer A2A message", { contextId, error });
+      }
+    }
+
     return {
       contextId,
       messageId,
@@ -122,6 +162,18 @@ export async function handleMessageSend(
   const skillDef = A2A_SKILL_REGISTRY[skill];
   if (!skillDef) {
     throw new Error(`Unknown skill: ${skill}`);
+  }
+
+  // Deny writes at the point skills are dispatched, not per-skill. A peer
+  // holding a write scope is still not the account owner.
+  if (!isPeerReachableSkill(skill)) {
+    logger.warn("Peer attempted a skill that is not peer-reachable", {
+      skill,
+      clientId: authContext.clientId,
+    });
+    throw new Error(
+      `Skill '${skill}' is not available to external agents. Writes are performed by the account owner.`,
+    );
   }
 
   // Check authorization

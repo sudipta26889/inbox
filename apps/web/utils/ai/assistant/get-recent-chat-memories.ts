@@ -11,7 +11,8 @@ export async function getRecentChatMemories({
 }: {
   emailAccountId: string;
   logger: Logger;
-  logContext: "messaging chat" | "Slack chat" | "scheduled check-in";
+  /** Free-form label for log attribution; callers go through loadAgentContext. */
+  logContext: string;
 }): Promise<{ content: string; date: string }[]> {
   try {
     const memories = await prisma.chatMemory.findMany({
