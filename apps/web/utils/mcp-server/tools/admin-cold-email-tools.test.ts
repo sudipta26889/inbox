@@ -7,6 +7,7 @@ import {
   adminColdEmailUpdateSettings,
 } from "@/utils/mcp-server/tools/admin-cold-email-tools";
 import { describe, expect, it, vi } from "vitest";
+import { expectMcpData } from "@/__tests__/helpers";
 import type { McpToolContext } from "./registry";
 
 vi.mock("@/utils/prisma");
@@ -27,11 +28,9 @@ describe("adminColdEmailGetSettings", () => {
 
     const result = await adminColdEmailGetSettings(ctx, {});
 
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.data.enabled).toBe(false);
-      expect(result.data.mode).toBe("DISABLED");
-    }
+    const data = expectMcpData(result);
+    expect(data.enabled).toBe(false);
+    expect(data.mode).toBe("DISABLED");
   });
 
   it("returns settings when rule exists", async () => {
@@ -56,12 +55,10 @@ describe("adminColdEmailGetSettings", () => {
 
     const result = await adminColdEmailGetSettings(ctx, {});
 
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.data.enabled).toBe(true);
-      expect(result.data.mode).toBe("LABEL");
-      expect(result.data.prompt).toBe("Block recruiters");
-    }
+    const data = expectMcpData(result);
+    expect(data.enabled).toBe(true);
+    expect(data.mode).toBe("LABEL");
+    expect(data.prompt).toBe("Block recruiters");
   });
 });
 
@@ -105,11 +102,9 @@ describe("adminColdEmailUpdateSettings", () => {
       prompt: "block all",
     });
 
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.data.enabled).toBe(true);
-      expect(result.data.mode).toBe("ARCHIVE_AND_LABEL");
-    }
+    const data = expectMcpData(result);
+    expect(data.enabled).toBe(true);
+    expect(data.mode).toBe("ARCHIVE_AND_LABEL");
   });
 });
 
@@ -119,11 +114,9 @@ describe("adminColdEmailListBlocked", () => {
 
     const result = await adminColdEmailListBlocked(ctx, { limit: 50 });
 
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.data.items).toEqual([]);
-      expect(result.data.total).toBe(0);
-    }
+    const data = expectMcpData(result);
+    expect(data.items).toEqual([]);
+    expect(data.total).toBe(0);
   });
 
   it("applies default limit when not provided", async () => {
@@ -301,8 +294,8 @@ describe("cold-email full flow", () => {
 
     // 1. Initial get: disabled
     const initial = await adminColdEmailGetSettings(ctx, {});
-    expect(initial.ok).toBe(true);
-    if (initial.ok) expect(initial.data.enabled).toBe(false);
+    const initialData = expectMcpData(initial);
+    expect(initialData.enabled).toBe(false);
 
     // 2. Enable with ARCHIVE_AND_LABEL
     const updated = await adminColdEmailUpdateSettings(ctx, {
@@ -311,11 +304,9 @@ describe("cold-email full flow", () => {
       prompt: "Block sales pitches and recruiter spam",
       labelName: "Cold Emails",
     });
-    expect(updated.ok).toBe(true);
-    if (updated.ok) {
-      expect(updated.data.enabled).toBe(true);
-      expect(updated.data.mode).toBe("ARCHIVE_AND_LABEL");
-    }
+    const updatedData = expectMcpData(updated);
+    expect(updatedData.enabled).toBe(true);
+    expect(updatedData.mode).toBe("ARCHIVE_AND_LABEL");
 
     // 3. Mark a sender as cold
     const marked = await adminColdEmailMark(ctx, {
@@ -327,13 +318,11 @@ describe("cold-email full flow", () => {
 
     // 4. List blocked: should contain the marked sender
     const listed = await adminColdEmailListBlocked(ctx, { limit: 50 });
-    expect(listed.ok).toBe(true);
-    if (listed.ok) {
-      expect(listed.data.items.map((i) => i.sender)).toContain(
-        "recruiter@bigco.com",
-      );
-      expect(listed.data.total).toBeGreaterThanOrEqual(1);
-    }
+    const listedData = expectMcpData(listed);
+    expect(listedData.items.map((i) => i.sender)).toContain(
+      "recruiter@bigco.com",
+    );
+    expect(listedData.total).toBeGreaterThanOrEqual(1);
 
     // 5. Unmark
     const unmarked = await adminColdEmailMark(ctx, {
@@ -344,11 +333,9 @@ describe("cold-email full flow", () => {
 
     // 6. List again: sender no longer present
     const listedAfter = await adminColdEmailListBlocked(ctx, { limit: 50 });
-    expect(listedAfter.ok).toBe(true);
-    if (listedAfter.ok) {
-      expect(listedAfter.data.items.map((i) => i.sender)).not.toContain(
-        "recruiter@bigco.com",
-      );
-    }
+    const listedAfterData = expectMcpData(listedAfter);
+    expect(listedAfterData.items.map((i) => i.sender)).not.toContain(
+      "recruiter@bigco.com",
+    );
   });
 });

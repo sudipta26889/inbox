@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { runTool } from "@/__tests__/helpers";
 import prisma from "@/utils/__mocks__/prisma";
 import { createScopedLogger } from "@/utils/logger";
 import { isActivePremium } from "@/utils/premium";
@@ -117,7 +118,7 @@ describe("chat settings tools", () => {
       logger,
     });
 
-    const result = await toolInstance.execute({});
+    const result = await runTool(toolInstance, {});
 
     expect(result).toMatchObject({
       snapshotVersion: "2026-02-20",
@@ -213,7 +214,7 @@ describe("chat settings tools", () => {
       logger,
     });
 
-    const result = await toolInstance.execute({});
+    const result = await runTool(toolInstance, {});
 
     const invalidWritableCapability = result.capabilities.find((capability) => {
       if (!capability.canWrite) return false;
@@ -240,7 +241,7 @@ describe("chat settings tools", () => {
       logger,
     });
 
-    const result = await toolInstance.execute({
+    const result = await runTool(toolInstance, {
       dryRun: false,
       changes: [
         {
@@ -282,7 +283,7 @@ describe("chat settings tools", () => {
       logger,
     });
 
-    const result = await toolInstance.execute({
+    const result = await runTool(toolInstance, {
       dryRun: true,
       changes: [
         {
@@ -317,7 +318,7 @@ describe("chat settings tools", () => {
       logger,
     });
 
-    const result = await toolInstance.execute({
+    const result = await runTool(toolInstance, {
       dryRun: false,
       changes: [
         {
@@ -353,7 +354,7 @@ describe("chat settings tools", () => {
       logger,
     });
 
-    const result = await toolInstance.execute({
+    const result = await runTool(toolInstance, {
       dryRun: false,
       changes: [
         {
@@ -384,7 +385,7 @@ describe("chat settings tools", () => {
       logger,
     });
 
-    const result = await toolInstance.execute({
+    const result = await runTool(toolInstance, {
       dryRun: false,
       changes: [
         {
@@ -424,7 +425,7 @@ describe("chat settings tools", () => {
       logger,
     });
 
-    const result = await toolInstance.execute({
+    const result = await runTool(toolInstance, {
       dryRun: false,
       changes: [
         {
@@ -463,7 +464,7 @@ describe("chat settings tools", () => {
       logger,
     });
 
-    const result = await toolInstance.execute({
+    const result = await runTool(toolInstance, {
       dryRun: false,
       changes: [
         {
@@ -513,7 +514,7 @@ describe("chat settings tools", () => {
       logger,
     });
 
-    const result = await toolInstance.execute({
+    const result = await runTool(toolInstance, {
       dryRun: false,
       changes: [
         {
@@ -552,7 +553,7 @@ describe("chat settings tools", () => {
       logger,
     });
 
-    await toolInstance.execute({
+    await runTool(toolInstance, {
       dryRun: false,
       changes: [
         {
@@ -608,7 +609,7 @@ describe("chat settings tools", () => {
       logger,
     });
 
-    await toolInstance.execute({
+    await runTool(toolInstance, {
       dryRun: false,
       changes: [
         {
@@ -663,7 +664,7 @@ describe("chat settings tools", () => {
       logger,
     });
 
-    await toolInstance.execute({
+    await runTool(toolInstance, {
       dryRun: false,
       changes: [
         {
@@ -723,7 +724,7 @@ describe("chat settings tools", () => {
       logger,
     });
 
-    const result = await toolInstance.execute({
+    const result = await runTool(toolInstance, {
       dryRun: false,
       changes: [
         {
@@ -755,7 +756,7 @@ describe("chat settings tools", () => {
       logger,
     });
 
-    const result = await toolInstance.execute({
+    const result = await runTool(toolInstance, {
       dryRun: false,
       changes: [
         {

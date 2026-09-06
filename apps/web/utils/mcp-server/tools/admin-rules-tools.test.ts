@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { expectMcpData } from "@/__tests__/helpers";
 import prisma from "@/utils/__mocks__/prisma";
 
 vi.mock("@/utils/prisma");
@@ -119,10 +120,8 @@ describe("adminRulesGet", () => {
 
     const out = await adminRulesGet(ctx, { id: "r_1" });
 
-    expect(out.ok).toBe(true);
-    if (out.ok) {
-      expect((out.data as any).rule.id).toBe("r_1");
-    }
+    const outData = expectMcpData(out);
+    expect((outData as any).rule.id).toBe("r_1");
     expect(prisma.rule.findFirst).toHaveBeenCalledWith({
       where: { id: "r_1", emailAccountId: "ea_1" },
       include: { actions: true, group: true },
@@ -180,10 +179,8 @@ describe("adminRulesCreate", () => {
       conditions: [{ type: "AI", instructions: "match newsletters" }],
     });
 
-    expect(out.ok).toBe(true);
-    if (out.ok) {
-      expect((out.data as any).rule.id).toBe("r_new");
-    }
+    const outData = expectMcpData(out);
+    expect((outData as any).rule.id).toBe("r_new");
     expect(prisma.rule.create).toHaveBeenCalled();
   });
 
@@ -228,10 +225,8 @@ describe("adminRulesUpdate", () => {
       conditions: [{ type: "AI", instructions: "match" }],
     });
 
-    expect(out.ok).toBe(true);
-    if (out.ok) {
-      expect((out.data as any).rule.id).toBe("r_1");
-    }
+    const outData = expectMcpData(out);
+    expect((outData as any).rule.id).toBe("r_1");
   });
 
   it("returns NOT_FOUND when the rule does not belong to the account", async () => {
@@ -334,10 +329,8 @@ describe("adminRulesSetEnabled", () => {
       enabled: false,
     });
 
-    expect(out.ok).toBe(true);
-    if (out.ok) {
-      expect((out.data as any).rule.enabled).toBe(false);
-    }
+    const outData = expectMcpData(out);
+    expect((outData as any).rule.enabled).toBe(false);
     expect(prisma.rule.update).toHaveBeenCalledWith({
       where: { id: "r_1", emailAccountId: "ea_1" },
       data: { enabled: false },

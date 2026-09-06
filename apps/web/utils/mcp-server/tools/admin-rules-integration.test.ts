@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { expectMcpData } from "@/__tests__/helpers";
 import prisma from "@/utils/__mocks__/prisma";
 
 vi.mock("@/utils/prisma");
@@ -76,10 +77,8 @@ describe("admin_rules_* end-to-end", () => {
     // 1. list — empty
     prisma.rule.findMany.mockResolvedValueOnce([]);
     const listed = await adminRulesList(ctx, {});
-    expect(listed.ok).toBe(true);
-    if (listed.ok) {
-      expect((listed.data as any).count).toBe(0);
-    }
+    const listedData = expectMcpData(listed);
+    expect((listedData as any).count).toBe(0);
 
     // 2. create
     prisma.rule.create.mockResolvedValueOnce(createdRule);
@@ -91,10 +90,8 @@ describe("admin_rules_* end-to-end", () => {
       ],
       conditions: [{ type: "AI", instructions: "filter newsletters" }],
     });
-    expect(created.ok).toBe(true);
-    if (created.ok) {
-      expect((created.data as any).rule.id).toBe("r_created");
-    }
+    const createdData = expectMcpData(created);
+    expect((createdData as any).rule.id).toBe("r_created");
 
     // 3. update
     prisma.rule.findFirst.mockResolvedValueOnce({
@@ -114,10 +111,8 @@ describe("admin_rules_* end-to-end", () => {
       ],
       conditions: [{ type: "AI", instructions: "filter newsletters" }],
     });
-    expect(updated.ok).toBe(true);
-    if (updated.ok) {
-      expect((updated.data as any).rule.name).toBe("Newsletters (renamed)");
-    }
+    const updatedData = expectMcpData(updated);
+    expect((updatedData as any).rule.name).toBe("Newsletters (renamed)");
 
     // 4. set_enabled false
     prisma.rule.findFirst.mockResolvedValueOnce({ id: "r_created" });
@@ -129,10 +124,8 @@ describe("admin_rules_* end-to-end", () => {
       ruleId: "r_created",
       enabled: false,
     });
-    expect(toggled.ok).toBe(true);
-    if (toggled.ok) {
-      expect((toggled.data as any).rule.enabled).toBe(false);
-    }
+    const toggledData = expectMcpData(toggled);
+    expect((toggledData as any).rule.enabled).toBe(false);
 
     // 5. delete dry-run
     prisma.rule.findFirst.mockResolvedValueOnce({
@@ -167,11 +160,9 @@ describe("admin_rules_* end-to-end", () => {
       id: "r_created",
       confirm: true,
     });
-    expect(confirmedDelete.ok).toBe(true);
-    if (confirmedDelete.ok) {
-      expect(confirmedDelete.dryRun).toBe(false);
-      expect((confirmedDelete.data as any).id).toBe("r_created");
-    }
+    const confirmedDeleteData = expectMcpData(confirmedDelete);
+    expect(confirmedDelete.dryRun).toBe(false);
+    expect((confirmedDeleteData as any).id).toBe("r_created");
     expect(prisma.rule.delete).toHaveBeenCalledWith({
       where: { id: "r_created", emailAccountId: "ea_1" },
     });

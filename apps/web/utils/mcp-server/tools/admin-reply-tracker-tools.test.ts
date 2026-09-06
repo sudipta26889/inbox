@@ -11,6 +11,7 @@ import {
   adminReplyTrackerUpdateSettings,
 } from "@/utils/mcp-server/tools/admin-reply-tracker-tools";
 import { describe, expect, it, vi } from "vitest";
+import { expectMcpData } from "@/__tests__/helpers";
 import type { McpToolContext } from "./registry";
 
 vi.mock("@/utils/prisma");
@@ -35,13 +36,11 @@ describe("admin_reply_tracker_get_settings", () => {
 
     const result = await adminReplyTrackerGetSettings(mcpCtx, {});
 
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.data).toMatchObject({
-        draftRepliesEnabled: false,
-        draftReplyConfidence: DraftReplyConfidence.STANDARD,
-      });
-    }
+    const data = expectMcpData(result);
+    expect(data).toMatchObject({
+      draftRepliesEnabled: false,
+      draftReplyConfidence: DraftReplyConfidence.STANDARD,
+    });
   });
 
   it("returns NOT_FOUND when account not owned", async () => {
@@ -74,12 +73,10 @@ describe("admin_reply_tracker_update_settings", () => {
       draftReplyConfidence: DraftReplyConfidence.HIGH_CONFIDENCE,
     });
 
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.data.draftReplyConfidence).toBe(
-        DraftReplyConfidence.HIGH_CONFIDENCE,
-      );
-    }
+    const data = expectMcpData(result);
+    expect(data.draftReplyConfidence).toBe(
+      DraftReplyConfidence.HIGH_CONFIDENCE,
+    );
   });
 
   it("returns NOT_FOUND when account not owned by user", async () => {
@@ -124,10 +121,8 @@ describe("admin_reply_tracker_update_settings", () => {
       draftRepliesEnabled: true,
     });
 
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.data.draftRepliesEnabled).toBe(true);
-    }
+    const data = expectMcpData(result);
+    expect(data.draftRepliesEnabled).toBe(true);
   });
 });
 
@@ -153,8 +148,8 @@ describe("admin_follow_ups_list", () => {
 
     const result = await adminFollowUpsList(mcpCtx, { limit: 10 });
 
-    expect(result.ok).toBe(true);
-    if (result.ok) expect(result.data.items).toHaveLength(1);
+    const data = expectMcpData(result);
+    expect(data.items).toHaveLength(1);
   });
 
   it("returns VALIDATION_ERROR on out-of-range limit", async () => {
@@ -197,8 +192,8 @@ describe("admin_follow_ups_update", () => {
       resolved: true,
     });
 
-    expect(result.ok).toBe(true);
-    if (result.ok) expect(result.data.resolved).toBe(true);
+    const data = expectMcpData(result);
+    expect(data.resolved).toBe(true);
   });
 
   it("returns NOT_FOUND for missing id", async () => {

@@ -1,3 +1,5 @@
+import type { ToolCallOptions } from "ai";
+import type { McpResult } from "@/utils/mcp-server/envelope";
 import type { EmailAccountWithAI } from "@/utils/llms/types";
 import type { EmailForLLM } from "@/utils/types";
 import type { EmailProvider } from "@/utils/email/types";
@@ -154,6 +156,14 @@ export function getAction(overrides: Partial<Action> = {}): Action {
     folderName: null,
     folderId: null,
     delayInMinutes: null,
+    staticAttachments: null,
+    haIntegrationType: null,
+    haWebhookId: null,
+    haMqttTopic: null,
+    haServiceDomain: null,
+    haServiceName: null,
+    haServiceData: null,
+    haEntityId: null,
     ...overrides,
   };
 }
@@ -315,4 +325,54 @@ export function getCalendarConnection({
     updatedAt: new Date(),
     calendars: calendarIds.map((id) => ({ calendarId: id })),
   };
+}
+
+/**
+ * Unwrap an admin-tool envelope in a test.
+ *
+ * `data` is optional even on success (a dryRun returns `preview` instead), so
+ * narrowing on `ok` alone still leaves `T | undefined`. Asserting here means a
+ * test that unexpectedly gets a failure envelope reports the actual error code
+ * rather than failing later on "undefined is not an object".
+ */
+export function expectMcpData<T>(result: McpResult<T>): T {
+  if (!result.ok) {
+    throw new Error(
+      `Expected a successful envelope, got ${result.error.code}: ${result.error.message}`,
+    );
+  }
+
+  if (result.data === undefined) {
+    throw new Error("Expected data on the success envelope, got none");
+  }
+
+  return result.data;
+}
+
+/**
+ * Invoke an AI SDK tool the way the runtime does.
+ *
+ * `execute` is optional on the Tool type and takes (input, options); calling
+ * it with one argument fails to type-check, and asserting it exists at every
+ * call site is noise. The options here are the minimum the SDK passes.
+ */
+export function runTool<TInput, TOutput>(
+  toolInstance: {
+    execute?: (
+      input: TInput,
+      options: ToolCallOptions,
+    ) => PromiseLike<TOutput> | TOutput;
+  },
+  input: TInput,
+): Promise<TOutput> {
+  if (!toolInstance.execute) {
+    throw new Error("Tool has no execute function");
+  }
+
+  return Promise.resolve(
+    toolInstance.execute(input, {
+      toolCallId: "test-tool-call",
+      messages: [],
+    } as ToolCallOptions),
+  );
 }

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { expectMcpData } from "@/__tests__/helpers";
 import prisma from "@/utils/__mocks__/prisma";
 import { TaskpilotClient } from "@/utils/taskpilot/client";
 import { convertToTaskpilotTask } from "./taskpilot-tools";
@@ -101,13 +102,11 @@ describe("convertToTaskpilotTask", () => {
       emailId: "msg-1",
       preview: true,
     });
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.data).toMatchObject({
-        alreadyExisted: false,
-      });
-      expect(result.data).toHaveProperty("draft");
-    }
+    const data = expectMcpData(result);
+    expect(data).toMatchObject({
+      alreadyExisted: false,
+    });
+    expect(data).toHaveProperty("draft");
     // No work-item was created
     expect(prisma.emailTaskLink.upsert).not.toHaveBeenCalled();
   });
@@ -132,12 +131,10 @@ describe("convertToTaskpilotTask", () => {
       emailId: "msg-2",
       preview: false,
     });
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.data).toMatchObject({
-        taskpilotIdentifier: "WEB-1",
-      });
-    }
+    const data = expectMcpData(result);
+    expect(data).toMatchObject({
+      taskpilotIdentifier: "WEB-1",
+    });
     const upsertCall = prisma.emailTaskLink.upsert.mock.calls[0]?.[0] as {
       create: { source: string };
     };
