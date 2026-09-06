@@ -79,6 +79,24 @@ async function main() {
     accessTokenTtlSeconds: Math.floor(days * 24 * 60 * 60),
   });
 
+  // generateAccessToken always mints a refresh token alongside the access one.
+  // For a static peer token that is a footgun: refreshAccessToken rotates the
+  // pair and REVOKES the old record, so anything that ever replayed the refresh
+  // token would silently kill this credential — the very lockout this script
+  // exists to avoid. Detach it so the row cannot be rotated.
+  const cleared = await prisma.mcpServerAccessToken.updateMany({
+    where: {
+      clientId: client.clientId,
+      revoked: false,
+      refreshToken: { not: null },
+    },
+    data: { refreshToken: null },
+  });
+  logger.info("Detached refresh tokens from static peer credentials", {
+    clientId: client.clientId,
+    rows: cleared.count,
+  });
+
   logger.info("Minted long-lived A2A token", {
     clientName: client.clientName,
     clientId: client.clientId,
@@ -94,6 +112,7 @@ async function main() {
         boundEmailAccount: emailAccount.email,
         scope,
         expiresInDays: Math.round(expiresIn / 86_400),
+        rotatable: false,
         expiresAt: new Date(Date.now() + expiresIn * 1000).toISOString(),
         accessToken,
       },
