@@ -21,6 +21,70 @@ function gatewayReturns(body: Record<string, unknown>) {
   mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve(body) });
 }
 
+describe("dharahilClient.runApprovalLoop — immediate decisions", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  function gatewayAnswers(body: Record<string, unknown>) {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: () => Promise.resolve(body),
+    });
+  }
+
+  const request = {
+    toolName: "send_email",
+    toolArgs: { to: "someone@example.com" },
+    context: {
+      agentId: "test",
+      runId: "r1",
+      stepId: "s1",
+      contextSummary: "test",
+      riskLevel: "MEDIUM" as const,
+      tags: [],
+      idempotencyKey: "k1",
+      metadata: {},
+    },
+  };
+
+  /**
+   * Regression. The gateway answers auto-allow policies inline, with an action
+   * and no request_id/expires_at. Only DENY was handled; ALLOW fell through to
+   * "invalid response", threw, and the fail-safe converted the gateway's ALLOW
+   * into a denial — blocking every auto-allowed send in production.
+   */
+  it("passes through an immediate ALLOW instead of failing closed", async () => {
+    gatewayAnswers({ action: "ALLOW", request_id: null, status: "RESOLVED" });
+
+    const decision = await dharahilClient.runApprovalLoop(request);
+
+    expect(decision.action).toBe("ALLOW");
+    expect(dharahilClient.shouldProceed(decision)).toBe(true);
+  });
+
+  it("still denies on an immediate DENY", async () => {
+    gatewayAnswers({ action: "DENY", request_id: null, status: "RESOLVED" });
+
+    const decision = await dharahilClient.runApprovalLoop(request);
+
+    expect(dharahilClient.wasDenied(decision)).toBe(true);
+  });
+
+  // A response carrying neither a pollable request nor a decision is genuinely
+  // unusable, and must still fail closed.
+  it("fails closed when the gateway returns neither request nor action", async () => {
+    gatewayAnswers({ status: "OK" });
+
+    const decision = await dharahilClient.runApprovalLoop(request);
+
+    expect(dharahilClient.shouldProceed(decision)).toBe(false);
+    expect(dharahilClient.wasDenied(decision)).toBe(true);
+  });
+});
+
 describe("dharahilClient.fetchDecision", () => {
   beforeEach(() => {
     vi.clearAllMocks();

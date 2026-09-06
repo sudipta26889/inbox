@@ -178,21 +178,22 @@ export class DharaHILClient {
         fullResponse: JSON.stringify(data),
       });
 
-      // Validate response
-      if (!data.request_id || !data.expires_at) {
-        // Check if this is an immediate rejection from the gateway
-        const anyData = data as any;
-        if (anyData.action === "DENY" || anyData.action === "REJECTED") {
-          logger.error("DharaHIL: Request immediately rejected by gateway", {
-            action: anyData.action,
-            reason: anyData.reason,
-            message: anyData.message,
-            error: anyData.error,
-            fullResponse: data,
+      // A response without request_id/expires_at is not malformed — it is the
+      // gateway answering immediately instead of opening a reviewable request,
+      // which is what its auto-allow and auto-deny policies do. Only DENY was
+      // handled here, so an immediate ALLOW fell through to "invalid response",
+      // threw, and runApprovalLoop's fail-safe turned the gateway's ALLOW into
+      // a denial. Every auto-allowed send was blocked.
+      if (!(data.request_id && data.expires_at)) {
+        const immediate = data.action;
+
+        if (immediate) {
+          logger.info("DharaHIL: gateway decided immediately", {
+            action: immediate,
+            fullResponse: JSON.stringify(data),
           });
-          throw new SafeError(
-            `DharaHIL gateway rejected request: ${anyData.reason || anyData.message || anyData.error || "No reason provided"}`,
-          );
+
+          return data;
         }
 
         logger.error("DharaHIL: Invalid response from gateway", {
@@ -201,7 +202,7 @@ export class DharaHILClient {
           fullResponse: data,
         });
         throw new SafeError(
-          "DharaHIL gateway returned invalid response - missing request_id or expires_at",
+          "DharaHIL gateway returned invalid response - no request_id, expires_at, or immediate action",
         );
       }
 
@@ -329,6 +330,15 @@ export class DharaHILClient {
     try {
       // Submit request and get dynamic TTL
       const response = await this.beforeExecute(request);
+
+      // The gateway may answer on submission (auto-allow / auto-deny policies).
+      // There is nothing to poll for in that case.
+      if (!(response.request_id && response.expires_at) && response.action) {
+        return {
+          action: response.action,
+          reason: (response as { reason?: string }).reason,
+        };
+      }
 
       // Poll for decision using the TTL from gateway
       const decision = await this.pollForDecision(
