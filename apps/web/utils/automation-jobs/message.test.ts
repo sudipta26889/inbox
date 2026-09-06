@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { getEmailAccount, getMockEmailProvider } from "@/__tests__/helpers";
-import type { AutomationCheckInEmailAccount } from "@/utils/ai/automation-jobs/generate-check-in-message";
+import { getMockEmailProvider } from "@/__tests__/helpers";
 import { createScopedLogger } from "@/utils/logger";
 
 const { mockAiGenerateAutomationCheckInMessage } = vi.hoisted(() => {
@@ -16,18 +15,7 @@ vi.mock("@/utils/ai/automation-jobs/generate-check-in-message", () => ({
 import { getAutomationJobMessage } from "./message";
 
 const logger = createScopedLogger("automation-jobs-message-test");
-const emailAccount: AutomationCheckInEmailAccount = {
-  ...getEmailAccount({
-    email: "user@example.com",
-    about: "Founder managing a high-volume inbox",
-    user: {
-      aiProvider: "openai",
-      aiModel: "gpt-5.1",
-      aiApiKey: null,
-    },
-  }),
-  name: "Test User",
-};
+const emailAccountId = "email-account-id";
 
 describe("getAutomationJobMessage", () => {
   beforeEach(() => {
@@ -39,60 +27,45 @@ describe("getAutomationJobMessage", () => {
       "Three urgent client emails need your review. Want to triage them now?",
     );
 
-    const emailProvider = getMockEmailProvider({
-      unread: 3,
-      total: 12,
-    });
-
     const message = await getAutomationJobMessage({
       prompt: "Only include urgent client messages.",
-      emailProvider,
-      emailAccount,
+      emailAccountId,
+      emailProvider: getMockEmailProvider({ unread: 3, total: 12 }),
       logger,
     });
 
     expect(message).toBe(
       "Three urgent client emails need your review. Want to triage them now?",
     );
-    expect(mockAiGenerateAutomationCheckInMessage).toHaveBeenCalledTimes(1);
     expect(mockAiGenerateAutomationCheckInMessage).toHaveBeenCalledWith(
       expect.objectContaining({
+        emailAccountId,
+        prompt: "Only include urgent client messages.",
         logger,
       }),
     );
   });
 
-  it("falls back to the custom prompt if custom prompt generation fails", async () => {
+  it("throws instead of echoing the prompt when generation fails", async () => {
     mockAiGenerateAutomationCheckInMessage.mockRejectedValueOnce(
       new Error("LLM unavailable"),
     );
 
-    const emailProvider = getMockEmailProvider({
-      unread: 5,
-      total: 20,
-    });
-
-    const message = await getAutomationJobMessage({
-      prompt: "Focus on priorities.",
-      emailProvider,
-      emailAccount,
-      logger,
-    });
-
-    expect(message).toBe("Focus on priorities.");
-    expect(mockAiGenerateAutomationCheckInMessage).toHaveBeenCalledTimes(1);
+    await expect(
+      getAutomationJobMessage({
+        prompt: "Focus on priorities.",
+        emailAccountId,
+        emailProvider: getMockEmailProvider({ unread: 5, total: 20 }),
+        logger,
+      }),
+    ).rejects.toThrow("LLM unavailable");
   });
 
   it("uses the non-LLM fallback flow when no custom prompt is provided", async () => {
-    const emailProvider = getMockEmailProvider({
-      unread: 0,
-      total: 4,
-    });
-
     const message = await getAutomationJobMessage({
       prompt: null,
-      emailProvider,
-      emailAccount,
+      emailAccountId,
+      emailProvider: getMockEmailProvider({ unread: 0, total: 4 }),
       logger,
     });
 

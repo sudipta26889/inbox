@@ -61,3 +61,11 @@ Range reviewed: `upstream-base` (59e496849, 2026-03-17) → `upstream-audit/2026
 - AI meeting recorder (Recall.ai) — covered by external Neosapien/MeetEcho MCPs.
 - Organizations/teams — single-user instance; revisit as its own project if needed.
 - Marketing pages, changelog, sponsor badges.
+
+---
+
+## Fork-local divergences (not upstream fixes — do not let a backport revert these)
+
+| Area | Files | Why the fork differs |
+|---|---|---|
+| Scheduled check-ins | `apps/web/utils/ai/automation-jobs/generate-check-in-message.ts`, `apps/web/utils/automation-jobs/message.ts`, `apps/web/utils/automation-jobs/messaging.ts`, `apps/web/utils/ai/assistant/chat.ts` (`readOnly`), `apps/web/utils/ai/assistant/get-recent-chat-memories.ts` | Upstream generates the check-in with `createGenerateObject` and a one-field `{ message }` schema, then silently falls back to `return trimmedPrompt` when generation throws. Against this fork's LiteLLM/Ollama gateway `responseFormat` is unsupported, so every run fails JSON parsing and Telegram receives the raw prompt instead of a digest. The fork runs the check-in through `aiProcessAssistantChat` in a new `readOnly` mode (read tools only, unattended) and lets failures fail the run instead of echoing the prompt. Upstream `main` (b3e10ebdb, 2026-09-06) still has the original code — re-check before backporting anything under `utils/automation-jobs/` or `utils/ai/automation-jobs/`. |

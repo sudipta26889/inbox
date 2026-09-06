@@ -1,163 +1,95 @@
-import { InvalidArgumentError } from "ai";
-import { z } from "zod";
-import { createGenerateObject } from "@/utils/llms";
-import { isTransientNetworkError, withRetry } from "@/utils/llms/retry";
-import { getModel } from "@/utils/llms/model";
-import type { EmailProvider } from "@/utils/email/types";
-import { getEmailForLLM } from "@/utils/get-email-from-message";
-import type { EmailAccountWithAI } from "@/utils/llms/types";
-import { stringifyEmailSimple } from "@/utils/stringify-email";
-import { PROMPT_SECURITY_INSTRUCTIONS } from "@/utils/ai/security";
+import {
+  convertToModelMessages,
+  readUIMessageStream,
+  type UIMessage,
+} from "ai";
+import { aiProcessAssistantChat } from "@/utils/ai/assistant/chat";
+import { getInboxStatsForChatContext } from "@/utils/ai/assistant/get-inbox-stats-for-chat-context";
+import { getRecentChatMemories } from "@/utils/ai/assistant/get-recent-chat-memories";
 import type { Logger } from "@/utils/logger";
+import { getEmailAccountWithAi } from "@/utils/user/get";
 
-const MAX_INBOX_MESSAGES_FOR_PROMPT = 8;
-
-const automationMessageSchema = z.object({
-  message: z.string().trim().min(1),
-});
-
-export type AutomationCheckInEmailAccount = Pick<
-  EmailAccountWithAI,
-  "id" | "userId" | "email" | "about" | "user"
-> & {
-  name: string | null;
-};
+// Telegram truncates at 4096 chars; leave room for the account header.
+const MAX_MESSAGE_CHARS = 3500;
 
 export async function aiGenerateAutomationCheckInMessage({
   prompt,
-  emailProvider,
-  emailAccount,
+  emailAccountId,
   logger,
 }: {
   prompt: string;
-  emailProvider: EmailProvider;
-  emailAccount: AutomationCheckInEmailAccount;
+  emailAccountId: string;
   logger: Logger;
 }) {
   const aiLogger = logger.with({
     component: "aiGenerateAutomationCheckInMessage",
   });
+
   const trimmedPrompt = prompt.trim();
+  if (!trimmedPrompt) throw new Error("Automation check-in prompt is required");
 
-  if (!trimmedPrompt) {
-    aiLogger.warn("Prompt is empty for automation check-in message generation");
-    throw new Error("Automation check-in prompt is required");
+  const emailAccount = await getEmailAccountWithAi({ emailAccountId });
+  if (!emailAccount?.account?.provider) {
+    throw new Error("Email account is not connected to a provider");
   }
 
-  if (!emailAccount.id || !emailAccount.userId || !emailAccount.email) {
-    aiLogger.warn(
-      "Email account is missing required fields for automation check-in message generation",
-    );
-    throw new Error("Email account is missing required fields");
-  }
-
-  const [stats, inboxMessages] = await Promise.all([
-    emailProvider.getInboxStats(),
-    emailProvider.getInboxMessages(MAX_INBOX_MESSAGES_FOR_PROMPT),
+  const [inboxStats, memories] = await Promise.all([
+    getInboxStatsForChatContext({
+      emailAccountId,
+      provider: emailAccount.account.provider,
+      logger: aiLogger,
+    }),
+    getRecentChatMemories({
+      emailAccountId,
+      logger: aiLogger,
+      logContext: "scheduled check-in",
+    }),
   ]);
 
-  const modelOptions = getModel(emailAccount.user, "economy");
-  const generateObject = createGenerateObject({
-    emailAccount,
-    label: "Automation check-in message",
-    modelOptions,
+  const userMessage: UIMessage = {
+    id: `check-in-${emailAccountId}`,
+    role: "user",
+    parts: [
+      {
+        type: "text",
+        text: `${trimmedPrompt}\n\nThis is an unattended scheduled check-in. Answer in at most ${MAX_MESSAGE_CHARS} characters. Do not ask me to confirm anything — I cannot reply to this run.`,
+      },
+    ],
+  };
+
+  const result = await aiProcessAssistantChat({
+    messages: await convertToModelMessages([userMessage]),
+    emailAccountId,
+    user: emailAccount,
+    memories,
+    inboxStats,
+    responseSurface: "messaging",
+    readOnly: true,
+    logger: aiLogger,
   });
 
-  const aiResponse = await withRetry(
-    () =>
-      generateObject({
-        ...modelOptions,
-        system: `You generate concise Slack check-in messages about the user's inbox.
+  const stream = result.toUIMessageStream<UIMessage>({
+    originalMessages: [userMessage],
+    generateMessageId: () => `${userMessage.id}-assistant`,
+  });
 
-${PROMPT_SECURITY_INSTRUCTIONS}
+  let assistantMessage: UIMessage | null = null;
+  for await (const message of readUIMessageStream<UIMessage>({ stream })) {
+    if (message.role === "assistant") assistantMessage = message;
+  }
 
-Follow the user's custom instructions while prioritizing the most actionable and important emails.
-Return plain text only and keep the message short.`,
-        prompt: buildAutomationPrompt({
-          prompt: trimmedPrompt,
-          unreadCount: stats.unread,
-          totalInboxCount: stats.total,
-          inboxMessages: inboxMessages.slice(0, MAX_INBOX_MESSAGES_FOR_PROMPT),
-          emailAccount,
-        }),
-        schema: automationMessageSchema,
-      }),
-    {
-      retryIf: (error: unknown) =>
-        isTransientNetworkError(error) ||
-        InvalidArgumentError.isInstance(error),
-      maxRetries: 2,
-      delayMs: 1000,
-    },
-  );
+  const text = (assistantMessage?.parts ?? [])
+    .flatMap((part) =>
+      part.type === "text" && typeof part.text === "string" ? [part.text] : [],
+    )
+    .join("\n")
+    .trim();
 
-  aiLogger.info("Generated automation check-in message");
-  return aiResponse.object.message;
-}
+  if (!text) throw new Error("Assistant returned an empty check-in message");
 
-function buildAutomationPrompt({
-  prompt,
-  unreadCount,
-  totalInboxCount,
-  inboxMessages,
-  emailAccount,
-}: {
-  prompt: string;
-  unreadCount: number;
-  totalInboxCount: number;
-  inboxMessages: Awaited<ReturnType<EmailProvider["getInboxMessages"]>>;
-  emailAccount: AutomationCheckInEmailAccount;
-}) {
-  const recentEmailsText = inboxMessages.length
-    ? inboxMessages
-        .map((message) => {
-          const email = getEmailForLLM(message, {
-            maxLength: 600,
-            removeForwarded: true,
-          });
-          const receivedAt = email.date
-            ? `<received_at>${email.date.toISOString()}</received_at>`
-            : "";
+  aiLogger.info("Generated automation check-in message", {
+    length: text.length,
+  });
 
-          return `<email>
-${receivedAt}
-${stringifyEmailSimple(email)}
-</email>`;
-        })
-        .join("\n")
-    : "<email_list_empty>true</email_list_empty>";
-
-  const userContext = [
-    `<email>${emailAccount.email}</email>`,
-    emailAccount.name ? `<name>${emailAccount.name}</name>` : "",
-    emailAccount.about ? `<about>${emailAccount.about}</about>` : "",
-  ]
-    .filter(Boolean)
-    .join("\n");
-
-  return `
-<custom_instructions>
-${prompt}
-</custom_instructions>
-
-<inbox_stats>
-  <unread>${unreadCount}</unread>
-  <total>${totalInboxCount}</total>
-</inbox_stats>
-
-<recent_inbox_messages>
-${recentEmailsText}
-</recent_inbox_messages>
-
-<user_context>
-${userContext}
-</user_context>
-
-Write one proactive Slack check-in message that:
-- follows the custom instructions,
-- references the inbox context above,
-- is at most 3 short sentences,
-- ends with a clear action question,
-- uses plain text only (no markdown bullets).
-`.trim();
+  return text;
 }

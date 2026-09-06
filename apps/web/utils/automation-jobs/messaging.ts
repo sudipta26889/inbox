@@ -6,6 +6,8 @@ import {
 } from "@/utils/automation-jobs/slack";
 import type { Logger } from "@/utils/logger";
 import { getMessagingChatSdkBot } from "@/utils/messaging/chat-sdk/bot";
+import { markdownToSlackMrkdwn } from "@/utils/messaging/providers/slack/format";
+import { markdownToTelegramText } from "@/utils/messaging/providers/telegram/format";
 
 export async function sendAutomationMessage({
   channel,
@@ -23,7 +25,7 @@ export async function sendAutomationMessage({
     case MessagingProvider.SLACK: {
       return sendAutomationMessageToSlack({
         channel,
-        text,
+        text: markdownToSlackMrkdwn(text),
         logger,
       });
     }
@@ -37,7 +39,7 @@ export async function sendAutomationMessage({
     case MessagingProvider.TELEGRAM: {
       return sendAutomationMessageToTelegram({
         providerUserId: channel.providerUserId,
-        text,
+        text: markdownToTelegramText(text),
         logger,
       });
     }

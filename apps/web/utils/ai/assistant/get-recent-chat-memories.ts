@@ -11,7 +11,7 @@ export async function getRecentChatMemories({
 }: {
   emailAccountId: string;
   logger: Logger;
-  logContext: "messaging chat" | "Slack chat";
+  logContext: "messaging chat" | "Slack chat" | "scheduled check-in";
 }): Promise<{ content: string; date: string }[]> {
   try {
     const memories = await prisma.chatMemory.findMany({

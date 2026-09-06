@@ -1,36 +1,28 @@
+import { aiGenerateAutomationCheckInMessage } from "@/utils/ai/automation-jobs/generate-check-in-message";
 import type { EmailProvider } from "@/utils/email/types";
 import type { Logger } from "@/utils/logger";
-import {
-  aiGenerateAutomationCheckInMessage,
-  type AutomationCheckInEmailAccount,
-} from "@/utils/ai/automation-jobs/generate-check-in-message";
 
 export async function getAutomationJobMessage({
   prompt,
+  emailAccountId,
   emailProvider,
-  emailAccount,
   logger,
 }: {
   prompt: string | null;
+  emailAccountId: string;
   emailProvider: EmailProvider;
-  emailAccount: AutomationCheckInEmailAccount;
   logger: Logger;
 }) {
   const trimmedPrompt = prompt?.trim();
+
+  // No silent fallback: echoing the prompt back looks like the check-in worked
+  // when it didn't. Let it throw so the run is recorded FAILED and retried.
   if (trimmedPrompt) {
-    try {
-      return await aiGenerateAutomationCheckInMessage({
-        prompt: trimmedPrompt,
-        emailProvider,
-        emailAccount,
-        logger,
-      });
-    } catch (error) {
-      logger.warn("Failed to generate automation message from prompt", {
-        error,
-      });
-      return trimmedPrompt;
-    }
+    return await aiGenerateAutomationCheckInMessage({
+      prompt: trimmedPrompt,
+      emailAccountId,
+      logger,
+    });
   }
 
   try {

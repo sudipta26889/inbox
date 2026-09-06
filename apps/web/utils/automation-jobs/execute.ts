@@ -30,21 +30,10 @@ export async function executeAutomationJobRun({
             include: {
               emailAccount: {
                 select: {
-                  id: true,
                   userId: true,
-                  email: true,
-                  name: true,
-                  about: true,
                   account: {
                     select: {
                       provider: true,
-                    },
-                  },
-                  user: {
-                    select: {
-                      aiProvider: true,
-                      aiModel: true,
-                      aiApiKey: true,
                     },
                   },
                 },
@@ -176,8 +165,8 @@ export async function executeAutomationJobRun({
 
     const outboundMessage = await getAutomationJobMessage({
       prompt: run.automationJob.prompt,
+      emailAccountId: run.automationJob.emailAccountId,
       emailProvider,
-      emailAccount: run.automationJob.messagingChannel.emailAccount,
       logger: runLogger,
     });
 
