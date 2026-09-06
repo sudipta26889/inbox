@@ -111,12 +111,17 @@ export async function generateAccessToken({
   clientId,
   scope,
   jwtSecret,
+  // Opt-in override for peers that cannot run an OAuth refresh loop. The
+  // resulting token is an ordinary access token — same signature, same
+  // revocation check — it just expires far later. Default is unchanged.
+  accessTokenTtlSeconds = TOKEN_CONFIG.ACCESS_TOKEN_TTL,
 }: {
   userId: string;
   emailAccountId: string;
   clientId: string;
   scope: string;
   jwtSecret: string;
+  accessTokenTtlSeconds?: number;
 }): Promise<{
   accessToken: string;
   refreshToken: string;
@@ -143,7 +148,7 @@ export async function generateAccessToken({
     email_account_id: emailAccountId,
     scope,
     client_id: clientId,
-    exp: now + TOKEN_CONFIG.ACCESS_TOKEN_TTL,
+    exp: now + accessTokenTtlSeconds,
     iat: now,
     jti: jti,
     token_type: "access",
@@ -169,7 +174,7 @@ export async function generateAccessToken({
       refreshToken: refreshTokenJti,
       tokenType: "Bearer",
       scope,
-      expiresAt: new Date((now + TOKEN_CONFIG.ACCESS_TOKEN_TTL) * 1000),
+      expiresAt: new Date((now + accessTokenTtlSeconds) * 1000),
       userId,
       emailAccountId,
       clientId,
@@ -186,7 +191,7 @@ export async function generateAccessToken({
   return {
     accessToken,
     refreshToken,
-    expiresIn: TOKEN_CONFIG.ACCESS_TOKEN_TTL,
+    expiresIn: accessTokenTtlSeconds,
     tokenType: "Bearer",
   };
 }

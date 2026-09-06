@@ -25,7 +25,10 @@ const AGENT_CARD = {
     "summarization, and composition. Supports Gmail, Google Workspace, and Outlook. " +
     "Can send outbound A2A notifications to remote agents when automation rules match urgent emails.",
   version: "1.0.0",
-  url: env.NEXT_PUBLIC_BASE_URL,
+  // The JSON-RPC endpoint, not the origin. Clients that skip card discovery on
+  // the outbound path POST straight to this value; advertising the bare origin
+  // sent them to the Next.js page handler, which answers 405.
+  url: `${env.NEXT_PUBLIC_BASE_URL}/a2a`,
 
   // ============ Provider Information ============
   provider: {

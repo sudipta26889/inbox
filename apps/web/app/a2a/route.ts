@@ -13,6 +13,10 @@ import {
   getRateLimitHeaders,
 } from "@/utils/a2a/rate-limit";
 import {
+  normalizeA2aMethod,
+  normalizeMessageSendParams,
+} from "@/utils/a2a/interop";
+import {
   handleMessageSend,
   handleTaskGet,
   handleTaskList,
@@ -163,9 +167,12 @@ export const POST = withError("a2a", async (request: RequestWithLogger) => {
       );
     }
 
+    // One spelling in, one canonical name out — see utils/a2a/interop.ts.
+    const canonicalMethod = normalizeA2aMethod(message.method);
+
     // Check rate limits for authenticated requests
     const operation =
-      message.method === "message.send" ? "task_create" : "request";
+      canonicalMethod === "message.send" ? "task_create" : "request";
     const rateLimitResult = await checkA2aRequestRateLimit(
       authContext,
       operation,
@@ -205,9 +212,12 @@ export const POST = withError("a2a", async (request: RequestWithLogger) => {
     try {
       let result: unknown;
 
-      switch (message.method) {
+      switch (canonicalMethod) {
         case "message.send":
-          result = await handleMessageSend(authContext, message.params || {});
+          result = await handleMessageSend(
+            authContext,
+            normalizeMessageSendParams(message.params || {}),
+          );
           break;
 
         case "task.get":
