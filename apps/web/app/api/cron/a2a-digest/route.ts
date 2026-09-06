@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { alertDigestFailure, recordDigestRun } from "@/utils/a2a/digest-report";
 import {
   buildDailyDigest,
   getLocalDate,
@@ -97,6 +98,17 @@ async function runDueDigests(logger: Logger, { force = false } = {}) {
       await saveDailyDigest(digest);
       await pushDailyDigestToRemoteAgents({ digest, logger: userLogger });
 
+      await recordDigestRun({
+        userId: user.id,
+        outcome: {
+          status: "ok",
+          date,
+          at: new Date().toISOString(),
+          accounts: digest.accounts.length,
+          failedAccounts: digest.failures.map((failure) => failure.email),
+        },
+      });
+
       userLogger.info("Generated daily digest", {
         date,
         accounts: digest.accounts.length,
@@ -107,6 +119,22 @@ async function runDueDigests(logger: Logger, { force = false } = {}) {
       // Release the latch so a later poll inside the same hour can retry.
       await redis.del(latchKey);
       userLogger.error("Failed to generate daily digest", { date, error });
+
+      // The cron container runs this as `curl ... || true`, so nothing else
+      // will ever notice this failure.
+      const outcome = {
+        status: "failed" as const,
+        date,
+        at: new Date().toISOString(),
+        error: error instanceof Error ? error.message : String(error),
+      };
+      await recordDigestRun({ userId: user.id, outcome });
+      await alertDigestFailure({
+        userId: user.id,
+        outcome,
+        logger: userLogger,
+      });
+
       failed += 1;
     }
   }

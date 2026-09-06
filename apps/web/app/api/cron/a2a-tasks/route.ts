@@ -7,6 +7,7 @@ import type { Logger } from "@/utils/logger";
 import { A2aTaskState } from "@/generated/prisma/enums";
 import { executeTask } from "@/utils/a2a/task-executor";
 import { cleanupRateLimitRecords } from "@/utils/a2a/rate-limit";
+import { reportA2aTokenHygiene } from "@/utils/a2a/token-hygiene";
 import {
   processPendingDharaHILApprovals,
   processExpiredDharaHILApprovals,
@@ -78,6 +79,9 @@ async function processA2aTasks(logger: Logger) {
   // Step 6: Clean up old records (once per hour)
   const cleanupResult = await cleanupOldRecords(logger);
 
+  // Step 7: Surface peer credentials nobody is watching
+  const tokenHygiene = await reportA2aTokenHygiene(logger);
+
   logger.info("Finished A2A task processing", {
     pending: pendingResult,
     dharahil: dharahilResult,
@@ -85,6 +89,7 @@ async function processA2aTasks(logger: Logger) {
     webhooks: webhooksResult,
     timeouts: timeoutResult,
     cleanup: cleanupResult,
+    tokenHygiene,
   });
 
   return {
@@ -94,6 +99,7 @@ async function processA2aTasks(logger: Logger) {
     webhooks: webhooksResult,
     timeouts: timeoutResult,
     cleanup: cleanupResult,
+    tokenHygiene,
   };
 }
 
