@@ -16,8 +16,7 @@ import { withOutlookRetry } from "@/utils/outlook/retry";
 import { extractEmailAddress, extractNameFromEmail } from "@/utils/email";
 import { ensureEmailSendingEnabled } from "@/utils/mail";
 import type { Logger } from "@/utils/logger";
-import { dharahilClient } from "@/utils/dharahil/client";
-import { env } from "@/env";
+import { requireSendApproval } from "@/utils/mail/send-approval";
 
 type GraphRecipient = {
   emailAddress: { address: string; name?: string };
@@ -49,62 +48,18 @@ export async function sendEmailWithHtml(
 ): Promise<SentEmailResult> {
   ensureEmailSendingEnabled();
 
-  // DharaHIL approval gate for ALL email sends
-  if (env.NEXT_PUBLIC_DHARAHIL_ENABLED) {
-    logger.info("DharaHIL: Requesting approval for Outlook email send", {
-      to: body.to,
-      subject: body.subject,
-    });
-
-    const decision = await dharahilClient.runApprovalLoop({
-      toolName: "send_email",
-      toolArgs: {
-        to: body.to,
-        from: body.from,
-        cc: body.cc,
-        bcc: body.bcc,
-        subject: body.subject,
-        body: body.messageHtml.substring(0, 500), // Preview first 500 chars
-        isReply: !!body.replyToEmail,
-      },
-      context: {
-        agentId: "inbox-outlook-provider",
-        runId: body.replyToEmail?.threadId || `email_${Date.now()}`,
-        stepId: "send_email",
-        contextSummary: `Send email to ${body.to} - Subject: ${body.subject}`,
-        riskLevel: isExternalDomain(body.to) ? "HIGH" : "MEDIUM",
-        tags: [
-          "email",
-          "outlook",
-          isExternalDomain(body.to) ? "external" : "internal",
-        ],
-        idempotencyKey: `outlook_${body.to}_${body.subject}_${Date.now()}`,
-        metadata: {
-          provider: "outlook",
-          to: body.to,
-          subject: body.subject,
-          is_reply: body.replyToEmail ? "true" : "false",
-        },
-      },
-    });
-
-    if (dharahilClient.wasDenied(decision)) {
-      throw new Error(
-        `Email sending denied by human reviewer: ${decision.action}${decision.reason ? ` - ${decision.reason}` : ""}`,
-      );
-    }
-
-    if (dharahilClient.shouldRevise(decision)) {
-      throw new Error(
-        `Email revision requested: ${decision.revise_input || "No specific instructions provided"}`,
-      );
-    }
-
-    logger.info("DharaHIL: Outlook email send approved", {
-      to: body.to,
-      action: decision.action,
-    });
-  }
+  await requireSendApproval({
+    operation: "send_email",
+    provider: "outlook",
+    to: body.to,
+    from: body.from,
+    cc: body.cc,
+    bcc: body.bcc,
+    subject: body.subject,
+    bodyText: body.messageHtml,
+    threadId: body.replyToEmail?.threadId,
+    isReply: !!body.replyToEmail,
+  });
 
   // For replies with a message ID, use createReply for proper threading
   // Microsoft Graph's sendMail doesn't support In-Reply-To/References headers
@@ -177,6 +132,17 @@ export async function replyToEmail(
   options?: { replyTo?: string; from?: string; attachments?: Attachment[] },
 ) {
   ensureEmailSendingEnabled();
+
+  await requireSendApproval({
+    operation: "reply_email",
+    provider: "outlook",
+    to: message.headers["reply-to"] || message.headers.from,
+    from: options?.from,
+    subject: message.headers.subject,
+    bodyText: reply,
+    threadId: message.threadId,
+    isReply: true,
+  });
 
   const { html } = createOutlookReplyContent({
     textContent: reply,
@@ -264,6 +230,15 @@ export async function forwardEmail(
   ensureEmailSendingEnabled();
 
   if (!options.to.trim()) throw new Error("Recipient address is required");
+
+  await requireSendApproval({
+    operation: "forward_email",
+    provider: "outlook",
+    to: options.to,
+    cc: options.cc,
+    bcc: options.bcc,
+    bodyText: options.content,
+  });
 
   // Get the original message
   const originalMessage: Message = await withOutlookRetry(

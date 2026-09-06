@@ -28,8 +28,7 @@ import {
   buildQuotedPlainText,
   quotePlainTextContent,
 } from "@/utils/email/quoted-plain-text";
-import { dharahilClient } from "@/utils/dharahil/client";
-import { env } from "@/env";
+import { requireSendApproval } from "@/utils/mail/send-approval";
 
 const logger = createScopedLogger("gmail/mail");
 
@@ -136,62 +135,18 @@ export async function sendEmailWithHtml(
 
   const messageText = htmlToMessageText(body.messageHtml);
 
-  // DharaHIL approval gate for ALL email sends
-  if (env.NEXT_PUBLIC_DHARAHIL_ENABLED) {
-    logger.info("DharaHIL: Requesting approval for email send", {
-      to: body.to,
-      subject: body.subject,
-    });
-
-    const decision = await dharahilClient.runApprovalLoop({
-      toolName: "send_email",
-      toolArgs: {
-        to: body.to,
-        from: body.from,
-        cc: body.cc,
-        bcc: body.bcc,
-        subject: body.subject,
-        body: messageText.substring(0, 500), // Preview first 500 chars
-        isReply: !!body.replyToEmail,
-      },
-      context: {
-        agentId: "inbox-gmail-provider",
-        runId: body.replyToEmail?.threadId || `email_${Date.now()}`,
-        stepId: "send_email",
-        contextSummary: `Send email to ${body.to} - Subject: ${body.subject}`,
-        riskLevel: isExternalDomain(body.to) ? "HIGH" : "MEDIUM",
-        tags: [
-          "email",
-          "gmail",
-          isExternalDomain(body.to) ? "external" : "internal",
-        ],
-        idempotencyKey: `gmail_${body.to}_${body.subject}_${Date.now()}`,
-        metadata: {
-          provider: "gmail",
-          to: body.to,
-          subject: body.subject,
-          is_reply: body.replyToEmail ? "true" : "false",
-        },
-      },
-    });
-
-    if (dharahilClient.wasDenied(decision)) {
-      throw new Error(
-        `Email sending denied by human reviewer: ${decision.action}${decision.reason ? ` - ${decision.reason}` : ""}`,
-      );
-    }
-
-    if (dharahilClient.shouldRevise(decision)) {
-      throw new Error(
-        `Email revision requested: ${decision.revise_input || "No specific instructions provided"}`,
-      );
-    }
-
-    logger.info("DharaHIL: Email send approved", {
-      to: body.to,
-      action: decision.action,
-    });
-  }
+  await requireSendApproval({
+    operation: "send_email",
+    provider: "gmail",
+    to: body.to,
+    from: body.from,
+    cc: body.cc,
+    bcc: body.bcc,
+    subject: body.subject,
+    bodyText: messageText,
+    threadId: body.replyToEmail?.threadId,
+    isReply: !!body.replyToEmail,
+  });
 
   const raw = await createRawMailMessage({ ...body, messageText });
   const result = await withGmailRetry(() =>
@@ -207,12 +162,6 @@ export async function sendEmailWithHtml(
 }
 
 // Helper to determine if email domain is external
-function isExternalDomain(email: string): boolean {
-  const internalDomains = ["sudiptadhara.in", "localhost"];
-  const domain = email.split("@")[1]?.toLowerCase();
-  return !internalDomains.some((internal) => domain?.includes(internal));
-}
-
 export async function sendEmailWithPlainText(
   gmail: gmail_v1.Gmail,
   body: Omit<MailSendEmailBody, "messageHtml"> & { messageText: string },
@@ -242,9 +191,21 @@ export async function replyToEmail(
     message,
   });
 
+  const replyTarget = message.headers["reply-to"] || message.headers.from;
+  await requireSendApproval({
+    operation: "reply_email",
+    provider: "gmail",
+    to: replyTarget,
+    from,
+    subject: formatReplySubject(message.headers.subject),
+    bodyText: messageText,
+    threadId: message.threadId,
+    isReply: true,
+  });
+
   // Only replying to the original sender
   const raw = await createRawMailMessage({
-    to: message.headers["reply-to"] || message.headers.from,
+    to: replyTarget,
     from,
     replyTo: options?.replyTo,
     subject: formatReplySubject(message.headers.subject),
@@ -288,6 +249,17 @@ export async function forwardEmail(
       `Recipient address is required for forwarding email. Received: "${options.to}"`,
     );
   }
+
+  await requireSendApproval({
+    operation: "forward_email",
+    provider: "gmail",
+    to: options.to,
+    cc: options.cc,
+    bcc: options.bcc,
+    subject: forwardEmailSubject(message.headers.subject),
+    bodyText: forwardEmailText({ content: options.content ?? "", message }),
+    threadId: message.threadId,
+  });
 
   const attachments = await Promise.all(
     message.attachments?.map(async (attachment) => {

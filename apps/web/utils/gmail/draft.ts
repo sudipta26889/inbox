@@ -6,6 +6,7 @@ import type { DraftStatus, MessageWithPayload } from "@/utils/types";
 import { isGmailError } from "@/utils/error";
 import { withGmailRetry } from "@/utils/gmail/retry";
 import { ensureEmailSendingEnabled } from "@/utils/mail";
+import { requireSendApproval } from "@/utils/mail/send-approval";
 
 const logger = createScopedLogger("gmail/draft");
 
@@ -165,6 +166,18 @@ export async function sendDraft(
   // Sending a draft is still sending. Without this the drafts API is a way
   // around the kill switch that guards every other send path.
   ensureEmailSendingEnabled();
+
+  // Same reasoning for the approval gate. Read the draft first so the reviewer
+  // sees who it goes to rather than an opaque draft id.
+  const draft = await getDraft(draftId, gmail);
+  await requireSendApproval({
+    operation: "send_draft",
+    provider: "gmail",
+    to: draft?.headers?.to || "unknown",
+    subject: draft?.subject,
+    bodyText: draft?.textPlain ?? undefined,
+    threadId: draft?.threadId,
+  });
 
   logger.info("Sending draft", { draftId });
 

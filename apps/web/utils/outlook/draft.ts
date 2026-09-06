@@ -9,6 +9,7 @@ import {
 } from "@/utils/outlook/message";
 import { withOutlookRetry } from "@/utils/outlook/retry";
 import { ensureEmailSendingEnabled } from "@/utils/mail";
+import { requireSendApproval } from "@/utils/mail/send-approval";
 import type { DraftStatus } from "@/utils/types";
 
 export async function getDraft({
@@ -123,6 +124,21 @@ export async function sendDraft({
   // Sending a draft is still sending. Without this the drafts API is a way
   // around the kill switch that guards every other send path.
   ensureEmailSendingEnabled();
+
+  // Same reasoning for the approval gate. Read the draft first so the reviewer
+  // sees the recipient rather than an opaque draft id.
+  const draft = await withOutlookRetry(
+    () => client.getClient().api(`/me/messages/${draftId}`).get(),
+    logger,
+  );
+  await requireSendApproval({
+    operation: "send_draft",
+    provider: "outlook",
+    to: draft?.toRecipients?.[0]?.emailAddress?.address || "unknown",
+    subject: draft?.subject,
+    bodyText: draft?.bodyPreview,
+    threadId: draft?.conversationId,
+  });
 
   logger.info("Sending draft", { draftId });
 
