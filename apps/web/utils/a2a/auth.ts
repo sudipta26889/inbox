@@ -255,8 +255,9 @@ export async function withA2aAuth(
     });
   }
 
-  // Check if context has any of the required scopes
-  if (!hasAnyScope(context, requiredScopes)) {
+  // An empty list means "authentication only" — note hasAnyScope([]) is false,
+  // so without this an empty list would forbid every request instead.
+  if (requiredScopes.length > 0 && !hasAnyScope(context, requiredScopes)) {
     const forbidden = createForbiddenResponse(
       requiredScopes.join(", "),
       `One of these scopes is required: ${requiredScopes.join(", ")}`,

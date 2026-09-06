@@ -122,6 +122,12 @@ services:
             sleep 600
           done
         ) &
+        (
+          while true; do
+            curl -s -X GET 'http://web:5500/api/cron/a2a-tasks' -H \"Authorization: Bearer $${CRON_SECRET}\" || true
+            sleep 60
+          done
+        ) &
         wait
       "
     env_file:

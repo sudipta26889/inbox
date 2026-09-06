@@ -7,6 +7,7 @@ import {
   verifyEmailAccountOwnership,
   getUserEmailAccounts,
   validateSkillAccess,
+  withA2aAuth,
 } from "../auth";
 import type { A2aAuthContext } from "../auth";
 
@@ -246,6 +247,52 @@ describe("A2A Authentication", () => {
       expect(response.status).toBe(403);
       expect(response.body.error).toBe("insufficient_scope");
       expect(response.body.required_scope).toBe("email:write");
+    });
+  });
+
+  describe("withA2aAuth", () => {
+    function request(headers: Record<string, string> = {}) {
+      return new Request("https://test.example.com/a2a/stream", { headers });
+    }
+
+    beforeEach(() => {
+      (validateAccessToken as ReturnType<typeof vi.fn>).mockResolvedValue(
+        mockTokenPayload,
+      );
+      (
+        prisma.mcpServerClient.findUnique as ReturnType<typeof vi.fn>
+      ).mockResolvedValue({ id: "c1", clientId: "client-789" });
+    });
+
+    it("returns the context when a required scope is held", async () => {
+      const context = await withA2aAuth(
+        request({ Authorization: "Bearer t" }),
+        ["email:read"],
+      );
+
+      expect(context.userId).toBe("user-123");
+    });
+
+    // hasAnyScope([]) is false, so an empty list used to forbid everything.
+    // It has to mean "any valid token will do" for auth-only endpoints.
+    it("treats an empty scope list as authentication only", async () => {
+      const context = await withA2aAuth(
+        request({ Authorization: "Bearer t" }),
+        [],
+      );
+
+      expect(context.clientId).toBe("client-789");
+    });
+
+    it("throws a Response rather than returning a flag", async () => {
+      // Callers must catch; a truthy `authorized` field does not exist.
+      await expect(
+        withA2aAuth(request({ Authorization: "Bearer t" }), ["rules:write"]),
+      ).rejects.toBeInstanceOf(Response);
+    });
+
+    it("throws a Response when unauthenticated", async () => {
+      await expect(withA2aAuth(request(), [])).rejects.toBeInstanceOf(Response);
     });
   });
 });

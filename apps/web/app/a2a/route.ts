@@ -260,7 +260,7 @@ export const POST = withError("a2a", async (request: RequestWithLogger) => {
         `Handler error: ${handlerError.message}`,
       );
     }
-  } catch (error: unknown) {
+  } catch (error) {
     reqLogger.error("A2A protocol error", { error: error.message });
 
     return NextResponse.json(
@@ -269,7 +269,10 @@ export const POST = withError("a2a", async (request: RequestWithLogger) => {
         id: null,
         error: {
           code: -32_700,
-          message: "Parse error: " + (error.message || "Invalid JSON"),
+          message:
+            "Parse error: " +
+            ((error instanceof Error ? error.message : String(error)) ||
+              "Invalid JSON"),
         },
       },
       { status: 400, headers: CORS_HEADERS },

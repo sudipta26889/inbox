@@ -149,7 +149,7 @@ async function processPendingTasks(logger: Logger) {
       taskLogger.info("Processed A2A task", {
         finalState: updatedTask?.state,
       });
-    } catch (error: unknown) {
+    } catch (error) {
       failed++;
       taskLogger.error("Failed to process A2A task", {
         error: error instanceof Error ? error.message : String(error),
@@ -162,7 +162,7 @@ async function processPendingTasks(logger: Logger) {
           where: { id: task.id },
           data: {
             state: A2aTaskState.failed,
-            stateReason: `Processor error: ${error.message}`,
+            stateReason: `Processor error: ${error instanceof Error ? error.message : String(error)}`,
             error: {
               message: error.message,
               stack: error.stack,
@@ -177,7 +177,7 @@ async function processPendingTasks(logger: Logger) {
             taskId: task.id,
             fromState: A2aTaskState.submitted,
             toState: A2aTaskState.failed,
-            reason: `Processor error: ${error.message}`,
+            reason: `Processor error: ${error instanceof Error ? error.message : String(error)}`,
           },
         });
       } catch (updateError: unknown) {
@@ -260,7 +260,7 @@ async function timeoutStuckTasks(logger: Logger, now: Date) {
 
       timedOut++;
       taskLogger.info("Timed out stuck A2A task", { ageMs });
-    } catch (error: unknown) {
+    } catch (error) {
       taskLogger.error("Failed to timeout stuck task", {
         error: error instanceof Error ? error.message : String(error),
       });
@@ -280,7 +280,7 @@ async function processDharaHILApprovals(logger: Logger) {
   try {
     await processPendingDharaHILApprovals();
     return { processed: true };
-  } catch (error: unknown) {
+  } catch (error) {
     logger.error("Failed to process DharaHIL approvals", {
       error: error instanceof Error ? error.message : String(error),
     });
@@ -295,7 +295,7 @@ async function processExpiredApprovals(logger: Logger) {
   try {
     await processExpiredDharaHILApprovals();
     return { processed: true };
-  } catch (error: unknown) {
+  } catch (error) {
     logger.error("Failed to process expired approvals", {
       error: error instanceof Error ? error.message : String(error),
     });
@@ -311,7 +311,7 @@ async function processWebhooks(logger: Logger) {
     const result = await processPendingWebhooks();
     logger.info("Processed pending webhooks", result);
     return result;
-  } catch (error: unknown) {
+  } catch (error) {
     logger.error("Failed to process webhooks", {
       error: error instanceof Error ? error.message : String(error),
     });
@@ -338,14 +338,14 @@ async function cleanupOldRecords(logger: Logger) {
       rateLimitsDeleted,
       webhooksDeleted,
     };
-  } catch (error: unknown) {
+  } catch (error) {
     logger.error("Failed to clean up old records", {
       error: error instanceof Error ? error.message : String(error),
     });
     return {
       rateLimitsDeleted: 0,
       webhooksDeleted: 0,
-      error: error.message,
+      error,
     };
   }
 }

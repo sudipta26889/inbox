@@ -1,4 +1,4 @@
-import { withA2aAuth } from "@/utils/a2a/auth";
+import { type A2aAuthContext, withA2aAuth } from "@/utils/a2a/auth";
 import prisma from "@/utils/prisma";
 import { createScopedLogger } from "@/utils/logger";
 import { A2aTaskState } from "@/generated/prisma/enums";
@@ -26,14 +26,20 @@ export const maxDuration = 300; // 5 minutes max connection time
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  // Authenticate the request
-  const authResult = await withA2aAuth(request, ["task:read"]);
-
-  if (!authResult.authorized) {
-    return new Response(authResult.error, {
-      status: authResult.status,
-      headers: { "Content-Type": "text/plain" },
-    });
+  // withA2aAuth THROWS a Response on failure and returns the context on
+  // success — it has no `authorized` field. Reading one meant the guard always
+  // fired and every stream answered `new Response(undefined)`, an empty 200.
+  //
+  // No scope is required beyond a valid token: the task lookup below is keyed
+  // on authResult.userId, so a client can only ever stream its own tasks.
+  // (The previous "task:read" is not a scope this server issues, so no token
+  // could have satisfied it either.)
+  let authResult: A2aAuthContext;
+  try {
+    authResult = await withA2aAuth(request, []);
+  } catch (authResponse) {
+    if (authResponse instanceof Response) return authResponse;
+    throw authResponse;
   }
 
   const { searchParams } = new URL(request.url);
@@ -66,8 +72,10 @@ export async function GET(request: Request) {
     });
   }
 
+  const streamedTaskId = task.taskId;
+
   logger.info("Starting SSE stream for task", {
-    taskId: task.taskId,
+    taskId: streamedTaskId,
     userId: authResult.userId,
     clientId: authResult.clientId,
   });
@@ -76,7 +84,7 @@ export async function GET(request: Request) {
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
-      const terminalStates = [
+      const terminalStates: A2aTaskState[] = [
         A2aTaskState.completed,
         A2aTaskState.failed,
         A2aTaskState.canceled,
@@ -147,13 +155,13 @@ export async function GET(request: Request) {
               cleanup();
             }
           }
-        } catch (error: unknown) {
+        } catch (error) {
           logger.error("Error polling task state", {
             taskId: task.taskId,
-            error: error.message,
+            error,
           });
           sendEvent(controller, encoder, "error", {
-            error: error.message,
+            error,
           });
           cleanup();
         }
@@ -165,7 +173,7 @@ export async function GET(request: Request) {
         controller.close();
 
         logger.info("SSE stream closed", {
-          taskId: task.taskId,
+          taskId: streamedTaskId,
           finalState: lastState,
         });
       }

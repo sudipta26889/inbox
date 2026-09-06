@@ -36,8 +36,8 @@ const AGENT_CARD = {
 
   // ============ Capabilities ============
   capabilities: {
-    streaming: false, // SSE streaming (Phase 3)
-    pushNotifications: false, // Webhook notifications (Phase 3)
+    streaming: true, // SSE at /a2a/stream
+    pushNotifications: true, // Webhooks, configured per client
     humanInTheLoop: true, // Supports approval workflows
     stateTransitionHistory: true, // Tracks task state changes
   },
@@ -342,6 +342,12 @@ const AGENT_CARD = {
       transport: "json-rpc",
       version: "0.3",
       description: "JSON-RPC 2.0 over HTTPS",
+    },
+    {
+      url: `${env.NEXT_PUBLIC_BASE_URL}/a2a/stream`,
+      transport: "sse",
+      version: "0.3",
+      description: "Server-sent task state updates",
     },
   ],
 

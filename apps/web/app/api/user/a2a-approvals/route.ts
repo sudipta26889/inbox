@@ -19,44 +19,44 @@ const logger = createScopedLogger("api/a2a-approvals");
 export const GET = withAuth("user/a2a-approvals", async (request) => {
   const userId = request.auth.userId;
 
+  // A2aApproval.taskId is a bare unique column, not a Prisma relation, so this
+  // cannot be a nested filter or an `include` — both throw at runtime.
+  const tasks = await prisma.a2aTask.findMany({
+    where: { userId, state: A2aTaskState.auth_required },
+    select: { id: true, taskId: true, contextId: true, clientId: true },
+  });
+
+  if (tasks.length === 0) return Response.json({ approvals: [] });
+
+  const tasksById = new Map(tasks.map((task) => [task.id, task]));
+
   const approvals = await prisma.a2aApproval.findMany({
     where: {
       status: "pending",
-      task: {
-        userId,
-        state: A2aTaskState.auth_required,
-      },
+      taskId: { in: tasks.map((task) => task.id) },
     },
-    include: {
-      task: {
-        select: {
-          id: true,
-          taskId: true,
-          skill: true,
-          input: true,
-          contextId: true,
-          createdAt: true,
-          clientId: true,
-        },
-      },
-    },
-    orderBy: {
-      requestedAt: "asc",
-    },
+    orderBy: { requestedAt: "asc" },
   });
 
   return Response.json({
-    approvals: approvals.map((approval) => ({
-      id: approval.id,
-      taskId: approval.task.taskId,
-      skill: approval.skill,
-      requestData: approval.requestData,
-      requestReason: approval.requestReason,
-      requestedAt: approval.requestedAt.toISOString(),
-      expiresAt: approval.expiresAt?.toISOString(),
-      contextId: approval.task.contextId,
-      clientId: approval.task.clientId,
-    })),
+    approvals: approvals.flatMap((approval) => {
+      const task = tasksById.get(approval.taskId);
+      if (!task) return [];
+
+      return [
+        {
+          id: approval.id,
+          taskId: task.taskId,
+          skill: approval.skill,
+          requestData: approval.requestData,
+          requestReason: approval.requestReason,
+          requestedAt: approval.requestedAt.toISOString(),
+          expiresAt: approval.expiresAt?.toISOString(),
+          contextId: task.contextId,
+          clientId: task.clientId,
+        },
+      ];
+    }),
   });
 });
 
@@ -115,15 +115,17 @@ export const POST = withAuth("user/a2a-approvals", async (request) => {
       taskId,
       message: "Task approved and queued for execution",
     });
-  } catch (error: unknown) {
+  } catch (error) {
     logger.error("Failed to approve task", {
       userId,
       taskId,
-      error: error.message,
+      error,
     });
 
     return Response.json(
-      { error: `Failed to approve task: ${error.message}` },
+      {
+        error: `Failed to approve task: ${error instanceof Error ? error.message : String(error)}`,
+      },
       { status: 500 },
     );
   }

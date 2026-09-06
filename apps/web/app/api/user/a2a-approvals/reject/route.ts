@@ -67,15 +67,17 @@ export const POST = withAuth("user/a2a-approvals/reject", async (request) => {
       taskId,
       message: "Task rejected",
     });
-  } catch (error: unknown) {
+  } catch (error) {
     logger.error("Failed to reject task", {
       userId,
       taskId,
-      error: error.message,
+      error,
     });
 
     return Response.json(
-      { error: `Failed to reject task: ${error.message}` },
+      {
+        error: `Failed to reject task: ${error instanceof Error ? error.message : String(error)}`,
+      },
       { status: 500 },
     );
   }
