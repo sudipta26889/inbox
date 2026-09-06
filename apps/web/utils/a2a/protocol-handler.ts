@@ -6,7 +6,7 @@ import {
 } from "@/utils/a2a/skill-registry";
 import type { A2aAuthContext } from "./auth";
 import { validateSkillAccess } from "./auth";
-import { A2aTaskState, A2aApprovalStatus } from "@prisma/client";
+import { A2aApprovalStatus, A2aTaskState } from "@/generated/prisma/enums";
 import { nanoid } from "nanoid";
 
 const logger = createScopedLogger("a2a-protocol");

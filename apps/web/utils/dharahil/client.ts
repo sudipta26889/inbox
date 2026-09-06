@@ -47,11 +47,11 @@ export interface DharaHILDecision {
 }
 
 export class DharaHILClient {
-  private baseUrl: string;
-  private apiKey: string;
-  private tenantId: string;
-  private appId: string;
-  private environment: string;
+  private readonly baseUrl: string;
+  private readonly apiKey: string;
+  private readonly tenantId: string;
+  private readonly appId: string;
+  private readonly environment: string;
 
   constructor(config?: {
     baseUrl?: string;
@@ -223,6 +223,53 @@ export class DharaHILClient {
   /**
    * Poll for a decision with dynamic TTL from gateway response
    */
+  /**
+   * Fetch the current decision for a request, or null while still pending.
+   *
+   * Public because background pollers need one shot without the wait loop;
+   * they previously reached through `client["baseUrl"]` and duplicated the
+   * status mapping below, which is how "REJECTED" came to mean two different
+   * actions depending on which copy ran.
+   */
+  async fetchDecision(requestId: string): Promise<DharaHILDecision | null> {
+    const response = await fetch(`${this.baseUrl}/v1/requests/${requestId}`, {
+      headers: {
+        "X-DHARA-API-KEY": this.apiKey,
+      },
+    });
+
+    if (!response.ok) {
+      logger.error("DharaHIL: Failed to poll decision", {
+        requestId,
+        status: response.status,
+      });
+      return null;
+    }
+
+    // Gateway returns: status (PENDING/APPROVED/REJECTED/...) and
+    // last_decision (approve/reject/revise).
+    const data = (await response.json()) as {
+      status?: string;
+      last_decision?: string;
+      last_decision_note?: string;
+      last_decision_revise_input?: string;
+    };
+
+    if (!data.status || data.status === "PENDING") return null;
+
+    logger.info("DharaHIL: Decision received", {
+      requestId,
+      status: data.status,
+      last_decision: data.last_decision,
+    });
+
+    return {
+      action: toDharaHILAction(data),
+      revise_input: data.last_decision_revise_input,
+      reason: data.last_decision_note,
+    };
+  }
+
   async pollForDecision(
     requestId: string,
     expiresAt: string,
@@ -251,57 +298,9 @@ export class DharaHILClient {
 
     while (Date.now() - startTime < dynamicTimeoutMs) {
       try {
-        const response = await fetch(
-          `${this.baseUrl}/v1/requests/${requestId}`,
-          {
-            headers: {
-              "X-DHARA-API-KEY": this.apiKey,
-            },
-          },
-        );
+        const decision = await this.fetchDecision(requestId);
 
-        if (!response.ok) {
-          logger.error("DharaHIL: Failed to poll decision", {
-            requestId,
-            status: response.status,
-          });
-          // Continue polling on transient errors
-          await this.sleep(pollIntervalMs);
-          continue;
-        }
-
-        const data = (await response.json()) as any;
-
-        // Check if we have a decision
-        // Gateway returns: status (PENDING/APPROVED/REJECTED/etc) and last_decision (approve/reject/etc)
-        if (data.status && data.status !== "PENDING") {
-          logger.info("DharaHIL: Decision received", {
-            requestId,
-            status: data.status,
-            last_decision: data.last_decision,
-          });
-
-          // Map gateway status to our action enum
-          let action: DharaHILAction;
-          if (data.status === "APPROVED" || data.last_decision === "approve") {
-            action = "APPROVED";
-          } else if (
-            data.status === "REJECTED" ||
-            data.last_decision === "reject"
-          ) {
-            action = "DENIED";
-          } else if (data.last_decision === "revise") {
-            action = "REVISE_REQUESTED";
-          } else {
-            action = data.status as DharaHILAction;
-          }
-
-          return {
-            action,
-            revise_input: data.last_decision_revise_input,
-            reason: data.last_decision_note,
-          };
-        }
+        if (decision) return decision;
 
         // Still pending, wait before next poll
         logger.trace("DharaHIL: Still pending, continuing to poll", {
@@ -385,3 +384,28 @@ export class DharaHILClient {
 
 // Singleton instance for global use
 export const dharahilClient = new DharaHILClient();
+
+/**
+ * Map a gateway response onto DharaHILAction.
+ *
+ * A rejection MUST land on a value `wasDenied` recognises. This returned
+ * "DENIED", which is not in the union at all, so `wasDenied` was false, and
+ * both mail send paths fell through their guards and sent the email a human
+ * had just rejected.
+ */
+function toDharaHILAction(data: {
+  status?: string;
+  last_decision?: string;
+}): DharaHILAction {
+  if (data.status === "APPROVED" || data.last_decision === "approve") {
+    return "APPROVED";
+  }
+
+  if (data.status === "REJECTED" || data.last_decision === "reject") {
+    return "REJECTED";
+  }
+
+  if (data.last_decision === "revise") return "REVISE_REQUESTED";
+
+  return data.status as DharaHILAction;
+}

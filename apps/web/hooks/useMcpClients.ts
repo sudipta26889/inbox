@@ -1,5 +1,5 @@
 import useSWR from "swr";
-import type { McpServerClient } from "@prisma/client";
+import type { McpServerClient } from "@/generated/prisma/models";
 
 export type McpClient = Pick<
   McpServerClient,

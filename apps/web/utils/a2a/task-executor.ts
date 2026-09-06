@@ -1,6 +1,7 @@
 import { createScopedLogger } from "@/utils/logger";
 import prisma from "@/utils/prisma";
-import { A2aTaskState } from "@prisma/client";
+import type { Prisma } from "@/generated/prisma/client";
+import { A2aTaskState } from "@/generated/prisma/enums";
 import { getTool } from "@/utils/mcp-server/tools/registry";
 import type { McpToolContext } from "@/utils/mcp-server/tools/registry";
 import { getSkillDefinition } from "./protocol-handler";
@@ -91,7 +92,8 @@ export async function executeTask(taskId: string): Promise<void> {
       A2aTaskState.working,
       A2aTaskState.completed,
       "Task completed successfully",
-      { result, durationMs },
+      // MCP handlers return `unknown`; the column is Json either way.
+      { result: result as Prisma.InputJsonValue, durationMs },
     );
 
     logger.info("Task completed successfully", {
@@ -99,13 +101,15 @@ export async function executeTask(taskId: string): Promise<void> {
       skill: task.skill,
       durationMs,
     });
-  } catch (error: any) {
+  } catch (error) {
     const durationMs = Date.now() - startTime;
+
+    const { message: errorMessage, stack: errorStack } = toErrorParts(error);
 
     logger.error("Task execution failed", {
       taskId: task.taskId,
       skill: task.skill,
-      error: error.message,
+      error: errorMessage,
       durationMs,
       retryCount: task.retryCount,
       maxRetries: task.maxRetries,
@@ -125,8 +129,8 @@ export async function executeTask(taskId: string): Promise<void> {
           retryCount: task.retryCount + 1,
           lastRetryAt: new Date(),
           error: {
-            message: error.message,
-            stack: error.stack,
+            message: errorMessage,
+            stack: errorStack,
             retryable: true,
           },
         },
@@ -138,7 +142,7 @@ export async function executeTask(taskId: string): Promise<void> {
           taskId: task.id,
           fromState: A2aTaskState.working,
           toState: A2aTaskState.submitted,
-          reason: `Retrying after error (attempt ${task.retryCount + 1}/${task.maxRetries}): ${error.message}`,
+          reason: `Retrying after error (attempt ${task.retryCount + 1}/${task.maxRetries}): ${errorMessage}`,
           durationMs,
         },
       });
@@ -155,12 +159,12 @@ export async function executeTask(taskId: string): Promise<void> {
         A2aTaskState.working,
         A2aTaskState.failed,
         shouldRetry
-          ? `Execution failed: ${error.message}`
-          : `Max retries exceeded (${task.maxRetries}): ${error.message}`,
+          ? `Execution failed: ${errorMessage}`
+          : `Max retries exceeded (${task.maxRetries}): ${errorMessage}`,
         {
           error: {
-            message: error.message,
-            stack: error.stack,
+            message: errorMessage,
+            stack: errorStack,
             retryable: isRetriableError(error),
             retriesExhausted: task.retryCount >= task.maxRetries,
           },
@@ -186,13 +190,13 @@ async function transitionTaskState(
   toState: A2aTaskState,
   reason: string,
   data?: {
-    result?: any;
-    error?: any;
-    artifacts?: any;
+    result?: Prisma.InputJsonValue;
+    error?: Prisma.InputJsonValue;
+    artifacts?: Prisma.InputJsonValue;
     durationMs?: number;
   },
 ): Promise<void> {
-  const terminalStates = [
+  const terminalStates: A2aTaskState[] = [
     A2aTaskState.completed,
     A2aTaskState.failed,
     A2aTaskState.canceled,
@@ -296,11 +300,11 @@ export async function processPendingTasks(limit = 10): Promise<void> {
   for (const task of pendingTasks) {
     try {
       await executeTask(task.id);
-    } catch (error: any) {
+    } catch (error) {
       logger.error("Failed to execute pending task", {
         taskId: task.taskId,
         skill: task.skill,
-        error: error.message,
+        error,
       });
     }
   }
@@ -315,7 +319,7 @@ export async function processPendingTasks(limit = 10): Promise<void> {
 export async function approveTask(
   taskId: string,
   approverId: string,
-  responseData?: any,
+  responseData?: Prisma.InputJsonValue,
 ): Promise<void> {
   const task = await prisma.a2aTask.findUnique({
     where: { id: taskId },
@@ -445,20 +449,22 @@ export async function getTasksRequiringApproval(userId: string) {
  * - Not found (404)
  * - Validation errors
  */
-function isRetriableError(error: any): boolean {
+function isRetriableError(error: unknown): boolean {
+  const { code, message } = toErrorShape(error);
+
   // Network/connection errors
   if (
-    error.code === "ECONNREFUSED" ||
-    error.code === "ECONNRESET" ||
-    error.code === "ETIMEDOUT" ||
-    error.code === "ENOTFOUND"
+    code === "ECONNREFUSED" ||
+    code === "ECONNRESET" ||
+    code === "ETIMEDOUT" ||
+    code === "ENOTFOUND"
   ) {
     return true;
   }
 
   // HTTP status codes
-  if (error.status || error.statusCode) {
-    const status = error.status || error.statusCode;
+  const { status } = toErrorShape(error);
+  if (status) {
     // Rate limits, service unavailable, gateway errors
     if (status === 429 || status === 503 || status === 502 || status === 504) {
       return true;
@@ -474,7 +480,7 @@ function isRetriableError(error: any): boolean {
   }
 
   // Error messages indicating transient issues
-  const errorMessage = error.message?.toLowerCase() || "";
+  const errorMessage = message.toLowerCase();
   if (
     errorMessage.includes("timeout") ||
     errorMessage.includes("connection") ||
@@ -486,4 +492,40 @@ function isRetriableError(error: any): boolean {
 
   // Default to non-retriable for unknown errors
   return false;
+}
+
+/** Pull a message and stack off an unknown throw value. */
+function toErrorParts(error: unknown) {
+  if (error instanceof Error) {
+    return { message: error.message, stack: error.stack };
+  }
+
+  return { message: String(error), stack: undefined };
+}
+
+/** Node/system errors carry a `code`; plain Errors only a message. */
+function toErrorShape(error: unknown) {
+  if (error && typeof error === "object") {
+    const candidate = error as {
+      code?: unknown;
+      message?: unknown;
+      status?: unknown;
+      statusCode?: unknown;
+    };
+
+    const status =
+      typeof candidate.status === "number"
+        ? candidate.status
+        : typeof candidate.statusCode === "number"
+          ? candidate.statusCode
+          : undefined;
+
+    return {
+      code: typeof candidate.code === "string" ? candidate.code : undefined,
+      message: typeof candidate.message === "string" ? candidate.message : "",
+      status,
+    };
+  }
+
+  return { code: undefined, message: String(error), status: undefined };
 }

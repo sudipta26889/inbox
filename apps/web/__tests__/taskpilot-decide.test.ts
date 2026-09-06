@@ -3,6 +3,9 @@ import { describe, expect, it } from "vitest";
 import { decidePass1 } from "@/utils/taskpilot/decide";
 import type { RichCandidate } from "@/utils/taskpilot/types";
 
+// Hits a live model. Run with `pnpm test-ai`.
+const isAiTest = process.env.RUN_AI_TESTS === "true";
+
 const MODEL = process.env.TASKPILOT_DECIDER_MODEL ?? "kimi-k2.6";
 
 function bpclCandidate(
@@ -32,7 +35,7 @@ function bpclCandidate(
   };
 }
 
-describe("Pass 1 — decide", () => {
+describe.runIf(isAiTest)("Pass 1 — decide", () => {
   it("RESOLVED language → COMMENT_ON + stateGroup=completed + HIGH confidence", async () => {
     const r = await decidePass1({
       mode: "auto",

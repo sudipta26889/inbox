@@ -2,7 +2,7 @@ import { withAuth } from "@/utils/middleware";
 import prisma from "@/utils/prisma";
 import { createScopedLogger } from "@/utils/logger";
 import { approveTask } from "@/utils/a2a/task-executor";
-import { A2aTaskState } from "@prisma/client";
+import { A2aTaskState } from "@/generated/prisma/enums";
 
 const logger = createScopedLogger("api/a2a-approvals");
 

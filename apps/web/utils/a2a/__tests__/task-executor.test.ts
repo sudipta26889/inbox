@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { executeTask, approveTask, rejectTask } from "../task-executor";
-import { A2aTaskState } from "@prisma/client";
+import { A2aTaskState } from "@/generated/prisma/enums";
 
 // Mock dependencies
 vi.mock("@/utils/prisma", () => ({

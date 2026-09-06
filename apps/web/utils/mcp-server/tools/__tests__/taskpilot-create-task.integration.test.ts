@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import prisma from "@/utils/__mocks__/prisma";
 import { ActionType } from "@/generated/prisma/enums";
 import { createMockEmailProvider } from "@/utils/__mocks__/email-provider";
+import prisma from "@/utils/__mocks__/prisma";
 import { runActionFunction } from "@/utils/ai/actions";
 import { createScopedLogger } from "@/utils/logger";
 import { TaskpilotClient } from "@/utils/taskpilot/client";
@@ -13,22 +13,6 @@ vi.mock("@/utils/taskpilot/config", () => ({
   getTaskpilotConfigForUser: vi
     .fn()
     .mockResolvedValue({ apiKey: "tk", workspaceSlug: "acme" }),
-}));
-
-vi.mock("@/utils/taskpilot/cache", () => ({
-  taskpilotCache: {
-    getProjects: vi.fn(
-      async (_userId: string, loader: () => Promise<unknown>) => loader(),
-    ),
-    getLabels: vi.fn(
-      async (
-        _userId: string,
-        _projectId: string,
-        loader: () => Promise<unknown>,
-      ) => loader(),
-    ),
-    invalidateUser: vi.fn(),
-  },
 }));
 
 // Existing mocks the dispatcher test suite uses
@@ -44,6 +28,14 @@ vi.mock("@/utils/attachments/draft-attachments", () => ({
   }),
 }));
 
+/**
+ * CREATE_TASK is a signal, not a create. The rule dispatcher records that the
+ * rule fired; `maybeRouteToTaskPilot` (see utils/taskpilot/route.test.ts) is
+ * what inspects executedRules and decides between CREATE and COMMENT_ON.
+ *
+ * These tests pin that boundary: creation must NOT leak back into the action,
+ * or the same email gets a task twice — once here and once from the hook.
+ */
 describe("runActionFunction — ActionType.CREATE_TASK", () => {
   const logger = createScopedLogger("test");
   const email = {
@@ -63,48 +55,11 @@ describe("runActionFunction — ActionType.CREATE_TASK", () => {
     internalDate: "1700000000000",
   } as ParsedMessage;
 
-  beforeEach(() => {
-    vi.clearAllMocks();
-    prisma.rule.findUnique.mockResolvedValue({
-      instructions: "Identify customer support; route to Acme Support",
-    } as never);
-    prisma.emailTaskLink.findFirst.mockResolvedValue(null);
-    prisma.emailTaskLink.upsert.mockResolvedValue({
-      id: "link-1",
-      emailAccountId: "account-1",
-      gmailMessageId: "message-1",
-      threadId: "thread-1",
-      workspaceSlug: "acme",
-      projectId: "p1",
-      taskpilotIssueId: "issue-1",
-      taskpilotIdentifier: "SUP-7",
-      source: "RULE",
-      ruleId: "rule-1",
-      createdAt: new Date(),
-    } as never);
+  const createWorkItem = vi.spyOn(TaskpilotClient.prototype, "createWorkItem");
 
-    vi.spyOn(TaskpilotClient.prototype, "listProjects").mockResolvedValue([
-      {
-        id: "p1",
-        identifier: "SUP",
-        name: "Acme Support",
-        description: "Customer support",
-      },
-    ]);
-    vi.spyOn(TaskpilotClient.prototype, "listLabels").mockResolvedValue([]);
-    vi.spyOn(TaskpilotClient.prototype, "createWorkItem").mockResolvedValue({
-      id: "issue-1",
-      identifier: "SUP-7",
-      sequence_id: 7,
-      alreadyExisted: false,
-    });
-    vi.spyOn(TaskpilotClient.prototype, "addLink").mockResolvedValue();
-  });
-
-  it("creates a TaskPilot task via the rule dispatcher", async () => {
-    const client = createMockEmailProvider();
-    const result = await runActionFunction({
-      client,
+  function runCreateTaskAction() {
+    return runActionFunction({
+      client: createMockEmailProvider(),
       email,
       action: {
         id: "action-1",
@@ -121,62 +76,37 @@ describe("runActionFunction — ActionType.CREATE_TASK", () => {
       } as never,
       logger,
     });
+  }
 
-    expect(result).toMatchObject({
-      success: true,
-      taskpilotIdentifier: "SUP-7",
-      alreadyExisted: false,
-    });
-
-    // Idempotency layer wrote the link with source=RULE + ruleId
-    expect(prisma.emailTaskLink.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        create: expect.objectContaining({
-          source: "RULE",
-          ruleId: "rule-1",
-        }),
-      }),
-    );
+  beforeEach(() => {
+    vi.clearAllMocks();
+    prisma.emailTaskLink.findFirst.mockResolvedValue(null);
   });
 
-  it("short-circuits when the email is already linked", async () => {
+  it("succeeds without creating a TaskPilot work item", async () => {
+    const result = await runCreateTaskAction();
+
+    expect(result).toMatchObject({ success: true });
+    expect(createWorkItem).not.toHaveBeenCalled();
+  });
+
+  it("does not write an email/task link itself", async () => {
+    // The link is the hook's idempotency key. Writing it here would make the
+    // hook think the email was already handled and skip the real decision.
+    await runCreateTaskAction();
+
+    expect(prisma.emailTaskLink.upsert).not.toHaveBeenCalled();
+  });
+
+  it("stays a no-op when the email is already linked", async () => {
     prisma.emailTaskLink.findFirst.mockResolvedValue({
-      id: "existing",
-      emailAccountId: "account-1",
-      gmailMessageId: "message-1",
-      threadId: "thread-1",
-      workspaceSlug: "acme",
-      projectId: "p1",
-      taskpilotIssueId: "old",
-      taskpilotIdentifier: "SUP-1",
-      source: "MANUAL",
-      ruleId: null,
-      createdAt: new Date(),
+      id: "link-1",
+      taskpilotIdentifier: "SUP-7",
     } as never);
-    const createSpy = vi.spyOn(TaskpilotClient.prototype, "createWorkItem");
 
-    const client = createMockEmailProvider();
-    const result = await runActionFunction({
-      client,
-      email,
-      action: { id: "action-1", type: ActionType.CREATE_TASK } as never,
-      userEmail: "user@example.com",
-      userId: "user-1",
-      emailAccountId: "account-1",
-      executedRule: {
-        id: "executed-rule-1",
-        threadId: "thread-1",
-        emailAccountId: "account-1",
-        ruleId: "rule-1",
-      } as never,
-      logger,
-    });
+    const result = await runCreateTaskAction();
 
-    expect(result).toMatchObject({
-      success: true,
-      taskpilotIdentifier: "SUP-1",
-      alreadyExisted: true,
-    });
-    expect(createSpy).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ success: true });
+    expect(createWorkItem).not.toHaveBeenCalled();
   });
 });

@@ -8,7 +8,7 @@ import {
 } from "../protocol-handler";
 import { A2A_SKILL_REGISTRY } from "../skill-registry";
 import type { A2aAuthContext } from "../auth";
-import { A2aTaskState } from "@prisma/client";
+import { A2aTaskState } from "@/generated/prisma/enums";
 
 // Mock dependencies
 vi.mock("@/utils/prisma", () => ({

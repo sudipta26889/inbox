@@ -1,28 +1,42 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  checkRateLimit,
-  recordRequest,
-  checkAndRecordRateLimit,
+  RATE_LIMITS,
   checkA2aRequestRateLimit,
+  checkAndRecordRateLimit,
   checkIpRateLimit,
+  checkRateLimit,
   cleanupRateLimitRecords,
   getRateLimitHeaders,
-  RATE_LIMITS,
+  recordRequest,
 } from "../rate-limit";
 import type { A2aAuthContext } from "../auth";
 
-// Mock dependencies
+vi.mock("server-only", () => ({}));
 vi.mock("@/utils/prisma", () => ({
   default: {
     a2aRateLimit: {
-      count: vi.fn(),
+      findMany: vi.fn(),
+      findFirst: vi.fn(),
       create: vi.fn(),
+      update: vi.fn(),
       deleteMany: vi.fn(),
     },
   },
 }));
 
 const prisma = await import("@/utils/prisma").then((m) => m.default);
+const rateLimit = prisma.a2aRateLimit as unknown as {
+  findMany: ReturnType<typeof vi.fn>;
+  findFirst: ReturnType<typeof vi.fn>;
+  create: ReturnType<typeof vi.fn>;
+  update: ReturnType<typeof vi.fn>;
+  deleteMany: ReturnType<typeof vi.fn>;
+};
+
+/** Stored rows only ever hold a count; the bucket comes from the where clause. */
+function rows(...counts: number[]) {
+  return counts.map((requestCount) => ({ id: "row", requestCount }));
+}
 
 const mockAuthContext: A2aAuthContext = {
   userId: "user-123",
@@ -45,11 +59,16 @@ const mockAuthContext: A2aAuthContext = {
 describe("A2A Rate Limiting", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    rateLimit.findMany.mockResolvedValue([]);
+    rateLimit.findFirst.mockResolvedValue(null);
+    rateLimit.create.mockResolvedValue({});
+    rateLimit.update.mockResolvedValue({});
+    rateLimit.deleteMany.mockResolvedValue({ count: 0 });
   });
 
   describe("checkRateLimit", () => {
-    it("should allow requests under limit", async () => {
-      (prisma.a2aRateLimit.count as any).mockResolvedValue(10);
+    it("allows requests under the limit", async () => {
+      rateLimit.findMany.mockResolvedValue(rows(10));
 
       const result = await checkRateLimit("client:test-client", "minute", 60);
 
@@ -58,8 +77,8 @@ describe("A2A Rate Limiting", () => {
       expect(result.limit).toBe(60);
     });
 
-    it("should block requests over limit", async () => {
-      (prisma.a2aRateLimit.count as any).mockResolvedValue(60);
+    it("blocks requests at the limit", async () => {
+      rateLimit.findMany.mockResolvedValue(rows(60));
 
       const result = await checkRateLimit("client:test-client", "minute", 60);
 
@@ -68,66 +87,108 @@ describe("A2A Rate Limiting", () => {
       expect(result.retryAfter).toBeGreaterThan(0);
     });
 
-    it("should reset after time window", async () => {
-      const now = new Date();
-      const nextMinute = new Date(Math.ceil(now.getTime() / 60_000) * 60_000);
+    it("sums duplicate rows for the same bucket", async () => {
+      // The unique constraint spans nullable columns, and Postgres treats
+      // NULLs as distinct, so concurrent writers can produce several rows.
+      rateLimit.findMany.mockResolvedValue(rows(30, 25, 10));
 
-      (prisma.a2aRateLimit.count as any).mockResolvedValue(0);
+      const result = await checkRateLimit("client:test-client", "minute", 60);
+
+      expect(result.allowed).toBe(false);
+    });
+
+    it("resets at the next window boundary", async () => {
+      const nextMinute = new Date(Math.ceil(Date.now() / 60_000) * 60_000);
 
       const result = await checkRateLimit("client:test-client", "minute", 60);
 
       expect(result.resetAt).toEqual(nextMinute);
     });
 
-    it("should track per-minute limits", async () => {
-      (prisma.a2aRateLimit.count as any).mockResolvedValue(30);
+    // Regression: checkRateLimit used to filter `windowEnd: { lte: now }`,
+    // but recordRequest writes the active bucket's windowEnd in the FUTURE.
+    // The current window was therefore never counted and nothing was limited.
+    it("queries the same bucket recordRequest writes", async () => {
+      await recordRequest("client:test-client", "minute");
+      const written = rateLimit.create.mock.calls[0][0].data;
 
-      const result = await checkRateLimit("client:test-client", "minute", 60);
+      await checkRateLimit("client:test-client", "minute", 60);
+      const queried = rateLimit.findMany.mock.calls[0][0].where;
 
-      expect(prisma.a2aRateLimit.count).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({
-            window: "minute",
-          }),
-        }),
-      );
+      expect(queried.windowStart).toEqual(written.windowStart);
+      expect(queried.windowEnd).toEqual(written.windowEnd);
+      expect(queried.clientId).toBe(written.clientId);
     });
 
-    it("should track per-hour limits", async () => {
-      (prisma.a2aRateLimit.count as any).mockResolvedValue(500);
+    it("keeps minute and hour buckets separate", async () => {
+      await checkRateLimit("client:test-client", "minute", 60);
+      await checkRateLimit("client:test-client", "hour", 1000);
 
-      const result = await checkRateLimit("client:test-client", "hour", 1000);
-
-      expect(prisma.a2aRateLimit.count).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({
-            window: "hour",
-          }),
-        }),
+      const [minute, hour] = rateLimit.findMany.mock.calls.map(
+        (call) => call[0].where,
       );
+
+      expect(minute.windowEnd).not.toEqual(hour.windowEnd);
+    });
+
+    // Regression: `const [limitType, identifier] = key.split(":")` dropped the
+    // ":task" suffix, so task-creation limits shared the client's counter.
+    it("keeps a scoped bucket separate from its parent", async () => {
+      await checkRateLimit("client:test-client", "minute", 60);
+      await checkRateLimit("client:test-client:task", "minute", 30);
+
+      const [plain, scoped] = rateLimit.findMany.mock.calls.map(
+        (call) => call[0].where,
+      );
+
+      expect(plain.clientId).toBe("test-client");
+      expect(scoped.clientId).toBe("test-client:task");
+    });
+
+    it("routes each limit type to its own column", async () => {
+      await checkRateLimit("user:u1", "minute", 60);
+      await checkRateLimit("ip:1.2.3.4", "minute", 60);
+
+      const [user, ip] = rateLimit.findMany.mock.calls.map(
+        (call) => call[0].where,
+      );
+
+      expect(user).toMatchObject({ limitType: "user", userId: "u1" });
+      expect(ip).toMatchObject({ limitType: "ip", ipAddress: "1.2.3.4" });
     });
   });
 
   describe("recordRequest", () => {
-    it("should record request in database", async () => {
-      (prisma.a2aRateLimit.create as any).mockResolvedValue({});
+    it("creates a bucket row when none exists", async () => {
+      await recordRequest("client:test-client", "minute");
+
+      expect(rateLimit.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          limitType: "client",
+          clientId: "test-client",
+          requestCount: 1,
+          windowStart: expect.any(Date),
+          windowEnd: expect.any(Date),
+        }),
+      });
+    });
+
+    it("increments instead of duplicating when the bucket exists", async () => {
+      rateLimit.findFirst.mockResolvedValue({ id: "existing" });
 
       await recordRequest("client:test-client", "minute");
 
-      expect(prisma.a2aRateLimit.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          key: "client:test-client",
-          window: "minute",
-          timestamp: expect.any(Date),
-        }),
+      expect(rateLimit.create).not.toHaveBeenCalled();
+      expect(rateLimit.update).toHaveBeenCalledWith({
+        where: { id: "existing" },
+        data: { requestCount: { increment: 1 } },
       });
     });
   });
 
   describe("checkAndRecordRateLimit", () => {
-    it("should record request if allowed", async () => {
-      (prisma.a2aRateLimit.count as any).mockResolvedValue(10);
-      (prisma.a2aRateLimit.create as any).mockResolvedValue({});
+    it("records the request when allowed", async () => {
+      rateLimit.findMany.mockResolvedValue(rows(10));
 
       const result = await checkAndRecordRateLimit(
         "client:test-client",
@@ -136,11 +197,11 @@ describe("A2A Rate Limiting", () => {
       );
 
       expect(result.allowed).toBe(true);
-      expect(prisma.a2aRateLimit.create).toHaveBeenCalled();
+      expect(rateLimit.create).toHaveBeenCalled();
     });
 
-    it("should NOT record request if blocked", async () => {
-      (prisma.a2aRateLimit.count as any).mockResolvedValue(60);
+    it("does not record the request when blocked", async () => {
+      rateLimit.findMany.mockResolvedValue(rows(60));
 
       const result = await checkAndRecordRateLimit(
         "client:test-client",
@@ -149,90 +210,56 @@ describe("A2A Rate Limiting", () => {
       );
 
       expect(result.allowed).toBe(false);
-      expect(prisma.a2aRateLimit.create).not.toHaveBeenCalled();
+      expect(rateLimit.create).not.toHaveBeenCalled();
     });
   });
 
-  describe("Multi-tier Limits", () => {
-    it("should enforce client-level limits", async () => {
-      // Mock counts for different limits
-      let callCount = 0;
-      (prisma.a2aRateLimit.count as any).mockImplementation(() => {
-        callCount++;
-        // First 2 calls are client limits (minute, hour)
-        if (callCount <= 2) return Promise.resolve(50); // Under limit
-        // Next 2 calls are user limits
-        return Promise.resolve(0);
-      });
-
-      (prisma.a2aRateLimit.create as any).mockResolvedValue({});
-
+  describe("checkA2aRequestRateLimit", () => {
+    it("checks client and user, per minute and per hour", async () => {
       const result = await checkA2aRequestRateLimit(mockAuthContext, "request");
 
       expect(result.allowed).toBe(true);
-      // Should check client:minute, client:hour, user:minute, user:hour
-      expect(prisma.a2aRateLimit.count).toHaveBeenCalledTimes(4);
+      expect(rateLimit.findMany).toHaveBeenCalledTimes(4);
     });
 
-    it("should enforce user-level limits", async () => {
-      let callCount = 0;
-      (prisma.a2aRateLimit.count as any).mockImplementation(() => {
-        callCount++;
-        // Client limits pass
-        if (callCount <= 2) return Promise.resolve(10);
-        // User minute limit exceeded
-        if (callCount === 3) return Promise.resolve(100);
-        return Promise.resolve(0);
-      });
+    it("blocks on the user limit even when the client is under", async () => {
+      rateLimit.findMany
+        .mockResolvedValueOnce(rows(10))
+        .mockResolvedValueOnce(rows(10))
+        .mockResolvedValueOnce(rows(RATE_LIMITS.USER_PER_MINUTE));
 
       const result = await checkA2aRequestRateLimit(mockAuthContext, "request");
 
       expect(result.allowed).toBe(false);
+      expect(rateLimit.create).not.toHaveBeenCalled();
     });
 
-    it("should use most restrictive limit for remaining count", async () => {
-      (prisma.a2aRateLimit.count as any).mockImplementation(
-        ({ where }: any) => {
-          if (where.key.includes("client") && where.window === "minute")
-            return Promise.resolve(50); // 10 remaining
-          if (where.key.includes("client") && where.window === "hour")
-            return Promise.resolve(900); // 100 remaining
-          if (where.key.includes("user") && where.window === "minute")
-            return Promise.resolve(95); // 5 remaining (most restrictive)
-          if (where.key.includes("user") && where.window === "hour")
-            return Promise.resolve(1500); // 500 remaining
-          return Promise.resolve(0);
-        },
-      );
-
-      (prisma.a2aRateLimit.create as any).mockResolvedValue({});
+    it("reports the most restrictive remaining count", async () => {
+      rateLimit.findMany
+        .mockResolvedValueOnce(rows(50)) // client/minute -> 10 left
+        .mockResolvedValueOnce(rows(900)) // client/hour   -> 100 left
+        .mockResolvedValueOnce(rows(95)) // user/minute   -> 5 left
+        .mockResolvedValueOnce(rows(1500)); // user/hour  -> 500 left
 
       const result = await checkA2aRequestRateLimit(mockAuthContext, "request");
 
       expect(result.allowed).toBe(true);
-      expect(result.remaining).toBe(5); // Most restrictive
+      expect(result.remaining).toBe(5);
     });
-  });
 
-  describe("Task Creation Limits", () => {
-    it("should apply stricter limits for task creation", async () => {
-      (prisma.a2aRateLimit.count as any).mockResolvedValue(0);
-      (prisma.a2aRateLimit.create as any).mockResolvedValue({});
-
+    it("uses the task bucket for task creation", async () => {
       await checkA2aRequestRateLimit(mockAuthContext, "task_create");
 
-      // Should check with task creation limits
-      expect(prisma.a2aRateLimit.count).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({
-            key: "client:client-789:task",
-          }),
-        }),
-      );
+      expect(rateLimit.findMany.mock.calls[0][0].where).toMatchObject({
+        limitType: "client",
+        clientId: "client-789:task",
+      });
     });
 
-    it("should enforce 30 req/min for task creation", async () => {
-      (prisma.a2aRateLimit.count as any).mockResolvedValue(30);
+    it("enforces the stricter task-creation limit", async () => {
+      rateLimit.findMany.mockResolvedValue(
+        rows(RATE_LIMITS.TASK_CREATE_PER_MINUTE),
+      );
 
       const result = await checkA2aRequestRateLimit(
         mockAuthContext,
@@ -240,97 +267,72 @@ describe("A2A Rate Limiting", () => {
       );
 
       expect(result.allowed).toBe(false);
+      expect(result.limit).toBe(RATE_LIMITS.TASK_CREATE_PER_MINUTE);
     });
   });
 
-  describe("IP-based Limits", () => {
-    it("should enforce IP limits for unauthenticated requests", async () => {
-      (prisma.a2aRateLimit.count as any).mockResolvedValue(10);
-      (prisma.a2aRateLimit.create as any).mockResolvedValue({});
+  describe("checkIpRateLimit", () => {
+    it("allows an IP under the limit", async () => {
+      rateLimit.findMany.mockResolvedValue(rows(10));
 
       const result = await checkIpRateLimit("192.168.1.100");
 
       expect(result.allowed).toBe(true);
-      expect(prisma.a2aRateLimit.count).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({
-            key: "ip:192.168.1.100",
-          }),
-        }),
-      );
+      expect(rateLimit.findMany.mock.calls[0][0].where).toMatchObject({
+        limitType: "ip",
+        ipAddress: "192.168.1.100",
+      });
     });
 
-    it("should block IP after 20 req/min", async () => {
-      (prisma.a2aRateLimit.count as any).mockResolvedValue(20);
+    it("blocks an IP at the per-minute limit", async () => {
+      rateLimit.findMany.mockResolvedValue(rows(RATE_LIMITS.IP_PER_MINUTE));
 
       const result = await checkIpRateLimit("192.168.1.100");
 
       expect(result.allowed).toBe(false);
+      expect(result.limit).toBe(RATE_LIMITS.IP_PER_MINUTE);
     });
   });
 
-  describe("Cleanup", () => {
-    it("should delete records older than 24 hours", async () => {
-      (prisma.a2aRateLimit.deleteMany as any).mockResolvedValue({
-        count: 1500,
-      });
+  describe("cleanupRateLimitRecords", () => {
+    // Regression: this filtered on `timestamp`, a column A2aRateLimit does not
+    // have, so every cleanup run threw and the table grew without bound.
+    it("deletes by a column that exists on the model", async () => {
+      rateLimit.deleteMany.mockResolvedValue({ count: 7 });
 
-      const deletedCount = await cleanupRateLimitRecords();
+      const deleted = await cleanupRateLimitRecords();
 
-      expect(deletedCount).toBe(1500);
-      expect(prisma.a2aRateLimit.deleteMany).toHaveBeenCalledWith({
-        where: {
-          timestamp: {
-            lt: expect.any(Date),
-          },
-        },
+      expect(deleted).toBe(7);
+      expect(rateLimit.deleteMany).toHaveBeenCalledWith({
+        where: { windowEnd: { lt: expect.any(Date) } },
       });
     });
   });
 
-  describe("Rate Limit Headers", () => {
-    it("should return standard rate limit headers", () => {
-      const result = {
+  describe("getRateLimitHeaders", () => {
+    it("omits Retry-After while requests are still allowed", () => {
+      const headers = getRateLimitHeaders({
         allowed: true,
-        remaining: 50,
-        resetAt: new Date("2026-03-24T10:00:00Z"),
-        limit: 100,
-      };
+        limit: 60,
+        remaining: 42,
+        resetAt: new Date(0),
+      });
 
-      const headers = getRateLimitHeaders(result);
-
-      expect(headers["X-RateLimit-Limit"]).toBe("100");
-      expect(headers["X-RateLimit-Remaining"]).toBe("50");
-      expect(headers["X-RateLimit-Reset"]).toBe(
-        String(Math.floor(result.resetAt.getTime() / 1000)),
-      );
+      expect(headers["X-RateLimit-Limit"]).toBe("60");
+      expect(headers["X-RateLimit-Remaining"]).toBe("42");
+      expect(headers["Retry-After"]).toBeUndefined();
     });
 
-    it("should include Retry-After header when blocked", () => {
-      const result = {
+    it("includes Retry-After once blocked", () => {
+      const headers = getRateLimitHeaders({
         allowed: false,
+        limit: 60,
         remaining: 0,
-        resetAt: new Date(Date.now() + 60_000),
-        limit: 100,
-        retryAfter: 60,
-      };
+        resetAt: new Date(0),
+        retryAfter: 30,
+      });
 
-      const headers = getRateLimitHeaders(result);
-
-      expect(headers["Retry-After"]).toBe("60");
-    });
-  });
-
-  describe("Rate Limit Constants", () => {
-    it("should have correct default limits", () => {
-      expect(RATE_LIMITS.CLIENT_PER_MINUTE).toBe(60);
-      expect(RATE_LIMITS.CLIENT_PER_HOUR).toBe(1000);
-      expect(RATE_LIMITS.USER_PER_MINUTE).toBe(100);
-      expect(RATE_LIMITS.USER_PER_HOUR).toBe(2000);
-      expect(RATE_LIMITS.IP_PER_MINUTE).toBe(20);
-      expect(RATE_LIMITS.IP_PER_HOUR).toBe(200);
-      expect(RATE_LIMITS.TASK_CREATE_PER_MINUTE).toBe(30);
-      expect(RATE_LIMITS.TASK_CREATE_PER_HOUR).toBe(500);
+      expect(headers["Retry-After"]).toBe("30");
     });
   });
 });

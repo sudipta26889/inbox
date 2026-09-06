@@ -124,16 +124,16 @@ describe("sendA2aMessage", () => {
     vi.clearAllMocks();
   });
 
-  it("sends JSON-RPC message and returns result", async () => {
+  it("sends a spec-shaped JSON-RPC message and returns the task result", async () => {
     mockFetch.mockResolvedValue({
       json: () =>
         Promise.resolve({
-          result: { taskId: "task-123", state: "completed" },
+          result: { id: "task-123", status: { state: "completed" } },
         }),
     });
 
     const result = await sendA2aMessage("http://agent.local/a2a", {
-      content: "hello",
+      text: "hello",
     });
 
     expect(result).toEqual({ taskId: "task-123", state: "completed" });
@@ -141,14 +141,35 @@ describe("sendA2aMessage", () => {
       "http://agent.local/a2a",
       expect.objectContaining({
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: expect.objectContaining({
+          "Content-Type": "application/json",
+        }),
       }),
     );
 
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
     expect(body.jsonrpc).toBe("2.0");
-    expect(body.method).toBe("message.send");
-    expect(body.params.content).toBe("hello");
+    expect(body.method).toBe("message/send");
+    expect(body.params.message.parts).toEqual([
+      { kind: "text", text: "hello" },
+    ]);
+  });
+
+  it("appends a data part only when data is given", async () => {
+    mockFetch.mockResolvedValue({
+      json: () => Promise.resolve({ result: {} }),
+    });
+
+    await sendA2aMessage("http://agent.local/a2a", {
+      text: "hello",
+      data: { kind: "inbox.daily_digest" },
+    });
+
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.params.message.parts).toEqual([
+      { kind: "text", text: "hello" },
+      { kind: "data", data: { kind: "inbox.daily_digest" } },
+    ]);
   });
 
   it("returns error when agent responds with JSON-RPC error", async () => {
@@ -160,7 +181,7 @@ describe("sendA2aMessage", () => {
     });
 
     const result = await sendA2aMessage("http://agent.local/a2a", {
-      content: "bad",
+      text: "bad",
     });
 
     expect(result.error).toEqual({
@@ -173,7 +194,7 @@ describe("sendA2aMessage", () => {
     mockFetch.mockRejectedValue(new Error("timeout"));
 
     const result = await sendA2aMessage("http://agent.local/a2a", {
-      content: "hello",
+      text: "hello",
     });
 
     expect(result.error).toEqual({ code: -1, message: "timeout" });
@@ -185,12 +206,12 @@ describe("sendA2aMessage", () => {
     });
 
     await sendA2aMessage("http://agent.local/a2a", {
-      content: "hello",
+      text: "hello",
       contextId: "my-ctx",
     });
 
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-    expect(body.params.contextId).toBe("my-ctx");
+    expect(body.params.message.contextId).toBe("my-ctx");
   });
 });
 
@@ -217,19 +238,19 @@ describe("buildA2aEmailPayload", () => {
       { ruleName: "urgent", ruleId: "r-1" },
     );
 
-    expect(payload.content).toBe(
-      "Urgent email from alice@example.com: Important",
+    expect(payload.text).toBe(
+      "Urgent email from alice@example.com: Important\n\nPlease review",
     );
-    expect(payload.input.from).toBe("alice@example.com");
-    expect(payload.input.subject).toBe("Important");
-    expect(payload.input.snippet).toBe("Please review");
-    expect(payload.input.thread_id).toBe("t-1");
-    expect(payload.input.message_id).toBe("m-1");
-    expect(payload.input.labels).toEqual(["INBOX", "IMPORTANT"]);
-    expect(payload.input.received_at).toBe("2026-01-15T10:00:00.000Z");
-    expect(payload.input.rule_name).toBe("urgent");
-    expect(payload.input.rule_id).toBe("r-1");
-    expect(payload.input.timestamp).toBeDefined();
+    expect(payload.data.from).toBe("alice@example.com");
+    expect(payload.data.subject).toBe("Important");
+    expect(payload.data.snippet).toBe("Please review");
+    expect(payload.data.thread_id).toBe("t-1");
+    expect(payload.data.message_id).toBe("m-1");
+    expect(payload.data.labels).toEqual(["INBOX", "IMPORTANT"]);
+    expect(payload.data.received_at).toBe("2026-01-15T10:00:00.000Z");
+    expect(payload.data.rule_name).toBe("urgent");
+    expect(payload.data.rule_id).toBe("r-1");
+    expect(payload.data.timestamp).toBeDefined();
   });
 
   it("handles missing optional fields", () => {
@@ -243,9 +264,9 @@ describe("buildA2aEmailPayload", () => {
       { ruleId: "r-2" },
     );
 
-    expect(payload.input.snippet).toBeUndefined();
-    expect(payload.input.labels).toBeUndefined();
-    expect(payload.input.received_at).toBeUndefined();
-    expect(payload.input.rule_name).toBeUndefined();
+    expect(payload.data.snippet).toBeUndefined();
+    expect(payload.data.labels).toBeUndefined();
+    expect(payload.data.received_at).toBeUndefined();
+    expect(payload.data.rule_name).toBeUndefined();
   });
 });

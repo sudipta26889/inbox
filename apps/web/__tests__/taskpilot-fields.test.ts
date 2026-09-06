@@ -3,6 +3,9 @@ import { describe, expect, it } from "vitest";
 import { decidePass2 } from "@/utils/taskpilot/decide";
 import type { RichCandidate } from "@/utils/taskpilot/types";
 
+// Hits a live model. Run with `pnpm test-ai`.
+const isAiTest = process.env.RUN_AI_TESTS === "true";
+
 const MODEL = process.env.TASKPILOT_FIELDS_MODEL ?? "kimi-k2.6";
 
 function target(): RichCandidate {
@@ -26,7 +29,7 @@ function target(): RichCandidate {
   };
 }
 
-describe("Pass 2 — field updates", () => {
+describe.runIf(isAiTest)("Pass 2 — field updates", () => {
   it("'this is now urgent' → priority urgent", async () => {
     const r = await decidePass2({
       email: {

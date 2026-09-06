@@ -4,6 +4,19 @@ import type { OutlookClient } from "@/utils/outlook/client";
 import { createScopedLogger } from "@/utils/logger";
 import { sendEmailWithHtml } from "./mail";
 
+vi.mock("server-only", () => ({}));
+
+// The send path runs through the DharaHIL human-approval gate, which
+// fails closed when the gateway is unreachable. Approve by default here;
+// the gate has its own tests.
+vi.mock("@/utils/dharahil/client", () => ({
+  dharahilClient: {
+    runApprovalLoop: vi.fn(async () => ({ action: "APPROVE" })),
+    wasDenied: vi.fn(() => false),
+    shouldRevise: vi.fn(() => false),
+  },
+}));
+
 vi.mock("@/utils/mail", () => ({
   ensureEmailSendingEnabled: vi.fn(),
 }));

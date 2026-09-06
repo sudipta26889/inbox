@@ -4,7 +4,7 @@ import { withError } from "@/utils/middleware";
 import { hasCronSecret, hasPostCronSecret } from "@/utils/cron";
 import { captureException } from "@/utils/error";
 import type { Logger } from "@/utils/logger";
-import { A2aTaskState } from "@prisma/client";
+import { A2aTaskState } from "@/generated/prisma/enums";
 import { executeTask } from "@/utils/a2a/task-executor";
 import { cleanupRateLimitRecords } from "@/utils/a2a/rate-limit";
 import {

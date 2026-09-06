@@ -3,7 +3,7 @@ import { createScopedLogger } from "@/utils/logger";
 import { dharahilClient } from "@/utils/dharahil/client";
 import type { DharaHILDecision } from "@/utils/dharahil/client";
 import prisma from "@/utils/prisma";
-import { A2aTaskState } from "@prisma/client";
+import { A2aTaskState } from "@/generated/prisma/enums";
 import { approveTask, rejectTask } from "./task-executor";
 import { env } from "@/env";
 
@@ -76,7 +76,7 @@ export async function requestApprovalViaDharaHIL(
   // Prepare DharaHIL request
   const request = {
     toolName: task.skill,
-    toolArgs: task.input,
+    toolArgs: toToolArgs(task.input),
     context: {
       agentId: "inbox-a2a-agent",
       runId: task.userId,
@@ -121,10 +121,10 @@ export async function requestApprovalViaDharaHIL(
     });
 
     return response.request_id;
-  } catch (error: any) {
+  } catch (error) {
     logger.error("Failed to submit DharaHIL approval request", {
       taskId: task.taskId,
-      error: error.message,
+      error,
     });
 
     // Update approval with error
@@ -133,7 +133,7 @@ export async function requestApprovalViaDharaHIL(
       data: {
         status: "rejected",
         approved: false,
-        rejectionReason: `DharaHIL submission failed: ${error.message}`,
+        rejectionReason: `DharaHIL submission failed: ${error instanceof Error ? error.message : String(error)}`,
         respondedAt: new Date(),
       },
     });
@@ -156,21 +156,22 @@ export async function pollForApprovalDecision(
 ): Promise<DharaHILDecision> {
   const task = await prisma.a2aTask.findUnique({
     where: { id: taskInternalId },
-    include: {
-      approval: true,
-    },
   });
 
   if (!task) {
     throw new Error(`Task not found: ${taskInternalId}`);
   }
 
-  if (!task.approval || !task.approval.dharahilRequestId) {
+  const approval = await prisma.a2aApproval.findUnique({
+    where: { taskId: taskInternalId },
+  });
+
+  if (!approval?.dharahilRequestId) {
     throw new Error(`No DharaHIL request found for task: ${task.taskId}`);
   }
 
-  const requestId = task.approval.dharahilRequestId;
-  const expiresAt = task.approval.expiresAt?.toISOString();
+  const requestId = approval.dharahilRequestId;
+  const expiresAt = approval.expiresAt?.toISOString();
 
   if (!expiresAt) {
     throw new Error(`No expiry time found for DharaHIL request: ${requestId}`);
@@ -284,9 +285,6 @@ export async function processPendingDharaHILApprovals(): Promise<void> {
         gte: new Date(), // Only check non-expired approvals
       },
     },
-    include: {
-      task: true,
-    },
     orderBy: { requestedAt: "asc" },
     take: 20, // Process up to 20 approvals at a time
   });
@@ -302,67 +300,24 @@ export async function processPendingDharaHILApprovals(): Promise<void> {
 
   for (const approval of pendingApprovals) {
     try {
-      // Check with DharaHIL gateway for decision
+      // One shot, not the full TTL wait: this runs on a schedule.
       const requestId = approval.dharahilRequestId!;
-      const expiresAt = approval.expiresAt!.toISOString();
+      const decision = await dharahilClient.fetchDecision(requestId);
 
-      // Make a single poll request (don't wait for full TTL)
-      const response = await fetch(
-        `${dharahilClient["baseUrl"]}/v1/requests/${requestId}`,
-        {
-          headers: {
-            "X-DHARA-API-KEY": dharahilClient["apiKey"],
-          },
-        },
-      );
-
-      if (!response.ok) {
-        logger.error("Failed to poll DharaHIL decision", {
-          requestId,
-          status: response.status,
-        });
-        continue;
-      }
-
-      const data = (await response.json()) as any;
-
-      // Check if decision is available
-      if (data.status && data.status !== "PENDING") {
-        // Map gateway status to decision
-        let action: any;
-        if (data.status === "APPROVED" || data.last_decision === "approve") {
-          action = "APPROVED";
-        } else if (
-          data.status === "REJECTED" ||
-          data.last_decision === "reject"
-        ) {
-          action = "REJECTED";
-        } else if (data.last_decision === "revise") {
-          action = "REVISE_REQUESTED";
-        } else {
-          action = data.status;
-        }
-
-        const decision: DharaHILDecision = {
-          action,
-          reason: data.last_decision_note,
-          revise_input: data.last_decision_revise_input,
-        };
-
+      if (decision) {
         logger.info("DharaHIL decision received", {
-          taskId: approval.task.taskId,
+          taskId: approval.taskId,
           requestId,
           decision: decision.action,
         });
 
-        // Handle the decision
         await handleDharaHILDecision(approval.taskId, decision);
       }
-    } catch (error: any) {
+    } catch (error) {
       logger.error("Error processing DharaHIL approval", {
         approvalId: approval.id,
-        taskId: approval.task.taskId,
-        error: error.message,
+        taskId: approval.taskId,
+        error,
       });
     }
   }
@@ -384,9 +339,6 @@ export async function processExpiredDharaHILApprovals(): Promise<void> {
         lt: new Date(), // Expired
       },
     },
-    include: {
-      task: true,
-    },
   });
 
   if (expiredApprovals.length === 0) {
@@ -406,14 +358,14 @@ export async function processExpiredDharaHILApprovals(): Promise<void> {
       );
 
       logger.info("Marked expired approval as rejected", {
-        taskId: approval.task.taskId,
+        taskId: approval.taskId,
         requestId: approval.dharahilRequestId,
       });
-    } catch (error: any) {
+    } catch (error) {
       logger.error("Failed to reject expired approval", {
         approvalId: approval.id,
-        taskId: approval.task.taskId,
-        error: error.message,
+        taskId: approval.taskId,
+        error,
       });
     }
   }
@@ -510,4 +462,17 @@ function createContextSummary(
     default:
       return `Execute skill "${skill}" - Requested by ${userEmail}`;
   }
+}
+
+/**
+ * A2aTask.input is a Json column, so it can be a scalar, an array or null even
+ * though skills always write an object. Keep the reviewer-facing payload an
+ * object rather than letting a stray scalar through untyped.
+ */
+function toToolArgs(input: unknown): Record<string, unknown> {
+  if (input && typeof input === "object" && !Array.isArray(input)) {
+    return input as Record<string, unknown>;
+  }
+
+  return { value: input };
 }

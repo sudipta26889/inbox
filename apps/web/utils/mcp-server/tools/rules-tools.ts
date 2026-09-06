@@ -1,7 +1,7 @@
 import prisma from "@/utils/prisma";
 import { createScopedLogger } from "@/utils/logger";
 import type { McpToolContext } from "./registry";
-import { ActionType } from "@/generated/prisma/client";
+import { ActionType } from "@/generated/prisma/enums";
 
 const logger = createScopedLogger("mcp-rules-tools");
 

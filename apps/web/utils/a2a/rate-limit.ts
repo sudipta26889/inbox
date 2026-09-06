@@ -60,26 +60,19 @@ export async function checkRateLimit(
   limit: number,
 ): Promise<RateLimitResult> {
   const now = new Date();
-  const windowStartTime =
-    window === "minute"
-      ? new Date(now.getTime() - 60 * 1000) // Last minute
-      : new Date(now.getTime() - 60 * 60 * 1000); // Last hour
 
-  const windowEndTime = now;
+  // key format: "client:abc123", "user:xyz789", "ip:1.2.3.4",
+  // or a scoped bucket like "client:abc123:task"
+  const { limitType, identifier } = parseRateLimitKey(key);
+  const { windowStart, windowEnd } = getWindowBounds(window, now);
 
-  // Parse key to get limitType and identifier
-  // key format: "client:abc123" or "user:xyz789" or "ip:1.2.3.4"
-  const [limitType, identifier] = key.split(":");
-
-  // Build where clause based on limitType
+  // Match the bucket `recordRequest` writes, exactly. A range match on
+  // windowEnd cannot work here: the active bucket's windowEnd is in the
+  // future, and minute and hour buckets share a (limitType, identifier).
   const whereClause: Record<string, unknown> = {
     limitType,
-    windowStart: {
-      gte: windowStartTime,
-    },
-    windowEnd: {
-      lte: windowEndTime,
-    },
+    windowStart,
+    windowEnd,
   };
 
   // Add identifier field based on type
@@ -91,7 +84,9 @@ export async function checkRateLimit(
     whereClause.ipAddress = identifier;
   }
 
-  // Get existing rate limit record or sum up request counts
+  // Summed rather than read from one row: the unique constraint includes
+  // nullable columns, and Postgres treats NULLs as distinct, so concurrent
+  // writers can still create more than one row per bucket.
   const records = await prisma.a2aRateLimit.findMany({
     where: whereClause as never,
   });
@@ -142,18 +137,8 @@ export async function recordRequest(
   window: RateLimitWindow,
 ): Promise<void> {
   const now = new Date();
-  const [limitType, identifier] = key.split(":");
-
-  // Calculate window boundaries
-  const windowStart =
-    window === "minute"
-      ? new Date(Math.floor(now.getTime() / 60_000) * 60_000)
-      : new Date(Math.floor(now.getTime() / 3_600_000) * 3_600_000);
-
-  const windowEnd =
-    window === "minute"
-      ? new Date(windowStart.getTime() + 60_000)
-      : new Date(windowStart.getTime() + 3_600_000);
+  const { limitType, identifier } = parseRateLimitKey(key);
+  const { windowStart, windowEnd } = getWindowBounds(window, now);
 
   // Build data object based on limitType
   const data: Record<string, unknown> = {
@@ -379,7 +364,7 @@ export async function cleanupRateLimitRecords(): Promise<number> {
 
   const result = await prisma.a2aRateLimit.deleteMany({
     where: {
-      timestamp: {
+      windowEnd: {
         lt: cutoffDate,
       },
     },
@@ -465,4 +450,33 @@ export function getClientIp(request: Request): string {
 
   // Fallback to a default IP if we can't determine it
   return "unknown";
+}
+
+/**
+ * Fixed bucket boundaries for a window. Readers and writers must agree on
+ * these exactly, or a check never sees the requests it is meant to count.
+ */
+function getWindowBounds(window: RateLimitWindow, now: Date) {
+  const size = window === "minute" ? 60_000 : 3_600_000;
+  const windowStart = new Date(Math.floor(now.getTime() / size) * size);
+
+  return { windowStart, windowEnd: new Date(windowStart.getTime() + size) };
+}
+
+/**
+ * Split a bucket key into its type and identifier.
+ *
+ * Everything after the first ":" is the identifier, so a scoped bucket like
+ * "client:abc:task" stays separate from "client:abc". Destructuring
+ * `key.split(":")` instead silently merged the two into one counter.
+ */
+function parseRateLimitKey(key: string) {
+  const separatorIndex = key.indexOf(":");
+
+  if (separatorIndex === -1) return { limitType: key, identifier: "" };
+
+  return {
+    limitType: key.slice(0, separatorIndex),
+    identifier: key.slice(separatorIndex + 1),
+  };
 }

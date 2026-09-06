@@ -1,7 +1,7 @@
 import { withA2aAuth } from "@/utils/a2a/auth";
 import prisma from "@/utils/prisma";
 import { createScopedLogger } from "@/utils/logger";
-import { A2aTaskState } from "@prisma/client";
+import { A2aTaskState } from "@/generated/prisma/enums";
 
 const logger = createScopedLogger("a2a-stream");
 

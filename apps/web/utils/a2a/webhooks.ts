@@ -1,8 +1,8 @@
 import "server-only";
 import { createScopedLogger } from "@/utils/logger";
 import prisma from "@/utils/prisma";
-import { A2aWebhookStatus, A2aTaskState } from "@prisma/client";
-import crypto from "crypto";
+import { A2aTaskState, A2aWebhookStatus } from "@/generated/prisma/enums";
+import crypto from "node:crypto";
 
 const logger = createScopedLogger("a2a-webhooks");
 

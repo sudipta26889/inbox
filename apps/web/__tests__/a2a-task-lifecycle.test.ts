@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { env } from "@/env";
 import prisma from "@/utils/prisma";
-import { A2aTaskState } from "@prisma/client";
+import { A2aTaskState } from "@/generated/prisma/enums";
 
 /**
  * A2A Task Lifecycle Integration Test
