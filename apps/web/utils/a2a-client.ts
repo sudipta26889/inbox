@@ -4,15 +4,29 @@ import { env } from "@/env";
 
 const logger = createScopedLogger("a2a-client");
 
-const A2A_TIMEOUT_MS = 10_000;
+// Card discovery is a plain GET and should be quick.
+const A2A_CARD_TIMEOUT_MS = 10_000;
+// message/send with blocking:true waits for the remote agent's whole run.
+// Mitra measured 11.1s for a trivial prompt, so the old shared 10s budget
+// aborted the request just before it completed.
+const A2A_TIMEOUT_MS = 120_000;
+
+type AgentInterface = {
+  url: string;
+  /** A2A v0.3 and OpenClaw's older cards. */
+  transport?: string;
+  /** Newer A2A cards name the same thing `protocolBinding`. */
+  protocolBinding?: string;
+};
 
 type AgentCard = {
   name: string;
   version?: string;
   url?: string;
   skills?: Array<{ id?: string; skill?: string; name?: string }>;
-  bindings?: Array<{ url: string; transport: string }>;
-  additionalInterfaces?: Array<{ url: string; transport: string }>;
+  bindings?: AgentInterface[];
+  additionalInterfaces?: AgentInterface[];
+  supportedInterfaces?: AgentInterface[];
 };
 
 type A2aMessageParams = {
@@ -30,7 +44,7 @@ type A2aResult = {
 export async function fetchAgentCard(agentBaseUrl: string): Promise<AgentCard> {
   const url = `${agentBaseUrl.replace(/\/$/, "")}/.well-known/agent-card.json`;
   const response = await fetch(url, {
-    signal: AbortSignal.timeout(A2A_TIMEOUT_MS),
+    signal: AbortSignal.timeout(A2A_CARD_TIMEOUT_MS),
   });
 
   if (!response.ok) {
@@ -50,16 +64,25 @@ export async function resolveA2aEndpoint(
   try {
     const card = await fetchAgentCard(base);
 
-    // Check bindings (A2A v0.3 spec) and additionalInterfaces (OpenClaw/Mitra)
+    // bindings (A2A v0.3), additionalInterfaces (older OpenClaw) and
+    // supportedInterfaces (newer OpenClaw / A2A) all describe the same thing;
+    // the newer cards also call the field `protocolBinding` rather than
+    // `transport`. Missing one of these silently falls through to the `/a2a`
+    // guess below, which is not where the agent listens.
     const interfaces = [
       ...(card.bindings || []),
       ...(card.additionalInterfaces || []),
+      ...(card.supportedInterfaces || []),
     ];
-    const jsonRpc = interfaces.find(
-      (b) =>
-        b.transport.toLowerCase().includes("jsonrpc") ||
-        b.transport === "json-rpc",
-    );
+    const jsonRpc = interfaces.find((candidate) => {
+      const binding = (
+        candidate.transport ??
+        candidate.protocolBinding ??
+        ""
+      ).toLowerCase();
+
+      return binding.includes("jsonrpc") || binding === "json-rpc";
+    });
 
     if (jsonRpc?.url) {
       return rewriteLocalhost(jsonRpc.url, base);
@@ -142,16 +165,20 @@ export async function sendA2aMessage(
       return { error: json.error };
     }
 
+    // Older cards answer { result: { id, status } }; newer ones nest it as
+    // { result: { task: { id, status } } }. Reading only the flat shape logged
+    // every send as taskId/state undefined.
+    const task = json.result?.task ?? json.result;
+    const taskId = task?.id;
+    const state = task?.status?.state;
+
     logger.info("A2A message sent successfully", {
       endpoint,
-      taskId: json.result?.id,
-      state: json.result?.status?.state,
+      taskId,
+      state,
     });
 
-    return {
-      taskId: json.result?.id,
-      state: json.result?.status?.state,
-    };
+    return { taskId, state };
   } catch (error) {
     logger.error("A2A message send failed", { endpoint, error });
     return {

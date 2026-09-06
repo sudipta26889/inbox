@@ -119,6 +119,57 @@ describe("resolveA2aEndpoint", () => {
   });
 });
 
+describe("resolveA2aEndpoint — card interface shapes", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  function cardReturns(card: Record<string, unknown>) {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(card),
+    });
+  }
+
+  // Newer OpenClaw/A2A cards use supportedInterfaces + protocolBinding. Missing
+  // that shape fell through to the `${base}/a2a` guess, which 403s.
+  it("resolves supportedInterfaces with protocolBinding", async () => {
+    cardReturns({
+      name: "Mitra",
+      supportedInterfaces: [
+        {
+          url: "http://agent.local:12345/a2a/v1",
+          protocolBinding: "JSONRPC",
+          protocolVersion: "1.0",
+        },
+      ],
+    });
+
+    await expect(resolveA2aEndpoint("http://agent.local:12345")).resolves.toBe(
+      "http://agent.local:12345/a2a/v1",
+    );
+  });
+
+  it("still resolves the older bindings + transport shape", async () => {
+    cardReturns({
+      name: "Mitra",
+      bindings: [{ url: "http://agent.local/a2a", transport: "json-rpc" }],
+    });
+
+    await expect(resolveA2aEndpoint("http://agent.local")).resolves.toBe(
+      "http://agent.local/a2a",
+    );
+  });
+
+  it("falls back to /a2a when the card advertises no interface", async () => {
+    cardReturns({ name: "Bare" });
+
+    await expect(resolveA2aEndpoint("http://agent.local")).resolves.toBe(
+      "http://agent.local/a2a",
+    );
+  });
+});
+
 describe("sendA2aMessage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -170,6 +221,27 @@ describe("sendA2aMessage", () => {
       { kind: "text", text: "hello" },
       { kind: "data", data: { kind: "inbox.daily_digest" } },
     ]);
+  });
+
+  // Newer agents nest the task: { result: { task: { id, status } } }.
+  it("reads the task from a nested result", async () => {
+    mockFetch.mockResolvedValue({
+      json: () =>
+        Promise.resolve({
+          result: {
+            task: { id: "task-9", status: { state: "TASK_STATE_COMPLETED" } },
+          },
+        }),
+    });
+
+    const result = await sendA2aMessage("http://agent.local/a2a", {
+      text: "hello",
+    });
+
+    expect(result).toEqual({
+      taskId: "task-9",
+      state: "TASK_STATE_COMPLETED",
+    });
   });
 
   it("returns error when agent responds with JSON-RPC error", async () => {
