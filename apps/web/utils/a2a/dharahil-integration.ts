@@ -5,7 +5,7 @@ import type { DharaHILDecision } from "@/utils/dharahil/client";
 import prisma from "@/utils/prisma";
 import { A2aTaskState } from "@/generated/prisma/enums";
 import { approveTask, rejectTask } from "./task-executor";
-import { env } from "@/env";
+import { isApprovalGateRequired } from "@/utils/dharahil/required";
 
 const logger = createScopedLogger("a2a-dharahil");
 
@@ -36,7 +36,7 @@ export async function requestApprovalViaDharaHIL(
   taskInternalId: string,
 ): Promise<string> {
   // Check if DharaHIL is enabled
-  if (!env.NEXT_PUBLIC_DHARAHIL_ENABLED) {
+  if (!isApprovalGateRequired()) {
     logger.info("DharaHIL disabled, skipping approval request", {
       taskInternalId,
     });
@@ -267,7 +267,7 @@ async function handleDharaHILDecision(
  * to check for decisions on pending approvals.
  */
 export async function processPendingDharaHILApprovals(): Promise<void> {
-  if (!env.NEXT_PUBLIC_DHARAHIL_ENABLED) {
+  if (!isApprovalGateRequired()) {
     logger.trace("DharaHIL disabled, skipping approval processing");
     return;
   }

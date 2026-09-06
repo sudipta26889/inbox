@@ -6,7 +6,14 @@ vi.mock("server-only", () => ({}));
 
 const { mockEnv, mockRunApprovalLoop, mockWasDenied, mockShouldRevise } =
   vi.hoisted(() => ({
-    mockEnv: { NEXT_PUBLIC_DHARAHIL_ENABLED: true },
+    // Credentials present is what arms the gate. The client-visible flag is
+    // deliberately false here: enforcement must not depend on it, because it
+    // used to, and setting it false silently let every send through unapproved.
+    mockEnv: {
+      DHARAHIL_BASE_URL: "https://gateway.test",
+      DHARAHIL_API_KEY: "key",
+      NEXT_PUBLIC_DHARAHIL_ENABLED: false,
+    },
     mockRunApprovalLoop: vi.fn(),
     mockWasDenied: vi.fn(() => false),
     mockShouldRevise: vi.fn(() => false),
@@ -34,7 +41,8 @@ const request = {
 describe("requireSendApproval", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockEnv.NEXT_PUBLIC_DHARAHIL_ENABLED = true;
+    mockEnv.DHARAHIL_BASE_URL = "https://gateway.test";
+    mockEnv.DHARAHIL_API_KEY = "key";
     mockRunApprovalLoop.mockResolvedValue({ action: "APPROVED" });
     mockWasDenied.mockReturnValue(false);
     mockShouldRevise.mockReturnValue(false);
@@ -68,11 +76,30 @@ describe("requireSendApproval", () => {
     await expect(requireSendApproval(request)).rejects.toThrow(/revision/i);
   });
 
-  it("is a no-op when DharaHIL is disabled", async () => {
-    mockEnv.NEXT_PUBLIC_DHARAHIL_ENABLED = false;
+  /**
+   * Upstream and any self-host that never set up a gateway: no credentials, no
+   * gate, sends proceed. This is the ONLY way to be ungated.
+   */
+  it("is a no-op when no gateway is configured", async () => {
+    mockEnv.DHARAHIL_BASE_URL = undefined;
+    mockEnv.DHARAHIL_API_KEY = undefined;
 
     await expect(requireSendApproval(request)).resolves.toBeUndefined();
     expect(mockRunApprovalLoop).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The regression that matters. Enforcement used to key on
+   * NEXT_PUBLIC_DHARAHIL_ENABLED, so flipping one client-visible boolean — or
+   * mistyping it in .env — sent every email unapproved, with no error and no
+   * log. A configured deployment cannot be disarmed that way.
+   */
+  it("gates even when the client-side flag is off", async () => {
+    mockEnv.NEXT_PUBLIC_DHARAHIL_ENABLED = false;
+
+    await requireSendApproval(request);
+
+    expect(mockRunApprovalLoop).toHaveBeenCalledTimes(1);
   });
 
   it("scores external recipients as higher risk", async () => {

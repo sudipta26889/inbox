@@ -9,7 +9,7 @@ import type {
   RecurrenceScope,
 } from "@/utils/calendar/event-types";
 import { dharahilClient } from "@/utils/dharahil/client";
-import { env } from "@/env";
+import { isApprovalGateRequired } from "@/utils/dharahil/required";
 import { extractEventId } from "./url-parser";
 
 const logger = createScopedLogger("mcp-calendar-tools");
@@ -332,7 +332,7 @@ export async function createCalendarEvent(
     !params.attendees || params.attendees.length === 0 || hasExternalAttendees;
 
   // DharaHIL approval gate for ALL calendar event creates
-  if (env.NEXT_PUBLIC_DHARAHIL_ENABLED) {
+  if (isApprovalGateRequired()) {
     logger.info("DharaHIL: Requesting approval for calendar event creation");
     logger.trace("DharaHIL: calendar event creation details", {
       title: params.title,
@@ -521,7 +521,7 @@ export async function updateCalendarEvent(
       : "";
 
   // DharaHIL approval gate for ALL calendar event updates
-  if (env.NEXT_PUBLIC_DHARAHIL_ENABLED) {
+  if (isApprovalGateRequired()) {
     logger.info("DharaHIL: Requesting approval for calendar event update", {
       eventId,
     });
@@ -672,7 +672,7 @@ export async function deleteCalendarEvent(
   });
 
   // DharaHIL approval gate for ALL calendar event deletes
-  if (env.NEXT_PUBLIC_DHARAHIL_ENABLED) {
+  if (isApprovalGateRequired()) {
     logger.info("DharaHIL: Requesting approval for calendar event deletion", {
       eventId,
       scope: params.scope,

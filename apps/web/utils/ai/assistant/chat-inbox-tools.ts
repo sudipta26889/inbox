@@ -214,7 +214,11 @@ export const searchInboxTool = ({
 }) =>
   tool({
     description:
-      "Search inbox messages and return concise message metadata for triage and summarization.",
+      "Search inbox messages and return concise message metadata for triage and summarization. " +
+      "Use it once per distinct question; if the result is empty, the mailbox genuinely has no match — " +
+      "broaden the query or answer from what you already have rather than running it again. " +
+      "Re-running an identical query always returns an identical result and wastes a step. " +
+      "It returns metadata only (sender, subject, date, labels, snippet), never full message bodies — use readEmail for those.",
     inputSchema: searchInboxInputSchema(provider),
     execute: async ({ query, limit, pageToken }) => {
       trackToolCall({ tool: "search_inbox", email, logger });
@@ -251,10 +255,26 @@ export const searchInboxTool = ({
           nextPageToken,
           summary: summarizeSearchResults(items),
           messages: items,
+          // An empty result and a broken tool look identical to a model, and
+          // "nothing happened" reads as "try again". Saying the search
+          // succeeded and found nothing is what makes the result terminal.
+          ...(items.length === 0 && {
+            guidance:
+              "The search succeeded and matched no messages. Do not repeat this query — either broaden it or answer from what you already have.",
+          }),
         };
       } catch (error) {
         logger.error("Failed to search inbox", { error });
-        return { error: "Failed to search inbox" };
+
+        // Name the failure and say it is not worth retrying. A bare
+        // "Failed to search inbox" invites the retry-on-failure behaviour
+        // these models are trained into.
+        return {
+          error: `Inbox search failed: ${error instanceof Error ? error.message : "unknown error"}`,
+          retryable: false,
+          guidance:
+            "This tool is unavailable right now. Do not call it again this turn; answer from what you already have and say the inbox could not be searched.",
+        };
       }
     },
   });

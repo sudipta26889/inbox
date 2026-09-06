@@ -14,6 +14,7 @@ import {
   type StreamTextOnStepFinishCallback,
   NoObjectGeneratedError,
   TypeValidationError,
+  type PrepareStepFunction,
 } from "ai";
 import type { LanguageModelV3 } from "@ai-sdk/provider";
 import { withTracing } from "@posthog/ai/vercel";
@@ -427,6 +428,7 @@ export async function chatCompletionStream({
         messages,
         tools,
         stopWhen: maxSteps ? stepCountIs(maxSteps) : undefined,
+        prepareStep: maxSteps ? finalStepMustAnswer(maxSteps) : undefined,
         ...commonOptions,
         providerOptions: providerOptions,
         experimental_transform: smoothStream({ chunking: "word" }),
@@ -588,6 +590,7 @@ export async function toolCallAgentStream({
       model,
       tools: candidateTools,
       stopWhen: maxSteps ? stepCountIs(maxSteps) : undefined,
+      prepareStep: maxSteps ? finalStepMustAnswer(maxSteps) : undefined,
       ...commonOptions,
       providerOptions,
       onFinish: async (result) => {
@@ -1101,4 +1104,24 @@ function withPosthogTracing({
       ...(userId ? { userId } : {}),
     },
   });
+}
+
+/**
+ * On the last permitted step, take the tools away.
+ *
+ * A tool-calling agent can spend its whole budget on tools and stop without
+ * ever writing a reply — observed here as seven consecutive search_inbox calls
+ * answering an A2A peer with nothing at all. `stopWhen` bounds the loop but
+ * does not require it to produce anything, so the bound alone turns a runaway
+ * into a SILENT runaway.
+ *
+ * Removing the tools from the final request leaves the model nothing to emit
+ * but prose. `activeTools: []` rather than `toolChoice: "none"`, which has a
+ * known bug on Bedrock — and we ship the Bedrock provider.
+ */
+export function finalStepMustAnswer(
+  maxSteps: number,
+): PrepareStepFunction<Record<string, Tool>> {
+  return ({ stepNumber }) =>
+    stepNumber >= maxSteps - 1 ? { activeTools: [] } : {};
 }

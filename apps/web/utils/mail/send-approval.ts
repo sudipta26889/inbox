@@ -1,7 +1,7 @@
 import "server-only";
-import { env } from "@/env";
 import { dharahilClient } from "@/utils/dharahil/client";
 import { createScopedLogger } from "@/utils/logger";
+import { isApprovalGateRequired } from "@/utils/dharahil/required";
 
 const logger = createScopedLogger("send-approval");
 
@@ -38,7 +38,7 @@ const BODY_PREVIEW_CHARS = 500;
 export async function requireSendApproval(
   request: SendApprovalRequest,
 ): Promise<void> {
-  if (!env.NEXT_PUBLIC_DHARAHIL_ENABLED) return;
+  if (!isApprovalGateRequired()) return;
 
   const { operation, provider, to, subject } = request;
 
