@@ -5,8 +5,8 @@ import {
   handleTaskList,
   handleTaskCancel,
   handleContextGet,
-  A2A_SKILL_REGISTRY,
 } from "../protocol-handler";
+import { A2A_SKILL_REGISTRY } from "../skill-registry";
 import type { A2aAuthContext } from "../auth";
 import { A2aTaskState } from "@prisma/client";
 

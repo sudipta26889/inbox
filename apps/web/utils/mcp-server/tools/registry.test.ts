@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { A2A_SKILL_REGISTRY } from "@/utils/a2a/skill-registry";
 import { MCP_TOOLS, getAllTools, getTool, hasRequiredScope } from "./registry";
 
 const DRAFT_WRITE_TOOLS = ["create_draft", "update_draft", "delete_draft"];
@@ -203,5 +204,26 @@ describe("admin scope split", () => {
 describe("getTool", () => {
   it("returns undefined for an unknown tool", () => {
     expect(getTool("nope")).toBeUndefined();
+  });
+});
+
+describe("A2A skill registry", () => {
+  // A skill pointing at a missing tool only fails on a live A2A call.
+  it("maps every skill to a tool that exists", () => {
+    for (const [skill, definition] of Object.entries(A2A_SKILL_REGISTRY)) {
+      expect(
+        getTool(definition.mcpTool),
+        `skill ${skill} -> missing tool ${definition.mcpTool}`,
+      ).toBeDefined();
+    }
+  });
+
+  it("requires a scope the tool it maps to also requires", () => {
+    for (const [skill, definition] of Object.entries(A2A_SKILL_REGISTRY)) {
+      expect(
+        getTool(definition.mcpTool)?.requiredScope,
+        `skill ${skill} scope mismatch`,
+      ).toBe(definition.requiredScope);
+    }
   });
 });

@@ -1,5 +1,9 @@
 import { createScopedLogger } from "@/utils/logger";
 import prisma from "@/utils/prisma";
+import {
+  A2A_SKILL_REGISTRY,
+  type A2aSkillDefinition,
+} from "@/utils/a2a/skill-registry";
 import type { A2aAuthContext } from "./auth";
 import { validateSkillAccess } from "./auth";
 import { A2aTaskState, A2aApprovalStatus } from "@prisma/client";
@@ -22,75 +26,6 @@ const logger = createScopedLogger("a2a-protocol");
  * A2A Skill Definition
  * Maps A2A skill names to MCP tool names and required scopes
  */
-export interface A2aSkillDefinition {
-  mcpTool: string; // Corresponding MCP tool (e.g., "search_emails")
-  requiredScope: string; // OAuth scope required
-  requiresApproval?: boolean; // Does this skill require human approval?
-  skill: string; // A2A skill name (e.g., "email.search")
-}
-
-/**
- * Skill registry - maps A2A skills to MCP tools
- * This will be expanded as we add more skills
- */
-export const A2A_SKILL_REGISTRY: Record<string, A2aSkillDefinition> = {
-  "email.search": {
-    skill: "email.search",
-    mcpTool: "search_emails",
-    requiredScope: "email:read",
-  },
-  "email.get": {
-    skill: "email.get",
-    mcpTool: "get_email",
-    requiredScope: "email:read",
-  },
-  "email.send": {
-    skill: "email.send",
-    mcpTool: "send_email",
-    requiredScope: "email:write",
-  },
-  "calendar.search": {
-    skill: "calendar.search",
-    mcpTool: "search_calendar",
-    requiredScope: "calendar:read",
-  },
-  "calendar.get_event": {
-    skill: "calendar.get_event",
-    mcpTool: "get_calendar_event",
-    requiredScope: "calendar:read",
-  },
-  "calendar.availability": {
-    skill: "calendar.availability",
-    mcpTool: "get_calendar_availability",
-    requiredScope: "calendar:read",
-  },
-  "calendar.create_event": {
-    skill: "calendar.create_event",
-    mcpTool: "create_calendar_event",
-    requiredScope: "calendar:write",
-    requiresApproval: true,
-  },
-  "digest.get": {
-    skill: "digest.get",
-    mcpTool: "get_daily_digest",
-    requiredScope: "email:read",
-  },
-  "automation.list_rules": {
-    skill: "automation.list_rules",
-    mcpTool: "list_rules",
-    requiredScope: "rules:read",
-  },
-  "stats.email_analytics": {
-    skill: "stats.email_analytics",
-    mcpTool: "get_email_stats",
-    requiredScope: "stats:read",
-  },
-  "account.list": {
-    skill: "account.list",
-    mcpTool: "list_email_accounts",
-    requiredScope: "email:read",
-  },
-};
 
 /**
  * Message.send request parameters

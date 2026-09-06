@@ -6,6 +6,7 @@ import {
   pushDailyDigestToRemoteAgents,
   saveDailyDigest,
 } from "@/utils/a2a/daily-digest";
+import { isAdmin } from "@/utils/admin";
 import { hasCronSecret } from "@/utils/cron";
 import { captureException } from "@/utils/error";
 import type { Logger } from "@/utils/logger";
@@ -32,23 +33,31 @@ export const GET = withError("cron/a2a-digest", async (request) => {
 });
 
 async function runDueDigests(logger: Logger) {
-  const emailAccounts = await prisma.emailAccount.findMany({
-    select: { userId: true, timezone: true },
-    orderBy: { createdAt: "asc" },
+  // Owners only. `A2A_REMOTE_AGENTS` is instance-wide, so pushing every user's
+  // digest to it would hand one user's inbox summary to another user's agent.
+  // Widen this only alongside a per-user destination setting.
+  const users = await prisma.user.findMany({
+    where: { emailAccounts: { some: {} } },
+    select: {
+      id: true,
+      email: true,
+      emailAccounts: {
+        select: { timezone: true },
+        orderBy: { createdAt: "asc" },
+        take: 1,
+      },
+    },
   });
 
-  const timeZoneByUser = new Map<string, string>();
-  for (const emailAccount of emailAccounts) {
-    if (!timeZoneByUser.has(emailAccount.userId)) {
-      timeZoneByUser.set(emailAccount.userId, emailAccount.timezone || "UTC");
-    }
-  }
+  const owners = users.filter((user) => isAdmin({ email: user.email }));
 
   let generated = 0;
   let skipped = 0;
   let failed = 0;
 
-  for (const [userId, timeZone] of timeZoneByUser) {
+  for (const user of owners) {
+    const userId = user.id;
+    const timeZone = user.emailAccounts[0]?.timezone || "UTC";
     const userLogger = logger.with({ userId, timeZone });
 
     if (getLocalHour(timeZone) !== DIGEST_HOUR) {
@@ -98,11 +107,18 @@ async function runDueDigests(logger: Logger) {
   }
 
   logger.info("Finished daily digest run", {
-    users: timeZoneByUser.size,
+    users: users.length,
+    owners: owners.length,
     generated,
     skipped,
     failed,
   });
 
-  return { users: timeZoneByUser.size, generated, skipped, failed };
+  return {
+    users: users.length,
+    owners: owners.length,
+    generated,
+    skipped,
+    failed,
+  };
 }
