@@ -16,7 +16,10 @@ export async function getRecentChatMemories({
 }): Promise<{ content: string; date: string }[]> {
   try {
     const memories = await prisma.chatMemory.findMany({
-      where: { emailAccountId },
+      // Superseded memories are excluded, not labelled. Handing the model
+      // both the old and new fact and trusting it to prefer the newer one is
+      // the configuration that measurably fails.
+      where: { emailAccountId, supersededAt: null },
       orderBy: { createdAt: "desc" },
       take: MAX_CHAT_MEMORIES,
       select: { content: true, createdAt: true },

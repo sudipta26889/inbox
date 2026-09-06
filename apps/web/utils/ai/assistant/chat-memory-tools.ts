@@ -4,6 +4,7 @@ import prisma from "@/utils/prisma";
 import { formatUtcDate } from "@/utils/date";
 import type { Logger } from "@/utils/logger";
 import { ingestMemory, recallMemories } from "@/utils/longmemory/client";
+import { saveMemory } from "@/utils/ai/assistant/save-memory";
 
 export const searchMemoriesTool = ({
   email,
@@ -48,6 +49,7 @@ export const searchMemoriesTool = ({
             where: {
               emailAccountId,
               content: { contains: query, mode: "insensitive" },
+              supersededAt: null,
             },
             orderBy: { createdAt: "desc" },
             take: 10,
@@ -117,24 +119,29 @@ export const saveMemoryTool = ({
         .describe(
           "The memory content to save. Should be a clear, self-contained statement of the preference or fact.",
         ),
+      subject: z
+        .string()
+        .trim()
+        .regex(/^[a-z0-9]+(?:[._][a-z0-9]+)*$/)
+        .max(60)
+        .optional()
+        .describe(
+          "Stable snake_case slot this fact occupies, so a later fact about the same thing replaces it instead of contradicting it. " +
+            "Reuse an existing key whenever the fact is about the same thing: digest.schedule, working_hours, timezone, signature, courier. " +
+            "Coin a new one only for a genuinely new slot, and keep it narrow enough that two facts sharing it really are mutually exclusive — " +
+            "courier.domestic and courier.international are different slots. Omit it for a one-off fact that nothing could later contradict.",
+        ),
     }),
-    execute: async ({ content }) => {
+    execute: async ({ content, subject }) => {
       logger.trace("Tool call: save_memory", { email });
       try {
-        const existing = await prisma.chatMemory.findFirst({
-          where: { emailAccountId, content },
-          select: { id: true },
+        const result = await saveMemory({
+          emailAccountId,
+          content,
+          subject,
+          chatId,
+          logger,
         });
-
-        if (!existing) {
-          await prisma.chatMemory.create({
-            data: {
-              content,
-              chatId: chatId ?? null,
-              emailAccountId,
-            },
-          });
-        }
 
         // Mirrored, not moved: ChatMemory stays the store the UI lists and the
         // one that survives long memory being unreachable. Ingest runs even on
@@ -147,7 +154,20 @@ export const saveMemoryTool = ({
           logger,
         });
 
-        return { success: true, content, deduplicated: Boolean(existing) };
+        return {
+          success: true,
+          content,
+          deduplicated: result.deduplicated,
+          ...(result.supersededCount > 0 && {
+            replaced: result.supersededCount,
+          }),
+          // Say so rather than reporting a clean save: the fact is stored but
+          // is not what the agent will recall, and silently implying otherwise
+          // is how a correction appears to work and doesn't.
+          ...(result.bornSuperseded && {
+            note: "Saved as historical. A newer or user-stated fact already occupies this subject, so this will not be recalled as current.",
+          }),
+        };
       } catch (error) {
         logger.error("Failed to save memory", { error });
         return {

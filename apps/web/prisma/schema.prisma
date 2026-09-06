@@ -1028,12 +1028,45 @@ model ChatCompaction {
   @@index([chatId])
 }
 
+/// Where a memory came from. An inference the assistant made is weaker
+/// evidence than something the user said outright, and must not silently
+/// overwrite it.
+enum MemorySource {
+  USER_STATED
+  AGENT_INFERRED
+}
+
 model ChatMemory {
   id        String   @id @default(cuid())
+  /// When we LEARNED it. Distinct from validFrom, which is when it became true.
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   content String
+
+  /// Slot key: "digest.schedule", "courier.domestic". Two memories sharing a
+  /// subject describe the same fact about the world, so a new one retires the
+  /// old — deterministically, with no LLM judge and no embedding threshold.
+  subject String?
+  source  MemorySource @default(AGENT_INFERRED)
+
+  /// When the fact became true in the world. Usually now, but a correction can
+  /// backdate one, and a memory that arrives describing an OLDER state than the
+  /// one already stored must not overwrite it.
+  validFrom DateTime @default(now())
+
+  /// Null means live. This is the recall filter: superseded memories are
+  /// EXCLUDED from context, not labelled and handed to the model to adjudicate
+  /// — measured work on stale agent memory shows readers do not reliably
+  /// prefer the newer fact even when both are retrieved.
+  supersededAt DateTime?
+
+  /// What replaced it. Null with supersededAt set means "no longer true, and
+  /// nothing took its place" — which is why supersession cannot be inferred
+  /// from the presence of a successor alone.
+  supersededById String?      @unique
+  supersededBy   ChatMemory?  @relation("Supersession", fields: [supersededById], references: [id], onDelete: SetNull)
+  supersedes     ChatMemory[] @relation("Supersession")
 
   chatId         String?
   chat           Chat?        @relation(fields: [chatId], references: [id], onDelete: SetNull)
@@ -1041,6 +1074,8 @@ model ChatMemory {
   emailAccount   EmailAccount @relation(fields: [emailAccountId], references: [id], onDelete: Cascade)
 
   @@index([emailAccountId])
+  @@index([emailAccountId, supersededAt])
+  @@index([emailAccountId, subject, supersededAt])
 }
 
 model CalendarConnection {

@@ -33,9 +33,17 @@ const {
     },
     chatMemory: {
       create: vi.fn(),
+      update: vi.fn(),
+      updateMany: vi.fn(),
       findFirst: vi.fn().mockResolvedValue(null),
       findMany: vi.fn().mockResolvedValue([]),
     },
+    // saveMemory retires the superseded row and writes the new one in one
+    // transaction; without this the write path throws and the tool reports a
+    // failure instead of a save.
+    $transaction: vi
+      .fn()
+      .mockResolvedValue([{ count: 0 }, { id: "memory-id" }]),
   },
 }));
 
@@ -1109,12 +1117,16 @@ describe("aiProcessAssistantChat", () => {
     expect(result.content).toBe("User prefers concise responses");
     // Always reported now, so the model can tell a fresh save from a no-op.
     expect(result.deduplicated).toBe(false);
-    expect(mockPrisma.chatMemory.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        content: "User prefers concise responses",
-        emailAccountId: "email-account-id",
+    expect(mockPrisma.chatMemory.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          content: "User prefers concise responses",
+          emailAccountId: "email-account-id",
+          // Live until something replaces it.
+          supersededAt: null,
+        }),
       }),
-    });
+    );
   });
 
   it("saveMemory deduplicates when identical memory exists", async () => {
