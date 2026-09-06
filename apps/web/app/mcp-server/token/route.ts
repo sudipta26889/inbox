@@ -1,4 +1,4 @@
-import type { McpServerClient } from "@/generated/prisma/models";
+import type { McpServerClient } from "@/generated/prisma/client";
 import { type NextRequest, NextResponse } from "next/server";
 import { env } from "@/env";
 import {

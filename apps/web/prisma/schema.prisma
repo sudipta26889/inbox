@@ -1842,6 +1842,7 @@ model A2aTask {
   emailAccount    EmailAccount? @relation("A2aTaskToEmailAccount", fields: [emailAccountId], references: [id], onDelete: Cascade)
   history         A2aTaskHistory[]
   messages        A2aMessage[]
+  approval        A2aApproval?
 
   @@index([userId])
   @@index([contextId])
@@ -1947,6 +1948,7 @@ enum A2aMessageRole {
 model A2aApproval {
   id              String            @id @default(cuid())
   taskId          String            @unique
+  task            A2aTask           @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
   // ============ Approval Request ============
   skill           String            // Which skill requires approval

@@ -83,4 +83,4 @@ export const POST = withAuth("user/a2a-approvals/reject", async (request) => {
   }
 });
 
-export type RejectA2aTaskResponse = Awaited<ReturnType<typeof POST.json>>;
+export type RejectA2aTaskResponse = { success: true } | { error: string };

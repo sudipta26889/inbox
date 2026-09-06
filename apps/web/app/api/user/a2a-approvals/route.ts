@@ -1,4 +1,5 @@
 import { withAuth } from "@/utils/middleware";
+import type { Prisma } from "@/generated/prisma/client";
 import prisma from "@/utils/prisma";
 import { createScopedLogger } from "@/utils/logger";
 import { approveTask } from "@/utils/a2a/task-executor";
@@ -17,50 +18,44 @@ const logger = createScopedLogger("api/a2a-approvals");
  * List all pending approval requests for the current user
  */
 export const GET = withAuth("user/a2a-approvals", async (request) => {
-  const userId = request.auth.userId;
+  return Response.json(await getA2aApprovals(request.auth.userId));
+});
 
-  // A2aApproval.taskId is a bare unique column, not a Prisma relation, so this
-  // cannot be a nested filter or an `include` — both throw at runtime.
-  const tasks = await prisma.a2aTask.findMany({
-    where: { userId, state: A2aTaskState.auth_required },
-    select: { id: true, taskId: true, contextId: true, clientId: true },
-  });
+// `withAuth` returns a NextHandler, which has no `.json`, so deriving the
+// response type from the handler resolved to an error and every consumer of
+// this type silently degraded to `any`.
+export type GetA2aApprovalsResponse = Awaited<
+  ReturnType<typeof getA2aApprovals>
+>;
 
-  if (tasks.length === 0) return Response.json({ approvals: [] });
-
-  const tasksById = new Map(tasks.map((task) => [task.id, task]));
-
+async function getA2aApprovals(userId: string) {
   const approvals = await prisma.a2aApproval.findMany({
     where: {
       status: "pending",
-      taskId: { in: tasks.map((task) => task.id) },
+      task: { userId, state: A2aTaskState.auth_required },
+    },
+    include: {
+      task: {
+        select: { taskId: true, contextId: true, clientId: true },
+      },
     },
     orderBy: { requestedAt: "asc" },
   });
 
-  return Response.json({
-    approvals: approvals.flatMap((approval) => {
-      const task = tasksById.get(approval.taskId);
-      if (!task) return [];
-
-      return [
-        {
-          id: approval.id,
-          taskId: task.taskId,
-          skill: approval.skill,
-          requestData: approval.requestData,
-          requestReason: approval.requestReason,
-          requestedAt: approval.requestedAt.toISOString(),
-          expiresAt: approval.expiresAt?.toISOString(),
-          contextId: task.contextId,
-          clientId: task.clientId,
-        },
-      ];
-    }),
-  });
-});
-
-export type GetA2aApprovalsResponse = Awaited<ReturnType<typeof GET.json>>;
+  return {
+    approvals: approvals.map((approval) => ({
+      id: approval.id,
+      taskId: approval.task.taskId,
+      skill: approval.skill,
+      requestData: approval.requestData,
+      requestReason: approval.requestReason,
+      requestedAt: approval.requestedAt.toISOString(),
+      expiresAt: approval.expiresAt?.toISOString(),
+      contextId: approval.task.contextId,
+      clientId: approval.task.clientId,
+    })),
+  };
+}
 
 /**
  * POST /api/user/a2a-approvals/approve
@@ -102,7 +97,11 @@ export const POST = withAuth("user/a2a-approvals", async (request) => {
 
   try {
     // Approve and execute the task
-    await approveTask(task.id, userId, responseData);
+    await approveTask(
+      task.id,
+      userId,
+      responseData as Prisma.InputJsonValue | undefined,
+    );
 
     logger.info("Task approved by user", {
       userId,
@@ -131,4 +130,4 @@ export const POST = withAuth("user/a2a-approvals", async (request) => {
   }
 });
 
-export type ApproveA2aTaskResponse = Awaited<ReturnType<typeof POST.json>>;
+export type ApproveA2aTaskResponse = { success: true } | { error: string };

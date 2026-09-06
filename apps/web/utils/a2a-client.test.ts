@@ -241,16 +241,16 @@ describe("buildA2aEmailPayload", () => {
     expect(payload.text).toBe(
       "Urgent email from alice@example.com: Important\n\nPlease review",
     );
-    expect(payload.data.from).toBe("alice@example.com");
-    expect(payload.data.subject).toBe("Important");
-    expect(payload.data.snippet).toBe("Please review");
-    expect(payload.data.thread_id).toBe("t-1");
-    expect(payload.data.message_id).toBe("m-1");
-    expect(payload.data.labels).toEqual(["INBOX", "IMPORTANT"]);
-    expect(payload.data.received_at).toBe("2026-01-15T10:00:00.000Z");
-    expect(payload.data.rule_name).toBe("urgent");
-    expect(payload.data.rule_id).toBe("r-1");
-    expect(payload.data.timestamp).toBeDefined();
+    expect(payload.data?.from).toBe("alice@example.com");
+    expect(payload.data?.subject).toBe("Important");
+    expect(payload.data?.snippet).toBe("Please review");
+    expect(payload.data?.thread_id).toBe("t-1");
+    expect(payload.data?.message_id).toBe("m-1");
+    expect(payload.data?.labels).toEqual(["INBOX", "IMPORTANT"]);
+    expect(payload.data?.received_at).toBe("2026-01-15T10:00:00.000Z");
+    expect(payload.data?.rule_name).toBe("urgent");
+    expect(payload.data?.rule_id).toBe("r-1");
+    expect(payload.data?.timestamp).toBeDefined();
   });
 
   it("handles missing optional fields", () => {
@@ -264,9 +264,9 @@ describe("buildA2aEmailPayload", () => {
       { ruleId: "r-2" },
     );
 
-    expect(payload.data.snippet).toBeUndefined();
-    expect(payload.data.labels).toBeUndefined();
-    expect(payload.data.received_at).toBeUndefined();
-    expect(payload.data.rule_name).toBeUndefined();
+    expect(payload.data?.snippet).toBeUndefined();
+    expect(payload.data?.labels).toBeUndefined();
+    expect(payload.data?.received_at).toBeUndefined();
+    expect(payload.data?.rule_name).toBeUndefined();
   });
 });

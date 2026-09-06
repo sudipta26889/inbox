@@ -18,7 +18,7 @@ export const GET = withAuth(
   "user/a2a-clients/[clientId]/tokens",
   async (request, { params }) => {
     const userId = request.auth.userId;
-    const { clientId } = params;
+    const { clientId } = await params;
 
     // Verify client ownership
     const client = await prisma.mcpServerClient.findFirst({
@@ -36,46 +36,57 @@ export const GET = withAuth(
       );
     }
 
-    // Get all tokens for this client
-    const tokens = await prisma.mcpServerAccessToken.findMany({
-      where: {
-        clientId,
-        userId,
-        revoked: false,
-      },
-      select: {
-        id: true,
-        scope: true,
-        createdAt: true,
-        expiresAt: true,
-        lastUsedAt: true,
-        emailAccount: {
-          select: {
-            email: true,
-          },
-        },
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
-
-    return Response.json({
-      clientId,
-      tokens: tokens.map((token) => ({
-        id: token.id,
-        scope: token.scope,
-        emailAccount: token.emailAccount?.email,
-        createdAt: token.createdAt.toISOString(),
-        expiresAt: token.expiresAt.toISOString(),
-        lastUsedAt: token.lastUsedAt?.toISOString(),
-        isExpired: token.expiresAt < new Date(),
-      })),
-    });
+    return Response.json(await getA2aClientTokens({ clientId, userId }));
   },
 );
 
-export type GetA2aClientTokensResponse = Awaited<ReturnType<typeof GET.json>>;
+async function getA2aClientTokens({
+  clientId,
+  userId,
+}: {
+  clientId: string;
+  userId: string;
+}) {
+  const tokens = await prisma.mcpServerAccessToken.findMany({
+    where: {
+      clientId,
+      userId,
+      revoked: false,
+    },
+    select: {
+      id: true,
+      scope: true,
+      createdAt: true,
+      expiresAt: true,
+      lastUsedAt: true,
+      emailAccount: {
+        select: {
+          email: true,
+        },
+      },
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+
+  return {
+    clientId,
+    tokens: tokens.map((token) => ({
+      id: token.id,
+      scope: token.scope,
+      emailAccount: token.emailAccount?.email,
+      createdAt: token.createdAt.toISOString(),
+      expiresAt: token.expiresAt.toISOString(),
+      lastUsedAt: token.lastUsedAt?.toISOString(),
+      isExpired: token.expiresAt < new Date(),
+    })),
+  };
+}
+
+export type GetA2aClientTokensResponse = Awaited<
+  ReturnType<typeof getA2aClientTokens>
+>;
 
 /**
  * DELETE /api/user/a2a-clients/[clientId]/tokens
@@ -85,7 +96,7 @@ export const DELETE = withAuth(
   "user/a2a-clients/[clientId]/tokens",
   async (request, { params }) => {
     const userId = request.auth.userId;
-    const { clientId } = params;
+    const { clientId } = await params;
     const body = await request.json();
 
     const { tokenIds } = body as { tokenIds?: string[]; revokeAll?: boolean };
@@ -169,6 +180,6 @@ export const DELETE = withAuth(
   },
 );
 
-export type RevokeA2aClientTokensResponse = Awaited<
-  ReturnType<typeof DELETE.json>
->;
+export type RevokeA2aClientTokensResponse =
+  | { success: true; revokedCount: number }
+  | { error: string };

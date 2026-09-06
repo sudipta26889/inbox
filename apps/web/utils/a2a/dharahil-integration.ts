@@ -156,22 +156,19 @@ export async function pollForApprovalDecision(
 ): Promise<DharaHILDecision> {
   const task = await prisma.a2aTask.findUnique({
     where: { id: taskInternalId },
+    include: { approval: true },
   });
 
   if (!task) {
     throw new Error(`Task not found: ${taskInternalId}`);
   }
 
-  const approval = await prisma.a2aApproval.findUnique({
-    where: { taskId: taskInternalId },
-  });
-
-  if (!approval?.dharahilRequestId) {
+  if (!task.approval?.dharahilRequestId) {
     throw new Error(`No DharaHIL request found for task: ${task.taskId}`);
   }
 
-  const requestId = approval.dharahilRequestId;
-  const expiresAt = approval.expiresAt?.toISOString();
+  const requestId = task.approval.dharahilRequestId;
+  const expiresAt = task.approval.expiresAt?.toISOString();
 
   if (!expiresAt) {
     throw new Error(`No expiry time found for DharaHIL request: ${requestId}`);

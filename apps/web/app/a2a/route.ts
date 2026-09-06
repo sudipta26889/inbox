@@ -248,20 +248,20 @@ export const POST = withError("a2a", async (request: RequestWithLogger) => {
           },
         },
       );
-    } catch (handlerError: unknown) {
+    } catch (handlerError) {
       reqLogger.error("A2A handler error", {
         method: message.method,
-        error: handlerError.message,
+        error: handlerError,
       });
 
       return createJsonRpcErrorResponse(
         message.id,
         -32_603,
-        `Handler error: ${handlerError.message}`,
+        `Handler error: ${handlerError instanceof Error ? handlerError.message : String(handlerError)}`,
       );
     }
   } catch (error) {
-    reqLogger.error("A2A protocol error", { error: error.message });
+    reqLogger.error("A2A protocol error", { error });
 
     return NextResponse.json(
       {
@@ -296,7 +296,7 @@ function createJsonRpcErrorResponse(
       error: {
         code,
         message,
-        ...(data && { data }),
+        ...(data === undefined ? {} : { data }),
       },
     },
     {

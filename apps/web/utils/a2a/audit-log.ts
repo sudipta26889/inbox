@@ -1,5 +1,6 @@
 import "server-only";
 import { createScopedLogger } from "@/utils/logger";
+import type { Prisma } from "@/generated/prisma/client";
 import prisma from "@/utils/prisma";
 
 const logger = createScopedLogger("a2a-audit");
@@ -33,6 +34,7 @@ export type AuditEventType =
 
 export interface AuditLogOptions {
   clientId?: string;
+  durationMs?: number;
   endpoint?: string;
   errorMessage?: string;
   eventType: AuditEventType;
@@ -49,18 +51,26 @@ export interface AuditLogOptions {
  */
 export async function logAuditEvent(options: AuditLogOptions): Promise<void> {
   try {
+    // The column is `operation`, and it holds exactly these dotted event names
+    // (see the model comment: "message.send", "task.cancel"). This module used
+    // to write `eventType` and `endpoint`, neither of which exists, so every
+    // create threw — and the catch below swallowed it. A2A auditing recorded
+    // nothing at all.
     await prisma.a2aAuditLog.create({
       data: {
-        eventType: options.eventType,
+        operation: options.eventType,
         userId: options.userId,
         clientId: options.clientId,
         taskId: options.taskId,
         ipAddress: options.ipAddress,
         userAgent: options.userAgent,
-        endpoint: options.endpoint,
-        metadata: options.metadata || {},
+        metadata: {
+          ...options.metadata,
+          ...(options.endpoint ? { endpoint: options.endpoint } : {}),
+        },
         success: options.success,
         errorMessage: options.errorMessage,
+        durationMs: options.durationMs ?? 0,
       },
     });
 
@@ -70,11 +80,11 @@ export async function logAuditEvent(options: AuditLogOptions): Promise<void> {
       userId: options.userId,
       clientId: options.clientId,
     });
-  } catch (error: unknown) {
+  } catch (error) {
     // Don't fail the operation if audit logging fails
     logger.error("Failed to create audit log", {
       eventType: options.eventType,
-      error: error.message,
+      error,
     });
   }
 }
@@ -183,17 +193,18 @@ export async function getUserAuditLogs(
 ) {
   const { limit = 100, offset = 0, eventType, startDate, endDate } = options;
 
-  const where: Record<string, unknown> = { userId };
-
-  if (eventType) {
-    where.eventType = eventType;
-  }
-
-  if (startDate || endDate) {
-    where.timestamp = {};
-    if (startDate) where.timestamp.gte = startDate;
-    if (endDate) where.timestamp.lte = endDate;
-  }
+  const where: Prisma.A2aAuditLogWhereInput = {
+    userId,
+    ...(eventType ? { operation: eventType } : {}),
+    ...(startDate || endDate
+      ? {
+          timestamp: {
+            ...(startDate ? { gte: startDate } : {}),
+            ...(endDate ? { lte: endDate } : {}),
+          },
+        }
+      : {}),
+  };
 
   const [logs, total] = await Promise.all([
     prisma.a2aAuditLog.findMany({
@@ -228,17 +239,18 @@ export async function getClientAuditLogs(
 ) {
   const { limit = 100, offset = 0, eventType, startDate, endDate } = options;
 
-  const where: Record<string, unknown> = { clientId };
-
-  if (eventType) {
-    where.eventType = eventType;
-  }
-
-  if (startDate || endDate) {
-    where.timestamp = {};
-    if (startDate) where.timestamp.gte = startDate;
-    if (endDate) where.timestamp.lte = endDate;
-  }
+  const where: Prisma.A2aAuditLogWhereInput = {
+    clientId,
+    ...(eventType ? { operation: eventType } : {}),
+    ...(startDate || endDate
+      ? {
+          timestamp: {
+            ...(startDate ? { gte: startDate } : {}),
+            ...(endDate ? { lte: endDate } : {}),
+          },
+        }
+      : {}),
+  };
 
   const [logs, total] = await Promise.all([
     prisma.a2aAuditLog.findMany({
@@ -279,35 +291,35 @@ export async function getClientSecuritySummary(clientId: string, days = 7) {
       where: {
         clientId,
         timestamp: { gte: since },
-        eventType: "auth.failure",
+        operation: "auth.failure",
       },
     }),
     prisma.a2aAuditLog.count({
       where: {
         clientId,
         timestamp: { gte: since },
-        eventType: "rate_limit.exceeded",
+        operation: "rate_limit.exceeded",
       },
     }),
     prisma.a2aAuditLog.count({
       where: {
         clientId,
         timestamp: { gte: since },
-        eventType: "task.created",
+        operation: "task.created",
       },
     }),
     prisma.a2aAuditLog.count({
       where: {
         clientId,
         timestamp: { gte: since },
-        eventType: "task.completed",
+        operation: "task.completed",
       },
     }),
     prisma.a2aAuditLog.count({
       where: {
         clientId,
         timestamp: { gte: since },
-        eventType: "task.failed",
+        operation: "task.failed",
       },
     }),
   ]);

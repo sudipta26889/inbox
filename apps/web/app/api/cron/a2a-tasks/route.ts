@@ -164,8 +164,8 @@ async function processPendingTasks(logger: Logger) {
             state: A2aTaskState.failed,
             stateReason: `Processor error: ${error instanceof Error ? error.message : String(error)}`,
             error: {
-              message: error.message,
-              stack: error.stack,
+              message: error instanceof Error ? error.message : String(error),
+              stack: error instanceof Error ? error.stack : undefined,
             },
             completedAt: new Date(),
           },
@@ -284,7 +284,10 @@ async function processDharaHILApprovals(logger: Logger) {
     logger.error("Failed to process DharaHIL approvals", {
       error: error instanceof Error ? error.message : String(error),
     });
-    return { processed: false, error: error.message };
+    return {
+      processed: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
   }
 }
 
@@ -299,7 +302,10 @@ async function processExpiredApprovals(logger: Logger) {
     logger.error("Failed to process expired approvals", {
       error: error instanceof Error ? error.message : String(error),
     });
-    return { processed: false, error: error.message };
+    return {
+      processed: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
   }
 }
 
@@ -315,7 +321,12 @@ async function processWebhooks(logger: Logger) {
     logger.error("Failed to process webhooks", {
       error: error instanceof Error ? error.message : String(error),
     });
-    return { processed: 0, succeeded: 0, failed: 0, error: error.message };
+    return {
+      processed: 0,
+      succeeded: 0,
+      failed: 0,
+      error: error instanceof Error ? error.message : String(error),
+    };
   }
 }
 

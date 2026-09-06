@@ -45,8 +45,12 @@ const updateClientSchema = z.object({
  * List all A2A clients owned by the current user
  */
 export const GET = withAuth("user/a2a-clients", async (request) => {
-  const userId = request.auth.userId;
+  return Response.json(await getA2aClients(request.auth.userId));
+});
 
+export type GetA2aClientsResponse = Awaited<ReturnType<typeof getA2aClients>>;
+
+async function getA2aClients(userId: string) {
   const clients = await prisma.mcpServerClient.findMany({
     where: {
       userId,
@@ -78,19 +82,13 @@ export const GET = withAuth("user/a2a-clients", async (request) => {
     },
   });
 
-  return Response.json({
-    clients: clients.map((client) => ({
+  return {
+    clients: clients.map(({ _count, ...client }) => ({
       ...client,
-      activeTokenCount: client._count.accessTokens,
-      _count: undefined, // Remove internal count field
+      activeTokenCount: _count.accessTokens,
     })),
-  });
-});
-
-export type GetA2aClientsResponse =
-  Awaited<ReturnType<typeof GET>> extends Response
-    ? Awaited<ReturnType<typeof GET.json>>
-    : never;
+  };
+}
 
 /**
  * POST /api/user/a2a-clients
@@ -174,7 +172,9 @@ export const POST = withAuth("user/a2a-clients", async (request) => {
   });
 });
 
-export type CreateA2aClientResponse = Awaited<ReturnType<typeof POST.json>>;
+export type CreateA2aClientResponse =
+  | { client: { clientId: string; clientName: string } }
+  | { error: string };
 
 /**
  * PATCH /api/user/a2a-clients
@@ -242,7 +242,7 @@ export const PATCH = withAuth("user/a2a-clients", async (request) => {
   return Response.json({ client });
 });
 
-export type UpdateA2aClientResponse = Awaited<ReturnType<typeof PATCH.json>>;
+export type UpdateA2aClientResponse = { success: true } | { error: string };
 
 /**
  * DELETE /api/user/a2a-clients
@@ -284,4 +284,4 @@ export const DELETE = withAuth("user/a2a-clients", async (request) => {
   });
 });
 
-export type DeleteA2aClientsResponse = Awaited<ReturnType<typeof DELETE.json>>;
+export type DeleteA2aClientsResponse = { success: true } | { error: string };
