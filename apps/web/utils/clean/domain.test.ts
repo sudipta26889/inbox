@@ -162,6 +162,7 @@ describe("createCleanupJob", () => {
       {
         action: CleanAction.ARCHIVE,
         daysOld: 7,
+        instructions: "",
         skips: defaultSkips(),
         confirm: false,
       },
@@ -189,6 +190,7 @@ describe("createCleanupJob", () => {
       {
         action: CleanAction.ARCHIVE,
         daysOld: 7,
+        instructions: "",
         skips: defaultSkips(),
         confirm: true,
       },
@@ -215,6 +217,7 @@ describe("createCleanupJob", () => {
       {
         action: CleanAction.ARCHIVE,
         daysOld: 7,
+        instructions: "",
         skips: defaultSkips(),
         confirm: false,
       },
@@ -232,6 +235,7 @@ describe("createCleanupJob", () => {
         {
           action: CleanAction.ARCHIVE,
           daysOld: 7,
+          instructions: "",
           skips: defaultSkips(),
           confirm: true,
           previewToken: dry.preview.previewToken,
@@ -251,6 +255,7 @@ describe("createCleanupJob", () => {
       {
         action: CleanAction.ARCHIVE,
         daysOld: 7,
+        instructions: "",
         skips: defaultSkips(),
         confirm: false,
       },
@@ -268,6 +273,7 @@ describe("createCleanupJob", () => {
       {
         action: CleanAction.ARCHIVE,
         daysOld: 7,
+        instructions: "",
         skips: defaultSkips(),
         confirm: true,
         previewToken: dry.preview.previewToken,
@@ -283,6 +289,7 @@ describe("createCleanupJob", () => {
         {
           action: CleanAction.ARCHIVE,
           daysOld: 7,
+          instructions: "",
           skips: defaultSkips(),
           confirm: true,
           previewToken: "garbage.token",
@@ -299,6 +306,7 @@ describe("createCleanupJob", () => {
         {
           action: CleanAction.ARCHIVE,
           daysOld: 7,
+          instructions: "",
           skips: defaultSkips(),
           confirm: false,
         },
@@ -314,6 +322,7 @@ describe("createCleanupJob", () => {
         {
           action: CleanAction.ARCHIVE,
           daysOld: 7,
+          instructions: "",
           skips: defaultSkips(),
           confirm: false,
         },

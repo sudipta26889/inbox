@@ -274,7 +274,7 @@ Use this context naturally if relevant. For past meetings, you might reference t
         ],
       };
 
-      const mockProvider: CalendarEventProvider = {
+      const mockProvider = mockCalendarProvider({
         fetchEventsWithAttendee: vi.fn(async ({ timeMax }) => {
           // First call is for past meetings (timeMax <= now)
           if (timeMax <= now) {
@@ -284,7 +284,7 @@ Use this context naturally if relevant. For past meetings, you might reference t
           return [upcomingEvent];
         }),
         fetchEvents: vi.fn(),
-      };
+      });
 
       vi.mocked(createCalendarEventProviders).mockResolvedValue([mockProvider]);
 
@@ -327,7 +327,7 @@ Use this context naturally if relevant. For past meetings, you might reference t
       };
 
       const now = new Date();
-      const mockProvider: CalendarEventProvider = {
+      const mockProvider = mockCalendarProvider({
         fetchEventsWithAttendee: vi.fn(async ({ timeMax }) => {
           // Only return events for past meetings (timeMax <= now)
           // The function calls fetchEventsWithAttendee twice - once for past, once for upcoming
@@ -337,7 +337,7 @@ Use this context naturally if relevant. For past meetings, you might reference t
           return [];
         }),
         fetchEvents: vi.fn(),
-      };
+      });
 
       vi.mocked(createCalendarEventProviders).mockResolvedValue([mockProvider]);
 
@@ -353,12 +353,12 @@ Use this context naturally if relevant. For past meetings, you might reference t
     });
 
     it("handles provider errors gracefully", async () => {
-      const mockProvider: CalendarEventProvider = {
+      const mockProvider = mockCalendarProvider({
         fetchEventsWithAttendee: vi
           .fn()
           .mockRejectedValue(new Error("API Error")),
         fetchEvents: vi.fn(),
-      };
+      });
 
       vi.mocked(createCalendarEventProviders).mockResolvedValue([mockProvider]);
 
@@ -389,7 +389,7 @@ Use this context naturally if relevant. For past meetings, you might reference t
       };
 
       const now = new Date();
-      const mockProvider: CalendarEventProvider = {
+      const mockProvider = mockCalendarProvider({
         fetchEventsWithAttendee: vi.fn(async ({ timeMax }) => {
           // Only return events for past meetings
           if (timeMax <= now) {
@@ -398,7 +398,7 @@ Use this context naturally if relevant. For past meetings, you might reference t
           return [];
         }),
         fetchEvents: vi.fn(),
-      };
+      });
 
       vi.mocked(createCalendarEventProviders).mockResolvedValue([mockProvider]);
 
@@ -431,7 +431,7 @@ Use this context naturally if relevant. For past meetings, you might reference t
       };
 
       const now = new Date();
-      const mockProvider: CalendarEventProvider = {
+      const mockProvider = mockCalendarProvider({
         fetchEventsWithAttendee: vi.fn(async ({ timeMin }) => {
           // Only return events for upcoming meetings (timeMin >= now)
           if (timeMin >= now) {
@@ -440,7 +440,7 @@ Use this context naturally if relevant. For past meetings, you might reference t
           return [];
         }),
         fetchEvents: vi.fn(),
-      };
+      });
 
       vi.mocked(createCalendarEventProviders).mockResolvedValue([mockProvider]);
 
@@ -468,7 +468,7 @@ Use this context naturally if relevant. For past meetings, you might reference t
       );
 
       const now = new Date();
-      const mockProvider: CalendarEventProvider = {
+      const mockProvider = mockCalendarProvider({
         fetchEventsWithAttendee: vi.fn(async ({ timeMax }) => {
           // Return past events when fetching past meetings
           if (timeMax <= now) {
@@ -477,7 +477,7 @@ Use this context naturally if relevant. For past meetings, you might reference t
           return [];
         }),
         fetchEvents: vi.fn(),
-      };
+      });
 
       vi.mocked(createCalendarEventProviders).mockResolvedValue([mockProvider]);
 
@@ -492,3 +492,14 @@ Use this context naturally if relevant. For past meetings, you might reference t
     });
   });
 });
+
+// The recipient context only calls these two; the rest of the provider surface
+// is never exercised here.
+function mockCalendarProvider(
+  provider: Pick<
+    CalendarEventProvider,
+    "fetchEvents" | "fetchEventsWithAttendee"
+  >,
+): CalendarEventProvider {
+  return provider as CalendarEventProvider;
+}

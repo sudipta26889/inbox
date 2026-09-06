@@ -29,9 +29,12 @@ vi.mock("@/utils/attachments/draft-attachments", () => ({
 
 describe("runActionFunction", () => {
   const logger = createScopedLogger("test");
-  const email = {
+  const email: ParsedMessage = {
     id: "message-1",
     threadId: "thread-1",
+    historyId: "history-1",
+    subject: "Property documents",
+    date: "2026-01-01T12:00:00.000Z",
     headers: {
       from: "sender@example.com",
       to: "user@example.com",
@@ -43,8 +46,9 @@ describe("runActionFunction", () => {
     textHtml: "<p>Please send the lease packet.</p>",
     snippet: "",
     attachments: [],
+    inline: [],
     internalDate: "1700000000000",
-  } as ParsedMessage;
+  };
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -56,6 +60,7 @@ describe("runActionFunction", () => {
     vi.mocked(getReplyWithConfidence).mockResolvedValue({
       reply: "Attached the requested PDF.",
       confidence: DraftReplyConfidence.HIGH_CONFIDENCE,
+      attribution: null,
       attachments: [
         {
           driveConnectionId: "drive-1",

@@ -1,18 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { isOwnSendingAddress } from "./is-from-us";
-import { env } from "@/env";
 
-vi.mock("@/env", () => ({
-  env: {
-    SMTP_FROM_EMAIL: "Inbox <no-reply@inbox.sudiptadhara.in>",
-    RESEND_FROM_EMAIL: "Inbox <updates@transactional.inbox.sudiptadhara.in>",
-  },
+// The real env is readonly; these tests need to vary the sending addresses.
+const mockEnv = vi.hoisted(() => ({
+  SMTP_FROM_EMAIL: undefined as string | undefined,
+  RESEND_FROM_EMAIL: undefined as string | undefined,
 }));
+
+vi.mock("@/env", () => ({ env: mockEnv }));
 
 describe("isOwnSendingAddress", () => {
   beforeEach(() => {
-    env.SMTP_FROM_EMAIL = "Inbox <no-reply@inbox.sudiptadhara.in>";
-    env.RESEND_FROM_EMAIL =
+    mockEnv.SMTP_FROM_EMAIL = "Inbox <no-reply@inbox.sudiptadhara.in>";
+    mockEnv.RESEND_FROM_EMAIL =
       "Inbox <updates@transactional.inbox.sudiptadhara.in>";
   });
 
@@ -38,8 +38,8 @@ describe("isOwnSendingAddress", () => {
   });
 
   it("handles unset sending addresses", () => {
-    env.SMTP_FROM_EMAIL = undefined;
-    env.RESEND_FROM_EMAIL = undefined;
+    mockEnv.SMTP_FROM_EMAIL = undefined;
+    mockEnv.RESEND_FROM_EMAIL = undefined;
     expect(isOwnSendingAddress("sender@example.com")).toBe(false);
   });
 

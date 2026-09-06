@@ -25,7 +25,7 @@ import { betterAuthConfig } from "@/utils/auth";
 import prisma from "@/utils/prisma";
 import { GET } from "./route";
 
-const mockBetterAuthConfig = vi.mocked(betterAuthConfig);
+const mockSignInSSO = vi.mocked(betterAuthConfig.api.signInSSO);
 
 describe("SSO Signin Route", () => {
   const mockContext = { params: Promise.resolve({}) };
@@ -78,10 +78,11 @@ describe("SSO Signin Route", () => {
 
   describe("Organization-based provider lookup", () => {
     test("should find provider by organization slug", async () => {
-      const mockSignInSSOResponse = { url: "https://sso.example.com/signin" };
-      mockBetterAuthConfig.api.signInSSO.mockResolvedValue(
-        mockSignInSSOResponse,
-      );
+      const mockSignInSSOResponse = {
+        url: "https://sso.example.com/signin",
+        redirect: false,
+      };
+      mockSignInSSO.mockResolvedValue(mockSignInSSOResponse);
 
       // Mock the Prisma call to return a provider
       vi.mocked(prisma.ssoProvider.findFirst).mockResolvedValue({
@@ -108,7 +109,7 @@ describe("SSO Signin Route", () => {
         },
       });
 
-      expect(mockBetterAuthConfig.api.signInSSO).toHaveBeenCalledWith({
+      expect(mockSignInSSO).toHaveBeenCalledWith({
         body: {
           providerId: "test-provider-id",
           callbackURL: "/accounts",
@@ -167,9 +168,7 @@ describe("SSO Signin Route", () => {
       } as any);
 
       // Mock betterAuth to throw an error
-      mockBetterAuthConfig.api.signInSSO.mockRejectedValue(
-        new Error("SSO service unavailable"),
-      );
+      mockSignInSSO.mockRejectedValue(new Error("SSO service unavailable"));
 
       const response = await GET(request, mockContext);
       const responseBody = await response.json();
@@ -185,10 +184,9 @@ describe("SSO Signin Route", () => {
     test("should return correct response structure on success", async () => {
       const mockSignInSSOResponse = {
         url: "https://sso.example.com/signin?token=abc123",
+        redirect: false,
       };
-      mockBetterAuthConfig.api.signInSSO.mockResolvedValue(
-        mockSignInSSOResponse,
-      );
+      mockSignInSSO.mockResolvedValue(mockSignInSSOResponse);
 
       // Mock Prisma to return a provider
       vi.mocked(prisma.ssoProvider.findFirst).mockResolvedValue({
@@ -211,10 +209,11 @@ describe("SSO Signin Route", () => {
     });
 
     test("should log SSO sign-in request", async () => {
-      const mockSignInSSOResponse = { url: "https://sso.example.com/signin" };
-      mockBetterAuthConfig.api.signInSSO.mockResolvedValue(
-        mockSignInSSOResponse,
-      );
+      const mockSignInSSOResponse = {
+        url: "https://sso.example.com/signin",
+        redirect: false,
+      };
+      mockSignInSSO.mockResolvedValue(mockSignInSSOResponse);
 
       // Mock Prisma to return a provider
       vi.mocked(prisma.ssoProvider.findFirst).mockResolvedValue({
@@ -260,10 +259,11 @@ describe("SSO Signin Route", () => {
 
   describe("betterAuthConfig integration", () => {
     test("should call betterAuthConfig.api.signInSSO with correct parameters", async () => {
-      const mockSignInSSOResponse = { url: "https://sso.example.com/signin" };
-      mockBetterAuthConfig.api.signInSSO.mockResolvedValue(
-        mockSignInSSOResponse,
-      );
+      const mockSignInSSOResponse = {
+        url: "https://sso.example.com/signin",
+        redirect: false,
+      };
+      mockSignInSSO.mockResolvedValue(mockSignInSSOResponse);
 
       // Mock Prisma to return a provider
       vi.mocked(prisma.ssoProvider.findFirst).mockResolvedValue({
@@ -277,7 +277,7 @@ describe("SSO Signin Route", () => {
 
       await GET(request, mockContext);
 
-      expect(mockBetterAuthConfig.api.signInSSO).toHaveBeenCalledWith({
+      expect(mockSignInSSO).toHaveBeenCalledWith({
         body: {
           providerId: "test-provider",
           callbackURL: "/accounts",
@@ -297,9 +297,7 @@ describe("SSO Signin Route", () => {
       } as any);
 
       // Mock betterAuth to throw an error
-      mockBetterAuthConfig.api.signInSSO.mockRejectedValue(
-        new Error("SSO service unavailable"),
-      );
+      mockSignInSSO.mockRejectedValue(new Error("SSO service unavailable"));
 
       const response = await GET(request, mockContext);
       const responseBody = await response.json();

@@ -5,7 +5,9 @@ import {
   shouldRunEvalTests,
 } from "@/__tests__/eval/models";
 import { createEvalReporter } from "@/__tests__/eval/reporter";
+import { partialRow, prismaImplementation } from "@/__tests__/helpers";
 import type { getEmailAccount } from "@/__tests__/helpers";
+import type { Prisma } from "@/generated/prisma/client";
 import prisma from "@/utils/__mocks__/prisma";
 import {
   ActionType,
@@ -30,6 +32,15 @@ const TIMEOUT = 60_000;
 const evalReporter = createEvalReporter();
 const logger = createScopedLogger("eval-assistant-chat-rule-editing");
 const notificationRuleUpdatedAt = new Date("2026-03-13T00:00:00.000Z");
+
+// The assistant reads rules and the account back with their relations, which
+// the bare row types the prisma mock is typed against do not carry.
+type RuleWithRelations = Prisma.RuleGetPayload<{
+  include: { actions: true; group: { include: { items: true } } };
+}>;
+type EmailAccountWithRules = Prisma.EmailAccountGetPayload<{
+  include: { rules: true };
+}>;
 const defaultRuleRows = getDefaultRuleRows();
 const defaultRuleRowsByName = new Map(
   defaultRuleRows.map((rule) => [rule.name, rule]),
@@ -110,43 +121,55 @@ describe.runIf(shouldRunEval)("Eval: assistant chat rule editing", () => {
     mockUpdateRuleActions.mockResolvedValue({ id: "updated-rule-id" });
     mockSaveLearnedPatterns.mockResolvedValue({ success: true });
 
-    prisma.emailAccount.findUnique.mockImplementation(async ({ select }) => {
-      if (select?.rules) {
-        return {
-          about: "My name is Test User, and I manage a company inbox.",
-          rules: defaultRuleRows,
-        };
-      }
+    prisma.emailAccount.findUnique.mockImplementation(
+      prismaImplementation<typeof prisma.emailAccount.findUnique>(
+        async ({ select }) => {
+          if (select?.rules) {
+            return partialRow<EmailAccountWithRules>({
+              about: "My name is Test User, and I manage a company inbox.",
+              rules: defaultRuleRows,
+            });
+          }
 
-      return {
+          return partialRow<EmailAccountWithRules>({
+            about: "My name is Test User, and I manage a company inbox.",
+          });
+        },
+      ),
+    );
+
+    prisma.emailAccount.update.mockResolvedValue(
+      partialRow({
         about: "My name is Test User, and I manage a company inbox.",
-      };
-    });
+      }),
+    );
 
-    prisma.emailAccount.update.mockResolvedValue({
-      about: "My name is Test User, and I manage a company inbox.",
-    });
-
-    prisma.rule.findUnique.mockImplementation(async ({ where, select }) => {
-      const ruleName = where?.name_emailAccountId?.name;
-      if (ruleName === "Notification") {
-        if (select?.group) {
-          return {
-            group: {
-              items: [
-                {
-                  type: GroupItemType.FROM,
-                  value: "alerts@system.example",
-                  exclude: false,
+    prisma.rule.findUnique.mockImplementation(
+      prismaImplementation<typeof prisma.rule.findUnique>(
+        async ({ where, select }) => {
+          const ruleName = where?.name_emailAccountId?.name;
+          if (ruleName === "Notification") {
+            if (select?.group) {
+              return partialRow<RuleWithRelations>({
+                group: {
+                  items: [
+                    {
+                      type: GroupItemType.FROM,
+                      value: "alerts@system.example",
+                      exclude: false,
+                    },
+                  ],
                 },
-              ],
-            },
-          };
-        }
-      }
+              });
+            }
+          }
 
-      return ruleName ? (defaultRuleRowsByName.get(ruleName) ?? null) : null;
-    });
+          return ruleName
+            ? (defaultRuleRowsByName.get(ruleName) ?? null)
+            : null;
+        },
+      ),
+    );
 
     mockCreateEmailProvider.mockResolvedValue({
       getMessagesWithPagination: vi.fn().mockResolvedValue({
@@ -671,7 +694,7 @@ function getDefaultRuleRows() {
   return SYSTEM_RULE_ORDER.map((systemType) => {
     const config = getRuleConfig(systemType);
 
-    return {
+    return partialRow<RuleWithRelations>({
       id: `${systemType.toLowerCase()}-rule-id`,
       name: config.name,
       instructions: config.instructions,
@@ -694,7 +717,7 @@ function getDefaultRuleRows() {
         url: action.url,
         folderName: action.folderName,
       })),
-    };
+    });
   });
 }
 

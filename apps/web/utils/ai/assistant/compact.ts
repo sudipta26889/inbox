@@ -1,4 +1,4 @@
-import type { ModelMessage } from "ai";
+import type { ModelMessage, ToolResultPart } from "ai";
 import { z } from "zod";
 import { getModel } from "@/utils/llms/model";
 import { createGenerateText, createGenerateObject } from "@/utils/llms";
@@ -22,8 +22,13 @@ export function estimateTokens(messages: ModelMessage[]): number {
         if ("input" in part && part.input) {
           totalChars += JSON.stringify(part.input).length;
         }
-        if ("result" in part && part.result) {
-          totalChars += JSON.stringify(part.result).length;
+        // Tool results live under `output`, not `result`. The old field name
+        // was from a pre-v6 AI SDK and exists on no message part type today,
+        // so this branch counted nothing — and since tool output is usually
+        // the bulk of a long agent conversation, the estimate ran far under
+        // and compaction fired late or never.
+        if ("output" in part && part.output) {
+          totalChars += measureToolOutput(part.output).length;
         }
       }
     }
@@ -203,4 +208,23 @@ function serializeContent(content: ModelMessage["content"]): string {
   }
 
   return parts.join("\n");
+}
+
+/**
+ * The billable text of a tool result.
+ *
+ * `output` is a tagged union: text and error-text carry a string, json and
+ * error-json carry arbitrary JSON, content carries parts, and
+ * execution-denied carries only a reason. Stringifying the wrapper would
+ * count the tag and the provider options too, which is noise — take the
+ * value, and fall back to the whole thing for shapes we do not know.
+ */
+function measureToolOutput(output: ToolResultPart["output"]): string {
+  if ("value" in output) {
+    return typeof output.value === "string"
+      ? output.value
+      : JSON.stringify(output.value);
+  }
+
+  return JSON.stringify(output);
 }

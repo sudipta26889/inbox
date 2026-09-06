@@ -6,7 +6,8 @@ import {
   hasFollowUpLabel,
   clearFollowUpLabel,
 } from "./labels";
-import { getMockMessage } from "@/__tests__/helpers";
+import { getMockMessage, partialRow } from "@/__tests__/helpers";
+import type { ThreadTracker } from "@/generated/prisma/client";
 import { createScopedLogger } from "@/utils/logger";
 import { createMockEmailProvider } from "@/__tests__/mocks/email-provider.mock";
 import prisma from "@/utils/__mocks__/prisma";
@@ -328,7 +329,10 @@ describe("clearFollowUpLabel", () => {
     });
 
     prisma.threadTracker.findMany.mockResolvedValue([
-      { id: "tracker-1", followUpDraftId: "draft-abc" },
+      partialRow<ThreadTracker>({
+        id: "tracker-1",
+        followUpDraftId: "draft-abc",
+      }),
     ]);
     prisma.threadTracker.updateMany.mockResolvedValue({ count: 1 });
 
@@ -364,7 +368,10 @@ describe("clearFollowUpLabel", () => {
     });
 
     prisma.threadTracker.findMany.mockResolvedValue([
-      { id: "tracker-1", followUpDraftId: "draft-abc" },
+      partialRow<ThreadTracker>({
+        id: "tracker-1",
+        followUpDraftId: "draft-abc",
+      }),
     ]);
     prisma.threadTracker.updateMany.mockResolvedValue({ count: 1 });
 
@@ -413,8 +420,14 @@ describe("clearFollowUpLabel", () => {
     });
 
     prisma.threadTracker.findMany.mockResolvedValue([
-      { id: "tracker-1", followUpDraftId: "draft-abc" },
-      { id: "tracker-2", followUpDraftId: "draft-def" },
+      partialRow<ThreadTracker>({
+        id: "tracker-1",
+        followUpDraftId: "draft-abc",
+      }),
+      partialRow<ThreadTracker>({
+        id: "tracker-2",
+        followUpDraftId: "draft-def",
+      }),
     ]);
     prisma.threadTracker.updateMany.mockResolvedValue({ count: 1 });
 

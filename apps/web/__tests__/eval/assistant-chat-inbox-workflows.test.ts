@@ -5,7 +5,12 @@ import {
   shouldRunEvalTests,
 } from "@/__tests__/eval/models";
 import { createEvalReporter } from "@/__tests__/eval/reporter";
-import { getMockMessage } from "@/__tests__/helpers";
+import {
+  getMockMessage,
+  partialRow,
+  prismaImplementation,
+} from "@/__tests__/helpers";
+import type { Prisma } from "@/generated/prisma/client";
 import prisma from "@/utils/__mocks__/prisma";
 import { createScopedLogger } from "@/utils/logger";
 import { aiProcessAssistantChat } from "@/utils/ai/assistant/chat";
@@ -125,6 +130,12 @@ vi.mock("@/env", () => ({
   },
 }));
 
+// The assistant reads the account back with the relations these tools select,
+// which the bare row type the prisma mock is typed against does not carry.
+type EmailAccountWithRelations = Prisma.EmailAccountGetPayload<{
+  include: { filingFolders: true; driveConnections: true; rules: true };
+}>;
+
 describe.runIf(shouldRunEval)("Eval: assistant chat inbox workflows", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -134,36 +145,42 @@ describe.runIf(shouldRunEval)("Eval: assistant chat inbox workflows", () => {
     mockUpdateRuleActions.mockResolvedValue({ id: "updated-rule-id" });
     mockSaveLearnedPatterns.mockResolvedValue({ success: true });
 
-    prisma.emailAccount.findUnique.mockImplementation(async ({ select }) => {
-      if (select?.rules) {
-        return {
-          about: "My name is Test User, and I manage a company inbox.",
-          rules: [],
-        };
-      }
+    prisma.emailAccount.findUnique.mockImplementation(
+      prismaImplementation<typeof prisma.emailAccount.findUnique>(
+        async ({ select }) => {
+          if (select?.rules) {
+            return partialRow<EmailAccountWithRelations>({
+              about: "My name is Test User, and I manage a company inbox.",
+              rules: [],
+            });
+          }
 
-      if (select?.email) {
-        return {
-          email: "user@test.com",
-          timezone: "America/Los_Angeles",
-          meetingBriefingsEnabled: false,
-          meetingBriefingsMinutesBefore: 15,
-          meetingBriefsSendEmail: false,
-          filingEnabled: false,
-          filingPrompt: null,
-          filingFolders: [],
-          driveConnections: [],
-        };
-      }
+          if (select?.email) {
+            return partialRow<EmailAccountWithRelations>({
+              email: "user@test.com",
+              timezone: "America/Los_Angeles",
+              meetingBriefingsEnabled: false,
+              meetingBriefingsMinutesBefore: 15,
+              meetingBriefsSendEmail: false,
+              filingEnabled: false,
+              filingPrompt: null,
+              filingFolders: [],
+              driveConnections: [],
+            });
+          }
 
-      return {
+          return partialRow<EmailAccountWithRelations>({
+            about: "My name is Test User, and I manage a company inbox.",
+          });
+        },
+      ),
+    );
+
+    prisma.emailAccount.update.mockResolvedValue(
+      partialRow({
         about: "My name is Test User, and I manage a company inbox.",
-      };
-    });
-
-    prisma.emailAccount.update.mockResolvedValue({
-      about: "My name is Test User, and I manage a company inbox.",
-    });
+      }),
+    );
 
     prisma.rule.findUnique.mockResolvedValue(null);
 

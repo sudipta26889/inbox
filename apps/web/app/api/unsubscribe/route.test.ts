@@ -1,6 +1,8 @@
 vi.mock("server-only", () => ({}));
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { partialRow } from "@/__tests__/helpers";
+import type { Prisma } from "@/generated/prisma/client";
 import prisma from "@/utils/__mocks__/prisma";
 
 vi.mock("@/utils/prisma");
@@ -17,20 +19,30 @@ vi.mock("@/utils/middleware", () => ({
 
 import { GET, POST } from "./route";
 
+// The route loads the token together with its email account, which the bare
+// row type the prisma mock is typed against does not carry.
+type EmailTokenWithAccount = Prisma.EmailTokenGetPayload<{
+  include: { emailAccount: true };
+}>;
+
+const routeContext = { params: Promise.resolve({}) };
+
 describe("unsubscribe route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    prisma.emailToken.findUnique.mockResolvedValue({
-      id: "email-token-1",
-      token: "valid-token",
-      emailAccountId: "email-account-1",
-      expiresAt: new Date("2099-01-01T00:00:00.000Z"),
-      emailAccount: {
-        id: "email-account-1",
-        email: "user@example.com",
-      },
-    } as Awaited<ReturnType<typeof prisma.emailToken.findUnique>>);
+    prisma.emailToken.findUnique.mockResolvedValue(
+      partialRow<EmailTokenWithAccount>({
+        id: "email-token-1",
+        token: "valid-token",
+        emailAccountId: "email-account-1",
+        expiresAt: new Date("2099-01-01T00:00:00.000Z"),
+        emailAccount: {
+          id: "email-account-1",
+          email: "user@example.com",
+        },
+      }),
+    );
 
     prisma.emailAccount.update.mockResolvedValue({} as never);
     prisma.emailToken.delete.mockResolvedValue({} as never);
@@ -41,7 +53,7 @@ describe("unsubscribe route", () => {
       "https://example.com/api/unsubscribe?token=valid-token",
     );
 
-    const response = await GET(request as never);
+    const response = await GET(request as never, routeContext);
     const body = await response.text();
 
     expect(response.status).toBe(200);
@@ -69,7 +81,7 @@ describe("unsubscribe route", () => {
       },
     );
 
-    const response = await POST(request as never);
+    const response = await POST(request as never, routeContext);
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ success: true });
@@ -94,7 +106,7 @@ describe("unsubscribe route", () => {
       },
     );
 
-    const response = await POST(request as never);
+    const response = await POST(request as never, routeContext);
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ success: true });

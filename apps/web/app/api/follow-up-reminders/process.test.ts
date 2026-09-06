@@ -81,6 +81,9 @@ vi.mock("@/utils/email/rate-limit", () => ({
   withRateLimitRecording: vi.fn(async (_context, operation) => operation()),
 }));
 
+import { partialRow, prismaImplementation } from "@/__tests__/helpers";
+import type { ThreadTracker } from "@/generated/prisma/client";
+import type { ThreadTrackerType } from "@/generated/prisma/enums";
 import prisma from "@/utils/prisma";
 import { createEmailProvider } from "@/utils/email/provider";
 import { generateFollowUpDraft } from "@/utils/follow-up/generate-draft";
@@ -426,26 +429,30 @@ describe("processAccountFollowUps - dedup logic", () => {
     vi.mocked(createEmailProvider).mockResolvedValue(provider);
 
     let findManyCallCount = 0;
-    vi.mocked(prisma.threadTracker.findMany).mockImplementation((args: any) => {
-      findManyCallCount += 1;
-      if (findManyCallCount === 1) return Promise.resolve([]);
+    vi.mocked(prisma.threadTracker.findMany).mockImplementation(
+      prismaImplementation<typeof prisma.threadTracker.findMany>(
+        async (args) => {
+          findManyCallCount += 1;
+          if (findManyCallCount === 1) return [];
 
-      // Simulate outbound side effect from a prior processing pass:
-      // the prior tracker exists but is resolved=true.
-      // If dedup query filters resolved=false, it will miss this row.
-      if (args?.where?.resolved === false) return Promise.resolve([]);
-      return Promise.resolve([
-        {
-          threadId: "thread-duplicate-check",
-          messageId: "msg-duplicate-check",
-        } as any,
-      ]);
-    });
+          // Simulate outbound side effect from a prior processing pass:
+          // the prior tracker exists but is resolved=true.
+          // If dedup query filters resolved=false, it will miss this row.
+          if (args?.where?.resolved === false) return [];
+          return [
+            partialRow<ThreadTracker>({
+              threadId: "thread-duplicate-check",
+              messageId: "msg-duplicate-check",
+            }),
+          ];
+        },
+      ),
+    );
 
     vi.mocked(prisma.threadTracker.findFirst).mockResolvedValue(null);
-    vi.mocked(prisma.threadTracker.create).mockResolvedValue({
-      id: "tracker-duplicate-check",
-    } as any);
+    vi.mocked(prisma.threadTracker.create).mockResolvedValue(
+      partialRow<ThreadTracker>({ id: "tracker-duplicate-check" }),
+    );
 
     await processAccountFollowUps({
       emailAccount: createMockAccount(),
@@ -672,35 +679,39 @@ describe("processAccountFollowUps - dedup logic", () => {
       { code: "P2002", clientVersion: "5.0.0" },
     );
 
-    let rowType: string | null = null;
-    vi.mocked(prisma.threadTracker.findMany).mockImplementation((args: any) => {
-      const requestedType = args?.where?.type;
-      if (!rowType) return Promise.resolve([]);
-      if (requestedType && rowType === requestedType) {
-        return Promise.resolve([
-          { threadId: "thread-shared", messageId: "msg-shared" } as any,
-        ]);
-      }
-      if (!requestedType) {
-        return Promise.resolve([
-          { threadId: "thread-shared", messageId: "msg-shared" } as any,
-        ]);
-      }
-      return Promise.resolve([]);
+    let rowType: ThreadTrackerType | null = null;
+    const sharedRow = partialRow<ThreadTracker>({
+      threadId: "thread-shared",
+      messageId: "msg-shared",
     });
+    vi.mocked(prisma.threadTracker.findMany).mockImplementation(
+      prismaImplementation<typeof prisma.threadTracker.findMany>(
+        async (args) => {
+          const requestedType = args?.where?.type;
+          if (!rowType) return [];
+          if (requestedType && rowType === requestedType) return [sharedRow];
+          if (!requestedType) return [sharedRow];
+          return [];
+        },
+      ),
+    );
     vi.mocked(prisma.threadTracker.findFirst).mockResolvedValue(null);
-    vi.mocked(prisma.threadTracker.create).mockImplementation((args: any) => {
-      const createType = args?.data?.type;
-      if (rowType === null) {
-        rowType = createType;
-        return Promise.resolve({ id: "tracker-shared" } as any);
-      }
-      return Promise.reject(duplicateError);
-    });
-    vi.mocked(prisma.threadTracker.update).mockImplementation((args: any) => {
-      rowType = args?.data?.type ?? rowType;
-      return Promise.resolve({ id: "tracker-shared" } as any);
-    });
+    vi.mocked(prisma.threadTracker.create).mockImplementation(
+      prismaImplementation<typeof prisma.threadTracker.create>(async (args) => {
+        if (rowType === null) {
+          rowType = args.data.type;
+          return partialRow<ThreadTracker>({ id: "tracker-shared" });
+        }
+        throw duplicateError;
+      }),
+    );
+    vi.mocked(prisma.threadTracker.update).mockImplementation(
+      prismaImplementation<typeof prisma.threadTracker.update>(async (args) => {
+        const updatedType = args.data.type;
+        if (typeof updatedType === "string") rowType = updatedType;
+        return partialRow<ThreadTracker>({ id: "tracker-shared" });
+      }),
+    );
 
     const emailAccount = createMockAccount({
       followUpAwaitingReplyDays: 3,

@@ -44,6 +44,7 @@ describe("validateWebhookAccount", () => {
       about: "Test account",
       lastSyncedHistoryId: null,
       autoCategorizeSenders: false,
+      autoLearnPatterns: false,
       watchEmailsSubscriptionId: "subscription-id",
       multiRuleSelectionEnabled: false,
       timezone: null,
@@ -77,6 +78,7 @@ describe("validateWebhookAccount", () => {
           emailAccountId: "account-id",
           systemType: null,
           promptText: null,
+          displayOrder: 0,
         },
       ],
       user: {

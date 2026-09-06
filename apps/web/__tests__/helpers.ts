@@ -166,6 +166,27 @@ export function partialRow<T>(
   return value as T;
 }
 
+/**
+ * A `mockImplementation` for a prisma model method that branches on its args.
+ *
+ * Prisma model methods return a fluent client (`Prisma__XClient`), not a plain
+ * promise, so an implementation that merely resolves a row does not type-check
+ * even though the code under test only ever awaits it. This keeps the
+ * arguments and the resolved row checked against the real signature and
+ * loosens only the fluent wrapper.
+ *
+ * `prismaImplementation<typeof prisma.rule.findUnique>(async ({ where }) => …)`
+ */
+export function prismaImplementation<
+  TMethod extends (...args: never[]) => PromiseLike<unknown>,
+>(
+  implementation: (
+    ...args: Parameters<TMethod>
+  ) => Promise<Awaited<ReturnType<TMethod>>>,
+): TMethod {
+  return implementation as unknown as TMethod;
+}
+
 export function getAction(overrides: Partial<Action> = {}): Action {
   return {
     id: "action-id",

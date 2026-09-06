@@ -1753,6 +1753,7 @@ function getRule(overrides: Partial<RuleWithActions> = {}): RuleWithActions {
     categoryFilterType = null,
     systemType = null,
     promptText = null,
+    displayOrder = 0,
     actions = [],
   } = overrides;
 
@@ -1775,6 +1776,7 @@ function getRule(overrides: Partial<RuleWithActions> = {}): RuleWithActions {
     categoryFilterType,
     systemType,
     promptText,
+    displayOrder,
     actions,
   };
 }

@@ -7,6 +7,7 @@ import {
 } from "./run-rules";
 import {
   ActionType,
+  DraftReplyConfidence,
   ExecutedRuleStatus,
   SystemType,
 } from "@/generated/prisma/enums";
@@ -76,6 +77,7 @@ const createRule = (
   automate: true,
   promptText: null,
   categoryFilterType: null,
+  displayOrder: 0,
 });
 
 const conversationMetaRule = createRule(CONVERSATION_TRACKING_META_RULE_ID);
@@ -310,7 +312,10 @@ describe("runRules draft attribution persistence", () => {
         },
       } as any,
       rules: [draftRule],
-      emailAccount: getEmailAccount(),
+      emailAccount: {
+        ...getEmailAccount(),
+        draftReplyConfidence: DraftReplyConfidence.ALL_EMAILS,
+      },
       isTest: false,
       modelType: "default" as any,
       logger,
@@ -384,7 +389,10 @@ describe("runRules draft attribution persistence", () => {
         },
       } as any,
       rules: [draftRule],
-      emailAccount: getEmailAccount(),
+      emailAccount: {
+        ...getEmailAccount(),
+        draftReplyConfidence: DraftReplyConfidence.ALL_EMAILS,
+      },
       isTest: false,
       modelType: "default" as any,
       logger,
@@ -393,8 +401,11 @@ describe("runRules draft attribution persistence", () => {
     expect(createSpy).toHaveBeenCalledTimes(1);
     const createdActions =
       createSpy.mock.calls[0]?.[0]?.data?.actionItems?.createMany?.data;
+    if (!Array.isArray(createdActions)) {
+      throw new Error("expected createMany data to be an array");
+    }
     expect(createdActions).toHaveLength(1);
-    expect(createdActions?.[0]).toEqual(
+    expect(createdActions[0]).toEqual(
       expect.objectContaining({
         type: ActionType.DRAFT_EMAIL,
         content: "Generated draft content",
@@ -820,7 +831,10 @@ describe("runRules - double draft prevention", () => {
       provider: {} as any,
       message,
       rules: [guestsRule, toReplyWithDraft],
-      emailAccount: getEmailAccount(),
+      emailAccount: {
+        ...getEmailAccount(),
+        draftReplyConfidence: DraftReplyConfidence.ALL_EMAILS,
+      },
       isTest: false,
       modelType: "actionable" as any,
       logger,

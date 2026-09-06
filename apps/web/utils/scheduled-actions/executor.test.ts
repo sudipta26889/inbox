@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ActionType, ScheduledActionStatus } from "@/generated/prisma/enums";
 import { executeScheduledAction } from "./executor";
+import { partialRow } from "@/__tests__/helpers";
+import type { ExecutedAction } from "@/generated/prisma/client";
 import prisma from "@/utils/__mocks__/prisma";
 import { createScopedLogger } from "@/utils/logger";
 
@@ -69,25 +71,27 @@ describe("executor", () => {
         ...mockScheduledAction,
         status: ScheduledActionStatus.COMPLETED,
       } as any);
-      prisma.executedAction.create.mockResolvedValue({
-        id: "executed-action-123",
-        type: ActionType.ARCHIVE,
-        label: null,
-        labelId: null,
-        folderName: null,
-        folderId: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        executedRuleId: "rule-123",
-        subject: null,
-        content: null,
-        to: null,
-        cc: null,
-        bcc: null,
-        url: null,
-        draftId: null,
-        wasDraftSent: null,
-      });
+      prisma.executedAction.create.mockResolvedValue(
+        partialRow<ExecutedAction>({
+          id: "executed-action-123",
+          type: ActionType.ARCHIVE,
+          label: null,
+          labelId: null,
+          folderName: null,
+          folderId: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          executedRuleId: "rule-123",
+          subject: null,
+          content: null,
+          to: null,
+          cc: null,
+          bcc: null,
+          url: null,
+          draftId: null,
+          wasDraftSent: null,
+        }),
+      );
       prisma.executedRule.findUnique.mockResolvedValue({
         id: "rule-123",
         createdAt: new Date(),
@@ -136,6 +140,7 @@ describe("executor", () => {
       const mockEmailProvider = await createEmailProvider({
         emailAccountId: "account-123",
         provider: "google",
+        logger,
       });
 
       const result = await executeScheduledAction(
@@ -160,25 +165,27 @@ describe("executor", () => {
         ...mockScheduledAction,
         status: ScheduledActionStatus.FAILED,
       } as any);
-      prisma.executedAction.create.mockResolvedValue({
-        id: "executed-action-123",
-        type: ActionType.ARCHIVE,
-        label: null,
-        labelId: null,
-        folderName: null,
-        folderId: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        executedRuleId: "rule-123",
-        subject: null,
-        content: null,
-        to: null,
-        cc: null,
-        bcc: null,
-        url: null,
-        draftId: null,
-        wasDraftSent: null,
-      });
+      prisma.executedAction.create.mockResolvedValue(
+        partialRow<ExecutedAction>({
+          id: "executed-action-123",
+          type: ActionType.ARCHIVE,
+          label: null,
+          labelId: null,
+          folderName: null,
+          folderId: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          executedRuleId: "rule-123",
+          subject: null,
+          content: null,
+          to: null,
+          cc: null,
+          bcc: null,
+          url: null,
+          draftId: null,
+          wasDraftSent: null,
+        }),
+      );
       prisma.executedRule.findUnique.mockResolvedValue({
         id: "rule-123",
         createdAt: new Date(),
@@ -215,6 +222,7 @@ describe("executor", () => {
       const mockEmailProvider = await createEmailProvider({
         emailAccountId: "account-123",
         provider: "google",
+        logger,
       });
 
       const result = await executeScheduledAction(
@@ -247,6 +255,7 @@ describe("executor", () => {
       const mockEmailProvider = await createEmailProvider({
         emailAccountId: "account-123",
         provider: "google",
+        logger,
       });
 
       await executeScheduledAction(

@@ -10,8 +10,8 @@ const { mockEnv, mockRunApprovalLoop, mockWasDenied, mockShouldRevise } =
     // deliberately false here: enforcement must not depend on it, because it
     // used to, and setting it false silently let every send through unapproved.
     mockEnv: {
-      DHARAHIL_BASE_URL: "https://gateway.test",
-      DHARAHIL_API_KEY: "key",
+      DHARAHIL_BASE_URL: "https://gateway.test" as string | undefined,
+      DHARAHIL_API_KEY: "key" as string | undefined,
       NEXT_PUBLIC_DHARAHIL_ENABLED: false,
     },
     mockRunApprovalLoop: vi.fn(),

@@ -1,7 +1,12 @@
 import { describe, expect, test, vi } from "vitest";
 import { aiChooseRule } from "@/utils/ai/choose-rule/ai-choose-rule";
 import { ActionType } from "@/generated/prisma/enums";
-import { getEmail, getEmailAccount, getRule } from "@/__tests__/helpers";
+import {
+  getAction,
+  getEmail,
+  getEmailAccount,
+  getRule,
+} from "@/__tests__/helpers";
 
 // pnpm test-ai ai-choose-rule
 
@@ -69,24 +74,12 @@ describe.runIf(isAiTest)("aiChooseRule", () => {
     const rule2 = getRule(
       "Match emails asking for a joke",
       [
-        {
+        getAction({
           id: "id",
-          createdAt: new Date(),
-          updatedAt: new Date(),
           type: ActionType.REPLY,
           ruleId: "ruleId",
-          label: null,
-          labelId: null,
-          subject: null,
           content: "{{Write a joke}}",
-          to: null,
-          cc: null,
-          bcc: null,
-          url: null,
-          folderName: null,
-          delayInMinutes: null,
-          folderId: null,
-        },
+        }),
       ],
       "Joke requests",
     );

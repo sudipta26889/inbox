@@ -83,10 +83,15 @@ describe("fetchUpcomingEvents", () => {
 });
 
 function createProvider(events: CalendarEvent[]): CalendarEventProvider {
+  // Only these two are called here; the rest of the provider surface is never
+  // exercised.
   return {
     fetchEvents: vi.fn().mockResolvedValue({ events, nextPageToken: null }),
     fetchEventsWithAttendee: vi.fn().mockResolvedValue([]),
-  };
+  } as Pick<
+    CalendarEventProvider,
+    "fetchEvents" | "fetchEventsWithAttendee"
+  > as CalendarEventProvider;
 }
 
 function createEvent(overrides: Partial<CalendarEvent>): CalendarEvent {

@@ -1,3 +1,4 @@
+import type { LanguageModelUsage } from "ai";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { redis } from "@/utils/redis";
 import {
@@ -18,12 +19,34 @@ vi.mock("@/utils/redis", () => ({
   },
 }));
 
+/**
+ * The SDK's usage type carries per-token detail objects that nothing here
+ * reads, so a test names only the counts its assertion depends on.
+ */
+function makeUsage(counts: Partial<LanguageModelUsage>): LanguageModelUsage {
+  return {
+    inputTokens: undefined,
+    outputTokens: undefined,
+    totalTokens: undefined,
+    inputTokenDetails: {
+      noCacheTokens: undefined,
+      cacheReadTokens: undefined,
+      cacheWriteTokens: undefined,
+    },
+    outputTokenDetails: {
+      textTokens: undefined,
+      reasoningTokens: undefined,
+    },
+    ...counts,
+  };
+}
+
 describe("redis usage weekly cost tracking", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(redis.scan).mockResolvedValue(["0", []]);
     vi.mocked(redis.hincrby).mockResolvedValue(1);
-    vi.mocked(redis.hincrbyfloat).mockResolvedValue(1);
+    vi.mocked(redis.hincrbyfloat).mockResolvedValue("1");
     vi.mocked(redis.expire).mockResolvedValue(1);
   });
 
@@ -96,11 +119,11 @@ describe("redis usage weekly cost tracking", () => {
 
     await saveUsage({
       email,
-      usage: {
+      usage: makeUsage({
         totalTokens: 300,
         inputTokens: 200,
         outputTokens: 100,
-      },
+      }),
       cost: 1.25,
       now,
     });
@@ -126,9 +149,9 @@ describe("redis usage weekly cost tracking", () => {
 
     await saveUsage({
       email: "user@example.com",
-      usage: {
+      usage: makeUsage({
         totalTokens: 100,
-      },
+      }),
       cost: 0,
       now,
     });

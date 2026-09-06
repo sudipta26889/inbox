@@ -38,9 +38,12 @@ vi.mock("@/utils/attachments/draft-attachments", () => ({
  */
 describe("runActionFunction — ActionType.CREATE_TASK", () => {
   const logger = createScopedLogger("test");
-  const email = {
+  const email: ParsedMessage = {
     id: "message-1",
     threadId: "thread-1",
+    historyId: "history-1",
+    subject: "Login broken",
+    date: "2026-01-01T12:00:00.000Z",
     headers: {
       from: "customer@example.com",
       to: "user@example.com",
@@ -52,8 +55,9 @@ describe("runActionFunction — ActionType.CREATE_TASK", () => {
     textHtml: "<p>I cannot log in to my account.</p>",
     snippet: "I cannot log in",
     attachments: [],
+    inline: [],
     internalDate: "1700000000000",
-  } as ParsedMessage;
+  };
 
   const createWorkItem = vi.spyOn(TaskpilotClient.prototype, "createWorkItem");
 

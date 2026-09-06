@@ -2,7 +2,15 @@ vi.mock("server-only", () => ({}));
 
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { partialRow } from "@/__tests__/helpers";
+import type { Prisma } from "@/generated/prisma/client";
 import prisma from "@/utils/__mocks__/prisma";
+
+// The route selects the account together with its user and emailAccount
+// relations, which the bare row type the prisma mock is typed against lacks.
+type AccountWithRelations = Prisma.AccountGetPayload<{
+  include: { user: true; emailAccount: true };
+}>;
 
 const {
   mockValidateOAuthCallback,
@@ -98,6 +106,7 @@ vi.mock("@/utils/outlook/scopes", () => ({
 import { GET } from "./route";
 
 describe("outlook linking callback route", () => {
+  const routeContext = { params: Promise.resolve({}) };
   const createRequest = (url: string, state = "valid-state") =>
     new NextRequest(url, {
       headers: {
@@ -141,6 +150,7 @@ describe("outlook linking callback route", () => {
 
     const response = await GET(
       createRequest("http://localhost:3000/api/outlook/linking/callback"),
+      routeContext,
     );
 
     const redirectLocation = response.headers.get("location");
@@ -157,6 +167,7 @@ describe("outlook linking callback route", () => {
       createRequest(
         "http://localhost:3000/api/outlook/linking/callback?error=access_denied&error_description=AADSTS65001&state=valid-state",
       ),
+      routeContext,
     );
 
     const redirectLocation = response.headers.get("location");
@@ -171,6 +182,7 @@ describe("outlook linking callback route", () => {
       createRequest(
         "http://localhost:3000/api/outlook/linking/callback?error=access_denied&error_description=AADSTS65004&state=valid-state",
       ),
+      routeContext,
     );
 
     const redirectLocation = response.headers.get("location");
@@ -185,6 +197,7 @@ describe("outlook linking callback route", () => {
       createRequest(
         "http://localhost:3000/api/outlook/linking/callback?error=access_denied&error_description=AADSTS65001&state=wrong-state",
       ),
+      routeContext,
     );
 
     const redirectLocation = response.headers.get("location");
@@ -193,13 +206,15 @@ describe("outlook linking callback route", () => {
   });
 
   it("allows successful reconnects when Microsoft omits scope from the token response", async () => {
-    prisma.account.findUnique.mockResolvedValue({
-      id: "account-123",
-      userId: "user-123",
-      refresh_token: "stored-refresh-token",
-      user: { name: "Test User", email: "user@example.com" },
-      emailAccount: { id: "email-account-123" },
-    } as Awaited<ReturnType<typeof prisma.account.findUnique>>);
+    prisma.account.findUnique.mockResolvedValue(
+      partialRow<AccountWithRelations>({
+        id: "account-123",
+        userId: "user-123",
+        refresh_token: "stored-refresh-token",
+        user: { name: "Test User", email: "user@example.com" },
+        emailAccount: { id: "email-account-123" },
+      }),
+    );
     mockHandleAccountLinking.mockResolvedValue({
       type: "update_tokens",
       existingAccountId: "account-123",
@@ -226,6 +241,7 @@ describe("outlook linking callback route", () => {
 
     const response = await GET(
       createRequest("http://localhost:3000/api/outlook/linking/callback"),
+      routeContext,
     );
 
     const redirectLocation = response.headers.get("location");
@@ -250,6 +266,7 @@ describe("outlook linking callback route", () => {
 
     const response = await GET(
       createRequest("http://localhost:3000/api/outlook/linking/callback"),
+      routeContext,
     );
 
     const redirectLocation = response.headers.get("location");
@@ -271,6 +288,7 @@ describe("outlook linking callback route", () => {
 
     const response = await GET(
       createRequest("http://localhost:3000/api/outlook/linking/callback"),
+      routeContext,
     );
 
     const redirectLocation = response.headers.get("location");

@@ -10,6 +10,7 @@ import { createScopedLogger } from "@/utils/logger";
 import { aiProcessAssistantChat } from "@/utils/ai/assistant/chat";
 import { isActivePremium } from "@/utils/premium";
 import { getUserPremium } from "@/utils/user/get";
+import { partialRow } from "@/__tests__/helpers";
 import type { getEmailAccount } from "@/__tests__/helpers";
 
 // pnpm test-ai eval/assistant-chat-settings-memory
@@ -133,23 +134,25 @@ describe.runIf(shouldRunEval)(
     beforeEach(() => {
       vi.clearAllMocks();
 
-      mockGetUserPremium.mockResolvedValue({});
+      mockGetUserPremium.mockResolvedValue(partialRow({}));
       mockIsActivePremium.mockReturnValue(true);
 
-      prisma.emailAccount.findUnique.mockResolvedValue(baseAccountSnapshot);
-      prisma.emailAccount.update.mockResolvedValue({});
+      prisma.emailAccount.findUnique.mockResolvedValue(
+        partialRow(baseAccountSnapshot),
+      );
+      prisma.emailAccount.update.mockResolvedValue(partialRow({}));
       prisma.automationJob.findUnique.mockResolvedValue(
-        baseAccountSnapshot.automationJob,
+        partialRow(baseAccountSnapshot.automationJob),
       );
       prisma.chatMemory.findMany.mockResolvedValue([
-        {
+        partialRow({
           content: "User likes batching newsletters in the afternoon.",
           createdAt: new Date("2026-03-15T08:00:00.000Z"),
-        },
+        }),
       ]);
       prisma.chatMemory.findFirst.mockResolvedValue(null);
-      prisma.chatMemory.create.mockResolvedValue({});
-      prisma.knowledge.upsert.mockResolvedValue({});
+      prisma.chatMemory.create.mockResolvedValue(partialRow({}));
+      prisma.knowledge.upsert.mockResolvedValue(partialRow({}));
     });
 
     describeEvalMatrix(

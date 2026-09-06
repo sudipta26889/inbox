@@ -703,7 +703,7 @@ describe("Models", () => {
         aiModel: null,
       };
 
-      vi.mocked(env).NANO_LLM_PROVIDER = Provider.OPEN_AI;
+      vi.mocked(env).NANO_LLM_PROVIDER = "openai";
       vi.mocked(env).NANO_LLM_MODEL = "gpt-5-nano";
 
       const result = getModel(userAi, "nano");
@@ -719,7 +719,7 @@ describe("Models", () => {
         aiModel: null,
       };
 
-      vi.mocked(env).NANO_LLM_PROVIDER = Provider.OPENROUTER;
+      vi.mocked(env).NANO_LLM_PROVIDER = "openrouter";
       vi.mocked(env).NANO_LLM_MODEL = "openai/gpt-5-nano";
       vi.mocked(env).ECONOMY_OPENROUTER_PROVIDERS = "Google Vertex,Anthropic";
       vi.mocked(env).OPENROUTER_API_KEY = "test-openrouter-key";

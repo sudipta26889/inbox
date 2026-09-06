@@ -28,13 +28,15 @@ describe("chat compaction thresholds", () => {
           },
           {
             type: "tool-call",
+            toolCallId: "call-1",
             toolName: "searchInbox",
             input: { query: "status" },
           },
           {
             type: "tool-result",
+            toolCallId: "call-1",
             toolName: "searchInbox",
-            result: { total: 2 },
+            output: { type: "json", value: { total: 2 } },
           },
         ],
       },
@@ -49,6 +51,51 @@ describe("chat compaction thresholds", () => {
           4,
       ),
     );
+  });
+
+  /**
+   * `output` is a tagged union and each arm carries its payload differently.
+   * Counting the wrapper instead of the value would fold the tag and provider
+   * options into the estimate; missing an arm would silently count zero, which
+   * is the bug this whole branch was fixed for.
+   */
+  it.each([
+    [
+      "text",
+      { type: "text" as const, value: "hello there" },
+      "hello there".length,
+    ],
+    [
+      "json",
+      { type: "json" as const, value: { a: 1 } },
+      JSON.stringify({ a: 1 }).length,
+    ],
+    [
+      "error-text",
+      { type: "error-text" as const, value: "boom" },
+      "boom".length,
+    ],
+    [
+      "execution-denied",
+      { type: "execution-denied" as const, reason: "nope" },
+      JSON.stringify({ type: "execution-denied", reason: "nope" }).length,
+    ],
+  ])("counts a %s tool output", (_name, output, expectedChars) => {
+    const messages: ModelMessage[] = [
+      {
+        role: "assistant",
+        content: [
+          {
+            type: "tool-result",
+            toolCallId: "call-1",
+            toolName: "searchInbox",
+            output,
+          },
+        ],
+      },
+    ];
+
+    expect(estimateTokens(messages)).toBe(Math.ceil(expectedChars / 4));
   });
 
   it("uses a single threshold for all providers", () => {

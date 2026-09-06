@@ -4,39 +4,17 @@ import {
   filterIncompleteDraftActions,
 } from "./choose-args";
 import { ActionType } from "@/generated/prisma/enums";
-import type { Action } from "@/generated/prisma/client";
 import type { DraftAttribution } from "@/utils/ai/reply/draft-attribution";
+import { getAction } from "@/__tests__/helpers";
 
 vi.mock("server-only", () => ({}));
-
-// Helper function to create a mock Action object
-function createMockAction(overrides: Partial<Action> = {}): Action {
-  return {
-    id: "test-action-id",
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    type: ActionType.DRAFT_EMAIL,
-    ruleId: "test-rule-id",
-    to: null,
-    subject: null,
-    label: null,
-    content: null,
-    cc: null,
-    bcc: null,
-    url: null,
-    folderName: null,
-    folderId: null,
-    delayInMinutes: null,
-    ...overrides,
-  };
-}
 
 describe("combineActionsWithAiArgs", () => {
   describe("DRAFT_EMAIL action with template content", () => {
     it("should replace template variables in content when AI args are provided", () => {
       // This test ensures template variables are replaced with AI-generated content
       const actions = [
-        createMockAction({
+        getAction({
           id: "1",
           type: ActionType.DRAFT_EMAIL,
           content: "Dear {{greeting}},\n\n{{draft response}}\n\nBest regards",
@@ -62,7 +40,7 @@ describe("combineActionsWithAiArgs", () => {
 
     it("stores attribution for template-generated draft content", () => {
       const actions = [
-        createMockAction({
+        getAction({
           id: "draft-template-1",
           type: ActionType.DRAFT_EMAIL,
           content: "Hello {{name}},\n\n{{reply}}",
@@ -102,7 +80,7 @@ describe("combineActionsWithAiArgs", () => {
     it("should handle DRAFT_EMAIL action without content (full draft generation)", () => {
       // This test shows the working case where no template exists
       const actions = [
-        createMockAction({
+        getAction({
           id: "2",
           type: ActionType.DRAFT_EMAIL,
           content: null,
@@ -120,7 +98,7 @@ describe("combineActionsWithAiArgs", () => {
     it("should not skip content field processing when draft exists but action has template", () => {
       // This test ensures that templates with variables are processed even when a draft exists
       const actions = [
-        createMockAction({
+        getAction({
           id: "3",
           type: ActionType.DRAFT_EMAIL,
           content: "Hello {{name}}, {{message}}",
@@ -156,7 +134,7 @@ describe("combineActionsWithAiArgs", () => {
   describe("Other action types with templates", () => {
     it("should process template variables in labels", () => {
       const actions = [
-        createMockAction({
+        getAction({
           id: "4",
           type: ActionType.LABEL,
           content: null,
@@ -182,12 +160,12 @@ describe("combineActionsWithAiArgs", () => {
 describe("filterIncompleteDraftActions", () => {
   it("removes draft actions that have no content", () => {
     const result = filterIncompleteDraftActions([
-      createMockAction({
+      getAction({
         id: "draft-empty",
         type: ActionType.DRAFT_EMAIL,
         content: null,
       }),
-      createMockAction({
+      getAction({
         id: "label-1",
         type: ActionType.LABEL,
         label: "Important",
@@ -200,7 +178,7 @@ describe("filterIncompleteDraftActions", () => {
 
   it("keeps draft actions when content exists", () => {
     const result = filterIncompleteDraftActions([
-      createMockAction({
+      getAction({
         id: "draft-filled",
         type: ActionType.DRAFT_EMAIL,
         content: "Thanks for reaching out.",

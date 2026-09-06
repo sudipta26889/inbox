@@ -1,3 +1,4 @@
+import type { LookupAddress, LookupAllOptions } from "node:dns";
 import * as dns from "node:dns/promises";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -8,6 +9,12 @@ import {
 vi.mock("node:dns/promises", () => ({
   lookup: vi.fn(),
 }));
+
+// `lookup` is overloaded; the code under test always calls the `all: true`
+// form, which resolves to a list of addresses.
+const mockLookup = vi.mocked<
+  (hostname: string, options: LookupAllOptions) => Promise<LookupAddress[]>
+>(dns.lookup);
 
 describe("isSafeExternalHttpUrl", () => {
   beforeEach(() => {
@@ -53,9 +60,7 @@ describe("isSafeExternalHttpUrl", () => {
   });
 
   it("rejects hostnames that resolve to private IP addresses", async () => {
-    vi.mocked(dns.lookup).mockResolvedValue([
-      { address: "10.0.0.8", family: 4 },
-    ] as Awaited<ReturnType<typeof dns.lookup>>);
+    mockLookup.mockResolvedValue([{ address: "10.0.0.8", family: 4 }]);
 
     await expect(
       resolveSafeExternalHttpUrl("https://news.example.com/unsubscribe"),
@@ -63,9 +68,7 @@ describe("isSafeExternalHttpUrl", () => {
   });
 
   it("rejects hostnames that resolve to private IPv6 addresses", async () => {
-    vi.mocked(dns.lookup).mockResolvedValue([
-      { address: "fd00::8", family: 6 },
-    ] as Awaited<ReturnType<typeof dns.lookup>>);
+    mockLookup.mockResolvedValue([{ address: "fd00::8", family: 6 }]);
 
     await expect(
       resolveSafeExternalHttpUrl("https://news.example.com/unsubscribe"),
@@ -76,7 +79,7 @@ describe("isSafeExternalHttpUrl", () => {
     const error = Object.assign(new Error("temporary failure"), {
       code: "EAI_AGAIN",
     });
-    vi.mocked(dns.lookup).mockRejectedValue(error);
+    mockLookup.mockRejectedValue(error);
 
     await expect(
       resolveSafeExternalHttpUrl("https://news.example.com/unsubscribe"),
@@ -86,9 +89,7 @@ describe("isSafeExternalHttpUrl", () => {
   });
 
   it("returns a pinned DNS lookup for public hostnames", async () => {
-    vi.mocked(dns.lookup).mockResolvedValue([
-      { address: "93.184.216.34", family: 4 },
-    ] as Awaited<ReturnType<typeof dns.lookup>>);
+    mockLookup.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
 
     const resolved = await resolveSafeExternalHttpUrl(
       "https://news.example.com/unsubscribe",
@@ -107,7 +108,7 @@ describe("isSafeExternalHttpUrl", () => {
           { all: false, family: 0, hints: 0 },
           (error, address, family) => {
             if (error) return reject(error);
-            if (!address || !family) {
+            if (typeof address !== "string" || !address || !family) {
               return reject(new Error("Expected a resolved address"));
             }
             resolve({ address, family });

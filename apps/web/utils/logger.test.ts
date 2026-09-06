@@ -21,8 +21,8 @@ const { mockedEnv } = vi.hoisted(() => ({
       setThrowOnAxiomTokenAccess(value: boolean) {
         throwOnAxiomTokenAccess = value;
       },
-      NEXT_PUBLIC_AXIOM_TOKEN: undefined,
-      NEXT_PUBLIC_LOG_SCOPES: undefined,
+      NEXT_PUBLIC_AXIOM_TOKEN: undefined as string | undefined,
+      NEXT_PUBLIC_LOG_SCOPES: undefined as string | undefined,
       ENABLE_DEBUG_LOGS: false,
     };
   })(),

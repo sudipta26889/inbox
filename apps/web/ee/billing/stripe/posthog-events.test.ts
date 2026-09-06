@@ -94,7 +94,7 @@ describe("getStripeTrialStartedProperties - subscription.updated guards", () => 
         },
         previous_attributes: {
           // status not changed in this update
-          current_period_end: 1_700_000_000,
+          cancel_at_period_end: true,
         },
       },
     });
@@ -103,24 +103,36 @@ describe("getStripeTrialStartedProperties - subscription.updated guards", () => 
   });
 });
 
-function subscriptionEvent(overrides: Partial<Stripe.Event>): Stripe.Event {
+type SubscriptionEventOverrides = {
+  type:
+    | Stripe.CustomerSubscriptionCreatedEvent["type"]
+    | Stripe.CustomerSubscriptionUpdatedEvent["type"];
+  data: {
+    object: Partial<Stripe.Subscription>;
+    previous_attributes?: Partial<Stripe.Subscription>;
+  };
+};
+
+function subscriptionEvent(
+  overrides: SubscriptionEventOverrides,
+): Stripe.Event {
   return {
     id: "evt_test",
-    type: "customer.subscription.created",
     object: "event",
     api_version: "2025-03-31.basil",
     created: 1,
     livemode: false,
     pending_webhooks: 0,
     request: { id: null, idempotency_key: null },
+    ...overrides,
     data: {
       object: {
         id: "sub_test",
         status: "incomplete",
         trial_end: null,
+        ...overrides.data.object,
       },
-      previous_attributes: {},
+      previous_attributes: overrides.data.previous_attributes ?? {},
     },
-    ...overrides,
   } as Stripe.Event;
 }

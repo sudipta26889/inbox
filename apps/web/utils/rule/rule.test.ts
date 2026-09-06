@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { partialRow } from "@/__tests__/helpers";
+import type { Rule } from "@/generated/prisma/client";
 import prisma from "@/utils/__mocks__/prisma";
 
 vi.mock("@/utils/prisma");
@@ -51,7 +53,7 @@ describe("deleteRule", () => {
 
   it("falls back to deleting the rule when the group is already gone", async () => {
     prisma.group.deleteMany.mockResolvedValue({ count: 0 });
-    prisma.rule.delete.mockResolvedValue({ id: "rule-id" });
+    prisma.rule.delete.mockResolvedValue(partialRow<Rule>({ id: "rule-id" }));
 
     await deleteRule({
       emailAccountId: "email-account-id",
@@ -68,7 +70,7 @@ describe("deleteRule", () => {
   });
 
   it("deletes the rule directly when there is no group", async () => {
-    prisma.rule.delete.mockResolvedValue({ id: "rule-id" });
+    prisma.rule.delete.mockResolvedValue(partialRow<Rule>({ id: "rule-id" }));
 
     await deleteRule({
       emailAccountId: "email-account-id",

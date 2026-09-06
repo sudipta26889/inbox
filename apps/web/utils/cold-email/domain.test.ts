@@ -4,6 +4,7 @@ import {
   GroupItemType,
   SystemType,
 } from "@/generated/prisma/enums";
+import type { Prisma } from "@/generated/prisma/client";
 import prisma from "@/utils/__mocks__/prisma";
 import {
   getColdEmailSettings,
@@ -36,27 +37,28 @@ describe("getColdEmailSettings", () => {
   });
 
   it("returns enabled + prompt + mode when rule exists with ARCHIVE+LABEL", async () => {
-    prisma.rule.findUnique.mockImplementation((args: never) => {
-      const a = args as { where?: { id?: string } };
-      // Second call: re-fetch for instructions
-      if (a.where?.id === "rule_1") {
+    prisma.rule.findUnique.mockImplementation(
+      (args: Prisma.RuleFindUniqueArgs) => {
+        // Second call: re-fetch for instructions
+        if (args.where.id === "rule_1") {
+          return Promise.resolve({
+            id: "rule_1",
+            instructions: "Block recruiters",
+          } as never) as never;
+        }
+        // First call: by emailAccountId + systemType
         return Promise.resolve({
           id: "rule_1",
+          enabled: true,
           instructions: "Block recruiters",
+          groupId: null,
+          actions: [
+            { type: ActionType.LABEL, label: "Cold Emails", labelId: null },
+            { type: ActionType.ARCHIVE, label: null, labelId: null },
+          ],
         } as never) as never;
-      }
-      // First call: by emailAccountId + systemType
-      return Promise.resolve({
-        id: "rule_1",
-        enabled: true,
-        instructions: "Block recruiters",
-        groupId: null,
-        actions: [
-          { type: ActionType.LABEL, label: "Cold Emails", labelId: null },
-          { type: ActionType.ARCHIVE, label: null, labelId: null },
-        ],
-      } as never) as never;
-    });
+      },
+    );
 
     const result = await getColdEmailSettings(ctx);
 
@@ -68,24 +70,25 @@ describe("getColdEmailSettings", () => {
   });
 
   it("returns LABEL mode when only LABEL action present", async () => {
-    prisma.rule.findUnique.mockImplementation((args: never) => {
-      const a = args as { where?: { id?: string } };
-      if (a.where?.id === "rule_2") {
+    prisma.rule.findUnique.mockImplementation(
+      (args: Prisma.RuleFindUniqueArgs) => {
+        if (args.where.id === "rule_2") {
+          return Promise.resolve({
+            id: "rule_2",
+            instructions: "Tag cold",
+          } as never) as never;
+        }
         return Promise.resolve({
           id: "rule_2",
+          enabled: true,
           instructions: "Tag cold",
+          groupId: null,
+          actions: [
+            { type: ActionType.LABEL, label: "Cold Emails", labelId: null },
+          ],
         } as never) as never;
-      }
-      return Promise.resolve({
-        id: "rule_2",
-        enabled: true,
-        instructions: "Tag cold",
-        groupId: null,
-        actions: [
-          { type: ActionType.LABEL, label: "Cold Emails", labelId: null },
-        ],
-      } as never) as never;
-    });
+      },
+    );
 
     const result = await getColdEmailSettings(ctx);
 
@@ -93,26 +96,27 @@ describe("getColdEmailSettings", () => {
   });
 
   it("returns ARCHIVE_AND_READ_AND_LABEL with all three actions", async () => {
-    prisma.rule.findUnique.mockImplementation((args: never) => {
-      const a = args as { where?: { id?: string } };
-      if (a.where?.id === "rule_3") {
+    prisma.rule.findUnique.mockImplementation(
+      (args: Prisma.RuleFindUniqueArgs) => {
+        if (args.where.id === "rule_3") {
+          return Promise.resolve({
+            id: "rule_3",
+            instructions: null,
+          } as never) as never;
+        }
         return Promise.resolve({
           id: "rule_3",
+          enabled: true,
           instructions: null,
+          groupId: null,
+          actions: [
+            { type: ActionType.LABEL, label: "Cold Emails", labelId: null },
+            { type: ActionType.ARCHIVE, label: null, labelId: null },
+            { type: ActionType.MARK_READ, label: null, labelId: null },
+          ],
         } as never) as never;
-      }
-      return Promise.resolve({
-        id: "rule_3",
-        enabled: true,
-        instructions: null,
-        groupId: null,
-        actions: [
-          { type: ActionType.LABEL, label: "Cold Emails", labelId: null },
-          { type: ActionType.ARCHIVE, label: null, labelId: null },
-          { type: ActionType.MARK_READ, label: null, labelId: null },
-        ],
-      } as never) as never;
-    });
+      },
+    );
 
     const result = await getColdEmailSettings(ctx);
 
@@ -126,32 +130,33 @@ describe("updateColdEmailSettings", () => {
     // Second call (in getColdEmailSettings): rule lookup after creation
     // Third call (in getColdEmailSettings): re-fetch instructions
     let lookupCount = 0;
-    prisma.rule.findUnique.mockImplementation((args: never) => {
-      lookupCount++;
-      const a = args as { where?: { id?: string } };
-      // Detail re-fetch
-      if (a.where?.id === "rule_new") {
+    prisma.rule.findUnique.mockImplementation(
+      (args: Prisma.RuleFindUniqueArgs) => {
+        lookupCount++;
+        // Detail re-fetch
+        if (args.where.id === "rule_new") {
+          return Promise.resolve({
+            id: "rule_new",
+            instructions: "Block all sales pitches",
+          } as never) as never;
+        }
+        if (lookupCount === 1) {
+          // First lookup before creation
+          return Promise.resolve(null as never) as never;
+        }
+        // After create: cold email rule exists
         return Promise.resolve({
           id: "rule_new",
+          enabled: true,
           instructions: "Block all sales pitches",
+          groupId: null,
+          actions: [
+            { type: ActionType.LABEL, label: "Cold Emails", labelId: null },
+            { type: ActionType.ARCHIVE, label: null, labelId: null },
+          ],
         } as never) as never;
-      }
-      if (lookupCount === 1) {
-        // First lookup before creation
-        return Promise.resolve(null as never) as never;
-      }
-      // After create: cold email rule exists
-      return Promise.resolve({
-        id: "rule_new",
-        enabled: true,
-        instructions: "Block all sales pitches",
-        groupId: null,
-        actions: [
-          { type: ActionType.LABEL, label: "Cold Emails", labelId: null },
-          { type: ActionType.ARCHIVE, label: null, labelId: null },
-        ],
-      } as never) as never;
-    });
+      },
+    );
     prisma.rule.create.mockResolvedValue({ id: "rule_new" } as never);
     prisma.action.deleteMany.mockResolvedValue({ count: 0 } as never);
     prisma.action.createMany.mockResolvedValue({ count: 2 } as never);
@@ -190,24 +195,25 @@ describe("updateColdEmailSettings", () => {
 
   it("updates prompt without changing mode when only prompt provided", async () => {
     // Existing rule lookup + post-update get re-fetches
-    prisma.rule.findUnique.mockImplementation((args: never) => {
-      const a = args as { where?: { id?: string } };
-      if (a.where?.id === "rule_existing") {
+    prisma.rule.findUnique.mockImplementation(
+      (args: Prisma.RuleFindUniqueArgs) => {
+        if (args.where.id === "rule_existing") {
+          return Promise.resolve({
+            id: "rule_existing",
+            instructions: "updated",
+          } as never) as never;
+        }
         return Promise.resolve({
           id: "rule_existing",
+          enabled: true,
           instructions: "updated",
+          groupId: null,
+          actions: [
+            { type: ActionType.LABEL, label: "Cold Emails", labelId: null },
+          ],
         } as never) as never;
-      }
-      return Promise.resolve({
-        id: "rule_existing",
-        enabled: true,
-        instructions: "updated",
-        groupId: null,
-        actions: [
-          { type: ActionType.LABEL, label: "Cold Emails", labelId: null },
-        ],
-      } as never) as never;
-    });
+      },
+    );
     prisma.rule.update.mockResolvedValue({ id: "rule_existing" } as never);
 
     const result = await updateColdEmailSettings(ctx, { prompt: "updated" });
@@ -225,26 +231,27 @@ describe("updateColdEmailSettings", () => {
   });
 
   it("disables existing rule when enabled=false", async () => {
-    prisma.rule.findUnique.mockImplementation((args: never) => {
-      const a = args as { where?: { id?: string } };
-      if (a.where?.id === "rule_existing") {
+    prisma.rule.findUnique.mockImplementation(
+      (args: Prisma.RuleFindUniqueArgs) => {
+        if (args.where.id === "rule_existing") {
+          return Promise.resolve({
+            id: "rule_existing",
+            instructions: "p",
+          } as never) as never;
+        }
+        // Used inside getColdEmailSettings (current) and updateColdEmailSettings
+        // After disable, rule.enabled = false -> mode=DISABLED.
         return Promise.resolve({
           id: "rule_existing",
+          enabled: false,
           instructions: "p",
+          groupId: null,
+          actions: [
+            { type: ActionType.LABEL, label: "Cold Emails", labelId: null },
+          ],
         } as never) as never;
-      }
-      // Used inside getColdEmailSettings (current) and updateColdEmailSettings
-      // After disable, rule.enabled = false -> mode=DISABLED.
-      return Promise.resolve({
-        id: "rule_existing",
-        enabled: false,
-        instructions: "p",
-        groupId: null,
-        actions: [
-          { type: ActionType.LABEL, label: "Cold Emails", labelId: null },
-        ],
-      } as never) as never;
-    });
+      },
+    );
     prisma.rule.update.mockResolvedValue({ id: "rule_existing" } as never);
 
     const result = await updateColdEmailSettings(ctx, { enabled: false });
@@ -254,26 +261,27 @@ describe("updateColdEmailSettings", () => {
   });
 
   it("switches mode rewrites the action set", async () => {
-    prisma.rule.findUnique.mockImplementation((args: never) => {
-      const a = args as { where?: { id?: string } };
-      if (a.where?.id === "rule_existing") {
+    prisma.rule.findUnique.mockImplementation(
+      (args: Prisma.RuleFindUniqueArgs) => {
+        if (args.where.id === "rule_existing") {
+          return Promise.resolve({
+            id: "rule_existing",
+            instructions: null,
+          } as never) as never;
+        }
         return Promise.resolve({
           id: "rule_existing",
+          enabled: true,
           instructions: null,
+          groupId: null,
+          actions: [
+            { type: ActionType.LABEL, label: "Cold Emails", labelId: null },
+            { type: ActionType.ARCHIVE, label: null, labelId: null },
+            { type: ActionType.MARK_READ, label: null, labelId: null },
+          ],
         } as never) as never;
-      }
-      return Promise.resolve({
-        id: "rule_existing",
-        enabled: true,
-        instructions: null,
-        groupId: null,
-        actions: [
-          { type: ActionType.LABEL, label: "Cold Emails", labelId: null },
-          { type: ActionType.ARCHIVE, label: null, labelId: null },
-          { type: ActionType.MARK_READ, label: null, labelId: null },
-        ],
-      } as never) as never;
-    });
+      },
+    );
     prisma.rule.update.mockResolvedValue({ id: "rule_existing" } as never);
     prisma.action.deleteMany.mockResolvedValue({ count: 1 } as never);
     prisma.action.createMany.mockResolvedValue({ count: 3 } as never);

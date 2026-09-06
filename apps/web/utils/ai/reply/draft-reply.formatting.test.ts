@@ -5,10 +5,14 @@ import {
   aiDraftReplyWithConfidence,
 } from "@/utils/ai/reply/draft-reply";
 import { DraftReplyConfidence } from "@/generated/prisma/enums";
+import type { createGenerateObject } from "@/utils/llms/index";
 
 const { mockCreateGenerateObject, mockGenerateObject } = vi.hoisted(() => {
   const mockGenerateObject = vi.fn();
-  const mockCreateGenerateObject = vi.fn(() => mockGenerateObject);
+  const mockCreateGenerateObject = vi.fn(
+    (_options: Parameters<typeof createGenerateObject>[0]) =>
+      mockGenerateObject,
+  );
   return { mockCreateGenerateObject, mockGenerateObject };
 });
 
