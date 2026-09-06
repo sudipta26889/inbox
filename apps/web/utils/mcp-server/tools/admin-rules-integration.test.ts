@@ -1,6 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { expectMcpData } from "@/__tests__/helpers";
+import { expectMcpData, partialRow } from "@/__tests__/helpers";
+import type { Prisma, Rule } from "@/generated/prisma/client";
+import { ActionType } from "@/generated/prisma/enums";
 import prisma from "@/utils/__mocks__/prisma";
+
+// The tools read rules back with their relations, which the bare row type the
+// prisma mock is typed against does not carry.
+type RuleWithRelations = Prisma.RuleGetPayload<{
+  include: { actions: true; group: true };
+}>;
+type EmailAccountWithAccount = Prisma.EmailAccountGetPayload<{
+  include: { account: true };
+}>;
 
 vi.mock("@/utils/prisma");
 vi.mock("@/utils/rule/rule-history", () => ({
@@ -60,7 +71,7 @@ const createdRule = {
   instructions: "filter newsletters",
   createdAt: new Date("2026-03-01"),
   updatedAt: new Date("2026-03-01"),
-  actions: [{ id: "a_1", type: "LABEL", label: "test-label" }],
+  actions: [{ id: "a_1", type: ActionType.LABEL, label: "test-label" }],
   group: null,
   groupId: null,
 };
@@ -68,9 +79,11 @@ const createdRule = {
 describe("admin_rules_* end-to-end", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    prisma.emailAccount.findUnique.mockResolvedValue({
-      account: { provider: "google" },
-    });
+    prisma.emailAccount.findUnique.mockResolvedValue(
+      partialRow<EmailAccountWithAccount>({
+        account: { provider: "google" },
+      }),
+    );
   });
 
   it("lists empty → creates → updates → toggles → previews delete → confirms delete", async () => {
@@ -81,7 +94,9 @@ describe("admin_rules_* end-to-end", () => {
     expect((listedData as any).count).toBe(0);
 
     // 2. create
-    prisma.rule.create.mockResolvedValueOnce(createdRule);
+    prisma.rule.create.mockResolvedValueOnce(
+      partialRow<RuleWithRelations>(createdRule),
+    );
     const created = await adminRulesCreate(ctx, {
       name: "Newsletters",
       runOnThreads: false,
@@ -94,14 +109,18 @@ describe("admin_rules_* end-to-end", () => {
     expect((createdData as any).rule.id).toBe("r_created");
 
     // 3. update
-    prisma.rule.findFirst.mockResolvedValueOnce({
-      id: "r_created",
-      emailAccountId: "ea_1",
-    });
-    prisma.rule.update.mockResolvedValueOnce({
-      ...createdRule,
-      name: "Newsletters (renamed)",
-    });
+    prisma.rule.findFirst.mockResolvedValueOnce(
+      partialRow<Rule>({
+        id: "r_created",
+        emailAccountId: "ea_1",
+      }),
+    );
+    prisma.rule.update.mockResolvedValueOnce(
+      partialRow<RuleWithRelations>({
+        ...createdRule,
+        name: "Newsletters (renamed)",
+      }),
+    );
     const updated = await adminRulesUpdate(ctx, {
       id: "r_created",
       name: "Newsletters (renamed)",
@@ -115,11 +134,15 @@ describe("admin_rules_* end-to-end", () => {
     expect((updatedData as any).rule.name).toBe("Newsletters (renamed)");
 
     // 4. set_enabled false
-    prisma.rule.findFirst.mockResolvedValueOnce({ id: "r_created" });
-    prisma.rule.update.mockResolvedValueOnce({
-      ...createdRule,
-      enabled: false,
-    });
+    prisma.rule.findFirst.mockResolvedValueOnce(
+      partialRow<Rule>({ id: "r_created" }),
+    );
+    prisma.rule.update.mockResolvedValueOnce(
+      partialRow<RuleWithRelations>({
+        ...createdRule,
+        enabled: false,
+      }),
+    );
     const toggled = await adminRulesSetEnabled(ctx, {
       ruleId: "r_created",
       enabled: false,
@@ -128,12 +151,14 @@ describe("admin_rules_* end-to-end", () => {
     expect((toggledData as any).rule.enabled).toBe(false);
 
     // 5. delete dry-run
-    prisma.rule.findFirst.mockResolvedValueOnce({
-      id: "r_created",
-      name: "Newsletters (renamed)",
-      groupId: null,
-      actions: [{ id: "a_1" }],
-    });
+    prisma.rule.findFirst.mockResolvedValueOnce(
+      partialRow<RuleWithRelations>({
+        id: "r_created",
+        name: "Newsletters (renamed)",
+        groupId: null,
+        actions: [{ id: "a_1" }],
+      }),
+    );
     const previewDelete = await adminRulesDelete(ctx, { id: "r_created" });
     expect(previewDelete).toEqual({
       ok: true,
@@ -151,15 +176,24 @@ describe("admin_rules_* end-to-end", () => {
     expect(prisma.rule.delete).not.toHaveBeenCalled();
 
     // 6. delete confirmed
-    prisma.rule.findFirst.mockResolvedValueOnce({
-      id: "r_created",
-      groupId: null,
-    });
-    prisma.rule.delete.mockResolvedValueOnce({ id: "r_created" });
+    prisma.rule.findFirst.mockResolvedValueOnce(
+      partialRow<Rule>({
+        id: "r_created",
+        groupId: null,
+      }),
+    );
+    prisma.rule.delete.mockResolvedValueOnce(
+      partialRow<Rule>({ id: "r_created" }),
+    );
     const confirmedDelete = await adminRulesDelete(ctx, {
       id: "r_created",
       confirm: true,
     });
+    if (!confirmedDelete.ok) {
+      throw new Error(
+        `Expected a successful delete, got ${confirmedDelete.error.code}`,
+      );
+    }
     const confirmedDeleteData = expectMcpData(confirmedDelete);
     expect(confirmedDelete.dryRun).toBe(false);
     expect((confirmedDeleteData as any).id).toBe("r_created");

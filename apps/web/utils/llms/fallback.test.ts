@@ -58,6 +58,21 @@ vi.mock("./retry", async () => {
   };
 });
 
+/**
+ * The fallback chain never calls the model: it passes it to generateText and
+ * compares it by identity, so an interface-shaped stub is enough.
+ */
+function mockModel(modelId: string): SelectModel["model"] {
+  return {
+    specificationVersion: "v3",
+    provider: "test-provider",
+    modelId,
+    supportedUrls: {},
+    doGenerate: vi.fn(),
+    doStream: vi.fn(),
+  };
+}
+
 describe("createGenerateText fallback chain", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -81,19 +96,19 @@ describe("createGenerateText fallback chain", () => {
   });
 
   it("falls back to the next provider on retryable provider failures", async () => {
-    const primaryModel = { id: "primary-model" };
-    const fallbackModel = { id: "fallback-model" };
+    const primaryModel = mockModel("primary-model");
+    const fallbackModel = mockModel("fallback-model");
 
     const modelOptions: SelectModel = {
       provider: "bedrock",
       modelName: "primary",
-      model: primaryModel as SelectModel["model"],
+      model: primaryModel,
       providerOptions: undefined,
       fallbackModels: [
         {
           provider: "openrouter",
           modelName: "fallback",
-          model: fallbackModel as SelectModel["model"],
+          model: fallbackModel,
           providerOptions: undefined,
         },
       ],
@@ -127,7 +142,7 @@ describe("createGenerateText fallback chain", () => {
 
     const result = await generateText({
       prompt: "hello",
-      model: primaryModel as SelectModel["model"],
+      model: primaryModel,
     });
 
     expect(result.text).toBe("fallback success");
@@ -143,11 +158,11 @@ describe("createGenerateText fallback chain", () => {
   });
 
   it("reports the actual provider and model used for text generation", async () => {
-    const model = { id: "openai-model" };
+    const model = mockModel("openai-model");
     const modelOptions: SelectModel = {
       provider: "openai",
       modelName: "gpt-5-mini",
-      model: model as SelectModel["model"],
+      model: model,
       providerOptions: undefined,
       fallbackModels: [],
       hasUserApiKey: false,
@@ -173,7 +188,7 @@ describe("createGenerateText fallback chain", () => {
 
     await generateText({
       prompt: "hello",
-      model: model as SelectModel["model"],
+      model: model,
     });
 
     expect(onModelUsed).toHaveBeenCalledWith({
@@ -183,11 +198,11 @@ describe("createGenerateText fallback chain", () => {
   });
 
   it("sets openrouter user from internal user id", async () => {
-    const model = { id: "openrouter-model" };
+    const model = mockModel("openrouter-model");
     const modelOptions: SelectModel = {
       provider: "openrouter",
       modelName: "openrouter-primary",
-      model: model as SelectModel["model"],
+      model: model,
       providerOptions: {
         openrouter: {
           provider: {
@@ -217,7 +232,7 @@ describe("createGenerateText fallback chain", () => {
 
     await generateText({
       prompt: "hello",
-      model: model as SelectModel["model"],
+      model: model,
     });
 
     expect(mockGenerateText).toHaveBeenCalledTimes(1);
@@ -238,11 +253,11 @@ describe("createGenerateText fallback chain", () => {
   });
 
   it("keeps explicit openrouter user and trace when request provides them", async () => {
-    const model = { id: "openrouter-model" };
+    const model = mockModel("openrouter-model");
     const modelOptions: SelectModel = {
       provider: "openrouter",
       modelName: "openrouter-primary",
-      model: model as SelectModel["model"],
+      model: model,
       providerOptions: undefined,
       fallbackModels: [],
       hasUserApiKey: false,
@@ -266,7 +281,7 @@ describe("createGenerateText fallback chain", () => {
 
     await generateText({
       prompt: "hello",
-      model: model as SelectModel["model"],
+      model: model,
       providerOptions: {
         openrouter: {
           user: "explicit-user-id",
@@ -290,12 +305,12 @@ describe("createGenerateText fallback chain", () => {
   });
 
   it("adds direct PostHog tracing with privacy mode", async () => {
-    const model = { id: "openai-model" };
-    const tracedModel = { id: "posthog-traced-model" };
+    const model = mockModel("openai-model");
+    const tracedModel = mockModel("posthog-traced-model");
     const modelOptions: SelectModel = {
       provider: "openai",
       modelName: "gpt-5-mini",
-      model: model as SelectModel["model"],
+      model: model,
       providerOptions: undefined,
       fallbackModels: [],
       hasUserApiKey: false,
@@ -320,7 +335,7 @@ describe("createGenerateText fallback chain", () => {
 
     await generateText({
       prompt: "sensitive prompt",
-      model: model as SelectModel["model"],
+      model: model,
     });
 
     expect(mockWithTracing).toHaveBeenCalledTimes(1);
@@ -348,12 +363,12 @@ describe("createGenerateText fallback chain", () => {
   });
 
   it("disables privacy mode for approved local eval accounts", async () => {
-    const model = { id: "openai-model" };
-    const tracedModel = { id: "posthog-traced-model" };
+    const model = mockModel("openai-model");
+    const tracedModel = mockModel("posthog-traced-model");
     const modelOptions: SelectModel = {
       provider: "openai",
       modelName: "gpt-5-mini",
-      model: model as SelectModel["model"],
+      model: model,
       providerOptions: undefined,
       fallbackModels: [],
       hasUserApiKey: false,
@@ -379,7 +394,7 @@ describe("createGenerateText fallback chain", () => {
 
     await generateText({
       prompt: "sensitive prompt",
-      model: model as SelectModel["model"],
+      model: model,
     });
 
     expect(mockWithTracing).toHaveBeenCalledWith(
@@ -404,11 +419,11 @@ describe("createGenerateText fallback chain", () => {
   });
 
   it("skips direct PostHog tracing when client is unavailable", async () => {
-    const model = { id: "openai-model" };
+    const model = mockModel("openai-model");
     const modelOptions: SelectModel = {
       provider: "openai",
       modelName: "gpt-5-mini",
-      model: model as SelectModel["model"],
+      model: model,
       providerOptions: undefined,
       fallbackModels: [],
       hasUserApiKey: false,
@@ -433,7 +448,7 @@ describe("createGenerateText fallback chain", () => {
 
     await generateText({
       prompt: "hello",
-      model: model as SelectModel["model"],
+      model: model,
     });
 
     expect(mockWithTracing).not.toHaveBeenCalled();

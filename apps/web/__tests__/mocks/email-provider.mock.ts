@@ -1,12 +1,16 @@
 import { vi } from "vitest";
 import type { EmailProvider } from "@/utils/email/types";
-import type { ParsedMessage } from "@/utils/types";
+import type { ParsedMessage, ParsedMessageHeaders } from "@/utils/types";
 
 /**
  * Creates a mock ParsedMessage for testing
  */
 export function getMockParsedMessage(
-  overrides: Partial<ParsedMessage> = {},
+  // Headers are merged over the defaults below, so a test only names the ones
+  // it cares about.
+  overrides: Partial<Omit<ParsedMessage, "headers">> & {
+    headers?: Partial<ParsedMessageHeaders>;
+  } = {},
 ): ParsedMessage {
   const { headers: headerOverrides, ...rest } = overrides;
   return {

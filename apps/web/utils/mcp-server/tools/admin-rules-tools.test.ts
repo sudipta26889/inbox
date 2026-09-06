@@ -1,6 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { expectMcpData } from "@/__tests__/helpers";
+import { expectMcpData, partialRow } from "@/__tests__/helpers";
+import type { Prisma, Rule } from "@/generated/prisma/client";
 import prisma from "@/utils/__mocks__/prisma";
+
+// The tools read rules back with their relations, which the bare row type the
+// prisma mock is typed against does not carry.
+type RuleWithRelations = Prisma.RuleGetPayload<{
+  include: { actions: true; group: true };
+}>;
+type EmailAccountWithAccount = Prisma.EmailAccountGetPayload<{
+  include: { account: true };
+}>;
 
 vi.mock("@/utils/prisma");
 vi.mock("@/utils/rule/rule-history", () => ({
@@ -57,7 +67,7 @@ import { adminRulesReorder } from "./admin-rules-tools";
 describe("adminRulesList", () => {
   it("returns the rules ordered by displayOrder then createdAt for the email account", async () => {
     prisma.rule.findMany.mockResolvedValue([
-      {
+      partialRow<RuleWithRelations>({
         id: "r_1",
         name: "Newsletters",
         enabled: true,
@@ -68,7 +78,7 @@ describe("adminRulesList", () => {
         createdAt: new Date("2026-01-01"),
         updatedAt: new Date("2026-01-02"),
         actions: [],
-      },
+      }),
     ]);
 
     const out = await adminRulesList(ctx, {});
@@ -104,19 +114,21 @@ describe("adminRulesList", () => {
 
 describe("adminRulesGet", () => {
   it("returns the rule with actions and group when it exists for the account", async () => {
-    prisma.rule.findFirst.mockResolvedValue({
-      id: "r_1",
-      name: "Newsletters",
-      enabled: true,
-      runOnThreads: false,
-      displayOrder: 0,
-      systemType: null,
-      instructions: null,
-      createdAt: new Date("2026-01-01"),
-      updatedAt: new Date("2026-01-02"),
-      actions: [],
-      group: null,
-    });
+    prisma.rule.findFirst.mockResolvedValue(
+      partialRow<RuleWithRelations>({
+        id: "r_1",
+        name: "Newsletters",
+        enabled: true,
+        runOnThreads: false,
+        displayOrder: 0,
+        systemType: null,
+        instructions: null,
+        createdAt: new Date("2026-01-01"),
+        updatedAt: new Date("2026-01-02"),
+        actions: [],
+        group: null,
+      }),
+    );
 
     const out = await adminRulesGet(ctx, { id: "r_1" });
 
@@ -150,22 +162,26 @@ describe("adminRulesGet", () => {
 
 describe("adminRulesCreate", () => {
   it("creates a rule via the domain function and returns its data", async () => {
-    prisma.emailAccount.findUnique.mockResolvedValue({
-      account: { provider: "google" },
-    });
-    prisma.rule.create.mockResolvedValue({
-      id: "r_new",
-      name: "New rule",
-      actions: [{ id: "a_1", type: "LABEL", label: "test-label" }],
-      enabled: true,
-      runOnThreads: true,
-      displayOrder: 0,
-      systemType: null,
-      instructions: null,
-      createdAt: new Date("2026-02-01"),
-      updatedAt: new Date("2026-02-01"),
-      group: null,
-    });
+    prisma.emailAccount.findUnique.mockResolvedValue(
+      partialRow<EmailAccountWithAccount>({
+        account: { provider: "google" },
+      }),
+    );
+    prisma.rule.create.mockResolvedValue(
+      partialRow<RuleWithRelations>({
+        id: "r_new",
+        name: "New rule",
+        actions: [{ id: "a_1", type: "LABEL", label: "test-label" }],
+        enabled: true,
+        runOnThreads: true,
+        displayOrder: 0,
+        systemType: null,
+        instructions: null,
+        createdAt: new Date("2026-02-01"),
+        updatedAt: new Date("2026-02-01"),
+        group: null,
+      }),
+    );
 
     const out = await adminRulesCreate(ctx, {
       name: "New rule",
@@ -195,26 +211,32 @@ describe("adminRulesCreate", () => {
 
 describe("adminRulesUpdate", () => {
   it("verifies ownership and updates via the domain function", async () => {
-    prisma.rule.findFirst.mockResolvedValue({
-      id: "r_1",
-      emailAccountId: "ea_1",
-    });
-    prisma.emailAccount.findUnique.mockResolvedValue({
-      account: { provider: "google" },
-    });
-    prisma.rule.update.mockResolvedValue({
-      id: "r_1",
-      name: "Renamed",
-      actions: [],
-      enabled: true,
-      runOnThreads: false,
-      displayOrder: 0,
-      systemType: null,
-      instructions: null,
-      createdAt: new Date("2026-02-01"),
-      updatedAt: new Date("2026-02-02"),
-      group: null,
-    });
+    prisma.rule.findFirst.mockResolvedValue(
+      partialRow<Rule>({
+        id: "r_1",
+        emailAccountId: "ea_1",
+      }),
+    );
+    prisma.emailAccount.findUnique.mockResolvedValue(
+      partialRow<EmailAccountWithAccount>({
+        account: { provider: "google" },
+      }),
+    );
+    prisma.rule.update.mockResolvedValue(
+      partialRow<RuleWithRelations>({
+        id: "r_1",
+        name: "Renamed",
+        actions: [],
+        enabled: true,
+        runOnThreads: false,
+        displayOrder: 0,
+        systemType: null,
+        instructions: null,
+        createdAt: new Date("2026-02-01"),
+        updatedAt: new Date("2026-02-02"),
+        group: null,
+      }),
+    );
 
     const out = await adminRulesUpdate(ctx, {
       id: "r_1",
@@ -251,12 +273,14 @@ describe("adminRulesUpdate", () => {
 
 describe("adminRulesDelete", () => {
   it("returns a dryRun preview and does NOT delete when confirm is omitted", async () => {
-    prisma.rule.findFirst.mockResolvedValue({
-      id: "r_1",
-      name: "Newsletters",
-      groupId: null,
-      actions: [{ id: "a_1" }, { id: "a_2" }],
-    });
+    prisma.rule.findFirst.mockResolvedValue(
+      partialRow<RuleWithRelations>({
+        id: "r_1",
+        name: "Newsletters",
+        groupId: null,
+        actions: [{ id: "a_1" }, { id: "a_2" }],
+      }),
+    );
 
     const out = await adminRulesDelete(ctx, { id: "r_1" });
 
@@ -283,13 +307,15 @@ describe("adminRulesDelete", () => {
   });
 
   it("deletes the rule when confirm is true", async () => {
-    prisma.rule.findFirst.mockResolvedValue({
-      id: "r_1",
-      name: "Newsletters",
-      groupId: null,
-      actions: [],
-    });
-    prisma.rule.delete.mockResolvedValue({ id: "r_1" });
+    prisma.rule.findFirst.mockResolvedValue(
+      partialRow<RuleWithRelations>({
+        id: "r_1",
+        name: "Newsletters",
+        groupId: null,
+        actions: [],
+      }),
+    );
+    prisma.rule.delete.mockResolvedValue(partialRow<Rule>({ id: "r_1" }));
 
     const out = await adminRulesDelete(ctx, { id: "r_1", confirm: true });
 
@@ -316,13 +342,15 @@ describe("adminRulesDelete", () => {
 
 describe("adminRulesSetEnabled", () => {
   it("toggles enabled via a scoped prisma.rule.update when ownership is verified", async () => {
-    prisma.rule.findFirst.mockResolvedValue({ id: "r_1" });
-    prisma.rule.update.mockResolvedValue({
-      id: "r_1",
-      enabled: false,
-      actions: [],
-      group: null,
-    });
+    prisma.rule.findFirst.mockResolvedValue(partialRow<Rule>({ id: "r_1" }));
+    prisma.rule.update.mockResolvedValue(
+      partialRow<RuleWithRelations>({
+        id: "r_1",
+        enabled: false,
+        actions: [],
+        group: null,
+      }),
+    );
 
     const out = await adminRulesSetEnabled(ctx, {
       ruleId: "r_1",
@@ -363,9 +391,9 @@ describe("adminRulesSetEnabled", () => {
 describe("adminRulesReorder", () => {
   it("rejects when the set of ruleIds is not exactly the account's rules", async () => {
     prisma.rule.findMany.mockResolvedValue([
-      { id: "r_1" },
-      { id: "r_2" },
-      { id: "r_3" },
+      partialRow<Rule>({ id: "r_1" }),
+      partialRow<Rule>({ id: "r_2" }),
+      partialRow<Rule>({ id: "r_3" }),
     ]);
 
     const out = await adminRulesReorder(ctx, { ruleIds: ["r_1", "r_2"] });
@@ -379,13 +407,15 @@ describe("adminRulesReorder", () => {
 
   it("updates displayOrder for each rule in the supplied order within a transaction", async () => {
     prisma.rule.findMany.mockResolvedValue([
-      { id: "r_1" },
-      { id: "r_2" },
-      { id: "r_3" },
+      partialRow<Rule>({ id: "r_1" }),
+      partialRow<Rule>({ id: "r_2" }),
+      partialRow<Rule>({ id: "r_3" }),
     ]);
-    prisma.rule.update.mockResolvedValue({});
-    prisma.$transaction.mockImplementation(async (ops: Promise<any>[]) =>
-      Promise.all(ops),
+    prisma.rule.update.mockResolvedValue(partialRow<Rule>({}));
+    // The mock resolves $transaction to its callback overload; the code under
+    // test uses the array overload, so what arrives is a list of promises.
+    prisma.$transaction.mockImplementation((ops) =>
+      Promise.all(ops as unknown as Promise<unknown>[]),
     );
 
     const out = await adminRulesReorder(ctx, {

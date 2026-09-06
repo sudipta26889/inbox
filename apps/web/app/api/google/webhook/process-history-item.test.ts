@@ -148,6 +148,7 @@ describe("processHistoryItem", () => {
     return {
       ...getEmailAccount(),
       autoCategorizeSenders: false,
+      autoLearnPatterns: false,
       filingEnabled: false,
       filingPrompt: null,
       draftReplyConfidence: DraftReplyConfidence.ALL_EMAILS,

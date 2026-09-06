@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { runTool } from "@/__tests__/helpers";
+import { partialRow, runTool } from "@/__tests__/helpers";
 import prisma from "@/utils/__mocks__/prisma";
 import { createScopedLogger } from "@/utils/logger";
 import { isActivePremium } from "@/utils/premium";
@@ -101,15 +101,17 @@ const baseAccountSnapshot = {
 describe("chat settings tools", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetUserPremium.mockResolvedValue({});
+    mockGetUserPremium.mockResolvedValue(partialRow({}));
     mockIsActivePremium.mockReturnValue(true);
     prisma.automationJob.findUnique.mockResolvedValue(
-      baseAccountSnapshot.automationJob,
+      partialRow(baseAccountSnapshot.automationJob),
     );
   });
 
   it("returns writable and read-only capability metadata", async () => {
-    prisma.emailAccount.findUnique.mockResolvedValue(baseAccountSnapshot);
+    prisma.emailAccount.findUnique.mockResolvedValue(
+      partialRow(baseAccountSnapshot),
+    );
 
     const toolInstance = getAssistantCapabilitiesTool({
       email: "user@example.com",
@@ -128,6 +130,12 @@ describe("chat settings tools", () => {
         timezone: "America/Los_Angeles",
       },
     });
+
+    if (!result.capabilities) {
+      throw new Error(
+        `Expected a capability snapshot, got ${JSON.stringify(result)}`,
+      );
+    }
 
     const multiRuleCapability = result.capabilities.find(
       (capability) =>
@@ -205,7 +213,9 @@ describe("chat settings tools", () => {
   });
 
   it("ensures writable capabilities map to valid writable paths", async () => {
-    prisma.emailAccount.findUnique.mockResolvedValue(baseAccountSnapshot);
+    prisma.emailAccount.findUnique.mockResolvedValue(
+      partialRow(baseAccountSnapshot),
+    );
 
     const toolInstance = getAssistantCapabilitiesTool({
       email: "user@example.com",
@@ -216,7 +226,14 @@ describe("chat settings tools", () => {
 
     const result = await runTool(toolInstance, {});
 
-    const invalidWritableCapability = result.capabilities.find((capability) => {
+    const { capabilities, writablePaths } = result;
+    if (!capabilities || !writablePaths) {
+      throw new Error(
+        `Expected a capability snapshot, got ${JSON.stringify(result)}`,
+      );
+    }
+
+    const invalidWritableCapability = capabilities.find((capability) => {
       if (!capability.canWrite) return false;
 
       const writePaths =
@@ -224,15 +241,17 @@ describe("chat settings tools", () => {
           ? capability.writePaths
           : [capability.path];
 
-      return writePaths.some((path) => !result.writablePaths.includes(path));
+      return writePaths.some((path) => !writablePaths.includes(path));
     });
 
     expect(invalidWritableCapability).toBeUndefined();
   });
 
   it("applies deduped settings updates with last-write-wins semantics", async () => {
-    prisma.emailAccount.findUnique.mockResolvedValue(baseAccountSnapshot);
-    prisma.emailAccount.update.mockResolvedValue({});
+    prisma.emailAccount.findUnique.mockResolvedValue(
+      partialRow(baseAccountSnapshot),
+    );
+    prisma.emailAccount.update.mockResolvedValue(partialRow({}));
 
     const toolInstance = updateAssistantSettingsTool({
       email: "user@example.com",
@@ -273,10 +292,14 @@ describe("chat settings tools", () => {
     expect(result.appliedChanges).toHaveLength(2);
   });
 
+  // The compat tool runs the payload through the settings schema, so omitting
+  // mode here exercises the schema's "append" default the way the model does.
   it("returns a dry-run preview without writing and appends about by default", async () => {
-    prisma.emailAccount.findUnique.mockResolvedValue(baseAccountSnapshot);
+    prisma.emailAccount.findUnique.mockResolvedValue(
+      partialRow(baseAccountSnapshot),
+    );
 
-    const toolInstance = updateAssistantSettingsTool({
+    const toolInstance = updateAssistantSettingsCompatTool({
       email: "user@example.com",
       emailAccountId: "email-account-1",
       userId: "user-1",
@@ -308,8 +331,10 @@ describe("chat settings tools", () => {
   });
 
   it("replaces about when mode is replace", async () => {
-    prisma.emailAccount.findUnique.mockResolvedValue(baseAccountSnapshot);
-    prisma.emailAccount.update.mockResolvedValue({});
+    prisma.emailAccount.findUnique.mockResolvedValue(
+      partialRow(baseAccountSnapshot),
+    );
+    prisma.emailAccount.update.mockResolvedValue(partialRow({}));
 
     const toolInstance = updateAssistantSettingsTool({
       email: "user@example.com",
@@ -345,7 +370,9 @@ describe("chat settings tools", () => {
   });
 
   it("returns no-op when all values already match", async () => {
-    prisma.emailAccount.findUnique.mockResolvedValue(baseAccountSnapshot);
+    prisma.emailAccount.findUnique.mockResolvedValue(
+      partialRow(baseAccountSnapshot),
+    );
 
     const toolInstance = updateAssistantSettingsTool({
       email: "user@example.com",
@@ -360,6 +387,7 @@ describe("chat settings tools", () => {
         {
           path: "assistant.personalInstructions.about",
           value: "Keep replies concise.",
+          mode: "append",
         },
       ],
     });
@@ -373,10 +401,12 @@ describe("chat settings tools", () => {
   });
 
   it("updates scheduled check-ins configuration", async () => {
-    prisma.emailAccount.findUnique.mockResolvedValue(baseAccountSnapshot);
+    prisma.emailAccount.findUnique.mockResolvedValue(
+      partialRow(baseAccountSnapshot),
+    );
     mockGetUserPremium.mockResolvedValue(null);
     mockIsActivePremium.mockReturnValue(false);
-    prisma.automationJob.update.mockResolvedValue({});
+    prisma.automationJob.update.mockResolvedValue(partialRow({}));
 
     const toolInstance = updateAssistantSettingsTool({
       email: "user@example.com",
@@ -414,7 +444,9 @@ describe("chat settings tools", () => {
   });
 
   it("blocks scheduled check-ins configuration changes without premium", async () => {
-    prisma.emailAccount.findUnique.mockResolvedValue(baseAccountSnapshot);
+    prisma.emailAccount.findUnique.mockResolvedValue(
+      partialRow(baseAccountSnapshot),
+    );
     mockGetUserPremium.mockResolvedValue(null);
     mockIsActivePremium.mockReturnValue(false);
 
@@ -446,7 +478,7 @@ describe("chat settings tools", () => {
   });
 
   it("requires explicit messagingChannelId when enabling scheduled check-ins", async () => {
-    prisma.emailAccount.findUnique.mockResolvedValue({
+    const snapshot = {
       ...baseAccountSnapshot,
       messagingChannels: [
         {
@@ -454,7 +486,8 @@ describe("chat settings tools", () => {
           id: "channel-2",
         },
       ],
-    });
+    };
+    prisma.emailAccount.findUnique.mockResolvedValue(partialRow(snapshot));
     prisma.automationJob.findUnique.mockResolvedValue(null);
 
     const toolInstance = updateAssistantSettingsTool({
@@ -484,7 +517,7 @@ describe("chat settings tools", () => {
   });
 
   it("allows disabling scheduled check-ins even when current channel is stale", async () => {
-    prisma.emailAccount.findUnique.mockResolvedValue({
+    const snapshot = {
       ...baseAccountSnapshot,
       messagingChannels: [
         {
@@ -496,16 +529,20 @@ describe("chat settings tools", () => {
           channelId: null,
         },
       ],
-    });
-    prisma.automationJob.findUnique.mockResolvedValue({
+    };
+    const staleAutomationJob = {
       ...baseAccountSnapshot.automationJob,
       messagingChannelId: "channel-stale",
       messagingChannel: {
         channelName: "legacy-channel",
         teamName: "Acme",
       },
-    });
-    prisma.automationJob.update.mockResolvedValue({});
+    };
+    prisma.emailAccount.findUnique.mockResolvedValue(partialRow(snapshot));
+    prisma.automationJob.findUnique.mockResolvedValue(
+      partialRow(staleAutomationJob),
+    );
+    prisma.automationJob.update.mockResolvedValue(partialRow({}));
 
     const toolInstance = updateAssistantSettingsTool({
       email: "user@example.com",
@@ -542,8 +579,10 @@ describe("chat settings tools", () => {
   });
 
   it("upserts and deletes draft knowledge base entries", async () => {
-    prisma.emailAccount.findUnique.mockResolvedValue(baseAccountSnapshot);
-    prisma.knowledge.upsert.mockResolvedValue({});
+    prisma.emailAccount.findUnique.mockResolvedValue(
+      partialRow(baseAccountSnapshot),
+    );
+    prisma.knowledge.upsert.mockResolvedValue(partialRow({}));
     prisma.knowledge.deleteMany.mockResolvedValue({ count: 1 });
 
     const toolInstance = updateAssistantSettingsTool({
@@ -598,8 +637,10 @@ describe("chat settings tools", () => {
   });
 
   it("preserves operation order for delete then upsert on knowledge entries", async () => {
-    prisma.emailAccount.findUnique.mockResolvedValue(baseAccountSnapshot);
-    prisma.knowledge.upsert.mockResolvedValue({});
+    prisma.emailAccount.findUnique.mockResolvedValue(
+      partialRow(baseAccountSnapshot),
+    );
+    prisma.knowledge.upsert.mockResolvedValue(partialRow({}));
     prisma.knowledge.deleteMany.mockResolvedValue({ count: 1 });
 
     const toolInstance = updateAssistantSettingsTool({
@@ -653,8 +694,10 @@ describe("chat settings tools", () => {
   });
 
   it("preserves operation order for upsert-delete-upsert sequences", async () => {
-    prisma.emailAccount.findUnique.mockResolvedValue(baseAccountSnapshot);
-    prisma.knowledge.upsert.mockResolvedValue({});
+    prisma.emailAccount.findUnique.mockResolvedValue(
+      partialRow(baseAccountSnapshot),
+    );
+    prisma.knowledge.upsert.mockResolvedValue(partialRow({}));
     prisma.knowledge.deleteMany.mockResolvedValue({ count: 1 });
 
     const toolInstance = updateAssistantSettingsTool({
@@ -714,8 +757,10 @@ describe("chat settings tools", () => {
   });
 
   it("applies valid changes through updateAssistantSettingsCompat", async () => {
-    prisma.emailAccount.findUnique.mockResolvedValue(baseAccountSnapshot);
-    prisma.emailAccount.update.mockResolvedValue({});
+    prisma.emailAccount.findUnique.mockResolvedValue(
+      partialRow(baseAccountSnapshot),
+    );
+    prisma.emailAccount.update.mockResolvedValue(partialRow({}));
 
     const toolInstance = updateAssistantSettingsCompatTool({
       email: "user@example.com",
@@ -747,7 +792,9 @@ describe("chat settings tools", () => {
   });
 
   it("returns a validation error for invalid compat payload values", async () => {
-    prisma.emailAccount.findUnique.mockResolvedValue(baseAccountSnapshot);
+    prisma.emailAccount.findUnique.mockResolvedValue(
+      partialRow(baseAccountSnapshot),
+    );
 
     const toolInstance = updateAssistantSettingsCompatTool({
       email: "user@example.com",

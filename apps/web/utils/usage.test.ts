@@ -13,6 +13,28 @@ vi.mock("@/utils/redis/usage", () => ({
   saveUsage: vi.fn().mockResolvedValue(undefined),
 }));
 
+/**
+ * The SDK's usage type carries per-token detail objects that nothing here
+ * reads, so a test names only the counts its assertion depends on.
+ */
+function makeUsage(counts: Partial<LanguageModelUsage>): LanguageModelUsage {
+  return {
+    inputTokens: undefined,
+    outputTokens: undefined,
+    totalTokens: undefined,
+    inputTokenDetails: {
+      noCacheTokens: undefined,
+      cacheReadTokens: undefined,
+      cacheWriteTokens: undefined,
+    },
+    outputTokenDetails: {
+      textTokens: undefined,
+      reasoningTokens: undefined,
+    },
+    ...counts,
+  };
+}
+
 describe("calculateUsageCost", () => {
   it("applies cached input pricing when cached tokens are present", () => {
     const provider = "openrouter";
@@ -22,12 +44,12 @@ describe("calculateUsageCost", () => {
     expect(pricing).toBeDefined();
     if (!pricing) throw new Error("Expected pricing for gpt-5.1");
 
-    const usage: LanguageModelUsage = {
+    const usage = makeUsage({
       inputTokens: 1000,
       cachedInputTokens: 400,
       outputTokens: 200,
       totalTokens: 1200,
-    };
+    });
 
     const expected =
       (usage.inputTokens! - usage.cachedInputTokens!) * pricing.input +
@@ -40,11 +62,11 @@ describe("calculateUsageCost", () => {
   it("uses fallback pricing first for non-openrouter providers", () => {
     const provider = "openai";
     const model = "gpt-4o";
-    const usage: LanguageModelUsage = {
+    const usage = makeUsage({
       inputTokens: 100,
       outputTokens: 50,
       totalTokens: 150,
-    };
+    });
 
     // Fallback map values in supported-model-pricing.ts for gpt-4o
     const expected =
@@ -61,12 +83,12 @@ describe("calculateUsageCost", () => {
     const pricing = OPENROUTER_MODEL_PRICING[baseModel];
     if (!pricing) throw new Error("Expected pricing for gpt-5.1");
 
-    const usage: LanguageModelUsage = {
+    const usage = makeUsage({
       inputTokens: 500,
       cachedInputTokens: 100,
       outputTokens: 75,
       totalTokens: 575,
-    };
+    });
 
     const expected =
       (usage.inputTokens! - usage.cachedInputTokens!) * pricing.input +
@@ -82,12 +104,12 @@ describe("calculateUsageCost", () => {
     const pricing = OPENROUTER_MODEL_PRICING["gpt-5.1"];
     if (!pricing) throw new Error("Expected pricing for gpt-5.1");
 
-    const usage: LanguageModelUsage = {
+    const usage = makeUsage({
       inputTokens: 100,
       cachedInputTokens: 300,
       outputTokens: 20,
       totalTokens: 120,
-    };
+    });
 
     const expected = 100 * pricing.cachedInput + 20 * pricing.output;
 
@@ -100,11 +122,11 @@ describe("calculateUsageCost", () => {
     const pricing = OPENROUTER_MODEL_PRICING["gpt-5.1"];
     if (!pricing) throw new Error("Expected pricing for gpt-5.1");
 
-    const usage: LanguageModelUsage = {
+    const usage = makeUsage({
       cachedInputTokens: 120,
       outputTokens: 30,
       totalTokens: 150,
-    };
+    });
 
     const expected =
       usage.cachedInputTokens! * pricing.cachedInput +
@@ -114,11 +136,11 @@ describe("calculateUsageCost", () => {
   });
 
   it("returns zero when pricing is unavailable", () => {
-    const usage: LanguageModelUsage = {
+    const usage = makeUsage({
       inputTokens: 100,
       outputTokens: 50,
       totalTokens: 150,
-    };
+    });
 
     expect(
       calculateUsageCost({
@@ -130,11 +152,11 @@ describe("calculateUsageCost", () => {
   });
 
   it("resolves prefixed OpenRouter pricing for non-prefixed model names", () => {
-    const usage: LanguageModelUsage = {
+    const usage = makeUsage({
       inputTokens: 100,
       outputTokens: 50,
       totalTokens: 150,
-    };
+    });
 
     const pricing = OPENROUTER_MODEL_PRICING["anthropic/claude-sonnet-4.5"];
     if (!pricing)
@@ -159,13 +181,13 @@ describe("saveAiUsage", () => {
   });
 
   it("publishes cached and reasoning token counts to analytics", async () => {
-    const usage: LanguageModelUsage = {
+    const usage = makeUsage({
       inputTokens: 700,
       cachedInputTokens: 300,
       outputTokens: 150,
       reasoningTokens: 25,
       totalTokens: 850,
-    };
+    });
 
     await saveAiUsage({
       email: "user@example.com",
@@ -207,11 +229,11 @@ describe("saveAiUsage", () => {
   });
 
   it("sets platform cost to zero for user API key traffic", async () => {
-    const usage: LanguageModelUsage = {
+    const usage = makeUsage({
       inputTokens: 1000,
       outputTokens: 400,
       totalTokens: 1400,
-    };
+    });
 
     const estimatedCost = calculateUsageCost({
       provider: "openrouter",

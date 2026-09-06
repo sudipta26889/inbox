@@ -135,7 +135,35 @@ export function getRule(
     conditionalOperator: LogicalOperator.AND,
     systemType: null,
     promptText: null,
+    displayOrder: 0,
   };
+}
+
+type DeepPartial<T> = T extends Date
+  ? T
+  : T extends (infer U)[]
+    ? DeepPartial<U>[]
+    : T extends object
+      ? { [K in keyof T]?: DeepPartial<T[K]> }
+      : T;
+
+/**
+ * A Prisma row stub for a mock return. Tests supply only the columns the code
+ * under test reads; TS otherwise demands all of them, and every new schema
+ * column breaks dozens of unrelated tests. Excess-property checking still
+ * catches typos in the fields a test does set, at every level.
+ *
+ * `NoInfer` keeps the row type coming from the call site (the mock's
+ * parameter) rather than the stub. Pass it explicitly when the query includes
+ * relations the bare row type does not have, e.g.
+ * `partialRow<RuleWithActions>({ id: "r_1", actions: [] })`.
+ */
+export function partialRow<T>(
+  value: {
+    [K in keyof NoInfer<T>]?: DeepPartial<NoInfer<T>[K]>;
+  },
+): T {
+  return value as T;
 }
 
 export function getAction(overrides: Partial<Action> = {}): Action {
@@ -355,8 +383,13 @@ export function expectMcpData<T>(result: McpResult<T>): T {
  * `execute` is optional on the Tool type and takes (input, options); calling
  * it with one argument fails to type-check, and asserting it exists at every
  * call site is noise. The options here are the minimum the SDK passes.
+ *
+ * The SDK also lets `execute` stream an AsyncIterable, which leaves that in
+ * every inferred result union even though no tool here streams. This awaits
+ * rather than iterates, so a streaming tool is rejected outright and the
+ * result type is the plain output.
  */
-export function runTool<TInput, TOutput>(
+export async function runTool<TInput, TOutput>(
   toolInstance: {
     execute?: (
       input: TInput,
@@ -364,15 +397,19 @@ export function runTool<TInput, TOutput>(
     ) => PromiseLike<TOutput> | TOutput;
   },
   input: TInput,
-): Promise<TOutput> {
+): Promise<Exclude<Awaited<TOutput>, AsyncIterable<unknown>>> {
   if (!toolInstance.execute) {
     throw new Error("Tool has no execute function");
   }
 
-  return Promise.resolve(
-    toolInstance.execute(input, {
-      toolCallId: "test-tool-call",
-      messages: [],
-    } as ToolCallOptions),
-  );
+  const output = await toolInstance.execute(input, {
+    toolCallId: "test-tool-call",
+    messages: [],
+  } as ToolCallOptions);
+
+  if (output && typeof output === "object" && Symbol.asyncIterator in output) {
+    throw new Error("runTool does not support streaming tools");
+  }
+
+  return output as Exclude<Awaited<TOutput>, AsyncIterable<unknown>>;
 }
