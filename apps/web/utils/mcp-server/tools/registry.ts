@@ -62,7 +62,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     handler: async (context, params) => {
       // Import dynamically to avoid circular dependencies
       const { searchEmailsMultiAccount } = await import("./email-tools");
-      return searchEmailsMultiAccount(context, params);
+      return searchEmailsMultiAccount(context, toolParams(params));
     },
     requiredScope: "email:read",
   },
@@ -89,7 +89,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     handler: async (context, params) => {
       const { getEmail } = await import("./email-tools");
-      return getEmail(context, params);
+      return getEmail(context, toolParams(params));
     },
     requiredScope: "email:read",
   },
@@ -140,7 +140,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     handler: async (context, params) => {
       const { sendEmail } = await import("./email-tools");
-      return sendEmail(context, params);
+      return sendEmail(context, toolParams(params));
     },
     requiredScope: "email:write",
   },
@@ -227,7 +227,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     handler: async (context, params) => {
       const { createDraft } = await import("./email-tools");
-      return createDraft(context, params);
+      return createDraft(context, toolParams(params));
     },
     requiredScope: "email:draft",
   },
@@ -288,7 +288,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     handler: async (context, params) => {
       const { updateDraft } = await import("./email-tools");
-      return updateDraft(context, params);
+      return updateDraft(context, toolParams(params));
     },
     requiredScope: "email:draft",
   },
@@ -314,7 +314,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     handler: async (context, params) => {
       const { listDrafts } = await import("./email-tools");
-      return listDrafts(context, params);
+      return listDrafts(context, toolParams(params));
     },
     requiredScope: "email:read",
   },
@@ -345,7 +345,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     handler: async (context, params) => {
       const { getDraftDetail } = await import("./email-tools");
-      return getDraftDetail(context, params);
+      return getDraftDetail(context, toolParams(params));
     },
     requiredScope: "email:read",
   },
@@ -376,7 +376,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     handler: async (context, params) => {
       const { deleteDraft } = await import("./email-tools");
-      return deleteDraft(context, params);
+      return deleteDraft(context, toolParams(params));
     },
     requiredScope: "email:draft",
   },
@@ -420,7 +420,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     handler: async (context, params) => {
       const { searchCalendar } = await import("./calendar-tools");
-      return searchCalendar(context, params);
+      return searchCalendar(context, toolParams(params));
     },
     requiredScope: "calendar:read",
   },
@@ -447,7 +447,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     handler: async (context, params) => {
       const { getCalendarEvent } = await import("./calendar-tools");
-      return getCalendarEvent(context, params);
+      return getCalendarEvent(context, toolParams(params));
     },
     requiredScope: "calendar:read",
   },
@@ -477,7 +477,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     handler: async (context, params) => {
       const { getCalendarAvailability } = await import("./calendar-tools");
-      return getCalendarAvailability(context, params);
+      return getCalendarAvailability(context, toolParams(params));
     },
     requiredScope: "calendar:read",
   },
@@ -561,7 +561,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     handler: async (context, params) => {
       const { createCalendarEvent } = await import("./calendar-tools");
-      return createCalendarEvent(context, params);
+      return createCalendarEvent(context, toolParams(params));
     },
     requiredScope: "calendar:write",
   },
@@ -583,7 +583,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     handler: async (context, params) => {
       const { listCalendars } = await import("./calendar-tools");
-      return listCalendars(context, params);
+      return listCalendars(context, toolParams(params));
     },
     requiredScope: "calendar:read",
   },
@@ -625,7 +625,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     handler: async (context, params) => {
       const { listCalendarEventInstances } = await import("./calendar-tools");
-      return listCalendarEventInstances(context, params);
+      return listCalendarEventInstances(context, toolParams(params));
     },
     requiredScope: "calendar:read",
   },
@@ -708,7 +708,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     handler: async (context, params) => {
       const { updateCalendarEvent } = await import("./calendar-tools");
-      return updateCalendarEvent(context, params);
+      return updateCalendarEvent(context, toolParams(params));
     },
     requiredScope: "calendar:write",
   },
@@ -749,7 +749,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     handler: async (context, params) => {
       const { deleteCalendarEvent } = await import("./calendar-tools");
-      return deleteCalendarEvent(context, params);
+      return deleteCalendarEvent(context, toolParams(params));
     },
     requiredScope: "calendar:write",
   },
@@ -794,7 +794,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     handler: async (context, params) => {
       const { respondToCalendarEvent } = await import("./calendar-tools");
-      return respondToCalendarEvent(context, params);
+      return respondToCalendarEvent(context, toolParams(params));
     },
     requiredScope: "calendar:write",
   },
@@ -815,7 +815,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     handler: async (context, params) => {
       const { getEmailStats } = await import("./stats-tools");
-      return getEmailStats(context, params);
+      return getEmailStats(context, toolParams(params));
     },
     requiredScope: "stats:read",
   },
@@ -850,7 +850,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     handler: async (context, params) => {
       const { listRules } = await import("./rules-tools");
-      return listRules(context, params);
+      return listRules(context, toolParams(params));
     },
     requiredScope: "rules:read",
   },
@@ -865,7 +865,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     handler: async (context, params) => {
       const { adminRulesList } = await import("./admin-rules-tools");
-      return adminRulesList(context, params);
+      return adminRulesList(context, toolParams(params));
     },
     requiredScope: "admin:read",
   },
@@ -886,7 +886,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     handler: async (context, params) => {
       const { adminRulesGet } = await import("./admin-rules-tools");
-      return adminRulesGet(context, params);
+      return adminRulesGet(context, toolParams(params));
     },
     requiredScope: "admin:read",
   },
@@ -923,7 +923,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     handler: async (context, params) => {
       const { adminRulesCreate } = await import("./admin-rules-tools");
-      return adminRulesCreate(context, params);
+      return adminRulesCreate(context, toolParams(params));
     },
     requiredScope: "admin:write",
   },
@@ -946,7 +946,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     handler: async (context, params) => {
       const { adminRulesUpdate } = await import("./admin-rules-tools");
-      return adminRulesUpdate(context, params);
+      return adminRulesUpdate(context, toolParams(params));
     },
     requiredScope: "admin:write",
   },
@@ -969,7 +969,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     handler: async (context, params) => {
       const { adminRulesDelete } = await import("./admin-rules-tools");
-      return adminRulesDelete(context, params);
+      return adminRulesDelete(context, toolParams(params));
     },
     requiredScope: "admin:write",
   },
@@ -988,7 +988,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     handler: async (context, params) => {
       const { adminRulesSetEnabled } = await import("./admin-rules-tools");
-      return adminRulesSetEnabled(context, params);
+      return adminRulesSetEnabled(context, toolParams(params));
     },
     requiredScope: "admin:write",
   },
@@ -1010,7 +1010,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     handler: async (context, params) => {
       const { adminRulesReorder } = await import("./admin-rules-tools");
-      return adminRulesReorder(context, params);
+      return adminRulesReorder(context, toolParams(params));
     },
     requiredScope: "admin:write",
   },
@@ -1025,7 +1025,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     handler: async (context, params) => {
       const { adminCategoriesList } = await import("./admin-categories-tools");
-      return adminCategoriesList(context, params);
+      return adminCategoriesList(context, toolParams(params));
     },
     requiredScope: "admin:read",
   },
@@ -1050,7 +1050,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       const { adminCategoriesUpdate } = await import(
         "./admin-categories-tools"
       );
-      return adminCategoriesUpdate(context, params);
+      return adminCategoriesUpdate(context, toolParams(params));
     },
     requiredScope: "admin:write",
   },
@@ -1076,7 +1076,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       const { adminCategoriesDelete } = await import(
         "./admin-categories-tools"
       );
-      return adminCategoriesDelete(context, params);
+      return adminCategoriesDelete(context, toolParams(params));
     },
     requiredScope: "admin:write",
   },
@@ -1100,7 +1100,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       const { adminCategoriesCreate } = await import(
         "./admin-categories-tools"
       );
-      return adminCategoriesCreate(context, params);
+      return adminCategoriesCreate(context, toolParams(params));
     },
     requiredScope: "admin:write",
   },
@@ -1129,7 +1129,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     handler: async (context, params) => {
       const { adminSendersList } = await import("./admin-categories-tools");
-      return adminSendersList(context, params);
+      return adminSendersList(context, toolParams(params));
     },
     requiredScope: "admin:read",
   },
@@ -1160,7 +1160,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       const { adminSendersCategorize } = await import(
         "./admin-categories-tools"
       );
-      return adminSendersCategorize(context, params);
+      return adminSendersCategorize(context, toolParams(params));
     },
     requiredScope: "admin:write",
   },
@@ -1175,7 +1175,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     handler: async (context, params) => {
       const { listEmailAccounts } = await import("./email-tools");
-      return listEmailAccounts(context, params);
+      return listEmailAccounts(context, toolParams(params));
     },
     requiredScope: "email:read",
   },
@@ -1187,7 +1187,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     inputSchema: { type: "object", properties: {} },
     handler: async (context, params) => {
       const { adminGroupsList } = await import("./admin-groups-tools");
-      return adminGroupsList(context, params);
+      return adminGroupsList(context, toolParams(params));
     },
     requiredScope: "admin:read",
   },
@@ -1205,7 +1205,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     handler: async (context, params) => {
       const { adminGroupsGet } = await import("./admin-groups-tools");
-      return adminGroupsGet(context, params);
+      return adminGroupsGet(context, toolParams(params));
     },
     requiredScope: "admin:read",
   },
@@ -1226,7 +1226,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     handler: async (context, params) => {
       const { adminGroupsCreate } = await import("./admin-groups-tools");
-      return adminGroupsCreate(context, params);
+      return adminGroupsCreate(context, toolParams(params));
     },
     requiredScope: "admin:write",
   },
@@ -1245,7 +1245,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     handler: async (context, params) => {
       const { adminGroupsUpdate } = await import("./admin-groups-tools");
-      return adminGroupsUpdate(context, params);
+      return adminGroupsUpdate(context, toolParams(params));
     },
     requiredScope: "admin:write",
   },
@@ -1269,7 +1269,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     handler: async (context, params) => {
       const { adminGroupsDelete } = await import("./admin-groups-tools");
-      return adminGroupsDelete(context, params);
+      return adminGroupsDelete(context, toolParams(params));
     },
     requiredScope: "admin:write",
   },
@@ -1290,7 +1290,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     handler: async (context, params) => {
       const { adminGroupsAddItem } = await import("./admin-groups-tools");
-      return adminGroupsAddItem(context, params);
+      return adminGroupsAddItem(context, toolParams(params));
     },
     requiredScope: "admin:write",
   },
@@ -1307,7 +1307,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     handler: async (context, params) => {
       const { adminGroupsRemoveItem } = await import("./admin-groups-tools");
-      return adminGroupsRemoveItem(context, params);
+      return adminGroupsRemoveItem(context, toolParams(params));
     },
     requiredScope: "admin:write",
   },
@@ -1331,7 +1331,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     handler: async (context, params) => {
       const { adminKnowledgeList } = await import("./admin-knowledge-tools");
-      return adminKnowledgeList(context, params);
+      return adminKnowledgeList(context, toolParams(params));
     },
     requiredScope: "admin:read",
   },
@@ -1348,7 +1348,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     handler: async (context, params) => {
       const { adminKnowledgeGet } = await import("./admin-knowledge-tools");
-      return adminKnowledgeGet(context, params);
+      return adminKnowledgeGet(context, toolParams(params));
     },
     requiredScope: "admin:read",
   },
@@ -1369,7 +1369,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     handler: async (context, params) => {
       const { adminKnowledgeCreate } = await import("./admin-knowledge-tools");
-      return adminKnowledgeCreate(context, params);
+      return adminKnowledgeCreate(context, toolParams(params));
     },
     requiredScope: "admin:write",
   },
@@ -1388,7 +1388,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     handler: async (context, params) => {
       const { adminKnowledgeUpdate } = await import("./admin-knowledge-tools");
-      return adminKnowledgeUpdate(context, params);
+      return adminKnowledgeUpdate(context, toolParams(params));
     },
     requiredScope: "admin:write",
   },
@@ -1412,7 +1412,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     handler: async (context, params) => {
       const { adminKnowledgeDelete } = await import("./admin-knowledge-tools");
-      return adminKnowledgeDelete(context, params);
+      return adminKnowledgeDelete(context, toolParams(params));
     },
     requiredScope: "admin:write",
   },
@@ -1426,7 +1426,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       const { adminColdEmailGetSettings } = await import(
         "./admin-cold-email-tools"
       );
-      return adminColdEmailGetSettings(context, params);
+      return adminColdEmailGetSettings(context, toolParams(params));
     },
     requiredScope: "admin:read",
   },
@@ -1457,7 +1457,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       const { adminColdEmailUpdateSettings } = await import(
         "./admin-cold-email-tools"
       );
-      return adminColdEmailUpdateSettings(context, params);
+      return adminColdEmailUpdateSettings(context, toolParams(params));
     },
     requiredScope: "admin:write",
   },
@@ -1482,7 +1482,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       const { adminColdEmailListBlocked } = await import(
         "./admin-cold-email-tools"
       );
-      return adminColdEmailListBlocked(context, params);
+      return adminColdEmailListBlocked(context, toolParams(params));
     },
     requiredScope: "admin:read",
   },
@@ -1505,7 +1505,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     handler: async (context, params) => {
       const { adminColdEmailMark } = await import("./admin-cold-email-tools");
-      return adminColdEmailMark(context, params);
+      return adminColdEmailMark(context, toolParams(params));
     },
     requiredScope: "admin:write",
   },
@@ -1519,7 +1519,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       const { adminReplyTrackerGetSettings } = await import(
         "./admin-reply-tracker-tools"
       );
-      return adminReplyTrackerGetSettings(context, params);
+      return adminReplyTrackerGetSettings(context, toolParams(params));
     },
     requiredScope: "admin:read",
   },
@@ -1543,7 +1543,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       const { adminReplyTrackerUpdateSettings } = await import(
         "./admin-reply-tracker-tools"
       );
-      return adminReplyTrackerUpdateSettings(context, params);
+      return adminReplyTrackerUpdateSettings(context, toolParams(params));
     },
     requiredScope: "admin:write",
   },
@@ -1569,7 +1569,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       const { adminFollowUpsList } = await import(
         "./admin-reply-tracker-tools"
       );
-      return adminFollowUpsList(context, params);
+      return adminFollowUpsList(context, toolParams(params));
     },
     requiredScope: "admin:read",
   },
@@ -1592,7 +1592,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       const { adminFollowUpsUpdate } = await import(
         "./admin-reply-tracker-tools"
       );
-      return adminFollowUpsUpdate(context, params);
+      return adminFollowUpsUpdate(context, toolParams(params));
     },
     requiredScope: "admin:write",
   },
@@ -1608,7 +1608,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     handler: async (context, params) => {
       const { adminDigestGet } = await import("./admin-digest-tools");
-      return adminDigestGet(context, params);
+      return adminDigestGet(context, toolParams(params));
     },
     requiredScope: "admin:read",
   },
@@ -1652,7 +1652,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       const { adminDigestUpdateSchedule } = await import(
         "./admin-digest-tools"
       );
-      return adminDigestUpdateSchedule(context, params);
+      return adminDigestUpdateSchedule(context, toolParams(params));
     },
     requiredScope: "admin:write",
   },
@@ -1675,7 +1675,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     handler: async (context, params) => {
       const { adminDigestSetEnabled } = await import("./admin-digest-tools");
-      return adminDigestSetEnabled(context, params);
+      return adminDigestSetEnabled(context, toolParams(params));
     },
     requiredScope: "admin:write",
   },
@@ -1698,7 +1698,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     handler: async (context, params) => {
       const { adminDigestUpdateItems } = await import("./admin-digest-tools");
-      return adminDigestUpdateItems(context, params);
+      return adminDigestUpdateItems(context, toolParams(params));
     },
     requiredScope: "admin:write",
   },
@@ -1720,7 +1720,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       const { adminFollowUpsDelete } = await import(
         "./admin-reply-tracker-tools"
       );
-      return adminFollowUpsDelete(context, params);
+      return adminFollowUpsDelete(context, toolParams(params));
     },
     requiredScope: "admin:write",
   },
@@ -1736,7 +1736,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     handler: async (context, params) => {
       const { adminAiGetSettings } = await import("./admin-ai-tools");
-      return adminAiGetSettings(context, params);
+      return adminAiGetSettings(context, toolParams(params));
     },
     requiredScope: "admin:read",
   },
@@ -1764,7 +1764,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     handler: async (context, params) => {
       const { adminAiUpdateModel } = await import("./admin-ai-tools");
-      return adminAiUpdateModel(context, params);
+      return adminAiUpdateModel(context, toolParams(params));
     },
     requiredScope: "admin:write",
   },
@@ -1780,7 +1780,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     handler: async (context, params) => {
       const { adminAccountGet } = await import("./admin-account-tools");
-      return adminAccountGet(context, params);
+      return adminAccountGet(context, toolParams(params));
     },
     requiredScope: "admin:read",
   },
@@ -1800,7 +1800,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     handler: async (context, params) => {
       const { adminCleanupListJobs } = await import("./admin-cleanup-tools");
-      return adminCleanupListJobs(context, params);
+      return adminCleanupListJobs(context, toolParams(params));
     },
     requiredScope: "admin:read",
   },
@@ -1834,7 +1834,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     handler: async (context, params) => {
       const { adminCleanupCreateJob } = await import("./admin-cleanup-tools");
-      return adminCleanupCreateJob(context, params);
+      return adminCleanupCreateJob(context, toolParams(params));
     },
     requiredScope: "admin:write",
   },
@@ -1857,7 +1857,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       const { adminUnsubscribeList } = await import(
         "./admin-unsubscribe-tools"
       );
-      return adminUnsubscribeList(context, params);
+      return adminUnsubscribeList(context, toolParams(params));
     },
     requiredScope: "admin:read",
   },
@@ -1880,7 +1880,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       const { adminUnsubscribeRequest } = await import(
         "./admin-unsubscribe-tools"
       );
-      return adminUnsubscribeRequest(context, params);
+      return adminUnsubscribeRequest(context, toolParams(params));
     },
     requiredScope: "admin:write",
   },
@@ -1933,7 +1933,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     handler: async (context, params) => {
       const { adminAccountUpdate } = await import("./admin-account-tools");
-      return adminAccountUpdate(context, params);
+      return adminAccountUpdate(context, toolParams(params));
     },
     requiredScope: "admin:write",
   },
@@ -1965,7 +1965,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     },
     handler: async (context, params) => {
       const { convertToTaskpilotTask } = await import("./taskpilot-tools");
-      return convertToTaskpilotTask(context, params);
+      return convertToTaskpilotTask(context, toolParams(params));
     },
     requiredScope: "email:write",
   },
@@ -1974,6 +1974,18 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
 /**
  * Get tool by name
  */
+/**
+ * MCP params arrive as unvalidated JSON; each tool's `inputSchema` is the
+ * contract the client is held to. Narrow at this one boundary rather than
+ * casting at every handler.
+ *
+ * ponytail: a cast, not a runtime check. Swap for zod parsing per tool if a
+ * client ever sends params that do not match the advertised schema.
+ */
+function toolParams<T>(params: unknown): T {
+  return params as T;
+}
+
 export function getTool(name: string): McpToolDefinition | undefined {
   return MCP_TOOLS[name];
 }

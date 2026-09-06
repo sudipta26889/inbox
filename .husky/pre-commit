@@ -1,1 +1,6 @@
 lint-staged
+
+# The prod image builds with SKIP_TYPE_CHECK=true, so nothing else stops a type
+# error reaching production. Hold the line until the count is zero and that
+# flag can go. See apps/web/scripts/typecheck-ratchet.mjs.
+(cd apps/web && node scripts/typecheck-ratchet.mjs)

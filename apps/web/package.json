@@ -21,7 +21,9 @@
     "prisma:migrate:e2e": "dotenv -e .env.e2e -- prisma migrate deploy",
     "prisma:migrate:local": "dotenv -e .env.local -- prisma migrate deploy",
     "preinstall": "npx only-allow pnpm",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck:ratchet": "node scripts/typecheck-ratchet.mjs"
   },
   "dependencies": {
     "@ai-sdk/amazon-bedrock": "4.0.77",
