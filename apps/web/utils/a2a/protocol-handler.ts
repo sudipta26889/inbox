@@ -123,6 +123,49 @@ export async function handleMessageSend(
 
     logger.info("Created A2A message", { contextId, messageId });
 
+    // A2A §7.6.2: a message carrying referenceTaskIds is about those tasks.
+    // referenceTaskIds was stored and read by nothing, so "any update on that
+    // one?" went to the general answerer, which has never heard of the task
+    // and confidently made something up.
+    //
+    // This reports state; it never changes it. Tasks park on human approval,
+    // and §7.6.4 is explicit that a state transition is not authorization —
+    // a peer must not be able to unpark its own approval by asking.
+    const referenced = referenceTaskIds[0]
+      ? await prisma.a2aTask.findFirst({
+          where: { taskId: referenceTaskIds[0], ...taskScope(authContext) },
+          select: {
+            taskId: true,
+            state: true,
+            stateReason: true,
+            skill: true,
+            updatedAt: true,
+          },
+        })
+      : null;
+
+    if (referenced) {
+      const answer =
+        `Task ${referenced.taskId} (${referenced.skill}) is ` +
+        `${toWireState(referenced.state)}` +
+        (referenced.stateReason ? `: ${referenced.stateReason}` : "") +
+        `. Last updated ${referenced.updatedAt.toISOString()}.`;
+
+      const replyId = nanoid();
+      await prisma.a2aMessage.create({
+        data: {
+          id: replyId,
+          contextId,
+          role: "agent",
+          content: answer as Prisma.InputJsonValue,
+          contentType: "text",
+          referenceTaskIds: [referenced.taskId],
+        },
+      });
+
+      return { contextId, messageId, replyMessageId: replyId, answer };
+    }
+
     // A peer that sent text asked a question. Answer it rather than returning
     // a bare messageId, which is what made every plain-text message a silent
     // no-op behind an HTTP 200.
