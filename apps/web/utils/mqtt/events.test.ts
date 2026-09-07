@@ -12,7 +12,13 @@ vi.mock("@/utils/mqtt/client", () => ({
 }));
 vi.mock("@/utils/prisma", () => ({ default: mockPrisma }));
 
-import { publishUnread, publishUrgent } from "./events";
+import {
+  clearAccountTopics,
+  publishApprovals,
+  publishDigest,
+  publishUnread,
+  publishUrgent,
+} from "./events";
 
 const optedIn = {
   mqttEnabled: true,
@@ -54,7 +60,18 @@ describe("mqtt events", () => {
     expect(mockPublish).not.toHaveBeenCalled();
   });
 
-  it("publishes nothing when the slug is missing or invalid", async () => {
+  it("publishes nothing when the slug is missing", async () => {
+    mockPrisma.emailAccount.findUnique.mockResolvedValue({
+      ...optedIn,
+      mqttTopicSlug: null,
+    });
+
+    await publishUnread({ emailAccountId: "a1", unread: 1, total: 2 });
+
+    expect(mockPublish).not.toHaveBeenCalled();
+  });
+
+  it("publishes nothing when the slug is invalid", async () => {
     mockPrisma.emailAccount.findUnique.mockResolvedValue({
       ...optedIn,
       mqttTopicSlug: "not a slug",
@@ -97,5 +114,107 @@ describe("mqtt events", () => {
       t.endsWith("/urgent/attributes"),
     )?.[1];
     expect(attributes).toMatch(/Invoice/);
+  });
+
+  describe("publishDigest", () => {
+    it("publishes state, attributes and a discovery config", async () => {
+      await publishDigest({ emailAccountId: "a1", items: 3 });
+
+      const topics = mockPublish.mock.calls.map(([t]) => t);
+      expect(topics).toEqual(
+        expect.arrayContaining([
+          "inbox/work/digest/state",
+          "inbox/work/digest/attributes",
+          "homeassistant/sensor/inbox_work/digest/config",
+        ]),
+      );
+    });
+
+    /** Off by default. Other people's mail must not reach the bus. */
+    it("publishes nothing for an account that has not opted in", async () => {
+      mockPrisma.emailAccount.findUnique.mockResolvedValue({
+        ...optedIn,
+        mqttEnabled: false,
+      });
+
+      await publishDigest({ emailAccountId: "a1", items: 3 });
+
+      expect(mockPublish).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("publishApprovals", () => {
+    it("publishes state, attributes and a discovery config", async () => {
+      await publishApprovals({
+        emailAccountId: "a1",
+        pending: 2,
+        oldestWaitingSeconds: 120,
+        actions: ["archive", "reply"],
+      });
+
+      const topics = mockPublish.mock.calls.map(([t]) => t);
+      expect(topics).toEqual(
+        expect.arrayContaining([
+          "inbox/work/approvals/state",
+          "inbox/work/approvals/attributes",
+          "homeassistant/sensor/inbox_work/approvals/config",
+        ]),
+      );
+    });
+
+    /** Off by default. Other people's mail must not reach the bus. */
+    it("publishes nothing for an account that has not opted in", async () => {
+      mockPrisma.emailAccount.findUnique.mockResolvedValue({
+        ...optedIn,
+        mqttEnabled: false,
+      });
+
+      await publishApprovals({
+        emailAccountId: "a1",
+        pending: 2,
+        oldestWaitingSeconds: 120,
+        actions: ["archive", "reply"],
+      });
+
+      expect(mockPublish).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("clearAccountTopics", () => {
+    it("publishes an empty retained payload to every state, attributes and config topic for all four entities", () => {
+      clearAccountTopics("work");
+
+      // 4 entities x (state, attributes, config) = 12 retained deletions.
+      expect(mockPublish).toHaveBeenCalledTimes(12);
+
+      const topics = mockPublish.mock.calls.map(([t]) => t);
+      expect(topics).toEqual(
+        expect.arrayContaining([
+          "inbox/work/unread/state",
+          "inbox/work/unread/attributes",
+          "homeassistant/sensor/inbox_work/unread/config",
+          "inbox/work/urgent/state",
+          "inbox/work/urgent/attributes",
+          "homeassistant/sensor/inbox_work/urgent/config",
+          "inbox/work/digest/state",
+          "inbox/work/digest/attributes",
+          "homeassistant/sensor/inbox_work/digest/config",
+          "inbox/work/approvals/state",
+          "inbox/work/approvals/attributes",
+          "homeassistant/sensor/inbox_work/approvals/config",
+        ]),
+      );
+
+      for (const [, payload, options] of mockPublish.mock.calls) {
+        expect(payload).toBe("");
+        expect(options).toMatchObject({ retain: true });
+      }
+    });
+
+    it("publishes nothing for a malformed slug", () => {
+      clearAccountTopics("not a slug");
+
+      expect(mockPublish).not.toHaveBeenCalled();
+    });
   });
 });

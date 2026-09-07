@@ -32,63 +32,6 @@ const ENTITY_META: Record<MqttEntity, { name: string; icon: string }> = {
 
 type Consent = { slug: string; includeDetail: boolean };
 
-async function consentFor(emailAccountId: string): Promise<Consent | null> {
-  if (!isMqttConfigured()) return null;
-
-  const account = await prisma.emailAccount.findUnique({
-    where: { id: emailAccountId },
-    select: {
-      mqttEnabled: true,
-      mqttTopicSlug: true,
-      mqttIncludeDetail: true,
-    },
-  });
-
-  if (!account?.mqttEnabled) return null;
-
-  const slug = account.mqttTopicSlug;
-
-  // A malformed slug would corrupt the topic string, so refuse rather than
-  // publish somewhere unintended.
-  if (!slug || !isValidSlug(slug)) {
-    logger.warn("Skipping MQTT publish: account has no usable topic slug", {
-      emailAccountId,
-    });
-    return null;
-  }
-
-  return { slug, includeDetail: account.mqttIncludeDetail };
-}
-
-function publishEntity(
-  slug: string,
-  entity: MqttEntity,
-  built: { state: string; attributes: Record<string, unknown> },
-) {
-  const meta = ENTITY_META[entity];
-
-  // A typo should be loud, not quietly register an entity nothing announced
-  // and that no dashboard will ever explain.
-  if (!meta) {
-    logger.error("Refusing to publish an unknown MQTT entity", { entity });
-    return;
-  }
-
-  const topics = entityTopics(slug, entity);
-
-  // Retained throughout: a subscriber connecting at noon should learn current
-  // state immediately rather than waiting for the next change.
-  publishMqtt(
-    topics.config,
-    JSON.stringify(discoveryConfig({ slug, entity, ...meta })),
-    { retain: true },
-  );
-  publishMqtt(topics.state, built.state, { retain: true });
-  publishMqtt(topics.attributes, JSON.stringify(built.attributes), {
-    retain: true,
-  });
-}
-
 export async function publishUnread({
   emailAccountId,
   unread,
@@ -174,10 +117,76 @@ export async function publishApprovals({
  * forever. An empty retained payload is how MQTT deletes one.
  */
 export function clearAccountTopics(slug: string): void {
+  // The account row has already flipped by the time this runs, so consentFor
+  // would refuse before anything could be cleared. Validate independently.
+  if (!isValidSlug(slug)) {
+    logger.error("Refusing to clear MQTT topics for an invalid slug", {
+      slug,
+    });
+    return;
+  }
+
   for (const entity of Object.keys(ENTITY_META) as MqttEntity[]) {
     const topics = entityTopics(slug, entity);
     publishMqtt(topics.config, "", { retain: true });
     publishMqtt(topics.state, "", { retain: true });
     publishMqtt(topics.attributes, "", { retain: true });
   }
+}
+
+async function consentFor(emailAccountId: string): Promise<Consent | null> {
+  if (!isMqttConfigured()) return null;
+
+  const account = await prisma.emailAccount.findUnique({
+    where: { id: emailAccountId },
+    select: {
+      mqttEnabled: true,
+      mqttTopicSlug: true,
+      mqttIncludeDetail: true,
+    },
+  });
+
+  if (!account?.mqttEnabled) return null;
+
+  const slug = account.mqttTopicSlug;
+
+  // A malformed slug would corrupt the topic string, so refuse rather than
+  // publish somewhere unintended.
+  if (!slug || !isValidSlug(slug)) {
+    logger.warn("Skipping MQTT publish: account has no usable topic slug", {
+      emailAccountId,
+    });
+    return null;
+  }
+
+  return { slug, includeDetail: account.mqttIncludeDetail };
+}
+
+function publishEntity(
+  slug: string,
+  entity: MqttEntity,
+  built: { state: string; attributes: Record<string, unknown> },
+) {
+  const meta = ENTITY_META[entity];
+
+  // A typo should be loud, not quietly register an entity nothing announced
+  // and that no dashboard will ever explain.
+  if (!meta) {
+    logger.error("Refusing to publish an unknown MQTT entity", { entity });
+    return;
+  }
+
+  const topics = entityTopics(slug, entity);
+
+  // Retained throughout: a subscriber connecting at noon should learn current
+  // state immediately rather than waiting for the next change.
+  publishMqtt(
+    topics.config,
+    JSON.stringify(discoveryConfig({ slug, entity, ...meta })),
+    { retain: true },
+  );
+  publishMqtt(topics.state, built.state, { retain: true });
+  publishMqtt(topics.attributes, JSON.stringify(built.attributes), {
+    retain: true,
+  });
 }
