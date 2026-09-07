@@ -2,6 +2,7 @@ import "server-only";
 import { createScopedLogger } from "@/utils/logger";
 import prisma from "@/utils/prisma";
 import { A2aTaskState, A2aWebhookStatus } from "@/generated/prisma/enums";
+import { toWireState } from "@/utils/a2a/wire-state";
 import crypto from "node:crypto";
 
 const logger = createScopedLogger("a2a-webhooks");
@@ -142,7 +143,7 @@ function buildWebhookPayload(task: any, event: WebhookEvent): any {
       context_id: task.contextId,
       skill: task.skill,
       input: task.input,
-      state: task.state,
+      state: toWireState(task.state),
       state_reason: task.stateReason,
       result: task.result,
       error: task.error,

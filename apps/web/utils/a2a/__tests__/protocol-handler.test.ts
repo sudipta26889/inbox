@@ -137,10 +137,11 @@ describe("A2A Protocol Handlers", () => {
         input: { query: "test" },
       });
 
+      // Wire spelling, not the stored enum: A2A v1.0 renamed every state.
       expect(result).toEqual({
         contextId: "ctx-abc",
         taskId: "test-id-123",
-        state: A2aTaskState.submitted,
+        state: "TASK_STATE_SUBMITTED",
       });
 
       expect(prisma.a2aTask.create).toHaveBeenCalledWith({
@@ -197,7 +198,7 @@ describe("A2A Protocol Handlers", () => {
         input: { title: "Meeting", startTime: "2026-03-24T10:00:00Z" },
       });
 
-      expect(result.state).toBe(A2aTaskState.auth_required);
+      expect(result.state).toBe("TASK_STATE_AUTH_REQUIRED");
       expect(prisma.a2aApproval.create).toHaveBeenCalled();
       expect(executeTask).not.toHaveBeenCalled();
     });
@@ -280,7 +281,7 @@ describe("A2A Protocol Handlers", () => {
       });
 
       expect(result.taskId).toBe("task-public-123");
-      expect(result.state).toBe(A2aTaskState.completed);
+      expect(result.state).toBe("TASK_STATE_COMPLETED");
       expect(result.history).toHaveLength(2);
       expect(result.history[0].fromState).toBe(A2aTaskState.submitted);
     });
@@ -402,7 +403,7 @@ describe("A2A Protocol Handlers", () => {
         reason: "User requested cancellation",
       });
 
-      expect(result.state).toBe(A2aTaskState.canceled);
+      expect(result.state).toBe("TASK_STATE_CANCELED");
       expect(prisma.a2aTask.update).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({

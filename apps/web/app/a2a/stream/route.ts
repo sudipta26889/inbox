@@ -3,6 +3,7 @@ import prisma from "@/utils/prisma";
 import { createScopedLogger } from "@/utils/logger";
 import { A2aTaskState } from "@/generated/prisma/enums";
 import { taskScope } from "@/utils/a2a/task-scope";
+import { toWireState } from "@/utils/a2a/wire-state";
 
 const logger = createScopedLogger("a2a-stream");
 
@@ -229,7 +230,7 @@ async function getTaskData(taskInternalId: string) {
     context_id: task.contextId,
     skill: task.skill,
     input: task.input,
-    state: task.state,
+    state: toWireState(task.state),
     state_reason: task.stateReason,
     result: task.result,
     error: task.error,

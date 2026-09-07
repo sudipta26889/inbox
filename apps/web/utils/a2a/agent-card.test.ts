@@ -12,6 +12,12 @@ import { A2A_SKILL_REGISTRY } from "@/utils/a2a/skill-registry";
 async function card() {
   const response = await GET();
   return (await response.json()) as {
+    url?: string;
+    supportedInterfaces?: {
+      url: string;
+      protocolBinding: string;
+      protocolVersion: string;
+    }[];
     skills: { name: string; requiresHumanApproval?: boolean }[];
   };
 }
@@ -52,5 +58,30 @@ describe("published agent card", () => {
         `${skill.name} is not registered`,
       ).toBeDefined();
     }
+  });
+});
+
+describe("protocol version advertised", () => {
+  /**
+   * v1.0 replaced the bare `url` with supportedInterfaces[]. Our peer already
+   * advertises protocolVersion "1.0" in its own card, so we were the
+   * non-conformant side of a conversation between two v1.0 agents.
+   */
+  it("declares a v1.0 JSON-RPC interface", async () => {
+    const interfaces = (await card()).supportedInterfaces;
+
+    expect(interfaces).toEqual([
+      expect.objectContaining({
+        protocolBinding: "JSONRPC",
+        protocolVersion: "1.0",
+      }),
+    ]);
+  });
+
+  // Kept alongside, so a client still reading the v0.3 shape is not stranded.
+  it("still carries the legacy url for older clients", async () => {
+    const published = await card();
+
+    expect(published.url).toBe(published.supportedInterfaces?.[0]?.url);
   });
 });

@@ -32,6 +32,18 @@ const AGENT_CARD = {
   // sent them to the Next.js page handler, which answers 405.
   url: `${env.NEXT_PUBLIC_BASE_URL}/a2a`,
 
+  // v1.0 replaced the bare `url` (plus protocolVersion/preferredTransport)
+  // with this list. `url` stays alongside it: dropping it would break any
+  // client still reading the v0.3 shape, and a client on v1.0 ignores it.
+  // Our own peer already advertises protocolVersion "1.0" in its card.
+  supportedInterfaces: [
+    {
+      url: `${env.NEXT_PUBLIC_BASE_URL}/a2a`,
+      protocolBinding: "JSONRPC",
+      protocolVersion: "1.0",
+    },
+  ],
+
   // ============ Provider Information ============
   provider: {
     name: "Inbox",

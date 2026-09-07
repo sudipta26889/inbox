@@ -13,6 +13,7 @@ import { A2aApprovalStatus, A2aTaskState } from "@/generated/prisma/enums";
 import { canonicalActionKey } from "@/utils/dharahil/prior-decision";
 import { taskScope } from "@/utils/a2a/task-scope";
 import { checkA2aRequestRateLimit } from "@/utils/a2a/rate-limit";
+import { fromWireState, toWireState } from "@/utils/a2a/wire-state";
 import { nanoid } from "nanoid";
 
 const logger = createScopedLogger("a2a-protocol");
@@ -52,7 +53,8 @@ export interface MessageSendResponse {
   contextId: string;
   messageId?: string;
   replyMessageId?: string;
-  state?: A2aTaskState;
+  /** Wire spelling (TASK_STATE_*), not the stored enum. */
+  state?: string;
   taskId?: string;
 }
 
@@ -69,7 +71,8 @@ export interface TaskGetParams {
 export interface TaskListParams {
   contextId: string;
   limit?: number;
-  state?: A2aTaskState;
+  /** As the peer sent it — either spelling; normalized before it reaches the DB. */
+  state?: string;
 }
 
 /**
@@ -316,7 +319,7 @@ export async function handleMessageSend(
   return {
     contextId,
     taskId,
-    state: initialState,
+    state: toWireState(initialState),
   };
 }
 
@@ -355,7 +358,7 @@ export async function handleTaskGet(
     taskId: task.taskId,
     contextId: task.contextId,
     skill: task.skill,
-    state: task.state,
+    state: toWireState(task.state),
     stateReason: task.stateReason,
     input: task.input,
     result: task.result,
@@ -392,7 +395,10 @@ export async function handleTaskList(
     where: {
       contextId,
       ...taskScope(authContext),
-      ...(state && { state }),
+      // A client filtering by state sends a wire value. Passed straight to
+      // Prisma, a v1.0 name matches no row and the peer sees an empty list
+      // rather than an error — so normalize, and reject a name we don't know.
+      ...(state && { state: requireKnownState(state) }),
     },
     orderBy: { createdAt: "desc" },
     take: Math.min(limit, 100), // Max 100 tasks
@@ -412,7 +418,7 @@ export async function handleTaskList(
     tasks: tasks.map((task) => ({
       taskId: task.taskId,
       skill: task.skill,
-      state: task.state,
+      state: toWireState(task.state),
       stateReason: task.stateReason,
       createdAt: task.createdAt.toISOString(),
       updatedAt: task.updatedAt.toISOString(),
@@ -455,7 +461,9 @@ export async function handleTaskCancel(
   ] as A2aTaskState[];
 
   if (terminalStates.includes(task.state)) {
-    throw new Error(`Cannot cancel task in terminal state: ${task.state}`);
+    throw new Error(
+      `Cannot cancel task in terminal state: ${toWireState(task.state)}`,
+    );
   }
 
   // Transition to canceled state
@@ -484,7 +492,7 @@ export async function handleTaskCancel(
 
   return {
     taskId: task.taskId,
-    state: A2aTaskState.canceled,
+    state: toWireState(A2aTaskState.canceled),
     stateReason: reason || "Canceled by user",
   };
 }
@@ -548,4 +556,13 @@ export function getSkillDefinition(
  */
 export function listSkills(): A2aSkillDefinition[] {
   return Object.values(A2A_SKILL_REGISTRY);
+}
+
+/** Turn a wire state filter into a stored one, or say plainly it is not a state. */
+function requireKnownState(value: string) {
+  const state = fromWireState(value);
+
+  if (!state) throw new Error(`Unknown task state: ${value}`);
+
+  return state;
 }
