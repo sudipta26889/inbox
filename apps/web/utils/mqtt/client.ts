@@ -77,7 +77,7 @@ function ensureClient(): MqttClient | null {
   // looks like an endless reconnect loop rather than a configuration mistake.
   const clientId = `inbox-${process.pid}-${Math.random().toString(36).slice(2, 8)}`;
 
-  client = mqtt.connect(`mqtt://${env.MQTT_HOST}:${env.MQTT_PORT ?? 1883}`, {
+  client = mqtt.connect(`mqtt://${env.MQTT_HOST}:${env.MQTT_PORT || 1883}`, {
     clientId,
     username: env.MQTT_USERNAME,
     password: env.MQTT_PASSWORD,
