@@ -117,7 +117,7 @@ inbox/<slug>/unread/attributes           {"total": 865}
 inbox/<slug>/urgent/state                "Urgent"               last rule that fired
 inbox/<slug>/urgent/attributes           {"count_today": 3, "at": "..."}
 inbox/<slug>/digest/state                "ready"
-inbox/<slug>/digest/attributes           {"items": 12, "at": "..."}
+inbox/<slug>/digest/attributes           {"at": "..."}   (see note)
 inbox/<slug>/approvals/state             2
 inbox/<slug>/approvals/attributes        {"oldest_waiting_seconds": 42,
                                           "actions": ["create_calendar_event"]}
@@ -160,6 +160,13 @@ depends on it being faster.
 `digest/state` stays `"ready"` with the timestamp of the last successful run —
 it is a retained record of the most recent digest, not a flag that resets. A
 subscriber wanting freshness reads `attributes.at`.
+
+`items` was dropped during implementation. No structured item count exists in
+the digest pipeline, so the only available number was a count of non-blank
+lines of AI-generated prose — greeting and sign-off included, and varying with
+however the model wrapped its output. Publishing that as `items` would give a
+dashboard unearned precision. `state` already answers "is there a digest" and
+`at` answers "how fresh"; an honest absent key beats a plausible wrong number.
 
 ## Architecture
 
