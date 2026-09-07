@@ -65,7 +65,9 @@ describe("home assistant mqtt action", () => {
     });
 
     expect(mockPublish).toHaveBeenCalledTimes(1);
-    const [topic, raw] = mockPublish.mock.calls[0];
+    const call = mockPublish.mock.calls[0];
+    expect(call).toHaveLength(2); // no retain option
+    const [topic, raw] = call;
     expect(topic).toBe("homeassistant/inbox/urgent");
 
     expect(JSON.parse(raw)).toMatchObject({

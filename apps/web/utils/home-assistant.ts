@@ -193,7 +193,10 @@ async function executeMqttPublish(
   // being up and on a per-user long-lived token. Same topic, same payload — only
   // the transport changed, so existing HA automations do not notice.
   publishMqtt(topic, JSON.stringify(payload));
-  logger.info("MQTT published", { topic });
+  // publishMqtt is fire-and-forget and fail-soft: it may no-op, queue, or drop.
+  // Delivery is reported by the client module's own connection logging, so this
+  // must not claim more than "handed over".
+  logger.info("MQTT notification handed to the broker client", { topic });
 }
 
 /**
