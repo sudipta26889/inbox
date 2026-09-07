@@ -99,15 +99,11 @@ async function processA2aTasks(logger: Logger) {
   const expiring = tokenHygiene.findings
     .filter((finding) => finding.reason === "expiring")
     .map((finding) => finding.clientName);
-  const expired = tokenHygiene.findings
-    .filter((finding) => finding.reason === "expired")
-    .map((finding) => finding.clientName);
   const stale = tokenHygiene.findings
     .filter((finding) => finding.reason === "stale")
     .map((finding) => finding.clientName);
   await publishServiceHealth("peers", String(tokenHygiene.checked), {
     expiring,
-    expired,
     stale,
   }).catch(() => {});
 

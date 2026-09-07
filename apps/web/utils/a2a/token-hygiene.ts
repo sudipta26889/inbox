@@ -26,7 +26,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export type TokenHygieneFinding = {
   clientName: string;
   clientId: string;
-  reason: "expiring" | "expired" | "stale";
+  reason: "expiring" | "stale";
   detail: string;
 };
 
@@ -52,16 +52,6 @@ export async function reportA2aTokenHygiene(
   for (const token of a2aTokens) {
     const clientName = token.client?.clientName ?? token.clientId;
     const daysToExpiry = (token.expiresAt.getTime() - now.getTime()) / DAY_MS;
-
-    if (daysToExpiry < 0) {
-      findings.push({
-        clientName,
-        clientId: token.clientId,
-        reason: "expired",
-        detail: `expired ${Math.floor(-daysToExpiry)}d ago (${token.expiresAt.toISOString().slice(0, 10)})`,
-      });
-      continue;
-    }
 
     if (daysToExpiry <= WARN_BEFORE_EXPIRY_DAYS) {
       findings.push({
