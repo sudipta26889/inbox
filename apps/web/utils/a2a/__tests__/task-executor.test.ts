@@ -2,6 +2,17 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { executeTask, approveTask, rejectTask } from "../task-executor";
 import { A2aTaskState } from "@/generated/prisma/enums";
 
+const { mockPublishApprovals, mockPendingApprovalsSummary } = vi.hoisted(
+  () => ({
+    mockPublishApprovals: vi.fn().mockResolvedValue(undefined),
+    mockPendingApprovalsSummary: vi.fn().mockResolvedValue({
+      pending: 0,
+      oldestWaitingSeconds: null,
+      actions: [],
+    }),
+  }),
+);
+
 // Mock dependencies
 vi.mock("@/utils/prisma", () => ({
   default: {
@@ -18,6 +29,10 @@ vi.mock("@/utils/prisma", () => ({
       update: vi.fn(),
     },
   },
+}));
+
+vi.mock("@/utils/mqtt/events", () => ({
+  publishApprovals: mockPublishApprovals,
 }));
 
 vi.mock("@/utils/mcp-server/tools/registry", () => ({
@@ -56,6 +71,7 @@ vi.mock("../protocol-handler", () => ({
     };
     return definitions[skill];
   }),
+  pendingApprovalsSummary: mockPendingApprovalsSummary,
 }));
 
 const prisma = await import("@/utils/prisma").then((m) => m.default);
@@ -371,6 +387,69 @@ describe("Task Executor", () => {
       );
     });
 
+    /**
+     * approveTask is one of the ways an approval leaves `pending` — before
+     * this fix, only creation and cancellation published to the bus, so
+     * `inbox/<slug>/approvals/state` kept saying the pre-approval count
+     * forever. Asserting the queried-down count reached publishApprovals is
+     * the regression test for that.
+     */
+    it("publishes the dropped pending count to the bus on approval", async () => {
+      const mockTask = {
+        id: "task-internal-123",
+        taskId: "task-public-123",
+        state: A2aTaskState.auth_required,
+        skill: "calendar.create_event",
+        userId: "user-123",
+        emailAccountId: "email-account-456",
+        clientId: "client-789",
+        input: {},
+        retryCount: 0,
+        maxRetries: 3,
+      };
+
+      (prisma.a2aTask.findUnique as any).mockResolvedValue(mockTask);
+      (prisma.a2aTask.update as any).mockResolvedValue({
+        ...mockTask,
+        state: A2aTaskState.submitted,
+      });
+      (prisma.a2aTaskHistory.create as any).mockResolvedValue({});
+      (prisma.a2aApproval.update as any).mockResolvedValue({});
+
+      const { getSkillDefinition } = await import("../protocol-handler");
+      (getSkillDefinition as any).mockReturnValue({
+        skill: "calendar.create_event",
+        mcpTool: "create_calendar_event",
+        requiredScope: "calendar:write",
+      });
+
+      const { getTool } = await import("@/utils/mcp-server/tools/registry");
+      (getTool as any).mockReturnValue({
+        name: "create_calendar_event",
+        handler: vi.fn().mockResolvedValue({ eventId: "evt-123" }),
+        requiredScope: "calendar:write",
+      });
+
+      // The approval just handled is no longer in the pending query.
+      mockPendingApprovalsSummary.mockResolvedValue({
+        pending: 0,
+        oldestWaitingSeconds: null,
+        actions: [],
+      });
+
+      await approveTask("task-internal-123", "user-123", { approved: true });
+
+      expect(mockPendingApprovalsSummary).toHaveBeenCalledWith(
+        "email-account-456",
+      );
+      expect(mockPublishApprovals).toHaveBeenCalledWith({
+        emailAccountId: "email-account-456",
+        pending: 0,
+        oldestWaitingSeconds: null,
+        actions: [],
+      });
+    });
+
     it("should reject and terminate auth_required task", async () => {
       const mockTask = {
         id: "task-internal-123",
@@ -408,6 +487,45 @@ describe("Task Executor", () => {
           }),
         }),
       );
+
+      // This task row predates the emailAccountId column, so there is
+      // nothing to report to the bus — the guard must skip quietly.
+      expect(mockPublishApprovals).not.toHaveBeenCalled();
+    });
+
+    it("publishes the dropped pending count to the bus on rejection", async () => {
+      const mockTask = {
+        id: "task-internal-123",
+        taskId: "task-public-123",
+        state: A2aTaskState.auth_required,
+        emailAccountId: "email-account-456",
+      };
+
+      (prisma.a2aTask.findUnique as any).mockResolvedValue(mockTask);
+      (prisma.a2aTask.update as any).mockResolvedValue({});
+      (prisma.a2aTaskHistory.create as any).mockResolvedValue({});
+      (prisma.a2aApproval.update as any).mockResolvedValue({});
+      mockPendingApprovalsSummary.mockResolvedValue({
+        pending: 0,
+        oldestWaitingSeconds: null,
+        actions: [],
+      });
+
+      await rejectTask(
+        "task-internal-123",
+        "user-123",
+        "Not authorized for this action",
+      );
+
+      expect(mockPendingApprovalsSummary).toHaveBeenCalledWith(
+        "email-account-456",
+      );
+      expect(mockPublishApprovals).toHaveBeenCalledWith({
+        emailAccountId: "email-account-456",
+        pending: 0,
+        oldestWaitingSeconds: null,
+        actions: [],
+      });
     });
   });
 

@@ -616,7 +616,7 @@ function requireKnownState(value: string) {
  * Snapshot of an account's pending-approval queue for the MQTT bus: how many
  * are waiting, how long the oldest has waited, and which skills they're for.
  */
-async function pendingApprovalsSummary(emailAccountId: string) {
+export async function pendingApprovalsSummary(emailAccountId: string) {
   const pending = await prisma.a2aApproval.findMany({
     where: { status: A2aApprovalStatus.pending, task: { emailAccountId } },
     select: { skill: true, requestedAt: true },
