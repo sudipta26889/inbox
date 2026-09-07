@@ -4,12 +4,13 @@ import type { ExecutedRule } from "@/generated/prisma/client";
 
 vi.mock("server-only", () => ({}));
 
-const { mockPublish } = vi.hoisted(() => ({
+const { mockPublish, mockIsMqttConfigured } = vi.hoisted(() => ({
   mockPublish: vi.fn().mockReturnValue(undefined),
+  mockIsMqttConfigured: vi.fn().mockReturnValue(true),
 }));
 vi.mock("@/utils/mqtt/client", () => ({
   publishMqtt: mockPublish,
-  isMqttConfigured: () => true,
+  isMqttConfigured: mockIsMqttConfigured,
 }));
 
 vi.mock("@/utils/prisma", () => ({
@@ -31,7 +32,28 @@ beforeEach(() => {
     homeAssistantUrl: "http://ha.local:8123",
     homeAssistantToken: "token-1",
   });
+  mockIsMqttConfigured.mockReturnValue(true);
 });
+
+const email = {
+  threadId: "t1",
+  messageId: "m1",
+  subject: "Invoice due",
+  from: "billing@vendor.com",
+  headerMessageId: "<h1>",
+  snippet: "Payment",
+  labels: ["INBOX"],
+  receivedAt: new Date("2026-09-07T05:00:00.000Z"),
+};
+const rule = { id: "r1", ruleId: "r1", ruleName: "Urgent" };
+const executedRule = {
+  id: "er1",
+  threadId: "t1",
+  messageId: "m1",
+  emailAccountId: "acct-1",
+  automated: true,
+  status: ExecutedRuleStatus.APPLIED,
+} as ExecutedRule;
 
 describe("home assistant mqtt action", () => {
   /**
@@ -39,26 +61,6 @@ describe("home assistant mqtt action", () => {
    * a published contract — only the transport is allowed to change.
    */
   it("publishes the same payload it used to send via the HA REST proxy", async () => {
-    const email = {
-      threadId: "t1",
-      messageId: "m1",
-      subject: "Invoice due",
-      from: "billing@vendor.com",
-      headerMessageId: "<h1>",
-      snippet: "Payment",
-      labels: ["INBOX"],
-      receivedAt: new Date("2026-09-07T05:00:00.000Z"),
-    };
-    const rule = { id: "r1", ruleId: "r1", ruleName: "Urgent" };
-    const executedRule = {
-      id: "er1",
-      threadId: "t1",
-      messageId: "m1",
-      emailAccountId: "acct-1",
-      automated: true,
-      status: ExecutedRuleStatus.APPLIED,
-    } as ExecutedRule;
-
     await executeHomeAssistantAction("user-1", email, rule, executedRule, {
       type: "mqtt",
       mqttTopic: "homeassistant/inbox/urgent",
@@ -82,5 +84,46 @@ describe("home assistant mqtt action", () => {
       rule_id: "r1",
       automated: true,
     });
+  });
+
+  it("publishes over MQTT even when Home Assistant credentials are absent", async () => {
+    mockFindUnique.mockResolvedValue({
+      homeAssistantUrl: null,
+      homeAssistantToken: null,
+    });
+
+    await executeHomeAssistantAction("user-1", email, rule, executedRule, {
+      type: "mqtt",
+      mqttTopic: "homeassistant/inbox/urgent",
+    });
+
+    expect(mockPublish).toHaveBeenCalledTimes(1);
+  });
+
+  it("throws a SafeError naming MQTT when MQTT is not configured", async () => {
+    mockIsMqttConfigured.mockReturnValue(false);
+
+    await expect(
+      executeHomeAssistantAction("user-1", email, rule, executedRule, {
+        type: "mqtt",
+        mqttTopic: "homeassistant/inbox/urgent",
+      }),
+    ).rejects.toThrow(/MQTT/);
+    expect(mockPublish).not.toHaveBeenCalled();
+  });
+});
+
+describe("home assistant non-mqtt actions", () => {
+  it("still throws the Home-Assistant-not-configured error when credentials are absent", async () => {
+    mockFindUnique.mockResolvedValue({
+      homeAssistantUrl: null,
+      homeAssistantToken: null,
+    });
+
+    await expect(
+      executeHomeAssistantAction("user-1", email, rule, executedRule, {
+        type: "persistent_notification",
+      }),
+    ).rejects.toThrow(/Home Assistant connection not configured/);
   });
 });

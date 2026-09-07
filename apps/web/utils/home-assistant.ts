@@ -2,7 +2,7 @@ import { createScopedLogger } from "@/utils/logger";
 import { SafeError } from "@/utils/error";
 import prisma from "@/utils/prisma";
 import { sleep } from "@/utils/sleep";
-import { publishMqtt } from "@/utils/mqtt/client";
+import { isMqttConfigured, publishMqtt } from "@/utils/mqtt/client";
 import type { ExecutedRule } from "@/generated/prisma/client";
 
 const logger = createScopedLogger("home-assistant");
@@ -62,16 +62,25 @@ export const executeHomeAssistantAction = async (
     },
   });
 
-  if (!user?.homeAssistantUrl || !user?.homeAssistantToken) {
-    throw new SafeError(
-      "Home Assistant connection not configured. Please add your Home Assistant URL and token in settings.",
-    );
-  }
-
-  const { homeAssistantUrl, homeAssistantToken } = user;
+  // Only the REST-based branches (webhook, service_call, persistent_notification)
+  // need HA credentials. mqtt talks to the broker directly, so it must not be
+  // gated on a token it doesn't use.
+  const requireHomeAssistantCredentials = () => {
+    if (!user?.homeAssistantUrl || !user?.homeAssistantToken) {
+      throw new SafeError(
+        "Home Assistant connection not configured. Please add your Home Assistant URL and token in settings.",
+      );
+    }
+    return {
+      homeAssistantUrl: user.homeAssistantUrl,
+      homeAssistantToken: user.homeAssistantToken,
+    };
+  };
 
   switch (config.type) {
-    case "webhook":
+    case "webhook": {
+      const { homeAssistantUrl, homeAssistantToken } =
+        requireHomeAssistantCredentials();
       return executeWebhookTrigger(
         homeAssistantUrl,
         homeAssistantToken,
@@ -80,9 +89,17 @@ export const executeHomeAssistantAction = async (
         rule,
         executedRule,
       );
+    }
     case "mqtt":
+      if (!isMqttConfigured()) {
+        throw new SafeError(
+          "MQTT connection not configured. Please set MQTT_HOST, MQTT_USERNAME, and MQTT_PASSWORD.",
+        );
+      }
       return executeMqttPublish(config.mqttTopic!, email, rule, executedRule);
-    case "service_call":
+    case "service_call": {
+      const { homeAssistantUrl, homeAssistantToken } =
+        requireHomeAssistantCredentials();
       return executeServiceCall(
         homeAssistantUrl,
         homeAssistantToken,
@@ -93,7 +110,10 @@ export const executeHomeAssistantAction = async (
         rule,
         executedRule,
       );
-    case "persistent_notification":
+    }
+    case "persistent_notification": {
+      const { homeAssistantUrl, homeAssistantToken } =
+        requireHomeAssistantCredentials();
       return executePersistentNotification(
         homeAssistantUrl,
         homeAssistantToken,
@@ -102,6 +122,7 @@ export const executeHomeAssistantAction = async (
         executedRule,
         config.serviceData || {},
       );
+    }
     default:
       throw new Error(
         `Unknown Home Assistant integration type: ${config.type}`,
