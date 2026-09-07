@@ -10,6 +10,7 @@ import {
   TASK_CONFIG_ORDER,
 } from "@/utils/a2a/webhooks";
 import prisma from "@/utils/prisma";
+import { validateWebhookUrlFormat } from "@/utils/webhook-validation";
 
 /**
  * A2A v1.0 §3.1.7 push notification configuration.
@@ -78,9 +79,20 @@ export async function handlePushConfigSet(
           taskId,
           url: pushNotificationConfig.url,
           secret: randomBytes(32).toString("hex"),
-          token: pushNotificationConfig.token,
+          // `?? null`, not the bare value: Prisma treats `undefined` as "no
+          // change" on update, so a plain `pushNotificationConfig.token`
+          // here would leave a stale token in place (and deliverWebhook
+          // would keep echoing it to the new url) when a peer re-`set`s
+          // without one. A2A §3.1.7 `set` is a replace, not a merge.
+          token: pushNotificationConfig.token ?? null,
           enabled: true,
-          events: DEFAULT_EVENTS,
+          // The same reasoning that makes a disabled client default suppress
+          // delivery client-wide (see isConfigEffectivelyEnabled) applies to
+          // `events`: an owner who deselected an event on their default must
+          // not see it silently re-enabled just because a peer called `set`
+          // for a task, which is what always subscribing to DEFAULT_EVENTS
+          // here used to do.
+          events: await defaultEventsForClient(authContext.clientId),
         },
         // No `enabled: true` here — this is the UPDATE path, and forcing it
         // on every `set` would silently undo a disable the owner made
@@ -88,7 +100,7 @@ export async function handlePushConfigSet(
         // still enforced client-wide regardless: see queueWebhook.)
         update: {
           url: pushNotificationConfig.url,
-          token: pushNotificationConfig.token,
+          token: pushNotificationConfig.token ?? null,
         },
       })
     : await upsertDefaultConfig(
@@ -118,9 +130,10 @@ export async function handlePushConfigGet(
   if (!config)
     throw new Error(`No push notification config for task ${taskId}`);
 
-  // The id is redundant for addressing (the partial unique index allows at
-  // most one config per {clientId, taskId}), but silently acting on a
-  // different config than the peer named would be wrong.
+  // The id is redundant for addressing (the full unique index
+  // a2a_webhook_configs_clientId_taskId_key allows at most one config per
+  // {clientId, taskId} — the partial index only covers taskId IS NULL), but
+  // silently acting on a different config than the peer named would be wrong.
   if (pushNotificationConfigId && pushNotificationConfigId !== config.id) {
     throw new Error(
       `pushNotificationConfigId ${pushNotificationConfigId} does not match the config found for task ${taskId} (${config.id})`,
@@ -159,9 +172,10 @@ export async function handlePushConfigDelete(
 
   await assertTaskInScope(authContext, taskId);
 
-  // The id is redundant for addressing (the partial unique index allows at
-  // most one config per {clientId, taskId}), but silently deleting a
-  // different config than the peer named would be wrong.
+  // The id is redundant for addressing (the full unique index
+  // a2a_webhook_configs_clientId_taskId_key allows at most one config per
+  // {clientId, taskId} — the partial index only covers taskId IS NULL), but
+  // silently deleting a different config than the peer named would be wrong.
   if (pushNotificationConfigId) {
     const existing = await prisma.a2aWebhookConfig.findFirst({
       where: { clientId: authContext.clientId, taskId },
@@ -193,9 +207,24 @@ function assertDeliverableUrl(url: string) {
   }
 
   // We sign each payload, but the signature does not protect the payload in
-  // transit — task input and results go over this wire.
+  // transit — task input and results go over this wire. Required in every
+  // environment, unlike validateWebhookUrlFormat's dev-only http allowance.
   if (parsed.protocol !== "https:") {
     throw new Error("pushNotificationConfig.url must use https");
+  }
+
+  // Any authenticated peer reaches this path (see the scope check in
+  // handlePushConfigSet above) — unlike the account-owner-only webhook form
+  // (utils/rule/rule.ts) that this same check guards, so it needs the same
+  // SSRF defenses. One generic message regardless of *why* validation
+  // failed, so a peer can't distinguish "resolves to a private IP" from
+  // "hostname is blocked" and map internal network topology by trial and
+  // error.
+  const result = validateWebhookUrlFormat(url);
+  if (!result.valid) {
+    throw new Error(
+      "pushNotificationConfig.url is not an allowed webhook destination",
+    );
   }
 }
 
@@ -229,9 +258,13 @@ async function upsertDefaultConfig(
     // No `enabled: true` here — this is the default row that
     // POST /api/user/a2a-webhooks's kill switch (enabled: false) disables;
     // forcing it back on every `set` would let a peer silently undo that.
+    //
+    // `token ?? null`, not the bare parameter: Prisma treats `undefined` as
+    // "no change" on update, so a re-`set` without a token would otherwise
+    // leave the old one in place. A2A §3.1.7 `set` is a replace, not a merge.
     return prisma.a2aWebhookConfig.update({
       where: { id: existing.id },
-      data: { url, token },
+      data: { url, token: token ?? null },
     });
   }
 
@@ -241,11 +274,26 @@ async function upsertDefaultConfig(
       taskId: null,
       url,
       secret: randomBytes(32).toString("hex"),
-      token,
+      token: token ?? null,
       enabled: true,
       events: DEFAULT_EVENTS,
     },
   });
+}
+
+/**
+ * The client default's `events`, or every event if the client has none yet.
+ * A fresh task-specific row must inherit this rather than always
+ * subscribing to DEFAULT_EVENTS — see the `events` field of the create
+ * branch in handlePushConfigSet above.
+ */
+async function defaultEventsForClient(clientId: string): Promise<string[]> {
+  const clientDefault = await prisma.a2aWebhookConfig.findFirst({
+    where: { clientId, taskId: null },
+    select: { events: true },
+  });
+
+  return clientDefault?.events ?? DEFAULT_EVENTS;
 }
 
 async function toResponse(config: {

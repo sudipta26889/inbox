@@ -7,6 +7,7 @@ import {
   WEBHOOK_EVENTS,
   deliverWebhook,
   queueWebhook,
+  cleanupOrphanedTaskWebhookConfigs,
 } from "@/utils/a2a/webhooks";
 
 vi.mock("server-only", () => ({}));
@@ -279,5 +280,77 @@ describe("deliverWebhook", () => {
 
     expect(result).toBe(false);
     expect(mockFetch).not.toHaveBeenCalled();
+  });
+});
+
+describe("cleanupOrphanedTaskWebhookConfigs", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("deletes a task-specific row whose task reached a terminal state", async () => {
+    prisma.a2aWebhookConfig.findMany.mockResolvedValue([
+      { taskId: "task_done" },
+    ] as any);
+    prisma.a2aTask.findMany.mockResolvedValue([
+      { taskId: "task_done", state: A2aTaskState.completed },
+    ] as any);
+    prisma.a2aWebhookConfig.deleteMany.mockResolvedValue({ count: 1 });
+
+    const deleted = await cleanupOrphanedTaskWebhookConfigs();
+
+    expect(deleted).toBe(1);
+    expect(prisma.a2aWebhookConfig.deleteMany).toHaveBeenCalledWith({
+      where: { taskId: { in: ["task_done"] } },
+    });
+  });
+
+  it("deletes a task-specific row whose task no longer exists at all", async () => {
+    prisma.a2aWebhookConfig.findMany.mockResolvedValue([
+      { taskId: "task_gone" },
+    ] as any);
+    prisma.a2aTask.findMany.mockResolvedValue([]); // the a2aTask row is gone
+    prisma.a2aWebhookConfig.deleteMany.mockResolvedValue({ count: 1 });
+
+    const deleted = await cleanupOrphanedTaskWebhookConfigs();
+
+    expect(deleted).toBe(1);
+    expect(prisma.a2aWebhookConfig.deleteMany).toHaveBeenCalledWith({
+      where: { taskId: { in: ["task_gone"] } },
+    });
+  });
+
+  it("keeps a task-specific row whose task is still active", async () => {
+    prisma.a2aWebhookConfig.findMany.mockResolvedValue([
+      { taskId: "task_active" },
+    ] as any);
+    prisma.a2aTask.findMany.mockResolvedValue([
+      { taskId: "task_active", state: A2aTaskState.working },
+    ] as any);
+
+    const deleted = await cleanupOrphanedTaskWebhookConfigs();
+
+    expect(deleted).toBe(0);
+    expect(prisma.a2aWebhookConfig.deleteMany).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The client-default row (taskId: null) is owner-configured and has no
+   * task lifecycle — it must never be deleted by this cleanup, even when
+   * other task-specific rows for the same client are. The exclusion is
+   * structural: the very first query only ever selects taskId IS NOT NULL
+   * rows, so a default row can never enter the candidate set in the first
+   * place, regardless of what state any task is in.
+   */
+  it("never queries or deletes the client-default row (taskId: null)", async () => {
+    prisma.a2aWebhookConfig.findMany.mockResolvedValue([]);
+
+    const deleted = await cleanupOrphanedTaskWebhookConfigs();
+
+    expect(deleted).toBe(0);
+    expect(prisma.a2aWebhookConfig.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { taskId: { not: null } } }),
+    );
+    expect(prisma.a2aWebhookConfig.deleteMany).not.toHaveBeenCalled();
   });
 });

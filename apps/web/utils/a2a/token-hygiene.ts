@@ -1,6 +1,7 @@
 import type { Logger } from "@/utils/logger";
 import prisma from "@/utils/prisma";
 import { redis } from "@/utils/redis";
+import { TOKEN_CONFIG } from "@/utils/mcp-server/constants";
 
 /**
  * Surface long-lived peer credentials that nobody is watching.
@@ -114,9 +115,20 @@ export async function reportA2aTokenHygiene(
  * revoked an hour ago may still be mid-refresh on the peer's side, and
  * deleting the row loses the audit trail of a rotation that is still in
  * flight.
+ *
+ * The grace period must stay >= TOKEN_CONFIG.REFRESH_TOKEN_TTL: the refresh
+ * token lives on this same row as the access token, so a shorter grace
+ * would delete a row whose refresh token is still valid, silently signing
+ * that peer out on its next refresh. Derived from REFRESH_TOKEN_TTL itself
+ * (currently 30 days) rather than repeated as a literal, so the two can
+ * never drift apart.
  */
+const REFRESH_TOKEN_TTL_DAYS = Math.ceil(
+  TOKEN_CONFIG.REFRESH_TOKEN_TTL / (24 * 60 * 60),
+);
+
 export async function cleanupExpiredAccessTokens(
-  daysToKeep = 30,
+  daysToKeep = REFRESH_TOKEN_TTL_DAYS,
 ): Promise<number> {
   const threshold = new Date(Date.now() - daysToKeep * DAY_MS);
 

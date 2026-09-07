@@ -85,6 +85,18 @@ describe("ntfy", () => {
     ).toContain("ntfy refused the notification");
   });
 
+  it("strips a trailing slash from NTFY_BASE_URL", async () => {
+    mockEnv.NTFY_BASE_URL = "https://ntfy.example.com/";
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue({ ok: true, status: 200, text: async () => "{}" });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await notifyOwner({ title: "Urgent", message: "x" });
+
+    expect(fetchMock.mock.calls[0][0]).toBe("https://ntfy.example.com/inbox");
+  });
+
   it("sends nothing at all when not configured", async () => {
     mockEnv.NTFY_BASE_URL = "";
     const fetchMock = vi.fn();

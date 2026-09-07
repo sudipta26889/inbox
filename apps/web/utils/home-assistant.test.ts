@@ -170,6 +170,18 @@ describe("home assistant mqtt action", () => {
   });
 
   describe("ntfy push to the owner's phone", () => {
+    /**
+     * The owner-check + notify chain is fire-and-forget (not awaited by
+     * executeHomeAssistantAction — see the comment at its call site), so
+     * awaiting the action alone does not guarantee it has settled yet. This
+     * flushes the microtask queue: setImmediate runs only after every
+     * pending microtask (including the chained awaits inside the
+     * fire-and-forget promise) has drained, regardless of how many ticks it
+     * took.
+     */
+    const flushMicrotasks = () =>
+      new Promise((resolve) => setImmediate(resolve));
+
     it("pushes to ntfy when the account belongs to the owner", async () => {
       mockIsOwnerEmailAccount.mockResolvedValue(true);
 
@@ -177,6 +189,7 @@ describe("home assistant mqtt action", () => {
         type: "mqtt",
         mqttTopic: "homeassistant/inbox/urgent",
       });
+      await flushMicrotasks();
 
       expect(mockIsOwnerEmailAccount).toHaveBeenCalledWith("acct-1");
       expect(mockNotifyOwner).toHaveBeenCalledTimes(1);
@@ -199,13 +212,18 @@ describe("home assistant mqtt action", () => {
         type: "mqtt",
         mqttTopic: "homeassistant/inbox/urgent",
       });
+      await flushMicrotasks();
 
       expect(mockNotifyOwner).not.toHaveBeenCalled();
     });
 
     /**
      * isOwnerEmailAccount does a database read; a blip there must not fail a
-     * rule action that already delivered the MQTT message.
+     * rule action that already delivered the MQTT message. Since the chain
+     * is fire-and-forget, "not fail the rule action" no longer means the
+     * outer promise waits on it at all — it means the rejection never
+     * surfaces as an unhandled rejection either, which is what the .catch
+     * at the call site is for.
      */
     it("does not let a failing owner check fail the rule action", async () => {
       mockIsOwnerEmailAccount.mockRejectedValue(new Error("db down"));
@@ -216,9 +234,40 @@ describe("home assistant mqtt action", () => {
           mqttTopic: "homeassistant/inbox/urgent",
         }),
       ).resolves.toBeUndefined();
+      await flushMicrotasks();
 
       expect(mockPublish).toHaveBeenCalledTimes(1);
       expect(mockNotifyOwner).not.toHaveBeenCalled();
+    });
+
+    /**
+     * Fix for the actual finding: notifyOwner has its own 5s fetch timeout,
+     * and this whole path used to be awaited inline in executeMqttPublish,
+     * serializing that latency into every matched email. Proving it no
+     * longer blocks: executeHomeAssistantAction must resolve while
+     * isOwnerEmailAccount's promise is still pending.
+     */
+    it("does not block the rule action on the owner check", async () => {
+      let resolveOwnerCheck!: (value: boolean) => void;
+      mockIsOwnerEmailAccount.mockReturnValue(
+        new Promise((resolve) => {
+          resolveOwnerCheck = resolve;
+        }),
+      );
+
+      await expect(
+        executeHomeAssistantAction("user-1", email, rule, executedRule, {
+          type: "mqtt",
+          mqttTopic: "homeassistant/inbox/urgent",
+        }),
+      ).resolves.toBeUndefined();
+
+      expect(mockNotifyOwner).not.toHaveBeenCalled();
+
+      resolveOwnerCheck(true);
+      await flushMicrotasks();
+
+      expect(mockNotifyOwner).toHaveBeenCalledTimes(1);
     });
   });
 

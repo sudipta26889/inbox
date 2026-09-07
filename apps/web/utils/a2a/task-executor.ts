@@ -19,6 +19,21 @@ const logger = createScopedLogger("a2a-task-executor");
  */
 
 /**
+ * States the A2A task state machine never leaves once reached (see
+ * A2aTaskState in schema.prisma). Shared so every caller that needs to ask
+ * "is this task done for good" — this file's own transition guard, the
+ * cancel check in protocol-handler.ts, and webhooks.ts's config cleanup —
+ * reads the same list instead of hand-rolling another copy.
+ */
+export const TERMINAL_A2A_TASK_STATES: readonly A2aTaskState[] = [
+  A2aTaskState.completed,
+  A2aTaskState.failed,
+  A2aTaskState.canceled,
+  A2aTaskState.rejected,
+  A2aTaskState.unknown,
+];
+
+/**
  * Execute a task by ID
  *
  * This is the main entry point for task execution.
@@ -199,20 +214,12 @@ async function transitionTaskState(
     durationMs?: number;
   },
 ): Promise<void> {
-  const terminalStates: A2aTaskState[] = [
-    A2aTaskState.completed,
-    A2aTaskState.failed,
-    A2aTaskState.canceled,
-    A2aTaskState.rejected,
-    A2aTaskState.unknown,
-  ];
-
   // Validate state transition
-  if (terminalStates.includes(fromState)) {
+  if (TERMINAL_A2A_TASK_STATES.includes(fromState)) {
     throw new Error(`Cannot transition from terminal state: ${fromState}`);
   }
 
-  const isTerminalState = terminalStates.includes(toState);
+  const isTerminalState = TERMINAL_A2A_TASK_STATES.includes(toState);
 
   // Update task
   await prisma.a2aTask.update({

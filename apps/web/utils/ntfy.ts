@@ -46,7 +46,11 @@ export async function notifyOwner({
   if (!isNtfyEnabled()) return;
 
   try {
-    const response = await fetch(`${env.NTFY_BASE_URL}/${env.NTFY_TOPIC}`, {
+    // Strip a trailing slash: NTFY_BASE_URL is documented (and commonly
+    // entered) without one, but a value that has one would otherwise
+    // produce "https://host//topic".
+    const baseUrl = env.NTFY_BASE_URL?.replace(/\/+$/, "");
+    const response = await fetch(`${baseUrl}/${env.NTFY_TOPIC}`, {
       method: "POST",
       headers: {
         ...(env.NTFY_TOKEN

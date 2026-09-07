@@ -1,6 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import prisma from "@/utils/__mocks__/prisma";
 import type { A2aAuthContext } from "@/utils/a2a/auth";
+import { WEBHOOK_EVENTS } from "@/utils/a2a/webhooks";
 import {
   handlePushConfigDelete,
   handlePushConfigGet,
@@ -20,6 +21,10 @@ const authContext = {
 describe("push notification config", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it("refuses a config for a task the caller does not own", async () => {
@@ -243,6 +248,23 @@ describe("push notification config", () => {
     ).rejects.toThrow(/https/i);
   });
 
+  it("rejects a callback url pointing at a private IP (SSRF)", async () => {
+    // Any authenticated peer reaches `set`, not just the account owner — this
+    // is the trust-boundary change that makes SSRF validation load-bearing
+    // here. Stubbed explicitly so this doesn't depend on the local .env.
+    vi.stubEnv("WEBHOOK_ALLOW_PRIVATE_IPS", "false");
+    prisma.a2aTask.findUnique.mockResolvedValue({ taskId: "task_1" } as any);
+
+    await expect(
+      handlePushConfigSet(authContext, {
+        taskId: "task_1",
+        pushNotificationConfig: { url: "https://192.168.10.252/hook" },
+      }),
+    ).rejects.toThrow(/not an allowed webhook destination/i);
+
+    expect(prisma.a2aWebhookConfig.upsert).not.toHaveBeenCalled();
+  });
+
   it("rejects an auth scheme it does not support, rather than silently ignoring it", async () => {
     // We don't implement any delivery-side auth scheme, only the token. A
     // 200 here would leave the peer believing a scheme it named is enforced.
@@ -338,6 +360,127 @@ describe("push notification config", () => {
     // actually takes should end up with it.
     expect(call.create.token).toBe("peer-token");
     expect(call.update.token).toBe("peer-token");
+  });
+
+  it("clears a task-specific config's stored token when a peer re-sets without one", async () => {
+    // Prisma treats `undefined` as "no change" on update — passing the bare
+    // (possibly-absent) token through would leave the OLD token in place,
+    // and deliverWebhook would keep echoing it to the NEW url. A2A §3.1.7
+    // `set` is a replace, not a merge.
+    prisma.a2aTask.findUnique.mockResolvedValue({ taskId: "task_1" } as any);
+    prisma.a2aWebhookConfig.upsert.mockResolvedValue({
+      id: "cfg_1",
+      clientId: "client_1",
+      taskId: "task_1",
+      url: "https://peer.example/hook",
+      secret: "s",
+      enabled: true,
+      events: ["task.completed"],
+    } as any);
+
+    await handlePushConfigSet(authContext, {
+      taskId: "task_1",
+      pushNotificationConfig: {
+        url: "https://peer.example/hook",
+        token: "first-token",
+      },
+    });
+
+    await handlePushConfigSet(authContext, {
+      taskId: "task_1",
+      pushNotificationConfig: { url: "https://peer.example/hook" },
+    });
+
+    const secondCall = prisma.a2aWebhookConfig.upsert.mock.calls[1][0];
+    expect(secondCall.update.token).toBeNull();
+    expect(secondCall.update.token).not.toBeUndefined();
+  });
+
+  it("clears the client-default config's stored token when a peer re-sets without one", async () => {
+    prisma.a2aWebhookConfig.findFirst.mockResolvedValue({
+      id: "cfg_default",
+      clientId: "client_1",
+      taskId: null,
+      url: "https://old.example/hook",
+      secret: "s",
+      token: "old-token",
+      enabled: true,
+      events: ["task.completed"],
+    } as any);
+    prisma.a2aWebhookConfig.update.mockResolvedValue({
+      id: "cfg_default",
+      clientId: "client_1",
+      taskId: null,
+      url: "https://peer.example/hook",
+      secret: "s",
+      enabled: true,
+      events: ["task.completed"],
+    } as any);
+
+    await handlePushConfigSet(authContext, {
+      pushNotificationConfig: { url: "https://peer.example/hook" },
+    });
+
+    const call = prisma.a2aWebhookConfig.update.mock.calls[0][0];
+    expect(call.data.token).toBeNull();
+    expect(call.data.token).not.toBeUndefined();
+  });
+
+  it("a new task-specific row inherits the client default's events instead of every event", async () => {
+    // isConfigEffectivelyEnabled already folds a disabled client default over
+    // a task-specific row's `enabled`; `events` needs the same inheritance —
+    // otherwise an owner who deselected an event on their default sees it
+    // silently re-enabled the moment a peer calls `set` for a task, since a
+    // fresh row used to always subscribe to every event.
+    prisma.a2aTask.findUnique.mockResolvedValue({ taskId: "task_1" } as any);
+    prisma.a2aWebhookConfig.findFirst.mockResolvedValue({
+      id: "cfg_default",
+      clientId: "client_1",
+      taskId: null,
+      url: "https://old.example/hook",
+      secret: "s",
+      enabled: true,
+      events: ["task.completed", "task.failed"],
+    } as any);
+    prisma.a2aWebhookConfig.upsert.mockResolvedValue({
+      id: "cfg_task",
+      clientId: "client_1",
+      taskId: "task_1",
+      url: "https://peer.example/hook",
+      secret: "s",
+      enabled: true,
+      events: ["task.completed", "task.failed"],
+    } as any);
+
+    await handlePushConfigSet(authContext, {
+      taskId: "task_1",
+      pushNotificationConfig: { url: "https://peer.example/hook" },
+    });
+
+    const call = prisma.a2aWebhookConfig.upsert.mock.calls[0][0];
+    expect(call.create.events).toEqual(["task.completed", "task.failed"]);
+  });
+
+  it("falls back to every event for a new task-specific row when the client has no default yet", async () => {
+    prisma.a2aTask.findUnique.mockResolvedValue({ taskId: "task_1" } as any);
+    prisma.a2aWebhookConfig.findFirst.mockResolvedValue(null);
+    prisma.a2aWebhookConfig.upsert.mockResolvedValue({
+      id: "cfg_task",
+      clientId: "client_1",
+      taskId: "task_1",
+      url: "https://peer.example/hook",
+      secret: "s",
+      enabled: true,
+      events: Object.values(WEBHOOK_EVENTS),
+    } as any);
+
+    await handlePushConfigSet(authContext, {
+      taskId: "task_1",
+      pushNotificationConfig: { url: "https://peer.example/hook" },
+    });
+
+    const call = prisma.a2aWebhookConfig.upsert.mock.calls[0][0];
+    expect(call.create.events).toEqual(Object.values(WEBHOOK_EVENTS));
   });
 
   it("does not re-enable a client-default config the owner disabled through POST /api/user/a2a-webhooks", async () => {

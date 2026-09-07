@@ -19,6 +19,7 @@ import {
 import {
   processPendingWebhooks,
   cleanupOldWebhookDeliveries,
+  cleanupOrphanedTaskWebhookConfigs,
 } from "@/utils/a2a/webhooks";
 
 export const maxDuration = 300;
@@ -369,20 +370,31 @@ async function processWebhooks(logger: Logger) {
  */
 async function cleanupOldRecords(logger: Logger) {
   try {
-    const [rateLimitsDeleted, webhooksDeleted, tokensDeleted] =
-      await Promise.all([
-        cleanupRateLimitRecords(),
-        cleanupOldWebhookDeliveries(30), // Keep 30 days of webhook history
-        cleanupExpiredAccessTokens(30),
-      ]);
+    const [
+      rateLimitsDeleted,
+      webhooksDeleted,
+      tokensDeleted,
+      taskWebhookConfigsDeleted,
+    ] = await Promise.all([
+      cleanupRateLimitRecords(),
+      cleanupOldWebhookDeliveries(30), // Keep 30 days of webhook history
+      cleanupExpiredAccessTokens(),
+      cleanupOrphanedTaskWebhookConfigs(),
+    ]);
 
     logger.info("Cleaned up old records", {
       rateLimitsDeleted,
       webhooksDeleted,
       tokensDeleted,
+      taskWebhookConfigsDeleted,
     });
 
-    return { rateLimitsDeleted, webhooksDeleted, tokensDeleted };
+    return {
+      rateLimitsDeleted,
+      webhooksDeleted,
+      tokensDeleted,
+      taskWebhookConfigsDeleted,
+    };
   } catch (error) {
     logger.error("Failed to clean up old records", {
       error: error instanceof Error ? error.message : String(error),
@@ -391,6 +403,7 @@ async function cleanupOldRecords(logger: Logger) {
       rateLimitsDeleted: 0,
       webhooksDeleted: 0,
       tokensDeleted: 0,
+      taskWebhookConfigsDeleted: 0,
       error,
     };
   }

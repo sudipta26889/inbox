@@ -3,6 +3,7 @@ import { createScopedLogger } from "@/utils/logger";
 import prisma from "@/utils/prisma";
 import { A2aTaskState, A2aWebhookStatus } from "@/generated/prisma/enums";
 import { toWireState } from "@/utils/a2a/wire-state";
+import { TERMINAL_A2A_TASK_STATES } from "@/utils/a2a/task-executor";
 import crypto from "node:crypto";
 
 const logger = createScopedLogger("a2a-webhooks");
@@ -587,6 +588,56 @@ export async function cleanupOldWebhookDeliveries(
         in: [A2aWebhookStatus.delivered, A2aWebhookStatus.failed],
       },
     },
+  });
+
+  return result.count;
+}
+
+/**
+ * Delete task-specific push notification config rows (A2A §3.1.7) whose
+ * task has ended: reached a terminal state, or no longer exists at all.
+ *
+ * A2aWebhookConfig.taskId carries a task's public taskId as a plain string —
+ * no relation, no foreign key, nothing else ever deletes the row. Task 1
+ * added cleanupExpiredAccessTokens here after finding 5657 unpruned rows in
+ * a comparable table; this per-task, per-client table (one `secret` per row)
+ * would grow the same way without this.
+ *
+ * Client-default rows (taskId: null) are never touched — they're
+ * owner-configured through POST /api/user/a2a-webhooks and have no task
+ * lifecycle to expire against. Excluding them is structural here (the first
+ * query only ever selects taskId IS NOT NULL rows), not a runtime check.
+ */
+export async function cleanupOrphanedTaskWebhookConfigs(): Promise<number> {
+  const taskSpecificConfigs = await prisma.a2aWebhookConfig.findMany({
+    where: { taskId: { not: null } },
+    select: { taskId: true },
+    distinct: ["taskId"],
+  });
+
+  if (taskSpecificConfigs.length === 0) return 0;
+
+  const configTaskIds = taskSpecificConfigs.map(
+    (config) => config.taskId as string,
+  );
+
+  const tasks = await prisma.a2aTask.findMany({
+    where: { taskId: { in: configTaskIds } },
+    select: { taskId: true, state: true },
+  });
+  const stateByTaskId = new Map(tasks.map((task) => [task.taskId, task.state]));
+
+  const orphanedTaskIds = configTaskIds.filter((taskId) => {
+    const state = stateByTaskId.get(taskId);
+    // Undefined means the task row is gone outright; either way it will
+    // never queue another webhook through this config.
+    return state === undefined || TERMINAL_A2A_TASK_STATES.includes(state);
+  });
+
+  if (orphanedTaskIds.length === 0) return 0;
+
+  const result = await prisma.a2aWebhookConfig.deleteMany({
+    where: { taskId: { in: orphanedTaskIds } },
   });
 
   return result.count;

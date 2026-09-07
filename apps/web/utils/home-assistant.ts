@@ -233,23 +233,22 @@ async function executeMqttPublish(
 
   // The bus tells Home Assistant that something urgent arrived; this tells the
   // owner's phone what it was. Gated on ADMINS because the ntfy topic is
-  // instance-wide — see isOwnerEmailAccount. The try/catch is load-bearing for
-  // the same reason as publishUrgent's .catch() above: isOwnerEmailAccount
-  // does a database read, and a blip there must not fail a rule execution
-  // that already delivered the MQTT message.
-  try {
-    if (await isOwnerEmailAccount(executedRule.emailAccountId)) {
-      await notifyOwner({
-        title: rule.ruleName ?? "Urgent email",
-        message: `${email.subject}\nFrom: ${email.from}`,
-        priority: 4,
-        tags: ["email"],
-        click: `${env.NEXT_PUBLIC_BASE_URL}/mail`,
-      });
-    }
-  } catch (error) {
+  // instance-wide — see isOwnerEmailAccount. Unlike publishUrgent above, this
+  // is never awaited: isOwnerEmailAccount is a database read and notifyOwner
+  // is a fetch with its own 5s timeout, and this runs once per matched
+  // email — awaiting either would add up to 5s of latency per email and
+  // serialize across a backlog. The .catch is still load-bearing: nothing
+  // here may throw back into a rule execution that already delivered the
+  // MQTT message.
+  notifyOwnerOfUrgentEmail(executedRule.emailAccountId, {
+    title: rule.ruleName ?? "Urgent email",
+    message: `${email.subject}\nFrom: ${email.from}`,
+    priority: 4,
+    tags: ["email"],
+    click: `${env.NEXT_PUBLIC_BASE_URL}/mail`,
+  }).catch((error) => {
     logger.warn("ntfy owner check failed", { error });
-  }
+  });
 
   // publishMqtt is fire-and-forget and fail-soft: it may no-op, queue, or drop.
   // Delivery is reported by the client module's own connection logging, so this
@@ -418,5 +417,19 @@ async function assertMqttTopicAllowed(
     throw new SafeError(
       "MQTT topic must not publish a Home Assistant discovery config",
     );
+  }
+}
+
+/**
+ * Push an urgent-email notification to the owner's phone, gated on the
+ * account actually being the operator's. Called fire-and-forget from
+ * executeMqttPublish, never awaited — see the comment at that call site.
+ */
+async function notifyOwnerOfUrgentEmail(
+  emailAccountId: string,
+  notification: Parameters<typeof notifyOwner>[0],
+): Promise<void> {
+  if (await isOwnerEmailAccount(emailAccountId)) {
+    await notifyOwner(notification);
   }
 }
