@@ -20,7 +20,9 @@ export function register() {
     // "offline" (the last will from the previous process) while the app is
     // actually healthy. Connecting here makes boot itself the trigger.
     // Node-only: MQTT uses TCP sockets, unavailable on the edge runtime.
-    import("@/utils/mqtt/client").then(({ connectMqtt }) => connectMqtt());
+    import("@/utils/mqtt/client")
+      .then(({ connectMqtt }) => connectMqtt())
+      .catch(() => {});
   }
 
   // This is your Sentry.init call from `sentry.edge.config.js|ts`
