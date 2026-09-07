@@ -164,10 +164,14 @@ function MqttSettingsForm({
           id="mqtt-slug"
           placeholder="work"
           disabled={isExecuting}
+          aria-invalid={!!errors.mqttTopicSlug}
+          aria-describedby={
+            errors.mqttTopicSlug ? "mqtt-slug-error" : undefined
+          }
           {...register("mqttTopicSlug")}
         />
         {errors.mqttTopicSlug && (
-          <p className="text-xs text-destructive">
+          <p id="mqtt-slug-error" className="text-xs text-destructive">
             {errors.mqttTopicSlug.message}
           </p>
         )}
