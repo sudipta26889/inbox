@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { env } from "@/env";
 import { createScopedLogger } from "@/utils/logger";
+import { A2A_SKILL_REGISTRY } from "@/utils/a2a/skill-registry";
+import { peerReachableSkills } from "@/utils/a2a/peer-tool-policy";
 
 const logger = createScopedLogger("agent-card");
 
@@ -380,6 +382,32 @@ const AGENT_CARD = {
  * Returns the AgentCard with optional JWS signature
  * Implements proper caching per A2A best practices
  */
+/**
+ * The card as published: only what a peer can actually reach, with the approval
+ * flag taken from the registry rather than retyped.
+ *
+ * The literal below advertised email.send, which peer-tool-policy denies for
+ * every peer — so the card promised a capability we always refuse. And
+ * `requiresHumanApproval` was hand-copied from `requiresApproval` in the skill
+ * registry, which is two sources of truth for "does a human have to see this".
+ * Deriving both means a skill added, denied, or newly gated tomorrow is
+ * described correctly without anyone remembering to edit this file.
+ */
+function publishedCard() {
+  const reachable = new Set(peerReachableSkills());
+
+  return {
+    ...AGENT_CARD,
+    skills: AGENT_CARD.skills
+      .filter((skill) => reachable.has(skill.name))
+      .map((skill) => ({
+        ...skill,
+        requiresHumanApproval:
+          A2A_SKILL_REGISTRY[skill.name]?.requiresApproval ?? false,
+      })),
+  };
+}
+
 export async function GET() {
   try {
     logger.info("AgentCard requested");
@@ -394,7 +422,7 @@ export async function GET() {
     //   };
     // }
 
-    return NextResponse.json(AGENT_CARD, {
+    return NextResponse.json(publishedCard(), {
       headers: {
         "Content-Type": "application/json",
         // Cache for 1 hour (agents should refetch periodically)
@@ -409,7 +437,7 @@ export async function GET() {
     logger.error("Failed to generate AgentCard", { error });
 
     // Return card without signature as fallback
-    return NextResponse.json(AGENT_CARD, {
+    return NextResponse.json(publishedCard(), {
       headers: {
         "Content-Type": "application/json",
         "Cache-Control": "public, max-age=300", // Shorter cache on error

@@ -25,6 +25,16 @@ export const RATE_LIMITS = {
   TASK_CREATE_PER_MINUTE: 30,
   TASK_CREATE_PER_HOUR: 500,
 
+  // Tasks that interrupt a HUMAN. The scarce resource here is not CPU, it is
+  // the reviewer's attention: under the task-creation limits a peer could raise
+  // 500 approval prompts an hour, and an approver buried in prompts starts
+  // approving without reading. That is a denial-of-oversight attack, and it
+  // defeats the gate behaviourally while it still holds on paper. Generous
+  // enough for someone scheduling a day of meetings, tight enough that a flood
+  // stops long before it wears anyone down.
+  APPROVAL_PER_MINUTE: 5,
+  APPROVAL_PER_HOUR: 20,
+
   // Cleanup configuration
   CLEANUP_INTERVAL_MS: 60 * 60 * 1000, // 1 hour
   CLEANUP_OLDER_THAN_HOURS: 24, // Keep records for 24 hours
@@ -215,9 +225,24 @@ export async function checkAndRecordRateLimit(
  */
 export async function checkA2aRequestRateLimit(
   context: A2aAuthContext,
-  operation: "request" | "task_create" = "request",
+  operation: "request" | "task_create" | "approval_request" = "request",
 ): Promise<RateLimitResult> {
   const { clientId, userId } = context;
+
+  if (operation === "approval_request") {
+    const minute = await checkAndRecordRateLimit(
+      `client:${clientId}:approval`,
+      "minute",
+      RATE_LIMITS.APPROVAL_PER_MINUTE,
+    );
+    if (!minute.allowed) return minute;
+
+    return checkAndRecordRateLimit(
+      `client:${clientId}:approval`,
+      "hour",
+      RATE_LIMITS.APPROVAL_PER_HOUR,
+    );
+  }
 
   if (operation === "task_create") {
     // More restrictive limits for task creation

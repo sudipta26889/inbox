@@ -15,6 +15,17 @@ vi.mock("server-only", () => ({}));
 // Mock dependencies
 vi.mock("@/utils/prisma", () => ({
   default: {
+    // A skill that parks for approval now spends a slice of the reviewer's
+    // attention budget before anything is written, so the handler reads and
+    // writes the rate-limit table on that path.
+    a2aRateLimit: {
+      findMany: vi.fn().mockResolvedValue([]),
+      findFirst: vi.fn().mockResolvedValue(null),
+      create: vi.fn().mockResolvedValue({}),
+      update: vi.fn().mockResolvedValue({}),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+    },
     a2aTask: {
       create: vi.fn(),
       findUnique: vi.fn(),
@@ -189,6 +200,32 @@ describe("A2A Protocol Handlers", () => {
       expect(result.state).toBe(A2aTaskState.auth_required);
       expect(prisma.a2aApproval.create).toHaveBeenCalled();
       expect(executeTask).not.toHaveBeenCalled();
+    });
+
+    /**
+     * Approval prompts spend a person's attention, and the generic
+     * task-creation budget allows 500 an hour. A peer that can raise hundreds
+     * of prompts can wear an approver down until they stop reading — the gate
+     * still standing on paper while failing completely in practice.
+     *
+     * Refused BEFORE anything is written: a task and an approval row created
+     * and then rejected would still have queued a notification.
+     */
+    it("refuses to raise an approval once the peer has spent its budget", async () => {
+      vi.mocked(prisma.a2aRateLimit.findMany).mockResolvedValue([
+        { requestCount: 999 },
+      ] as any);
+
+      await expect(
+        handleMessageSend(mockAuthContext, {
+          contextId: "ctx-budget",
+          skill: "calendar.create_event",
+          input: { title: "Meeting" },
+        }),
+      ).rejects.toThrow(/Too many approval requests/);
+
+      expect(prisma.a2aTask.create).not.toHaveBeenCalled();
+      expect(prisma.a2aApproval.create).not.toHaveBeenCalled();
     });
 
     it("should validate contextId is required", async () => {

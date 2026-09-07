@@ -12,6 +12,7 @@ import { validateSkillAccess } from "./auth";
 import { A2aApprovalStatus, A2aTaskState } from "@/generated/prisma/enums";
 import { canonicalActionKey } from "@/utils/dharahil/prior-decision";
 import { taskScope } from "@/utils/a2a/task-scope";
+import { checkA2aRequestRateLimit } from "@/utils/a2a/rate-limit";
 import { nanoid } from "nanoid";
 
 const logger = createScopedLogger("a2a-protocol");
@@ -192,6 +193,28 @@ export async function handleMessageSend(
   // Create task
   const taskId = nanoid();
   const requiresApproval = skillDef.requiresApproval || false;
+
+  // Checked before anything is written. A skill that parks for approval spends
+  // a human's attention, not just CPU, and the task-creation limits are far too
+  // loose for that — they would let a peer raise hundreds of prompts an hour
+  // until one gets waved through unread.
+  if (requiresApproval) {
+    const approvalBudget = await checkA2aRequestRateLimit(
+      authContext,
+      "approval_request",
+    );
+
+    if (!approvalBudget.allowed) {
+      logger.warn("Refusing to raise another approval request", {
+        clientId: authContext.clientId,
+        skill,
+        limit: approvalBudget.limit,
+      });
+      throw new Error(
+        `Too many approval requests. This peer may raise ${approvalBudget.limit} approvals per window; try again after ${approvalBudget.resetAt.toISOString()}.`,
+      );
+    }
+  }
 
   const initialState = requiresApproval
     ? A2aTaskState.auth_required
