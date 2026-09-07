@@ -132,16 +132,27 @@ export async function handleMessageSend(
     // and §7.6.4 is explicit that a state transition is not authorization —
     // a peer must not be able to unpark its own approval by asking.
     const referenced = referenceTaskIds[0]
-      ? await prisma.a2aTask.findFirst({
-          where: { taskId: referenceTaskIds[0], ...taskScope(authContext) },
-          select: {
-            taskId: true,
-            state: true,
-            stateReason: true,
-            skill: true,
-            updatedAt: true,
-          },
-        })
+      ? await prisma.a2aTask
+          .findFirst({
+            where: { taskId: referenceTaskIds[0], ...taskScope(authContext) },
+            select: {
+              taskId: true,
+              state: true,
+              stateReason: true,
+              skill: true,
+              updatedAt: true,
+            },
+          })
+          .catch((error) => {
+            // A failed lookup must not lose the peer's message, which is
+            // already stored above; fall through to the general answerer
+            // instead.
+            logger.error("Failed to look up referenced A2A task", {
+              contextId,
+              error,
+            });
+            return null;
+          })
       : null;
 
     if (referenced) {

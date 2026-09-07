@@ -115,4 +115,25 @@ describe("handleMessageSend — answering a message about a referenced task", ()
       },
     });
   });
+
+  it("falls through to the general answerer when the reference lookup itself fails", async () => {
+    // The peer's message is already durably stored above; a transient DB
+    // error on this lookup must not throw past that point and surface as a
+    // JSON-RPC error for a message that was, in fact, accepted.
+    prisma.a2aMessage.create.mockResolvedValue({ id: "msg_1" } as any);
+    prisma.a2aTask.findFirst.mockRejectedValue(new Error("connection reset"));
+    vi.mocked(answerA2aMessage).mockResolvedValue("a general answer");
+
+    const result = await handleMessageSend(authContext, {
+      contextId: "ctx_1",
+      content: "any update on that one?",
+      referenceTaskIds: ["task_1"],
+    });
+
+    // Resolves rather than rejects, returning the id of the peer's message
+    // that was durably stored before the failing lookup ran.
+    const storedId = prisma.a2aMessage.create.mock.calls[0]?.[0]?.data?.id;
+    expect(result.messageId).toBe(storedId);
+    expect(answerA2aMessage).toHaveBeenCalled();
+  });
 });
