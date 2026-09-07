@@ -285,6 +285,12 @@ export const env = createEnv({
     // Long-term agentic memory (MCP). Scoped per email account via project_id.
     LONGMEMORY_BASE_URL: z.string().url().optional(),
     LONGMEMORY_API_KEY: z.string().optional(),
+
+    // MQTT agent bus. All optional: no broker configured means no publishing.
+    MQTT_HOST: z.string().optional(),
+    MQTT_PORT: z.coerce.number().optional(),
+    MQTT_USERNAME: z.string().optional(),
+    MQTT_PASSWORD: z.string().optional(),
   },
   client: {
     // stripe

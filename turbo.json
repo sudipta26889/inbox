@@ -217,7 +217,12 @@
         "A2A_REMOTE_AGENT_TOKEN",
 
         "LONGMEMORY_BASE_URL",
-        "LONGMEMORY_API_KEY"
+        "LONGMEMORY_API_KEY",
+
+        "MQTT_HOST",
+        "MQTT_PORT",
+        "MQTT_USERNAME",
+        "MQTT_PASSWORD"
       ],
       "outputs": [".next/**", "!.next/cache/**"]
     },
@@ -292,7 +297,12 @@
         "A2A_REMOTE_AGENT_TOKEN",
 
         "LONGMEMORY_BASE_URL",
-        "LONGMEMORY_API_KEY"
+        "LONGMEMORY_API_KEY",
+
+        "MQTT_HOST",
+        "MQTT_PORT",
+        "MQTT_USERNAME",
+        "MQTT_PASSWORD"
       ],
       "outputs": [".next/**", "!.next/cache/**"]
     },
