@@ -182,6 +182,18 @@ model EmailAccount {
 
   digestSchedule Schedule?
 
+  /// MQTT agent bus. Off by default: this instance is not single-tenant, and
+  /// anything holding the broker password can read every topic on it.
+  mqttEnabled Boolean @default(false)
+
+  /// Topic label, so no email address ever appears in a topic string. Unique
+  /// because two accounts choosing "work" would silently merge one person's
+  /// events into another's.
+  mqttTopicSlug String? @unique
+
+  /// Separate, explicit consent for subjects and senders in payloads.
+  mqttIncludeDetail Boolean @default(false)
+
   userId    String
   user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   accountId String  @unique
