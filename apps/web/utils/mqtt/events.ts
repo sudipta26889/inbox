@@ -79,7 +79,9 @@ export async function publishUrgent({
     "urgent",
     urgentPayload({
       ruleName,
-      countToday: 1,
+      // No structured per-day count exists in this pipeline — see
+      // digestPayload's `items` for the same precedent. Omitting the key
+      // beats publishing a plausible-looking but false "1" every time.
       at: new Date().toISOString(),
       ...(consent.includeDetail ? { detail: { subject, from } } : {}),
     }),

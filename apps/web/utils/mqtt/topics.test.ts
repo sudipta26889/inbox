@@ -99,6 +99,21 @@ describe("topics", () => {
     expect(attributes).toMatchObject({ subject: "Invoice", from: "a@b.com" });
   });
 
+  /**
+   * No structured per-day count exists in the urgent-notification pipeline —
+   * an absent key is the point. Publishing `count_today: 1` unconditionally
+   * (the previous behavior) is a fabricated number, never a real one.
+   */
+  it("omits count_today entirely rather than publish a fabricated count", () => {
+    const { attributes } = urgentPayload({
+      ruleName: "Urgent",
+      at: "2026-09-07T05:00:00.000Z",
+    });
+
+    expect(attributes).not.toHaveProperty("count_today");
+    expect(attributes).toEqual({ at: "2026-09-07T05:00:00.000Z" });
+  });
+
   it("carries a real item count in the digest payload", () => {
     expect(digestPayload({ items: 4, at: "2026-09-07T05:00:00.000Z" })).toEqual(
       {

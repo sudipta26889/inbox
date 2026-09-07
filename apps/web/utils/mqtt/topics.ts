@@ -130,14 +130,19 @@ export function urgentPayload({
   detail,
 }: {
   ruleName: string;
-  countToday: number;
+  /** Omitted entirely when no real count exists — never a guessed number. */
+  countToday?: number;
   at: string;
   /** Only supplied when the account has mqttIncludeDetail. */
   detail?: { subject: string; from: string };
 }) {
   return {
     state: ruleName,
-    attributes: { count_today: countToday, at, ...(detail ?? {}) },
+    attributes: {
+      ...(countToday === undefined ? {} : { count_today: countToday }),
+      at,
+      ...(detail ?? {}),
+    },
   };
 }
 

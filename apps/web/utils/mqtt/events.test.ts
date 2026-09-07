@@ -116,6 +116,26 @@ describe("mqtt events", () => {
     expect(attributes).toMatch(/Invoice/);
   });
 
+  /**
+   * No structured per-day count exists in this pipeline. Publishing
+   * `count_today: 1` unconditionally used to be a fabricated number; omitting
+   * the key is the fix.
+   */
+  it("omits count_today from the published attributes", async () => {
+    await publishUrgent({
+      emailAccountId: "a1",
+      ruleName: "Urgent",
+      subject: "Invoice",
+      from: "billing@vendor.com",
+    });
+
+    const attributes = mockPublish.mock.calls.find(([t]) =>
+      t.endsWith("/urgent/attributes"),
+    )?.[1];
+    expect(attributes).not.toContain("count_today");
+    expect(JSON.parse(attributes as string)).not.toHaveProperty("count_today");
+  });
+
   describe("publishDigest", () => {
     it("publishes state, attributes and a discovery config", async () => {
       await publishDigest({ emailAccountId: "a1", items: 3 });
