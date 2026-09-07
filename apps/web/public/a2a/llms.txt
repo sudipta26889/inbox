@@ -165,6 +165,49 @@ This changed: task queries were previously scoped by user alone, so two peers
 belonging to the same person could read and cancel each other's tasks. If you
 relied on that, you were relying on a bug.
 
+## MQTT Event Bus
+
+Inbox publishes its state to the LAN MQTT broker, so an agent can learn that
+something happened without polling this API. The bus is **listen-only**: it
+carries events, never commands.
+
+Act by calling A2A over HTTP with your own token. MQTT authenticates a
+connection rather than a request — one shared credential, no per-request
+identity, no scopes, no per-peer audit — so accepting commands there would mean
+rebuilding every control this API already has on a strictly weaker channel.
+MQTT is the discovery plane; A2A is the control plane.
+
+Topics (all retained, so a subscriber connecting late gets current state
+immediately rather than waiting for the next change):
+
+```
+inbox/availability                  "online" | "offline"
+inbox/dependencies/state            count of unhealthy dependencies
+inbox/dependencies/attributes       {"unhealthy": [...]}
+inbox/peers/state                   count of peer credentials checked
+inbox/peers/attributes              {"expiring": [...], "stale": [...]}
+inbox/agent_runs/state              last run outcome
+inbox/agent_runs/attributes         {"steps", "repeated_tool_calls", "answered", "hit_step_cap"}
+inbox/<slug>/unread/state           unread count
+inbox/<slug>/urgent/state           name of the last rule that matched
+inbox/<slug>/digest/state           "ready"
+inbox/<slug>/approvals/state        count of approvals waiting on a human
+```
+
+`inbox/availability` carries a Last Will: if the process dies the broker
+publishes `offline` on its behalf, so agent-down detection needs no polling and
+no watchdog.
+
+Per-account topics (`inbox/<slug>/…`) appear only for accounts that have opted
+in, under a slug chosen by the account holder — no email address appears in any
+topic or payload. Payloads carry counts and classifications; subjects and
+senders appear only if that account separately opted into detail. Service-level
+topics carry no mail content at all.
+
+Entities self-register via Home Assistant MQTT Discovery under
+`homeassistant/sensor/inbox/<entity>/config` and
+`homeassistant/sensor/inbox_<slug>/<entity>/config`.
+
 ## Rate Limits
 
 - Client: 60 requests/minute, 1000/hour
