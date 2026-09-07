@@ -94,7 +94,7 @@ export type SetDigestEnabledBody = z.infer<typeof setDigestEnabledBody>;
 // client-side via zodResolver. The slug is substituted into an MQTT topic
 // string and an HA unique_id, so a mismatch here could let a slash or
 // wildcard through to the server unvalidated.
-const MQTT_SLUG_PATTERN = /^[a-z0-9][a-z0-9_-]{0,30}$/;
+export const MQTT_SLUG_PATTERN = /^[a-z0-9][a-z0-9_-]{0,30}$/;
 
 export const updateMqttSettingsBody = z
   .object({

@@ -1,12 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   getDigestConfigBody,
+  MQTT_SLUG_PATTERN,
   saveAiSettingsBody,
   saveDigestScheduleBody,
   updateDigestItemsBody,
   updateMqttSettingsBody,
 } from "./settings.validation";
 import { DEFAULT_PROVIDER, Provider } from "@/utils/llms/config";
+
+vi.mock("server-only", () => ({}));
 
 describe("digest validation schemas", () => {
   it("getDigestConfigBody accepts empty object", () => {
@@ -132,5 +135,19 @@ describe("updateMqttSettingsBody", () => {
       mqttTopicSlug: "a".repeat(31),
     });
     expect(result.success).toBe(true);
+  });
+
+  /**
+   * The pattern is duplicated on purpose: topics.ts is server-only, and this
+   * schema also runs in the browser via zodResolver. Nothing else keeps the two
+   * copies equal, and a divergence is silent — the form would accept a slug the
+   * publisher later refuses, or worse, one that corrupts a topic string and
+   * routes one account's events into another's namespace.
+   */
+  it("keeps the client-side slug pattern identical to the publisher's", async () => {
+    const { SLUG_PATTERN } = await import("@/utils/mqtt/topics");
+
+    expect(MQTT_SLUG_PATTERN.source).toBe(SLUG_PATTERN.source);
+    expect(MQTT_SLUG_PATTERN.flags).toBe(SLUG_PATTERN.flags);
   });
 });

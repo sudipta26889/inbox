@@ -20,8 +20,11 @@ export type MqttEntity = "unread" | "urgent" | "digest" | "approvals";
 /**
  * A slug is substituted into a topic string and an HA `unique_id`, so a slash
  * or a wildcard would silently reroute or corrupt another account's topics.
+ *
+ * Exported so the duplicate pattern in settings.validation.ts can be tested
+ * against it to prevent silent divergence.
  */
-const SLUG_PATTERN = /^[a-z0-9][a-z0-9_-]{0,30}$/;
+export const SLUG_PATTERN = /^[a-z0-9][a-z0-9_-]{0,30}$/;
 
 export function isValidSlug(slug: string): boolean {
   return SLUG_PATTERN.test(slug);
