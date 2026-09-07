@@ -2,7 +2,13 @@ import "server-only";
 import { randomBytes } from "node:crypto";
 import type { A2aAuthContext } from "@/utils/a2a/auth";
 import { taskScope } from "@/utils/a2a/task-scope";
-import { WEBHOOK_EVENTS } from "@/utils/a2a/webhooks";
+import {
+  WEBHOOK_EVENTS,
+  getConfigForTask,
+  isConfigEffectivelyEnabled,
+  taskConfigWhere,
+  TASK_CONFIG_ORDER,
+} from "@/utils/a2a/webhooks";
 import prisma from "@/utils/prisma";
 
 /**
@@ -46,8 +52,10 @@ export async function handlePushConfigSet(
 
   // We don't implement any auth scheme (mTLS, OAuth, etc.) on the delivery
   // side — only the token below. Accepting this silently would leave the
-  // peer believing a scheme it named is actually enforced.
-  if (pushNotificationConfig.authentication) {
+  // peer believing a scheme it named is actually enforced. An empty
+  // `schemes` array means the same thing as omitting `authentication`
+  // entirely, so only a non-empty list is rejected.
+  if (pushNotificationConfig.authentication?.schemes?.length) {
     throw new Error(
       "pushNotificationConfig.authentication is not supported; use token instead",
     );
@@ -94,30 +102,30 @@ export async function handlePushConfigSet(
 
 export async function handlePushConfigGet(
   authContext: A2aAuthContext,
-  params: { taskId: string },
+  params: { taskId: string; pushNotificationConfigId?: string },
 ): Promise<PushConfigResponse> {
-  const { taskId } = params;
+  const { taskId, pushNotificationConfigId } = params;
   if (!taskId) throw new Error("taskId is required");
 
   await assertTaskInScope(authContext, taskId);
 
   // The task's own row wins; the client default answers for a task that was
-  // never configured individually, which is what actually fires today.
-  // `IN (taskId, NULL)` would silently drop the NULL row — SQL's IN never
-  // matches NULL — so the fallback is an explicit OR instead.
-  const config = await prisma.a2aWebhookConfig.findFirst({
-    where: {
-      clientId: authContext.clientId,
-      OR: [{ taskId }, { taskId: null }],
-    },
-    // Postgres defaults DESC to NULLS FIRST, which would hand back the
-    // default row even when a task-specific one exists; pin NULLS LAST so
-    // the non-null, task-specific row always wins the tie.
-    orderBy: { taskId: { sort: "desc", nulls: "last" } },
-  });
+  // never configured individually, which is what actually fires today. See
+  // getConfigForTask in webhooks.ts for why this needs an explicit OR and
+  // NULLS LAST rather than an `in` filter or a plain DESC.
+  const config = await getConfigForTask(authContext.clientId, taskId);
 
   if (!config)
     throw new Error(`No push notification config for task ${taskId}`);
+
+  // The id is redundant for addressing (the partial unique index allows at
+  // most one config per {clientId, taskId}), but silently acting on a
+  // different config than the peer named would be wrong.
+  if (pushNotificationConfigId && pushNotificationConfigId !== config.id) {
+    throw new Error(
+      `pushNotificationConfigId ${pushNotificationConfigId} does not match the config found for task ${taskId} (${config.id})`,
+    );
+  }
 
   return toResponse(config);
 }
@@ -131,27 +139,41 @@ export async function handlePushConfigList(
 
   await assertTaskInScope(authContext, taskId);
 
-  // See handlePushConfigGet for why this is OR + explicit null ordering
-  // rather than an `in` filter.
+  // See getConfigForTask in webhooks.ts for why this is OR + explicit null
+  // ordering rather than an `in` filter; shared here as findMany rather than
+  // findFirst since list wants both rows when both exist.
   const configs = await prisma.a2aWebhookConfig.findMany({
-    where: {
-      clientId: authContext.clientId,
-      OR: [{ taskId }, { taskId: null }],
-    },
-    orderBy: { taskId: { sort: "desc", nulls: "last" } },
+    where: taskConfigWhere(authContext.clientId, taskId),
+    orderBy: TASK_CONFIG_ORDER,
   });
 
-  return { configs: configs.map(toResponse) };
+  return { configs: await Promise.all(configs.map(toResponse)) };
 }
 
 export async function handlePushConfigDelete(
   authContext: A2aAuthContext,
-  params: { taskId: string },
+  params: { taskId: string; pushNotificationConfigId?: string },
 ): Promise<{ deleted: boolean }> {
-  const { taskId } = params;
+  const { taskId, pushNotificationConfigId } = params;
   if (!taskId) throw new Error("taskId is required");
 
   await assertTaskInScope(authContext, taskId);
+
+  // The id is redundant for addressing (the partial unique index allows at
+  // most one config per {clientId, taskId}), but silently deleting a
+  // different config than the peer named would be wrong.
+  if (pushNotificationConfigId) {
+    const existing = await prisma.a2aWebhookConfig.findFirst({
+      where: { clientId: authContext.clientId, taskId },
+      select: { id: true },
+    });
+
+    if (existing && existing.id !== pushNotificationConfigId) {
+      throw new Error(
+        `pushNotificationConfigId ${pushNotificationConfigId} does not match the config found for task ${taskId} (${existing.id})`,
+      );
+    }
+  }
 
   // Only the task-specific row. Deleting the client default here would
   // silently disable push for every other task the peer has running.
@@ -226,13 +248,14 @@ async function upsertDefaultConfig(
   });
 }
 
-function toResponse(config: {
+async function toResponse(config: {
   id: string;
+  clientId: string;
   taskId: string | null;
   url: string;
   enabled: boolean;
   events: string[];
-}): PushConfigResponse {
+}): Promise<PushConfigResponse> {
   // No `secret`, no `token`. `secret` is the HMAC key we sign with; `token`
   // is the peer's own shared credential that we echo back on each delivery
   // so it can verify the call came from us — returning either here would
@@ -242,7 +265,11 @@ function toResponse(config: {
     pushNotificationConfigId: config.id,
     taskId: config.taskId,
     url: config.url,
-    enabled: config.enabled,
+    // The row's own flag isn't enough: a task-specific row stays `enabled:
+    // true` while a disabled client default suppresses every delivery for
+    // it (see queueWebhook). Reporting the raw flag here would tell a peer
+    // push is on when nothing is actually being delivered.
+    enabled: await isConfigEffectivelyEnabled(config),
     events: config.events,
   };
 }

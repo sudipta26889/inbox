@@ -183,22 +183,25 @@ export const DELETE = withAuth("user/a2a-webhooks", async (request) => {
     return NextResponse.json({ error: "Client not found" }, { status: 404 });
   }
 
-  // Delete webhook config. This route predates A2A §3.1.7 per-task config; it
-  // only ever manages the client-level default (taskId NULL). Prisma's
-  // compound-unique input can't carry null, so find the row before deleting
-  // it by id.
-  const existingConfig = await prisma.a2aWebhookConfig.findFirst({
-    where: { clientId, taskId: null },
+  // This is the owner's kill switch, so it has to stop delivery outright —
+  // not just for the client-level default this route predates A2A §3.1.7
+  // per-task config to manage. A peer can create task-specific rows via
+  // pushconfig.set (see push-config.ts), and queueWebhook only suppresses
+  // those when a *disabled* default row exists — with no default row at
+  // all, a task-specific row still delivers. Deleting every row for this
+  // client, not just taskId: null, is the simplest way to guarantee nothing
+  // is left that would still fire, and it keeps this GET route's
+  // `configured` answer accurate (no rows left means nothing to deliver).
+  const result = await prisma.a2aWebhookConfig.deleteMany({
+    where: { clientId },
   });
 
-  if (!existingConfig) {
+  if (result.count === 0) {
     return NextResponse.json(
       { error: "Webhook config not found" },
       { status: 404 },
     );
   }
-
-  await prisma.a2aWebhookConfig.delete({ where: { id: existingConfig.id } });
 
   return NextResponse.json({ success: true });
 });

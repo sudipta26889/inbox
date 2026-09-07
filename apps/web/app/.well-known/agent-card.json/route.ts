@@ -54,7 +54,7 @@ const AGENT_CARD = {
   // ============ Capabilities ============
   capabilities: {
     streaming: true, // SSE at /a2a/stream
-    pushNotifications: true, // Webhooks, configured per client
+    pushNotifications: true, // Webhooks, configured per task with a client-level default
     humanInTheLoop: true, // Supports approval workflows
     stateTransitionHistory: true, // Tracks task state changes
   },

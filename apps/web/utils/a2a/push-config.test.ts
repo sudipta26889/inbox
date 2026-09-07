@@ -146,6 +146,92 @@ describe("push notification config", () => {
     expect(prisma.a2aWebhookConfig.findFirst).not.toHaveBeenCalled();
   });
 
+  it("looks up the task's config through the same shared query as queueWebhook (explicit OR, NULLS LAST), not a second hand-rolled copy", async () => {
+    // handlePushConfigGet used to duplicate this query inline; a regression
+    // back to a hand-rolled copy (e.g. a plain `in` filter, or DESC without
+    // NULLS LAST) would silently hand back the client default instead of a
+    // task-specific row and still pass every other test in this file.
+    prisma.a2aTask.findUnique.mockResolvedValue({ taskId: "task_1" } as any);
+    prisma.a2aWebhookConfig.findFirst.mockResolvedValue({
+      id: "cfg_1",
+      clientId: "client_1",
+      taskId: "task_1",
+      url: "https://peer.example/hook",
+      secret: "s",
+      enabled: true,
+      events: ["task.completed"],
+    } as any);
+
+    await handlePushConfigGet(authContext, { taskId: "task_1" });
+
+    const call = prisma.a2aWebhookConfig.findFirst.mock.calls[0][0];
+    expect(call?.where).toMatchObject({
+      clientId: "client_1",
+      OR: [{ taskId: "task_1" }, { taskId: null }],
+    });
+    expect(call?.orderBy).toEqual({ taskId: { sort: "desc", nulls: "last" } });
+  });
+
+  it("reports enabled: false for a task-specific config when the client default is disabled", async () => {
+    // getConfigForTask's own OR+NULLS-LAST query resolves the task-specific
+    // row (it wins the tie); queueWebhook additionally suppresses delivery
+    // because the client default is disabled. A peer told `enabled: true`
+    // here would have no way to learn push is actually off.
+    prisma.a2aTask.findUnique.mockResolvedValue({ taskId: "task_1" } as any);
+    prisma.a2aWebhookConfig.findFirst.mockImplementation(({ where }: any) => {
+      // isConfigEffectivelyEnabled's own lookup for the client default is a
+      // direct `taskId: null` filter with no OR; getConfigForTask's is the
+      // OR-based fallback query. Keying on that shape (not call order) is
+      // what lets this test tell a correct implementation from a broken one.
+      if (where?.taskId === null && !where?.OR) {
+        return Promise.resolve({
+          id: "cfg_default",
+          clientId: "client_1",
+          taskId: null,
+          url: "https://old.example/hook",
+          secret: "s",
+          enabled: false,
+          events: ["task.completed"],
+        }) as any;
+      }
+      return Promise.resolve({
+        id: "cfg_task",
+        clientId: "client_1",
+        taskId: "task_1",
+        url: "https://peer.example/hook",
+        secret: "s",
+        enabled: true,
+        events: ["task.completed"],
+      }) as any;
+    });
+
+    const result = await handlePushConfigGet(authContext, {
+      taskId: "task_1",
+    });
+
+    expect(result.enabled).toBe(false);
+  });
+
+  it("rejects get when pushNotificationConfigId does not match the config found for the task", async () => {
+    prisma.a2aTask.findUnique.mockResolvedValue({ taskId: "task_1" } as any);
+    prisma.a2aWebhookConfig.findFirst.mockResolvedValue({
+      id: "cfg_1",
+      clientId: "client_1",
+      taskId: "task_1",
+      url: "https://peer.example/hook",
+      secret: "s",
+      enabled: true,
+      events: ["task.completed"],
+    } as any);
+
+    await expect(
+      handlePushConfigGet(authContext, {
+        taskId: "task_1",
+        pushNotificationConfigId: "cfg_some_other_config",
+      }),
+    ).rejects.toThrow(/does not match/i);
+  });
+
   it("rejects a non-https callback url", async () => {
     prisma.a2aTask.findUnique.mockResolvedValue({ taskId: "task_1" } as any);
 
@@ -171,6 +257,29 @@ describe("push notification config", () => {
 
     expect(prisma.a2aWebhookConfig.upsert).not.toHaveBeenCalled();
     expect(prisma.a2aWebhookConfig.create).not.toHaveBeenCalled();
+  });
+
+  it("accepts authentication: { schemes: [] }, since an empty list means the same as omitting it", async () => {
+    prisma.a2aWebhookConfig.findFirst.mockResolvedValue(null);
+    prisma.a2aWebhookConfig.create.mockResolvedValue({
+      id: "cfg_default",
+      clientId: "client_1",
+      taskId: null,
+      url: "https://peer.example/hook",
+      secret: "s",
+      enabled: true,
+      events: ["task.completed"],
+    } as any);
+
+    const result = await handlePushConfigSet(authContext, {
+      pushNotificationConfig: {
+        url: "https://peer.example/hook",
+        authentication: { schemes: [] },
+      },
+    });
+
+    expect(result.taskId).toBeNull();
+    expect(prisma.a2aWebhookConfig.create).toHaveBeenCalled();
   });
 
   it("stores a client-level default when no taskId is given", async () => {
@@ -325,6 +434,22 @@ describe("push notification config", () => {
     ).rejects.toThrow("Task not found: task_1");
 
     expect(prisma.a2aTask.findUnique).toHaveBeenCalled();
+    expect(prisma.a2aWebhookConfig.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it("rejects delete when pushNotificationConfigId does not match the config found for the task, and deletes nothing", async () => {
+    prisma.a2aTask.findUnique.mockResolvedValue({ taskId: "task_1" } as any);
+    prisma.a2aWebhookConfig.findFirst.mockResolvedValue({
+      id: "cfg_actual",
+    } as any);
+
+    await expect(
+      handlePushConfigDelete(authContext, {
+        taskId: "task_1",
+        pushNotificationConfigId: "cfg_some_other_config",
+      }),
+    ).rejects.toThrow(/does not match/i);
+
     expect(prisma.a2aWebhookConfig.deleteMany).not.toHaveBeenCalled();
   });
 });

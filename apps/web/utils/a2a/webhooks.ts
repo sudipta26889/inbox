@@ -79,7 +79,7 @@ export async function queueWebhook(
 
   const webhookConfig = await getConfigForTask(task.clientId, task.taskId);
 
-  if (!webhookConfig || !webhookConfig.enabled) {
+  if (!webhookConfig) {
     logger.trace("No webhook configured for client", {
       clientId: task.clientId,
       event,
@@ -91,23 +91,15 @@ export async function queueWebhook(
   // fallback for tasks with no row of their own: without this check, a peer
   // disabled by the owner could resume delivery by calling `set` with a
   // taskId, since the fresh task-specific row is created enabled and always
-  // wins the lookup above over the disabled default. Checked here, at
-  // delivery time, rather than by forcing new rows disabled at create time,
-  // so the switch also covers task-specific rows that already existed
-  // before the default was disabled.
-  if (webhookConfig.taskId !== null) {
-    const clientDefault = await prisma.a2aWebhookConfig.findFirst({
-      where: { clientId: task.clientId, taskId: null },
-      select: { enabled: true },
-    });
-
-    if (clientDefault && !clientDefault.enabled) {
-      logger.trace("Client default is disabled; suppressing task webhook", {
-        clientId: task.clientId,
-        event,
-      });
-      return;
-    }
+  // wins the lookup above over the disabled default. Folded into one helper
+  // so `pushconfig.get/list/set` (see push-config.ts's toResponse) and
+  // deliverWebhook's retry path can't drift from what actually ships here.
+  if (!(await isConfigEffectivelyEnabled(webhookConfig))) {
+    logger.trace(
+      "Webhook config disabled or suppressed by a disabled client default",
+      { clientId: task.clientId, event },
+    );
+    return;
   }
 
   // Check if this event is subscribed
@@ -239,6 +231,31 @@ export async function deliverWebhook(deliveryId: string): Promise<boolean> {
       ? await getConfigForTask(delivery.clientId, task.taskId)
       : null;
 
+    // The config may have been disabled (or the task-specific row deleted
+    // outright, e.g. by DELETE /api/user/a2a-webhooks) after this delivery
+    // was queued but before a retry runs. Without this, a delivery queued
+    // while push was on keeps firing through all five retries regardless of
+    // what the peer does in between.
+    if (!webhookConfig || !(await isConfigEffectivelyEnabled(webhookConfig))) {
+      logger.info("Skipping webhook delivery: config disabled or removed", {
+        deliveryId,
+        taskId: delivery.taskId,
+        event: delivery.event,
+      });
+
+      await prisma.a2aWebhookDelivery.update({
+        where: { id: deliveryId },
+        data: {
+          status: A2aWebhookStatus.failed,
+          lastAttemptAt: new Date(),
+          errorMessage: "Push notification config disabled or removed",
+          nextAttemptAt: null,
+        },
+      });
+
+      return false;
+    }
+
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
       "User-Agent": "InboxZero-A2A-Webhook/1.0",
@@ -340,23 +357,58 @@ export async function deliverWebhook(deliveryId: string): Promise<boolean> {
   }
 }
 
+// A2A §3.1.7 config is per task; a NULL taskId row is the client's default.
+// `IN (taskId, NULL)` would silently drop the NULL row — SQL's IN never
+// matches NULL — so the fallback is an explicit OR. Postgres also defaults
+// DESC to NULLS FIRST, which would hand back the default even when a
+// task-specific row exists, hence the explicit NULLS LAST. This exact shape
+// has been duplicated (and gotten wrong) more than once, so it's defined
+// here once and shared by every findFirst/findMany that needs "this task's
+// own config, or the client default" (see getConfigForTask below and
+// handlePushConfigList in push-config.ts).
+export function taskConfigWhere(clientId: string, taskId: string) {
+  return {
+    clientId,
+    OR: [{ taskId }, { taskId: null }],
+  };
+}
+
+export const TASK_CONFIG_ORDER = {
+  taskId: { sort: "desc", nulls: "last" },
+} as const;
+
 /**
  * Find the push notification config that applies to a task: its own
  * task-specific row if one exists, else the client's default.
  */
-function getConfigForTask(clientId: string, taskId: string) {
-  // A2A §3.1.7 config is per task; a NULL taskId row is the client's default.
-  // `IN (taskId, NULL)` would silently drop the NULL row — SQL's IN never
-  // matches NULL — so the fallback is an explicit OR. Postgres also defaults
-  // DESC to NULLS FIRST, which would hand back the default even when a
-  // task-specific row exists, hence the explicit NULLS LAST.
+export function getConfigForTask(clientId: string, taskId: string) {
   return prisma.a2aWebhookConfig.findFirst({
-    where: {
-      clientId,
-      OR: [{ taskId }, { taskId: null }],
-    },
-    orderBy: { taskId: { sort: "desc", nulls: "last" } },
+    where: taskConfigWhere(clientId, taskId),
+    orderBy: TASK_CONFIG_ORDER,
   });
+}
+
+/**
+ * Whether a config would actually let a delivery through: its own `enabled`
+ * flag, folded with the client-wide kill switch a disabled default enforces
+ * over every task-specific row (see queueWebhook). Shared with
+ * push-config.ts's toResponse so a peer is never told `enabled: true` while
+ * queueWebhook and deliverWebhook are suppressing every delivery.
+ */
+export async function isConfigEffectivelyEnabled(config: {
+  clientId: string;
+  taskId: string | null;
+  enabled: boolean;
+}): Promise<boolean> {
+  if (!config.enabled) return false;
+  if (config.taskId === null) return true;
+
+  const clientDefault = await prisma.a2aWebhookConfig.findFirst({
+    where: { clientId: config.clientId, taskId: null },
+    select: { enabled: true },
+  });
+
+  return !clientDefault || clientDefault.enabled;
 }
 
 /**

@@ -219,4 +219,65 @@ describe("deliverWebhook", () => {
     const [, options] = mockFetch.mock.calls[0];
     expect(options.headers).not.toHaveProperty("X-A2A-Notification-Token");
   });
+
+  it("does not fire, and records the delivery as failed, when the config was disabled after it was queued", async () => {
+    // Retries happen up to 5 times over minutes; the owner may disable push
+    // in between. Without this guard, a delivery queued while push was on
+    // keeps firing through every retry regardless of what the peer does.
+    prisma.a2aWebhookDelivery.findUnique.mockResolvedValue({
+      id: "delivery_1",
+      taskId: "internal_task_1",
+      clientId: "client_1",
+      url: "https://peer.example/hook",
+      method: "POST",
+      event: WEBHOOK_EVENTS.TASK_COMPLETED,
+      payload: {},
+      signature: "sha256=abc",
+      status: A2aWebhookStatus.pending,
+      attempts: 0,
+      maxAttempts: 5,
+    } as any);
+    prisma.a2aTask.findUnique.mockResolvedValue({ taskId: "task_1" } as any);
+    prisma.a2aWebhookConfig.findFirst.mockResolvedValue(
+      fakeConfig({ enabled: false }),
+    );
+    prisma.a2aWebhookDelivery.update.mockResolvedValue({} as any);
+
+    const result = await deliverWebhook("delivery_1");
+
+    expect(result).toBe(false);
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(prisma.a2aWebhookDelivery.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "delivery_1" },
+        data: expect.objectContaining({ status: A2aWebhookStatus.failed }),
+      }),
+    );
+  });
+
+  it("does not fire, and records the delivery as failed, when the config row was deleted after it was queued", async () => {
+    prisma.a2aWebhookDelivery.findUnique.mockResolvedValue({
+      id: "delivery_1",
+      taskId: "internal_task_1",
+      clientId: "client_1",
+      url: "https://peer.example/hook",
+      method: "POST",
+      event: WEBHOOK_EVENTS.TASK_COMPLETED,
+      payload: {},
+      signature: "sha256=abc",
+      status: A2aWebhookStatus.pending,
+      attempts: 0,
+      maxAttempts: 5,
+    } as any);
+    prisma.a2aTask.findUnique.mockResolvedValue({ taskId: "task_1" } as any);
+    // e.g. the owner called DELETE /api/user/a2a-webhooks, which now removes
+    // every row for the client (see route.ts) rather than just the default.
+    prisma.a2aWebhookConfig.findFirst.mockResolvedValue(null);
+    prisma.a2aWebhookDelivery.update.mockResolvedValue({} as any);
+
+    const result = await deliverWebhook("delivery_1");
+
+    expect(result).toBe(false);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
 });
