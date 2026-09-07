@@ -10,6 +10,7 @@ import type { EmailProvider } from "@/utils/email/types";
 import type { Logger } from "@/utils/logger";
 import { sleep } from "@/utils/sleep";
 import { clearCachedResearchForUser } from "@/utils/redis/research-cache";
+import { clearAccountTopics } from "@/utils/mqtt/events";
 
 export async function deleteUser({
   userId,
@@ -30,6 +31,7 @@ export async function deleteUser({
           id: true,
           email: true,
           watchEmailsSubscriptionId: true,
+          mqttTopicSlug: true,
         },
       },
     },
@@ -53,6 +55,7 @@ export async function deleteUser({
       userId,
       emailProvider,
       subscriptionId: account.emailAccount.watchEmailsSubscriptionId,
+      mqttTopicSlug: account.emailAccount.mqttTopicSlug,
       logger,
     });
   });
@@ -105,6 +108,7 @@ async function deleteResources({
   userId,
   emailProvider,
   subscriptionId,
+  mqttTopicSlug,
   logger,
 }: {
   emailAccountId: string;
@@ -112,8 +116,17 @@ async function deleteResources({
   userId: string;
   emailProvider: EmailProvider | null;
   subscriptionId: string | null;
+  mqttTopicSlug: string | null;
   logger: Logger;
 }) {
+  // Retained topics outlive the account (see clearAccountTopics), so
+  // deleting the account — a stronger opt-out than disabling it — must clear
+  // them too. clearAccountTopics is fail-soft by construction; no wrapping
+  // needed. The slug was captured before any deletion, above.
+  if (mqttTopicSlug) {
+    clearAccountTopics(mqttTopicSlug);
+  }
+
   const resourcesPromise = Promise.allSettled([
     deleteLoopsContact(emailAccountId),
     deletePosthogUser({ email }),

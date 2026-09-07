@@ -17,6 +17,7 @@ import {
 import { clearLastEmailAccountCookie } from "@/utils/cookies.server";
 import { aliasPosthogUser } from "@/utils/posthog";
 import { cleanupAIDraftsForAccount } from "@/utils/ai/draft-cleanup";
+import { clearAccountTopics } from "@/utils/mqtt/events";
 
 export const saveAboutAction = actionClient
   .metadata({ name: "saveAbout" })
@@ -90,6 +91,7 @@ export const deleteEmailAccountAction = actionClientUser
       select: {
         email: true,
         accountId: true,
+        mqttTopicSlug: true,
         user: { select: { email: true } },
       },
     });
@@ -144,6 +146,14 @@ export const deleteEmailAccountAction = actionClientUser
     await prisma.account.delete({
       where: { id: emailAccount.accountId, userId },
     });
+
+    // Retained topics outlive the account (see clearAccountTopics), so
+    // deleting the account — a stronger opt-out than disabling it — must
+    // clear them too. The slug was captured before the delete above.
+    // clearAccountTopics is fail-soft by construction; no wrapping needed.
+    if (emailAccount.mqttTopicSlug) {
+      clearAccountTopics(emailAccount.mqttTopicSlug);
+    }
 
     after(async () => {
       await updateAccountSeats({ userId });
