@@ -2,6 +2,7 @@ import { type A2aAuthContext, withA2aAuth } from "@/utils/a2a/auth";
 import prisma from "@/utils/prisma";
 import { createScopedLogger } from "@/utils/logger";
 import { A2aTaskState } from "@/generated/prisma/enums";
+import { taskScope } from "@/utils/a2a/task-scope";
 
 const logger = createScopedLogger("a2a-stream");
 
@@ -56,7 +57,7 @@ export async function GET(request: Request) {
   const task = await prisma.a2aTask.findUnique({
     where: {
       taskId,
-      userId: authResult.userId,
+      ...taskScope(authResult),
     },
     select: {
       id: true,

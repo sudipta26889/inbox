@@ -11,6 +11,7 @@ import type { A2aAuthContext } from "./auth";
 import { validateSkillAccess } from "./auth";
 import { A2aApprovalStatus, A2aTaskState } from "@/generated/prisma/enums";
 import { canonicalActionKey } from "@/utils/dharahil/prior-decision";
+import { taskScope } from "@/utils/a2a/task-scope";
 import { nanoid } from "nanoid";
 
 const logger = createScopedLogger("a2a-protocol");
@@ -312,7 +313,7 @@ export async function handleTaskGet(
   const task = await prisma.a2aTask.findUnique({
     where: {
       taskId,
-      userId: authContext.userId, // Ensure user owns this task
+      ...taskScope(authContext),
     },
     include: {
       history: {
@@ -367,7 +368,7 @@ export async function handleTaskList(
   const tasks = await prisma.a2aTask.findMany({
     where: {
       contextId,
-      userId: authContext.userId,
+      ...taskScope(authContext),
       ...(state && { state }),
     },
     orderBy: { createdAt: "desc" },
@@ -413,7 +414,7 @@ export async function handleTaskCancel(
   const task = await prisma.a2aTask.findUnique({
     where: {
       taskId,
-      userId: authContext.userId,
+      ...taskScope(authContext),
     },
   });
 
@@ -482,7 +483,7 @@ export async function handleContextGet(
   const userTask = await prisma.a2aTask.findFirst({
     where: {
       contextId,
-      userId: authContext.userId,
+      ...taskScope(authContext),
     },
     select: { id: true },
   });
