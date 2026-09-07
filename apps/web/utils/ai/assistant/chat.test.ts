@@ -18,7 +18,10 @@ vi.mock("@/utils/llms", () => ({
   toolCallAgentStream: mockToolCallAgentStream,
 }));
 vi.mock("@/utils/prisma", () => ({
-  default: { rule: { findMany: vi.fn().mockResolvedValue([]) } },
+  default: {
+    rule: { findMany: vi.fn().mockResolvedValue([]) },
+    chatMemory: { findMany: vi.fn().mockResolvedValue([]) },
+  },
 }));
 
 import { aiProcessAssistantChat } from "./chat";

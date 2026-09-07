@@ -20,10 +20,11 @@ import prisma from "@/utils/prisma";
  * were flagged), and embeddings rank negations ABOVE paraphrases, so
  * similarity is a fine way to FIND candidates and a terrible way to decide.
  *
- * ponytail: subject matching only. If the model coins "courier" on Monday and
- * "shipping_provider" on Friday, supersession silently doesn't fire and we are
- * back to today's behaviour — degradation, not regression. Upgrade path is a
- * nightly sweep that clusters live subjects and merges keys.
+ * ponytail: subject matching only, exact. The model is shown this account's
+ * live subjects when it calls saveMemory, so it usually reuses the right key —
+ * but nothing enforces it, and two names for one slot still means two live
+ * rows. Degradation, not regression. Upgrade path is a nightly sweep that
+ * clusters live subjects and merges keys.
  */
 export async function saveMemory({
   emailAccountId,

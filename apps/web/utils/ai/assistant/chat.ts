@@ -397,6 +397,21 @@ Behavior anchors (minimal examples):
       contextMessages,
     });
 
+  // Distinct live subjects, so saveMemory's exact-match supersession has a
+  // chance to fire. Capped: this goes into every request's tool description.
+  // Skipped entirely in readOnly runs — saveMemory isn't offered there.
+  const existingSubjects = readOnly
+    ? []
+    : (
+        await prisma.chatMemory.findMany({
+          where: { emailAccountId, subject: { not: null }, supersededAt: null },
+          select: { subject: true },
+          distinct: ["subject"],
+          orderBy: { createdAt: "desc" },
+          take: 50,
+        })
+      ).map((row) => row.subject as string);
+
   const messagesWithCacheControl = addAnthropicCacheControl(
     cacheOptimizedMessages,
     stablePrefixEndIndex,
@@ -491,7 +506,11 @@ Behavior anchors (minimal examples):
               updatePersonalInstructionsTool(toolOptions),
             addToKnowledgeBase: addToKnowledgeBaseTool(toolOptions),
             searchMemories: searchMemoriesTool(toolOptions),
-            saveMemory: saveMemoryTool({ ...toolOptions, chatId }),
+            saveMemory: saveMemoryTool({
+              ...toolOptions,
+              chatId,
+              existingSubjects,
+            }),
             ...(emailSendToolsEnabled
               ? {
                   sendEmail: sendEmailTool(toolOptions),

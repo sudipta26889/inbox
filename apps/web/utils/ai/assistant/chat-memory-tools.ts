@@ -101,15 +101,26 @@ export const saveMemoryTool = ({
   emailAccountId,
   chatId,
   logger,
+  existingSubjects,
 }: {
   email: string;
   emailAccountId: string;
   chatId?: string;
   logger: Logger;
+  /**
+   * Live subject keys for this account. Supersession resolves on exact
+   * subject match, so a model that coins a second name for a slot it already
+   * has silently keeps both facts. Static examples in the description could
+   * not fix that; the account's real keys can.
+   */
+  existingSubjects: string[];
 }) =>
   tool({
     description:
-      "Save a memory for future conversations. Use when the user asks you to remember something or when you identify a durable preference worth saving (e.g., workflow preferences, important contacts, inbox management style).",
+      "Save a memory for future conversations. Use when the user asks you to remember something or when you identify a durable preference worth saving (e.g., workflow preferences, important contacts, inbox management style)." +
+      (existingSubjects.length
+        ? `\n\nExisting keys for this account — reuse one whenever the fact is about the same thing: ${existingSubjects.join(", ")}.`
+        : ""),
     inputSchema: z.object({
       content: z
         .string()
