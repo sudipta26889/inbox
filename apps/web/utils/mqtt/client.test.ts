@@ -61,8 +61,21 @@ describe("mqtt client", () => {
     expect(clientId).toMatch(new RegExp(`^inbox-${process.pid}-[a-z0-9]+$`));
   });
 
-  it("registers a last will so the broker announces our death", () => {
+  /**
+   * inbox/availability describes the SERVICE, not a process. A bare
+   * publishMqtt (a script, a one-off job — anything that didn't call
+   * connectMqtt) must not own the Last Will: it exiting without a clean
+   * DISCONNECT would otherwise make the broker announce the whole service
+   * dead while the real service is healthy.
+   */
+  it("registers no last will for a process that never called connectMqtt", () => {
     publishMqtt("inbox/x/state", "1");
+
+    expect(mockConnect.mock.calls[0][1].will).toBeUndefined();
+  });
+
+  it("registers a last will on inbox/availability for the connectMqtt-marked service instance", () => {
+    connectMqtt();
 
     expect(mockConnect.mock.calls[0][1].will).toMatchObject({
       topic: "inbox/availability",
@@ -109,15 +122,16 @@ describe("mqtt client", () => {
     )?.[1] as () => void;
     connectHandler();
 
-    // availability + the capped queue, oldest dropped.
-    expect(fakeClient.publish.mock.calls.length).toBe(MAX_QUEUED_MESSAGES + 1);
+    // A bare publishMqtt caller doesn't own availability, so just the capped
+    // queue, oldest dropped.
+    expect(fakeClient.publish.mock.calls.length).toBe(MAX_QUEUED_MESSAGES);
     const topics = fakeClient.publish.mock.calls.map(([t]) => t);
     expect(topics).not.toContain("inbox/x/0");
     expect(topics).toContain(`inbox/x/${MAX_QUEUED_MESSAGES + 49}`);
   });
 
-  it("announces itself online when it connects", () => {
-    publishMqtt("inbox/x/state", "1");
+  it("announces itself online when the connectMqtt-marked service instance connects", () => {
+    connectMqtt();
     fakeClient.connected = true;
     const connectHandler = fakeClient.on.mock.calls.find(
       ([event]) => event === "connect",
@@ -128,6 +142,22 @@ describe("mqtt client", () => {
       "inbox/availability",
       "online",
       { qos: 1, retain: true },
+      expect.any(Function),
+    );
+  });
+
+  it("does not announce online for a process that never called connectMqtt", () => {
+    publishMqtt("inbox/x/state", "1");
+    fakeClient.connected = true;
+    const connectHandler = fakeClient.on.mock.calls.find(
+      ([event]) => event === "connect",
+    )?.[1] as () => void;
+    connectHandler();
+
+    expect(fakeClient.publish).not.toHaveBeenCalledWith(
+      "inbox/availability",
+      "online",
+      expect.anything(),
       expect.any(Function),
     );
   });

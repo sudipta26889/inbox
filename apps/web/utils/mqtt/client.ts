@@ -24,6 +24,16 @@ let client: MqttClient | null = null;
 let queue: Queued[] = [];
 let lastLoggedState: string | null = null;
 
+/**
+ * inbox/availability describes the SERVICE, not a process. Only the one
+ * process connectMqtt() marks (the long-lived web service, wired up from
+ * instrumentation.ts at boot) may own the Last Will and the "online"
+ * announcement. Any other process that only calls publishMqtt (a script, a
+ * one-off job) must connect without a will — its exit is not the service
+ * going down, and must not make the broker say otherwise.
+ */
+let isServiceInstance = false;
+
 export function isMqttConfigured(): boolean {
   return Boolean(env.MQTT_HOST && env.MQTT_USERNAME && env.MQTT_PASSWORD);
 }
@@ -63,6 +73,8 @@ export function publishMqtt(
 export function connectMqtt(): void {
   if (!isMqttConfigured()) return;
 
+  isServiceInstance = true;
+
   try {
     ensureClient();
   } catch (error) {
@@ -76,6 +88,7 @@ function ensureClient(): MqttClient | null {
   // Sharing a client id makes the broker disconnect the older connection, which
   // looks like an endless reconnect loop rather than a configuration mistake.
   const clientId = `inbox-${process.pid}-${Math.random().toString(36).slice(2, 8)}`;
+  const ownsAvailability = isServiceInstance;
 
   client = mqtt.connect(`mqtt://${env.MQTT_HOST}:${env.MQTT_PORT || 1883}`, {
     clientId,
@@ -85,21 +98,27 @@ function ensureClient(): MqttClient | null {
     connectTimeout: 10_000,
     // Our own bounded queue is the buffer; mqtt.js's unbounded one is not.
     queueQoSZero: false,
-    will: {
-      topic: AVAILABILITY_TOPIC,
-      payload: "offline",
-      qos: 1,
-      retain: true,
-    },
+    ...(ownsAvailability
+      ? {
+          will: {
+            topic: AVAILABILITY_TOPIC,
+            payload: "offline",
+            qos: 1,
+            retain: true,
+          },
+        }
+      : {}),
   });
 
   client.on("connect", () => {
     logState("connected");
-    send(client as MqttClient, {
-      topic: AVAILABILITY_TOPIC,
-      payload: "online",
-      retain: true,
-    });
+    if (ownsAvailability) {
+      send(client as MqttClient, {
+        topic: AVAILABILITY_TOPIC,
+        payload: "online",
+        retain: true,
+      });
+    }
     flush();
   });
 
@@ -167,4 +186,5 @@ export function __resetMqttForTests() {
   client = null;
   queue = [];
   lastLoggedState = null;
+  isServiceInstance = false;
 }
