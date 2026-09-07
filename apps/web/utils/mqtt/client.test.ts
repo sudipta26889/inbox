@@ -142,4 +142,42 @@ describe("mqtt client", () => {
 
     expect(mockConnect).toHaveBeenCalledTimes(1);
   });
+
+  /**
+   * mqtt.js fires "connect" on CONNACK, not on the TCP handshake, so a broker
+   * that completes TCP and then refuses authorization surfaces only through
+   * this handler, as an error carrying the CONNACK return code. Nothing else
+   * exercises it, so a typo in the field name (or an unregistered handler)
+   * would pass every other test in this file.
+   */
+  it("logs the CONNACK error code so a refusal reads differently than an outage", () => {
+    const consoleLogSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    publishMqtt("inbox/x/state", "1");
+    const errorHandler = fakeClient.on.mock.calls.find(
+      ([event]) => event === "error",
+    )?.[1] as (error: unknown) => void;
+
+    expect(() =>
+      errorHandler({ message: "Connection refused: Not authorized", code: 5 }),
+    ).not.toThrow();
+
+    const logged = consoleLogSpy.mock.calls.flat().join(" ");
+    expect(logged).toContain('"code": 5');
+
+    consoleLogSpy.mockRestore();
+  });
+
+  /**
+   * The outer try/catch in publishMqtt guards ensureClient() and enqueue(),
+   * not just send(). A construction failure (bad options, a synchronous throw
+   * from mqtt.connect) must be swallowed the same as a publish failure.
+   */
+  it("does not throw when constructing the client itself throws", () => {
+    mockConnect.mockImplementation(() => {
+      throw new Error("construction failed");
+    });
+
+    expect(() => publishMqtt("inbox/x/state", "1")).not.toThrow();
+  });
 });

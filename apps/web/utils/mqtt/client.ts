@@ -123,7 +123,7 @@ function enqueue(message: Queued) {
   queue.push(message);
 
   if (queue.length > MAX_QUEUED_MESSAGES) {
-    queue = queue.slice(-MAX_QUEUED_MESSAGES);
+    queue.shift();
     logState("queue-full");
   }
 }
