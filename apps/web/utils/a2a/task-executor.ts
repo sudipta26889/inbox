@@ -6,9 +6,8 @@ import { getTool } from "@/utils/mcp-server/tools/registry";
 import type { McpToolContext } from "@/utils/mcp-server/tools/registry";
 import {
   getSkillDefinition,
-  pendingApprovalsSummary,
+  publishPendingApprovalsUpdate,
 } from "./protocol-handler";
-import { publishApprovals } from "@/utils/mqtt/events";
 
 const logger = createScopedLogger("a2a-task-executor");
 
@@ -351,18 +350,7 @@ export async function approveTask(
 
   // Approving is one of the ways an approval leaves the pending queue, so the
   // bus's count has to drop here too — not just on creation and withdrawal.
-  // Task rows predate the emailAccountId column and may not carry one; there
-  // is nothing to report to the bus for those. The catch is load-bearing,
-  // same as the two existing publish sites: a database blip must not fail an
-  // approval.
-  const { emailAccountId } = task;
-  if (emailAccountId) {
-    await pendingApprovalsSummary(emailAccountId)
-      .then((approvalsSummary) =>
-        publishApprovals({ emailAccountId, ...approvalsSummary }),
-      )
-      .catch(() => {});
-  }
+  await publishPendingApprovalsUpdate(task.emailAccountId);
 
   // Transition task to submitted state for execution
   await transitionTaskState(
@@ -416,16 +404,9 @@ export async function rejectTask(
     },
   });
 
-  // Rejecting also removes this approval from the pending queue. Same
-  // load-bearing catch and missing-emailAccountId guard as approveTask above.
-  const { emailAccountId } = task;
-  if (emailAccountId) {
-    await pendingApprovalsSummary(emailAccountId)
-      .then((approvalsSummary) =>
-        publishApprovals({ emailAccountId, ...approvalsSummary }),
-      )
-      .catch(() => {});
-  }
+  // Rejecting also removes this approval from the pending queue. Same as
+  // approveTask above.
+  await publishPendingApprovalsUpdate(task.emailAccountId);
 
   // Transition task to rejected terminal state
   await transitionTaskState(

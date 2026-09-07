@@ -279,17 +279,8 @@ export async function handleMessageSend(
     });
 
     // The bus should show the queue as it stands after this new approval, not
-    // before it. The catch is load-bearing and covers both steps: computing
-    // the summary is itself a database read, and a blip there — same as one
-    // in the publisher itself — must not fail approval creation.
-    await pendingApprovalsSummary(authContext.emailAccountId)
-      .then((approvalsSummary) =>
-        publishApprovals({
-          emailAccountId: authContext.emailAccountId,
-          ...approvalsSummary,
-        }),
-      )
-      .catch(() => {});
+    // before it.
+    await publishPendingApprovalsUpdate(authContext.emailAccountId);
 
     // Submit to DharaHIL for human approval
     try {
@@ -509,18 +500,7 @@ export async function handleTaskCancel(
       taskId: task.taskId,
     });
 
-    // Task rows predate the emailAccountId column and may not carry one;
-    // there is nothing to report to the bus for those.
-    const emailAccountId = task.emailAccountId;
-    if (emailAccountId) {
-      // Same load-bearing catch as above: covers both the summary read and
-      // the publish, so a database blip cannot fail the cancellation.
-      await pendingApprovalsSummary(emailAccountId)
-        .then((approvalsSummary) =>
-          publishApprovals({ emailAccountId, ...approvalsSummary }),
-        )
-        .catch(() => {});
-    }
+    await publishPendingApprovalsUpdate(task.emailAccountId);
   }
 
   // Record state transition
@@ -632,4 +612,25 @@ export async function pendingApprovalsSummary(emailAccountId: string) {
       : null,
     actions: pending.map((approval) => approval.skill),
   };
+}
+
+/**
+ * Summarize-then-publish the account's pending-approval queue to the bus.
+ * Every place that moves an approval into or out of "pending" needs this
+ * same pair of calls with the same load-bearing catch (a database blip here
+ * must never fail the approval action that triggered it) — shared once
+ * rather than copy-pasted at each call site.
+ */
+export async function publishPendingApprovalsUpdate(
+  emailAccountId: string | null | undefined,
+): Promise<void> {
+  // Task rows predate the emailAccountId column and may not carry one; there
+  // is nothing to report to the bus for those.
+  if (!emailAccountId) return;
+
+  await pendingApprovalsSummary(emailAccountId)
+    .then((approvalsSummary) =>
+      publishApprovals({ emailAccountId, ...approvalsSummary }),
+    )
+    .catch(() => {});
 }

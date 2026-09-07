@@ -2,16 +2,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { executeTask, approveTask, rejectTask } from "../task-executor";
 import { A2aTaskState } from "@/generated/prisma/enums";
 
-const { mockPublishApprovals, mockPendingApprovalsSummary } = vi.hoisted(
-  () => ({
-    mockPublishApprovals: vi.fn().mockResolvedValue(undefined),
-    mockPendingApprovalsSummary: vi.fn().mockResolvedValue({
-      pending: 0,
-      oldestWaitingSeconds: null,
-      actions: [],
-    }),
-  }),
-);
+const { mockPublishPendingApprovalsUpdate } = vi.hoisted(() => ({
+  mockPublishPendingApprovalsUpdate: vi.fn().mockResolvedValue(undefined),
+}));
 
 // Mock dependencies
 vi.mock("@/utils/prisma", () => ({
@@ -29,10 +22,6 @@ vi.mock("@/utils/prisma", () => ({
       update: vi.fn(),
     },
   },
-}));
-
-vi.mock("@/utils/mqtt/events", () => ({
-  publishApprovals: mockPublishApprovals,
 }));
 
 vi.mock("@/utils/mcp-server/tools/registry", () => ({
@@ -71,7 +60,7 @@ vi.mock("../protocol-handler", () => ({
     };
     return definitions[skill];
   }),
-  pendingApprovalsSummary: mockPendingApprovalsSummary,
+  publishPendingApprovalsUpdate: mockPublishPendingApprovalsUpdate,
 }));
 
 const prisma = await import("@/utils/prisma").then((m) => m.default);
@@ -391,8 +380,9 @@ describe("Task Executor", () => {
      * approveTask is one of the ways an approval leaves `pending` — before
      * this fix, only creation and cancellation published to the bus, so
      * `inbox/<slug>/approvals/state` kept saying the pre-approval count
-     * forever. Asserting the queried-down count reached publishApprovals is
-     * the regression test for that.
+     * forever. Asserting the account reaches publishPendingApprovalsUpdate is
+     * the regression test for that; the summarize-then-publish logic itself
+     * is tested where it lives, in protocol-handler.test.ts.
      */
     it("publishes the dropped pending count to the bus on approval", async () => {
       const mockTask = {
@@ -430,24 +420,11 @@ describe("Task Executor", () => {
         requiredScope: "calendar:write",
       });
 
-      // The approval just handled is no longer in the pending query.
-      mockPendingApprovalsSummary.mockResolvedValue({
-        pending: 0,
-        oldestWaitingSeconds: null,
-        actions: [],
-      });
-
       await approveTask("task-internal-123", "user-123", { approved: true });
 
-      expect(mockPendingApprovalsSummary).toHaveBeenCalledWith(
+      expect(mockPublishPendingApprovalsUpdate).toHaveBeenCalledWith(
         "email-account-456",
       );
-      expect(mockPublishApprovals).toHaveBeenCalledWith({
-        emailAccountId: "email-account-456",
-        pending: 0,
-        oldestWaitingSeconds: null,
-        actions: [],
-      });
     });
 
     it("should reject and terminate auth_required task", async () => {
@@ -488,9 +465,11 @@ describe("Task Executor", () => {
         }),
       );
 
-      // This task row predates the emailAccountId column, so there is
-      // nothing to report to the bus — the guard must skip quietly.
-      expect(mockPublishApprovals).not.toHaveBeenCalled();
+      // This task row predates the emailAccountId column. Whether that skips
+      // quietly is publishPendingApprovalsUpdate's own guard, tested in
+      // protocol-handler.test.ts — here it's enough that rejectTask still
+      // passes the (absent) id through rather than crashing on it.
+      expect(mockPublishPendingApprovalsUpdate).toHaveBeenCalledWith(undefined);
     });
 
     it("publishes the dropped pending count to the bus on rejection", async () => {
@@ -505,11 +484,6 @@ describe("Task Executor", () => {
       (prisma.a2aTask.update as any).mockResolvedValue({});
       (prisma.a2aTaskHistory.create as any).mockResolvedValue({});
       (prisma.a2aApproval.update as any).mockResolvedValue({});
-      mockPendingApprovalsSummary.mockResolvedValue({
-        pending: 0,
-        oldestWaitingSeconds: null,
-        actions: [],
-      });
 
       await rejectTask(
         "task-internal-123",
@@ -517,15 +491,9 @@ describe("Task Executor", () => {
         "Not authorized for this action",
       );
 
-      expect(mockPendingApprovalsSummary).toHaveBeenCalledWith(
+      expect(mockPublishPendingApprovalsUpdate).toHaveBeenCalledWith(
         "email-account-456",
       );
-      expect(mockPublishApprovals).toHaveBeenCalledWith({
-        emailAccountId: "email-account-456",
-        pending: 0,
-        oldestWaitingSeconds: null,
-        actions: [],
-      });
     });
   });
 

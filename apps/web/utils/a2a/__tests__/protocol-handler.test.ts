@@ -5,6 +5,7 @@ import {
   handleTaskList,
   handleTaskCancel,
   handleContextGet,
+  publishPendingApprovalsUpdate,
 } from "../protocol-handler";
 import { A2A_SKILL_REGISTRY } from "../skill-registry";
 import type { A2aAuthContext } from "../auth";
@@ -581,6 +582,42 @@ describe("A2A Protocol Handlers", () => {
       expect(A2A_SKILL_REGISTRY["calendar.create_event"].requiresApproval).toBe(
         true,
       );
+    });
+  });
+
+  /**
+   * Shared by every place an approval moves into or out of "pending"
+   * (creation and cancellation here, approve/reject in task-executor.ts, and
+   * the DharaHIL submission-failure path) so the query and the guard for a
+   * task row with no emailAccountId only have to be right once.
+   */
+  describe("publishPendingApprovalsUpdate", () => {
+    it("skips quietly when there is no emailAccountId to report", async () => {
+      await publishPendingApprovalsUpdate(null);
+      await publishPendingApprovalsUpdate(undefined);
+
+      expect(prisma.a2aApproval.findMany).not.toHaveBeenCalled();
+      expect(mockPublishApprovals).not.toHaveBeenCalled();
+    });
+
+    it("publishes the current pending count for a real account", async () => {
+      (prisma.a2aApproval.findMany as any).mockResolvedValue([]);
+
+      await publishPendingApprovalsUpdate("email-account-456");
+
+      expect(prisma.a2aApproval.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            task: { emailAccountId: "email-account-456" },
+          }),
+        }),
+      );
+      expect(mockPublishApprovals).toHaveBeenCalledWith({
+        emailAccountId: "email-account-456",
+        pending: 0,
+        oldestWaitingSeconds: null,
+        actions: [],
+      });
     });
   });
 });
