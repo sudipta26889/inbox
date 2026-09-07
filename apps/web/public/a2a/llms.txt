@@ -1,6 +1,6 @@
 # Inbox A2A Protocol API
 
-> A2A (Agent-to-Agent) Protocol v0.3 implementation enabling AI agents to securely interact with email, calendar, and automation services through a standardized JSON-RPC 2.0 interface with OAuth 2.0 authentication.
+> A2A (Agent-to-Agent) Protocol v1.0 implementation enabling AI agents to securely interact with email, calendar, and automation services through a standardized JSON-RPC 2.0 interface with OAuth 2.0 authentication.
 
 ## Quick Start
 
@@ -18,7 +18,7 @@ Inbox can also act as an **A2A client**, sending outbound notifications to remot
 
 - **A2A_NOTIFY action**: A zero-config rule action that sends a JSON-RPC 2.0 `message.send` to configured remote A2A agents when a rule matches an email
 - **Use case**: Urgent/important emails trigger notifications to OpenClaw Mitra or other A2A agents, which can then notify users via WhatsApp, Telegram, Slack, etc.
-- **Configuration**: Set `A2A_REMOTE_AGENTS` env var with comma-separated agent URLs (e.g., `http://192.168.10.22:18800`)
+- **Configuration**: Set `A2A_REMOTE_AGENTS` env var with comma-separated agent URLs (e.g., `http://dharabot.lan:12345`)
 - **Agent card discovery**: Inbox fetches the remote agent's `/.well-known/agent-card.json` to resolve the JSON-RPC endpoint
 - **Payload**: Includes email metadata (from, subject, snippet, thread_id, message_id, labels, received_at, rule info)
 - **Fan-out**: Sends to all configured agents in parallel; succeeds if at least one agent responds
@@ -38,6 +38,12 @@ OAuth 2.0 Authorization Code flow with PKCE is required:
 ### AgentCard Discovery
 - [Agent Capabilities](https://inbox.sudiptadhara.in/.well-known/agent-card.json): Discover available skills, OAuth endpoints, and protocol bindings
 
+The card carries `supportedInterfaces[]` (v1.0), each entry naming a `url`,
+`protocolBinding` and `protocolVersion`. The bare top-level `url` is retained
+alongside it for clients still reading the v0.3 shape. Skills listed on the card
+are exactly those a peer can reach, and each carries `requiresHumanApproval`
+derived from the same registry that enforces it.
+
 ### JSON-RPC API
 - [A2A Endpoint](https://inbox.sudiptadhara.in/a2a): POST requests with JSON-RPC 2.0 format
   - method: message.send - Create a new task
@@ -51,21 +57,30 @@ OAuth 2.0 Authorization Code flow with PKCE is required:
 
 ## Available Skills
 
+Exactly these skills are reachable by a peer. The agent card is generated from
+the same registry, so it and this list cannot disagree.
+
 ### Email Operations
 - **email.search**: Search emails with query syntax (scope: email:read)
 - **email.get**: Get full email details including attachments (scope: email:read)
-- **email.send**: Send emails from connected accounts (scope: email:write)
+- **digest.get**: Retrieve the generated daily digest (scope: email:read)
 - **account.list**: List all connected email accounts (scope: email:read)
+
+`email.send` is registered but **NOT peer-reachable**. Sending mail as the
+account owner is a larger trust grant than this protocol surface should hand
+out, and its only gate is a backstop that applies to every caller rather than a
+peer-facing review. Requests for it are refused regardless of the scopes on your
+token.
 
 ### Calendar Operations
 - **calendar.search**: Search calendar events by date range (scope: calendar:read)
 - **calendar.get_event**: Get event details (scope: calendar:read)
-- **calendar.get_availability**: Check availability for a date range (scope: calendar:read)
+- **calendar.availability**: Check availability for a date range (scope: calendar:read)
 - **calendar.create_event**: Create calendar event - REQUIRES HUMAN APPROVAL via Slack/Telegram (scope: calendar:write)
 
 ### Statistics & Automation
-- **stats.get**: Get email statistics for a time period (scope: stats:read)
-- **rules.list**: List automation rules (scope: rules:read)
+- **stats.email_analytics**: Get email statistics for a time period (scope: stats:read)
+- **automation.list_rules**: List automation rules (scope: rules:read)
 
 ## Request Format
 
@@ -100,7 +115,7 @@ Success:
   "result": {
     "contextId": "unique-context-id",
     "taskId": "task_abc123",
-    "state": "submitted"
+    "state": "TASK_STATE_SUBMITTED"
   }
 }
 ```
@@ -119,21 +134,45 @@ Error:
 
 ## Task States
 
-Tasks progress through these states:
-- **submitted**: Task queued for execution
-- **working**: Task is executing
-- **auth_required**: Human approval needed (Slack/Telegram notification sent)
-- **completed**: Task finished successfully
-- **failed**: Task failed (check error field)
-- **canceled**: Task was canceled
-- **rejected**: Human rejected the approval request
-- **unknown**: Unknown state (error condition)
+States are emitted in the A2A v1.0 spelling:
+
+- **TASK_STATE_SUBMITTED**: Task queued for execution
+- **TASK_STATE_WORKING**: Task is executing
+- **TASK_STATE_AUTH_REQUIRED**: Human approval needed (notification sent)
+- **TASK_STATE_COMPLETED**: Task finished successfully
+- **TASK_STATE_FAILED**: Task failed (check error field)
+- **TASK_STATE_CANCELED**: Task was canceled
+- **TASK_STATE_REJECTED**: Human rejected the approval request
+- **TASK_STATE_UNSPECIFIED**: Unknown state (v1.0 replacement for v0.3 `unknown`)
+
+Terminal states are COMPLETED, FAILED, CANCELED and REJECTED; once reached a
+task cannot restart, and follow-on work needs a new task in the same contextId.
+AUTH_REQUIRED and INPUT_REQUIRED are interrupted rather than terminal.
+
+**Inbound, both spellings are accepted.** A `state` filter on `task.list` may be
+sent as either `TASK_STATE_COMPLETED` or the older `completed`. An unrecognised
+name is refused with an error rather than silently matching nothing.
+
+## Task Visibility
+
+A task is visible only to the peer that created it. Queries are bounded by
+user, email account **and client id**, so `task.get`, `task.list`,
+`task.cancel`, `context.get` and the SSE stream return only your own tasks —
+another peer's task id resolves to "task not found" rather than "forbidden",
+which avoids confirming that it exists.
+
+This changed: task queries were previously scoped by user alone, so two peers
+belonging to the same person could read and cancel each other's tasks. If you
+relied on that, you were relying on a bug.
 
 ## Rate Limits
 
 - Client: 60 requests/minute, 1000/hour
 - User: 100 requests/minute, 2000/hour
 - Task Creation: 30 requests/minute, 500/hour
+- **Approval-requiring tasks: 5/minute, 20/hour** — far tighter than task
+  creation, because these spend a person's attention rather than CPU. Checked
+  before the task is created, so an exhausted budget means nothing was queued.
 - IP (unauthenticated): 20 requests/minute, 200/hour
 
 Rate limit headers included in all responses:
@@ -235,7 +274,7 @@ POST https://inbox.sudiptadhara.in/a2a
 }
 ```
 
-5. When state is "completed", result contains emails
+5. When state is TASK_STATE_COMPLETED, result contains emails
 
 ## Example: Create Calendar Event (with Approval)
 
@@ -261,10 +300,10 @@ POST https://inbox.sudiptadhara.in/a2a
 }
 ```
 
-2. Task enters "auth_required" state
+2. Task enters TASK_STATE_AUTH_REQUIRED
 3. Human receives Slack/Telegram notification with event details
 4. Human approves or rejects
-5. Task transitions to "completed" (if approved) or "rejected"
+5. Task transitions to TASK_STATE_COMPLETED (if approved) or TASK_STATE_REJECTED
 6. Poll or use SSE to get final result
 
 ## Security Features
@@ -286,7 +325,7 @@ POST https://inbox.sudiptadhara.in/a2a
 
 ## Technical Specifications
 
-- Protocol: A2A Protocol v0.3 (Google/Linux Foundation)
+- Protocol: A2A Protocol v1.0 (Linux Foundation / Agentic AI Foundation)
 - Transport: JSON-RPC 2.0 over HTTPS
 - Authentication: OAuth 2.0 Authorization Code with PKCE
 - Real-time: Server-Sent Events (SSE)
