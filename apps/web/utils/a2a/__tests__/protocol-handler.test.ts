@@ -41,6 +41,7 @@ vi.mock("@/utils/prisma", () => ({
       findMany: vi.fn(),
     },
     a2aApproval: {
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       create: vi.fn(),
     },
   },
@@ -404,6 +405,16 @@ describe("A2A Protocol Handlers", () => {
       });
 
       expect(result.state).toBe("TASK_STATE_CANCELED");
+
+      // A withdrawn request must stop asking. Left pending, the approval sits
+      // in the reviewer's queue for a task that no longer exists — and an
+      // approval granted after the fact used to stay spendable by a later
+      // identical request.
+      expect(prisma.a2aApproval.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ status: "withdrawn" }),
+        }),
+      );
       expect(prisma.a2aTask.update).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({

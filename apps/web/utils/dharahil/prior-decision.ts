@@ -1,6 +1,6 @@
 import "server-only";
 import { createHash } from "node:crypto";
-import { A2aApprovalStatus } from "@/generated/prisma/enums";
+import { A2aApprovalStatus, A2aTaskState } from "@/generated/prisma/enums";
 import type { Logger } from "@/utils/logger";
 import prisma from "@/utils/prisma";
 
@@ -21,6 +21,14 @@ import prisma from "@/utils/prisma";
  * canonical identity of the action, so the only way to skip a prompt is for a
  * human to have genuinely approved this exact action already.
  */
+
+/** A decision attached to a finished task authorizes nothing. */
+const TERMINAL_TASK_STATES = [
+  A2aTaskState.completed,
+  A2aTaskState.failed,
+  A2aTaskState.canceled,
+  A2aTaskState.rejected,
+];
 
 /**
  * Canonical identity of an action: same action, same key, whoever asks.
@@ -96,6 +104,12 @@ export async function consumeApprovedDecision({
       actionKey,
       status: A2aApprovalStatus.approved,
       consumedAt: null,
+      // The decision must still belong to a live request. Without this, a peer
+      // could ask for an event, cancel it, let the human approve anyway, then
+      // resubmit the identical event and inherit that approval — writing with
+      // no prompt at all. Verified before this clause existed: an approval on a
+      // CANCELLED task authorized a write.
+      task: { state: { notIn: TERMINAL_TASK_STATES } },
     },
     data: { consumedAt: new Date() },
   });

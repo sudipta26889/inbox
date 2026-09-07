@@ -2038,6 +2038,7 @@ enum A2aApprovalStatus {
   approved  // User approved
   rejected  // User rejected
   expired   // Timeout reached
+  withdrawn // Requester cancelled before a human decided
 
   @@map("a2a_approval_status")
 }

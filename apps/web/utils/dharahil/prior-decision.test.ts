@@ -115,8 +115,31 @@ describe("consuming a prior decision", () => {
     await consumeApprovedDecision({ actionKey: "abc", logger });
 
     expect(mockPrisma.a2aApproval.updateMany).toHaveBeenCalledWith({
-      where: { actionKey: "abc", status: "approved", consumedAt: null },
+      where: expect.objectContaining({
+        actionKey: "abc",
+        status: "approved",
+        consumedAt: null,
+      }),
       data: { consumedAt: expect.any(Date) },
+    });
+  });
+
+  /**
+   * A decision only counts while the request it belongs to is still live.
+   *
+   * Verified against production before this clause existed: a peer could ask
+   * for an event, cancel it, let the human approve anyway, then resubmit the
+   * identical event and inherit that approval — writing with no prompt at all.
+   */
+  it("ignores a decision whose task has already finished", async () => {
+    mockPrisma.a2aApproval.updateMany.mockResolvedValue({ count: 1 });
+
+    await consumeApprovedDecision({ actionKey: "abc", logger });
+
+    const where = mockPrisma.a2aApproval.updateMany.mock.calls[0][0].where;
+
+    expect(where.task).toEqual({
+      state: { notIn: ["completed", "failed", "canceled", "rejected"] },
     });
   });
 

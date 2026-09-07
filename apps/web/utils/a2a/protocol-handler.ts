@@ -478,6 +478,24 @@ export async function handleTaskCancel(
     },
   });
 
+  // A withdrawn request must stop asking. Left pending, the approval sits in
+  // the reviewer's queue for a task that no longer exists — and if they approve
+  // it, that decision used to remain spendable by a later identical request.
+  const withdrawn = await prisma.a2aApproval.updateMany({
+    where: { taskId: task.id, status: A2aApprovalStatus.pending },
+    data: {
+      status: A2aApprovalStatus.withdrawn,
+      respondedAt: new Date(),
+      rejectionReason: reason || "Requester canceled the task",
+    },
+  });
+
+  if (withdrawn.count > 0) {
+    logger.info("Withdrew a pending approval for a canceled task", {
+      taskId: task.taskId,
+    });
+  }
+
   // Record state transition
   await prisma.a2aTaskHistory.create({
     data: {
