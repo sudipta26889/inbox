@@ -150,24 +150,11 @@ async function enqueueEmailProcessingJobs(logger: Logger) {
 
       queued += 1;
 
-      // Skip the provider round trip entirely when MQTT isn't configured on
-      // this instance at all — no point paying for inbox stats nobody can
-      // consume. Per-account consent is still resolved inside publishUnread.
-      if (isMqttConfigured()) {
-        const stats = await getInboxStatsForChatContext({
-          emailAccountId: account.id,
-          provider: account.account?.provider || "google",
-          logger: accountLogger,
-        });
-
-        if (stats) {
-          await publishUnread({
-            emailAccountId: account.id,
-            unread: stats.unread,
-            total: stats.total,
-          }).catch(() => {});
-        }
-      }
+      await publishUnreadStats({
+        emailAccountId: account.id,
+        provider: account.account?.provider || "google",
+        logger: accountLogger,
+      });
     } catch (error) {
       failed += 1;
       accountLogger.error("Failed to enqueue email account for processing", {
@@ -189,4 +176,42 @@ async function enqueueEmailProcessingJobs(logger: Logger) {
     skipped,
     failed,
   };
+}
+
+/**
+ * Best-effort MQTT publish for one account's unread count.
+ *
+ * Exported so this can be tested in isolation: this is the one untested call
+ * site that ran inside the same per-account try/catch as `enqueueBackgroundJob`
+ * and the `queued` counter above — a throw here would double-count the
+ * account as both queued and failed, logged under a misleading label. Every
+ * exit is fail-soft on purpose; nothing here may reject.
+ */
+export async function publishUnreadStats({
+  emailAccountId,
+  provider,
+  logger,
+}: {
+  emailAccountId: string;
+  provider: string;
+  logger: Logger;
+}): Promise<void> {
+  // Skip the provider round trip entirely when MQTT isn't configured on this
+  // instance at all — no point paying for inbox stats nobody can consume.
+  // Per-account consent is still resolved inside publishUnread.
+  if (!isMqttConfigured()) return;
+
+  const stats = await getInboxStatsForChatContext({
+    emailAccountId,
+    provider,
+    logger,
+  });
+
+  if (!stats) return;
+
+  await publishUnread({
+    emailAccountId,
+    unread: stats.unread,
+    total: stats.total,
+  }).catch(() => {});
 }

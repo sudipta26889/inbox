@@ -4,6 +4,7 @@ vi.mock("server-only", () => ({}));
 
 import {
   AVAILABILITY_TOPIC,
+  digestPayload,
   discoveryConfig,
   entityTopics,
   isValidSlug,
@@ -96,5 +97,26 @@ describe("topics", () => {
     });
 
     expect(attributes).toMatchObject({ subject: "Invoice", from: "a@b.com" });
+  });
+
+  it("carries a real item count in the digest payload", () => {
+    expect(digestPayload({ items: 4, at: "2026-09-07T05:00:00.000Z" })).toEqual(
+      {
+        state: "ready",
+        attributes: { items: 4, at: "2026-09-07T05:00:00.000Z" },
+      },
+    );
+  });
+
+  /**
+   * No structured item count exists in the digest pipeline, so an absent
+   * count must stay absent — publishing `items: 0` would be a different lie
+   * (implying an empty digest rather than an uncounted one).
+   */
+  it("omits items entirely rather than publish a fabricated count", () => {
+    const { attributes } = digestPayload({ at: "2026-09-07T05:00:00.000Z" });
+
+    expect(attributes).not.toHaveProperty("items");
+    expect(attributes).toEqual({ at: "2026-09-07T05:00:00.000Z" });
   });
 });

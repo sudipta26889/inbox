@@ -78,7 +78,8 @@ export async function publishDigest({
   items,
 }: {
   emailAccountId: string;
-  items: number;
+  /** Omitted when no real item count exists — see digestPayload. */
+  items?: number;
 }): Promise<void> {
   const consent = await consentFor(emailAccountId);
   if (!consent) return;

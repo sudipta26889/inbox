@@ -141,6 +141,21 @@ describe("mqtt events", () => {
 
       expect(mockPublish).not.toHaveBeenCalled();
     });
+
+    /**
+     * No structured item count exists in the digest pipeline — an absent key
+     * is the point. Publishing `items: 0` would be a different lie (an empty
+     * digest rather than an uncounted one).
+     */
+    it("omits items from the published attributes when no count is supplied", async () => {
+      await publishDigest({ emailAccountId: "a1" });
+
+      const attributes = mockPublish.mock.calls.find(([t]) =>
+        t.endsWith("/digest/attributes"),
+      )?.[1];
+      expect(attributes).not.toContain("items");
+      expect(JSON.parse(attributes as string)).not.toHaveProperty("items");
+    });
   });
 
   describe("publishApprovals", () => {

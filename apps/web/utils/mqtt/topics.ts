@@ -94,8 +94,18 @@ export function urgentPayload({
   };
 }
 
-export function digestPayload({ items, at }: { items: number; at: string }) {
-  return { state: "ready", attributes: { items, at } };
+export function digestPayload({
+  items,
+  at,
+}: {
+  /** Omitted entirely when no real item count exists — never a guessed 0. */
+  items?: number;
+  at: string;
+}) {
+  return {
+    state: "ready",
+    attributes: { ...(items === undefined ? {} : { items }), at },
+  };
 }
 
 export function approvalsPayload({
