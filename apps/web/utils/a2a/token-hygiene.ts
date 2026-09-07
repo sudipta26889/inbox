@@ -99,15 +99,21 @@ export async function reportA2aTokenHygiene(
 }
 
 /**
- * Delete access tokens that expired long enough ago to be certainly dead.
+ * Delete access tokens that are certainly dead: expired, or revoked, long
+ * enough ago.
  *
  * Measured before this existed: 5657 rows backing 1 live token. Nothing had
- * ever pruned the table. Revoked and expired rows are both deleted — a peer
- * cannot present either one, so keeping them buys nothing.
+ * ever pruned the table. Revocation gets its own clock (`revokedAt`) instead
+ * of riding on `expiresAt`, because revoking a token never backdates its
+ * expiry — the two columns are independent. Peer tokens are minted with
+ * multi-year TTLs (see apps/web/scripts/mint-a2a-token.ts), so without this a
+ * revoked row from a long-lived credential would sit for a decade waiting on
+ * an expiry date that revocation already made irrelevant.
  *
- * The grace period matters: a token that expired an hour ago may still be
- * mid-refresh on the peer's side, and deleting the row loses the audit trail
- * of a rotation that is still in flight.
+ * The grace period applies to both clocks: a token that expired or was
+ * revoked an hour ago may still be mid-refresh on the peer's side, and
+ * deleting the row loses the audit trail of a rotation that is still in
+ * flight.
  */
 export async function cleanupExpiredAccessTokens(
   daysToKeep = 30,
@@ -115,7 +121,9 @@ export async function cleanupExpiredAccessTokens(
   const threshold = new Date(Date.now() - daysToKeep * DAY_MS);
 
   const result = await prisma.mcpServerAccessToken.deleteMany({
-    where: { expiresAt: { lt: threshold } },
+    where: {
+      OR: [{ expiresAt: { lt: threshold } }, { revokedAt: { lt: threshold } }],
+    },
   });
 
   return result.count;

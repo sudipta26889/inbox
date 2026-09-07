@@ -103,11 +103,11 @@ describe("cleanupExpiredAccessTokens", () => {
 
     expect(deleted).toBe(54);
     const where = deleteMany.mock.calls[0][0].where;
-    expect(where.expiresAt.lt).toBeInstanceOf(Date);
+    const expiresClause = clauseFor(where, "expiresAt");
+    expect(expiresClause.lt).toBeInstanceOf(Date);
     // 30 days ago, not now: a token that expired an hour ago may still be
     // mid-refresh on the peer's side.
-    const ageDays =
-      (Date.now() - where.expiresAt.lt.getTime()) / (24 * 60 * 60 * 1000);
+    const ageDays = (Date.now() - expiresClause.lt.getTime()) / DAY;
     expect(ageDays).toBeGreaterThan(29);
     expect(ageDays).toBeLessThan(31);
   });
@@ -121,7 +121,82 @@ describe("cleanupExpiredAccessTokens", () => {
     // The negative control: the filter is on expiresAt in the PAST. If someone
     // flips this to `gt`, or drops the clause, this catches it.
     const where = deleteMany.mock.calls[0][0].where;
-    expect(where.expiresAt.lt.getTime()).toBeLessThan(Date.now());
+    expect(clauseFor(where, "expiresAt").lt.getTime()).toBeLessThan(Date.now());
     expect(where).not.toHaveProperty("revoked");
   });
+
+  // Revocation gets its own clock: expiresAt never moves when a token is
+  // revoked, and peer tokens are minted with multi-year TTLs, so without this
+  // clause a revoked row would sit for a decade waiting for an expiry date
+  // that revocation already made irrelevant.
+  it("deletes a token revoked long ago even with a far-future expiry", async () => {
+    const deleteMany = vi.fn().mockResolvedValue({ count: 1 });
+    prisma.mcpServerAccessToken.deleteMany = deleteMany;
+
+    await cleanupExpiredAccessTokens(30);
+
+    const where = deleteMany.mock.calls[0][0].where;
+    const row = {
+      expiresAt: new Date(Date.now() + 3650 * DAY),
+      revokedAt: new Date(Date.now() - 60 * DAY),
+    };
+    expect(rowIsDeleted(row, where)).toBe(true);
+  });
+
+  it("does not delete a token revoked recently", async () => {
+    const deleteMany = vi.fn().mockResolvedValue({ count: 0 });
+    prisma.mcpServerAccessToken.deleteMany = deleteMany;
+
+    await cleanupExpiredAccessTokens(30);
+
+    const where = deleteMany.mock.calls[0][0].where;
+    const row = {
+      expiresAt: new Date(Date.now() + 3650 * DAY),
+      revokedAt: new Date(Date.now() - 5 * DAY),
+    };
+    expect(rowIsDeleted(row, where)).toBe(false);
+  });
+
+  it("does not delete a revoked row with a null revokedAt", async () => {
+    const deleteMany = vi.fn().mockResolvedValue({ count: 0 });
+    prisma.mcpServerAccessToken.deleteMany = deleteMany;
+
+    await cleanupExpiredAccessTokens(30);
+
+    const where = deleteMany.mock.calls[0][0].where;
+    const row = {
+      expiresAt: new Date(Date.now() + 3650 * DAY),
+      revokedAt: null,
+    };
+    expect(rowIsDeleted(row, where)).toBe(false);
+  });
 });
+
+// Prisma itself is mocked in this file, so these two helpers re-evaluate the
+// constructed `where` clause against a sample row the way the DB engine
+// would: an OR of "lt threshold" clauses, where a null column never
+// satisfies "lt" (mirrors SQL NULL semantics).
+function clauseFor(
+  where: { OR: Array<Record<string, { lt: Date }>> },
+  field: "expiresAt" | "revokedAt",
+) {
+  const clause = where.OR.find((c) => field in c)?.[field];
+  if (!clause) throw new Error(`no ${field} clause in where.OR`);
+  return clause;
+}
+
+function rowIsDeleted(
+  row: { expiresAt: Date; revokedAt: Date | null },
+  where: { OR: Array<Record<string, { lt: Date }>> },
+) {
+  return where.OR.some((clause) => {
+    if (clause.expiresAt)
+      return row.expiresAt.getTime() < clause.expiresAt.lt.getTime();
+    if (clause.revokedAt)
+      return (
+        row.revokedAt !== null &&
+        row.revokedAt.getTime() < clause.revokedAt.lt.getTime()
+      );
+    return false;
+  });
+}
