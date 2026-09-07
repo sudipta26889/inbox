@@ -35,9 +35,12 @@ export const GET = withAuth("user/a2a-webhooks", async (request) => {
     return NextResponse.json({ error: "Client not found" }, { status: 404 });
   }
 
-  // Get webhook config
-  const config = await prisma.a2aWebhookConfig.findUnique({
-    where: { clientId },
+  // This UI predates A2A §3.1.7 per-task config; it only ever manages the
+  // client-level default (taskId NULL). Prisma's compound-unique input can't
+  // carry null (SQL equality never matches NULL), so this is a plain filter
+  // rather than findUnique.
+  const config = await prisma.a2aWebhookConfig.findFirst({
+    where: { clientId, taskId: null },
   });
 
   if (!config) {
@@ -119,23 +122,34 @@ export const POST = withAuth("user/a2a-webhooks", async (request) => {
   // Generate webhook secret (random 32-byte hex string)
   const secret = crypto.randomBytes(32).toString("hex");
 
-  // Create or update config
-  const config = await prisma.a2aWebhookConfig.upsert({
-    where: { clientId },
-    create: {
-      clientId,
-      url,
-      secret,
-      enabled,
-      events: selectedEvents,
-    },
-    update: {
-      url,
-      enabled,
-      events: selectedEvents,
-      // Keep existing secret unless explicitly regenerating
-    },
+  // Create or update config. This UI predates A2A §3.1.7 per-task config; it
+  // only ever manages the client-level default (taskId NULL). Prisma's
+  // compound-unique input can't carry null, so this can't be an atomic
+  // upsert — find the existing default row, then create or update by id.
+  const existingConfig = await prisma.a2aWebhookConfig.findFirst({
+    where: { clientId, taskId: null },
   });
+
+  const config = existingConfig
+    ? await prisma.a2aWebhookConfig.update({
+        where: { id: existingConfig.id },
+        data: {
+          url,
+          enabled,
+          events: selectedEvents,
+          // Keep existing secret unless explicitly regenerating
+        },
+      })
+    : await prisma.a2aWebhookConfig.create({
+        data: {
+          clientId,
+          taskId: null,
+          url,
+          secret,
+          enabled,
+          events: selectedEvents,
+        },
+      });
 
   return NextResponse.json({
     clientId: config.clientId,
@@ -169,10 +183,22 @@ export const DELETE = withAuth("user/a2a-webhooks", async (request) => {
     return NextResponse.json({ error: "Client not found" }, { status: 404 });
   }
 
-  // Delete webhook config
-  await prisma.a2aWebhookConfig.delete({
-    where: { clientId },
+  // Delete webhook config. This UI predates A2A §3.1.7 per-task config; it
+  // only ever manages the client-level default (taskId NULL). Prisma's
+  // compound-unique input can't carry null, so find the row before deleting
+  // it by id.
+  const existingConfig = await prisma.a2aWebhookConfig.findFirst({
+    where: { clientId, taskId: null },
   });
+
+  if (!existingConfig) {
+    return NextResponse.json(
+      { error: "Webhook config not found" },
+      { status: 404 },
+    );
+  }
+
+  await prisma.a2aWebhookConfig.delete({ where: { id: existingConfig.id } });
 
   return NextResponse.json({ success: true });
 });

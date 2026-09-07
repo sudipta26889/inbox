@@ -2085,7 +2085,11 @@ model A2aWebhookConfig {
   id              String   @id @default(cuid())
 
   // ============ Client Reference ============
-  clientId        String   @unique // OAuth client ID
+  clientId        String   // OAuth client ID
+  /// A2A v1.0 §3.1.7 scopes push config to a task. NULL is this client's
+  /// default, which is what the pre-§3.1.7 UI at /api/user/a2a-webhooks
+  /// writes and what queueWebhook falls back to.
+  taskId          String?
 
   // ============ Webhook Settings ============
   url             String   // Webhook endpoint URL
@@ -2099,6 +2103,7 @@ model A2aWebhookConfig {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
+  @@unique([clientId, taskId])
   @@index([clientId])
   @@map("a2a_webhook_configs")
 }

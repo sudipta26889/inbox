@@ -23,6 +23,12 @@ import {
   handleTaskCancel,
   handleContextGet,
 } from "@/utils/a2a/protocol-handler";
+import {
+  handlePushConfigDelete,
+  handlePushConfigGet,
+  handlePushConfigList,
+  handlePushConfigSet,
+} from "@/utils/a2a/push-config";
 import { env } from "@/env";
 
 const logger = createScopedLogger("a2a");
@@ -234,6 +240,28 @@ export const POST = withError("a2a", async (request: RequestWithLogger) => {
 
         case "context.get":
           result = await handleContextGet(authContext, message.params || {});
+          break;
+
+        case "pushconfig.set":
+          result = await handlePushConfigSet(authContext, message.params || {});
+          break;
+
+        case "pushconfig.get":
+          result = await handlePushConfigGet(authContext, message.params || {});
+          break;
+
+        case "pushconfig.list":
+          result = await handlePushConfigList(
+            authContext,
+            message.params || {},
+          );
+          break;
+
+        case "pushconfig.delete":
+          result = await handlePushConfigDelete(
+            authContext,
+            message.params || {},
+          );
           break;
 
         default:

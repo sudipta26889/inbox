@@ -26,6 +26,21 @@ describe("normalizeA2aMethod", () => {
     expect(normalizeA2aMethod("message/stream")).toBeNull();
     expect(normalizeA2aMethod("")).toBeNull();
   });
+
+  it("resolves the spec's capitalised push config spellings", () => {
+    expect(normalizeA2aMethod("tasks/pushNotificationConfig/set")).toBe(
+      "pushconfig.set",
+    );
+    expect(normalizeA2aMethod("tasks/pushNotificationConfig/get")).toBe(
+      "pushconfig.get",
+    );
+    expect(normalizeA2aMethod("tasks/pushNotificationConfig/list")).toBe(
+      "pushconfig.list",
+    );
+    expect(normalizeA2aMethod("tasks/pushNotificationConfig/delete")).toBe(
+      "pushconfig.delete",
+    );
+  });
 });
 
 describe("normalizeMessageSendParams", () => {

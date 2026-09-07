@@ -37,6 +37,22 @@ const METHOD_ALIASES: Record<string, string> = {
   "context.get": "context.get",
   "contexts/get": "context.get",
   getcontext: "context.get",
+
+  "pushconfig.set": "pushconfig.set",
+  "tasks/pushnotificationconfig/set": "pushconfig.set",
+  settaskpushnotificationconfig: "pushconfig.set",
+
+  "pushconfig.get": "pushconfig.get",
+  "tasks/pushnotificationconfig/get": "pushconfig.get",
+  gettaskpushnotificationconfig: "pushconfig.get",
+
+  "pushconfig.list": "pushconfig.list",
+  "tasks/pushnotificationconfig/list": "pushconfig.list",
+  listtaskpushnotificationconfig: "pushconfig.list",
+
+  "pushconfig.delete": "pushconfig.delete",
+  "tasks/pushnotificationconfig/delete": "pushconfig.delete",
+  deletetaskpushnotificationconfig: "pushconfig.delete",
 };
 
 /** Map any accepted spelling onto this server's canonical method name. */

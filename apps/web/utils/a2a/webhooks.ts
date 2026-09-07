@@ -77,9 +77,17 @@ export async function queueWebhook(
     return;
   }
 
-  // Get webhook configuration for this client
-  const webhookConfig = await prisma.a2aWebhookConfig.findUnique({
-    where: { clientId: task.clientId },
+  // A2A §3.1.7 config is per task; a NULL taskId row is the client's default.
+  // `IN (taskId, NULL)` would silently drop the NULL row — SQL's IN never
+  // matches NULL — so the fallback is an explicit OR. Postgres also defaults
+  // DESC to NULLS FIRST, which would hand back the default even when a
+  // task-specific row exists, hence the explicit NULLS LAST.
+  const webhookConfig = await prisma.a2aWebhookConfig.findFirst({
+    where: {
+      clientId: task.clientId,
+      OR: [{ taskId: task.taskId }, { taskId: null }],
+    },
+    orderBy: { taskId: { sort: "desc", nulls: "last" } },
   });
 
   if (!webhookConfig || !webhookConfig.enabled) {
