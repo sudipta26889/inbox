@@ -44,9 +44,10 @@ export async function updateMqttSettings(
       },
     });
 
-    // After the write, using the slug captured before it — the freed slug
-    // could otherwise be reclaimed by a different account while these
-    // retained topics still sat on the broker under the old owner's data.
+    // Cleared only after the write succeeds, using the slug captured before
+    // it: the unique index still held the old slug up to this point, so no
+    // other account could have claimed it, and a failed update must not wipe
+    // topics that are still live under the unchanged slug.
     if (shouldClearPreviousTopics) {
       clearAccountTopics(previous.mqttTopicSlug as string);
     }
