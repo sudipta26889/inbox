@@ -1,18 +1,15 @@
-vi.mock("server-only", () => ({}));
-
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import prisma from "@/utils/__mocks__/prisma";
+import { DELETE, GET } from "./route";
 
+vi.mock("server-only", () => ({}));
 vi.mock("@/utils/prisma");
-
 vi.mock("@/utils/middleware", () => ({
   withAuth:
     (_scope: string, handler: (request: any) => Promise<Response>) =>
     (request: any) =>
       handler(request),
 }));
-
-import { DELETE, GET } from "./route";
 
 const routeContext = { params: Promise.resolve({}) };
 
@@ -131,5 +128,37 @@ describe("DELETE /api/user/a2a-webhooks", () => {
     );
 
     expect(response.status).toBe(404);
+  });
+});
+
+describe("GET /api/user/a2a-webhooks", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    prisma.mcpServerClient.findUnique.mockResolvedValue({
+      clientId: "client_1",
+      userId: "user_1",
+    } as any);
+  });
+
+  it("reports configured: true when a task-specific row delivers even with no client default", async () => {
+    // A peer can create a task-specific row via pushconfig.set (A2A §3.1.7)
+    // without ever creating the client-level default this route otherwise
+    // reads. Before this fix, GET derived `configured` from the default row
+    // alone, so it reported `false` while queueWebhook was still delivering.
+    prisma.a2aWebhookConfig.findFirst.mockResolvedValue(null);
+    prisma.a2aWebhookConfig.count.mockResolvedValue(1);
+
+    const response = await GET(
+      fakeRequest(
+        "https://example.com/api/user/a2a-webhooks?clientId=client_1",
+      ),
+      routeContext,
+    );
+    const body = await response.json();
+
+    expect(body.configured).toBe(true);
+    expect(prisma.a2aWebhookConfig.count).toHaveBeenCalledWith({
+      where: { clientId: "client_1" },
+    });
   });
 });

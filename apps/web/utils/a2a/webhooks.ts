@@ -264,7 +264,7 @@ export async function deliverWebhook(deliveryId: string): Promise<boolean> {
       "X-Webhook-Delivery-ID": delivery.id,
     };
 
-    if (webhookConfig?.token) {
+    if (webhookConfig.token) {
       headers["X-A2A-Notification-Token"] = webhookConfig.token;
     }
 

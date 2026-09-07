@@ -44,10 +44,17 @@ export const GET = withAuth("user/a2a-webhooks", async (request) => {
   });
 
   if (!config) {
+    // No client-level default, but a peer may have created a task-specific
+    // row via pushconfig.set (A2A §3.1.7) — that still delivers, so
+    // `configured` must reflect it even though the rest of this response
+    // describes the (missing) client-default row.
+    const anyRow = await prisma.a2aWebhookConfig.count({
+      where: { clientId },
+    });
     return NextResponse.json(
       {
         clientId,
-        configured: false,
+        configured: anyRow > 0,
         events: Object.values(WEBHOOK_EVENTS),
       },
       { status: 200 },
