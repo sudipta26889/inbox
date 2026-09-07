@@ -52,6 +52,24 @@ export function publishMqtt(
   }
 }
 
+/**
+ * Opens the broker connection at process boot (called from instrumentation.ts)
+ * instead of waiting for the first publishMqtt call. Without this, the
+ * "online" announcement — which only happens in ensureClient's connect
+ * handler — doesn't fire until whatever cron job publishes next, leaving
+ * inbox/availability reporting "offline" (the last will from the previous
+ * process's death) for up to a cron period after a perfectly healthy restart.
+ */
+export function connectMqtt(): void {
+  if (!isMqttConfigured()) return;
+
+  try {
+    ensureClient();
+  } catch (error) {
+    logger.warn("Failed to establish MQTT connection at boot", { error });
+  }
+}
+
 function ensureClient(): MqttClient | null {
   if (client) return client;
 

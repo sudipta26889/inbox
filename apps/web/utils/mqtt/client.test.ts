@@ -27,6 +27,7 @@ vi.mock("mqtt", () => ({ default: { connect: mockConnect } }));
 import {
   __resetMqttForTests,
   MAX_QUEUED_MESSAGES,
+  connectMqtt,
   isMqttConfigured,
   publishMqtt,
 } from "./client";
@@ -179,5 +180,34 @@ describe("mqtt client", () => {
     });
 
     expect(() => publishMqtt("inbox/x/state", "1")).not.toThrow();
+  });
+
+  /**
+   * The whole point of connectMqtt: open the connection at boot so the
+   * "online" announcement (fired from ensureClient's connect handler) doesn't
+   * wait for the first cron-triggered publishMqtt call.
+   */
+  it("connectMqtt establishes the connection without publishing anything itself", () => {
+    connectMqtt();
+
+    expect(mockConnect).toHaveBeenCalledTimes(1);
+    expect(fakeClient.publish).not.toHaveBeenCalled();
+  });
+
+  it("connectMqtt is a no-op when MQTT is unconfigured", () => {
+    mockEnv.MQTT_HOST = undefined;
+    __resetMqttForTests();
+
+    connectMqtt();
+
+    expect(mockConnect).not.toHaveBeenCalled();
+  });
+
+  it("connectMqtt does not throw when client construction fails", () => {
+    mockConnect.mockImplementation(() => {
+      throw new Error("construction failed");
+    });
+
+    expect(() => connectMqtt()).not.toThrow();
   });
 });
