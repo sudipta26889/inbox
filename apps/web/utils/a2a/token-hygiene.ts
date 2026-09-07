@@ -97,3 +97,26 @@ export async function reportA2aTokenHygiene(
 
   return { checked: a2aTokens.length, findings };
 }
+
+/**
+ * Delete access tokens that expired long enough ago to be certainly dead.
+ *
+ * Measured before this existed: 5657 rows backing 1 live token. Nothing had
+ * ever pruned the table. Revoked and expired rows are both deleted — a peer
+ * cannot present either one, so keeping them buys nothing.
+ *
+ * The grace period matters: a token that expired an hour ago may still be
+ * mid-refresh on the peer's side, and deleting the row loses the audit trail
+ * of a rotation that is still in flight.
+ */
+export async function cleanupExpiredAccessTokens(
+  daysToKeep = 30,
+): Promise<number> {
+  const threshold = new Date(Date.now() - daysToKeep * DAY_MS);
+
+  const result = await prisma.mcpServerAccessToken.deleteMany({
+    where: { expiresAt: { lt: threshold } },
+  });
+
+  return result.count;
+}

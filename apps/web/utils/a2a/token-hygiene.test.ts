@@ -3,13 +3,16 @@ import { createScopedLogger } from "@/utils/logger";
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/utils/prisma", () => ({
-  default: { mcpServerAccessToken: { findMany: vi.fn() } },
+  default: { mcpServerAccessToken: { findMany: vi.fn(), deleteMany: vi.fn() } },
 }));
 vi.mock("@/utils/redis", () => ({
   redis: { set: vi.fn().mockResolvedValue("OK") },
 }));
 
-import { reportA2aTokenHygiene } from "./token-hygiene";
+import {
+  cleanupExpiredAccessTokens,
+  reportA2aTokenHygiene,
+} from "./token-hygiene";
 
 const prisma = await import("@/utils/prisma").then((m) => m.default);
 const findMany = prisma.mcpServerAccessToken.findMany as ReturnType<
@@ -84,5 +87,41 @@ describe("reportA2aTokenHygiene", () => {
     const result = await reportA2aTokenHygiene(logger);
 
     expect(result.findings).toEqual([]);
+  });
+});
+
+describe("cleanupExpiredAccessTokens", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("deletes tokens that expired longer ago than the grace period", async () => {
+    const deleteMany = vi.fn().mockResolvedValue({ count: 54 });
+    prisma.mcpServerAccessToken.deleteMany = deleteMany;
+
+    const deleted = await cleanupExpiredAccessTokens(30);
+
+    expect(deleted).toBe(54);
+    const where = deleteMany.mock.calls[0][0].where;
+    expect(where.expiresAt.lt).toBeInstanceOf(Date);
+    // 30 days ago, not now: a token that expired an hour ago may still be
+    // mid-refresh on the peer's side.
+    const ageDays =
+      (Date.now() - where.expiresAt.lt.getTime()) / (24 * 60 * 60 * 1000);
+    expect(ageDays).toBeGreaterThan(29);
+    expect(ageDays).toBeLessThan(31);
+  });
+
+  it("never deletes a token that is still valid", async () => {
+    const deleteMany = vi.fn().mockResolvedValue({ count: 0 });
+    prisma.mcpServerAccessToken.deleteMany = deleteMany;
+
+    await cleanupExpiredAccessTokens(30);
+
+    // The negative control: the filter is on expiresAt in the PAST. If someone
+    // flips this to `gt`, or drops the clause, this catches it.
+    const where = deleteMany.mock.calls[0][0].where;
+    expect(where.expiresAt.lt.getTime()).toBeLessThan(Date.now());
+    expect(where).not.toHaveProperty("revoked");
   });
 });

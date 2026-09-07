@@ -7,7 +7,10 @@ import type { Logger } from "@/utils/logger";
 import { A2aTaskState } from "@/generated/prisma/enums";
 import { executeTask } from "@/utils/a2a/task-executor";
 import { cleanupRateLimitRecords } from "@/utils/a2a/rate-limit";
-import { reportA2aTokenHygiene } from "@/utils/a2a/token-hygiene";
+import {
+  cleanupExpiredAccessTokens,
+  reportA2aTokenHygiene,
+} from "@/utils/a2a/token-hygiene";
 import { publishServiceHealth } from "@/utils/mqtt/events";
 import {
   processPendingDharaHILApprovals,
@@ -366,20 +369,20 @@ async function processWebhooks(logger: Logger) {
  */
 async function cleanupOldRecords(logger: Logger) {
   try {
-    const [rateLimitsDeleted, webhooksDeleted] = await Promise.all([
-      cleanupRateLimitRecords(),
-      cleanupOldWebhookDeliveries(30), // Keep 30 days of webhook history
-    ]);
+    const [rateLimitsDeleted, webhooksDeleted, tokensDeleted] =
+      await Promise.all([
+        cleanupRateLimitRecords(),
+        cleanupOldWebhookDeliveries(30), // Keep 30 days of webhook history
+        cleanupExpiredAccessTokens(30),
+      ]);
 
     logger.info("Cleaned up old records", {
       rateLimitsDeleted,
       webhooksDeleted,
+      tokensDeleted,
     });
 
-    return {
-      rateLimitsDeleted,
-      webhooksDeleted,
-    };
+    return { rateLimitsDeleted, webhooksDeleted, tokensDeleted };
   } catch (error) {
     logger.error("Failed to clean up old records", {
       error: error instanceof Error ? error.message : String(error),
@@ -387,6 +390,7 @@ async function cleanupOldRecords(logger: Logger) {
     return {
       rateLimitsDeleted: 0,
       webhooksDeleted: 0,
+      tokensDeleted: 0,
       error,
     };
   }
