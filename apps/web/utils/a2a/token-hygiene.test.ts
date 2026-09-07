@@ -85,4 +85,49 @@ describe("reportA2aTokenHygiene", () => {
 
     expect(result.findings).toEqual([]);
   });
+
+  it("flags a token that expired 100 days ago as expired, not expiring", async () => {
+    findMany.mockResolvedValue([
+      token({ expiresAt: new Date(Date.now() - 100 * DAY) }),
+    ]);
+
+    const result = await reportA2aTokenHygiene(logger);
+
+    expect(result.findings[0]).toMatchObject({ reason: "expired" });
+    expect(result.findings[0].detail).toContain("100d ago");
+    // Verify the detail does not include a negative number (expires in -XXd pattern)
+    expect(result.findings[0].detail).not.toMatch(/expires in -/);
+  });
+
+  it("reports the boundary: 0 days to expiry is expiring, not expired", async () => {
+    const expiresAt = new Date(Date.now()); // Expires now (0 days)
+    findMany.mockResolvedValue([token({ expiresAt })]);
+
+    const result = await reportA2aTokenHygiene(logger);
+
+    expect(result.findings[0]).toMatchObject({ reason: "expiring" });
+    expect(result.findings[0].detail).toContain("expires in 0d");
+  });
+
+  it("reports expiring token with future tense", async () => {
+    findMany.mockResolvedValue([
+      token({ expiresAt: new Date(Date.now() + 10 * DAY) }),
+    ]);
+
+    const result = await reportA2aTokenHygiene(logger);
+
+    expect(result.findings[0]).toMatchObject({ reason: "expiring" });
+    expect(result.findings[0].detail).toContain("expires in 10d");
+  });
+
+  it("keeps stale detection unchanged", async () => {
+    findMany.mockResolvedValue([
+      token({ lastUsedAt: new Date(Date.now() - 90 * DAY) }),
+    ]);
+
+    const result = await reportA2aTokenHygiene(logger);
+
+    expect(result.findings[0]).toMatchObject({ reason: "stale" });
+    expect(result.findings[0].detail).toContain("90d");
+  });
 });
