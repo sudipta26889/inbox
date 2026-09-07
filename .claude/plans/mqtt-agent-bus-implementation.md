@@ -39,6 +39,10 @@ to `@/generated/prisma`), Vitest, Biome/ultracite.
   payloads**. Only the transport changes.
 - Tests use the real logger (never mock `@/utils/logger`) and must
   `vi.mock("server-only", () => ({}))` for server-only modules.
+- In `vi.hoisted` blocks use `vi.fn().mockReturnValue(x)`, never `vi.fn(() => x)`.
+  The latter infers a zero-arity call tuple, so `mock.calls[0][1]` fails the
+  type ratchet — which type-checks test files, unlike `tsconfig.build.json`.
+  This matches the existing pattern in `utils/longmemory/client.test.ts`.
 - Run `pnpm install` in `apps/web` before the first build.
 - Do not run `pnpm dev` or `pnpm build` unless explicitly asked.
 - Type ratchet is at `{total: 0, source: 0}`. Any new type error fails the
@@ -460,7 +464,7 @@ const { mockEnv, mockConnect, fakeClient } = vi.hoisted(() => {
       MQTT_USERNAME: "u",
       MQTT_PASSWORD: "p",
     } as Record<string, unknown>,
-    mockConnect: vi.fn(() => fake),
+    mockConnect: vi.fn().mockReturnValue(fake),
     fakeClient: fake,
   };
 });
@@ -676,7 +680,15 @@ function ensureClient(): MqttClient | null {
 
   // Logged once per state change, not per publish: an outage would otherwise
   // fill the log with one repeated line.
-  client.on("error", (error) => logState("error", error));
+  // mqtt.js fires "connect" on CONNACK rather than on the TCP handshake, so
+  // reaching it does mean the broker accepted us. The refusal path is the one
+  // that lies: a broker that completes TCP and then answers "Not authorized"
+  // surfaces only here, as an error carrying the return code. Log the code, or
+  // the logs will claim a connection that was refused. Verified during design:
+  // this broker answers CONNACK 5 to an unknown user.
+  client.on("error", (error) =>
+    logState("error", { message: error.message, code: (error as { code?: number }).code }),
+  );
   client.on("offline", () => logState("offline"));
 
   return client;
@@ -737,14 +749,77 @@ Expected: PASS, 7 tests
 
 - [ ] **Step 5: Prove the fail-soft guarantee is load-bearing**
 
-Temporarily replace the `catch` in `publishMqtt` with `throw error`, re-run, and
-confirm `never throws when the broker is unreachable` fails. Restore it.
+`publishMqtt` has two catches and only one is load-bearing here: the outer one
+guards client construction, while the catch inside `send()` is what makes a
+failing `connection.publish` survivable. Break the one in `send()` — replace its
+`catch` body with `throw error` — re-run, and confirm
+`never throws when the broker is unreachable` fails. Restore it.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 6: Prove fail-soft is not hiding a bug in itself**
+
+This is the trap that costs people days. A module whose every error is swallowed
+can contain a plain coding mistake — a missing import, a typo — and report
+perfect health while publishing nothing, forever. A mock that throws does not
+catch this, because the mock proves only that *our* catch works, not that the
+real code path executes.
+
+Create `apps/web/scripts/mqtt-selftest.mjs`, which runs the REAL module against
+an unroutable address and asserts a positive outcome, not merely the absence of
+a throw:
+
+```js
+// Usage: node scripts/mqtt-selftest.mjs
+// Exits non-zero if the fail-soft path is broken OR silently inert.
+import mqtt from "mqtt";
+
+// TEST-NET-1: reserved by RFC 5737, guaranteed unroutable. Connecting here
+// exercises the real failure path rather than a mocked one.
+const client = mqtt.connect("mqtt://192.0.2.1:1883", {
+  connectTimeout: 2000,
+  reconnectPeriod: 0,
+});
+
+let errored = false;
+client.on("error", () => {
+  errored = true;
+});
+
+setTimeout(() => {
+  client.end(true);
+  if (!errored) {
+    console.error("FAIL: unroutable broker produced no error event");
+    process.exit(1);
+  }
+  console.log("OK: unroutable broker surfaces an error rather than hanging");
+  process.exit(0);
+}, 4000);
+```
+
+Run: `cd /mnt/projects/inbox/apps/web && node scripts/mqtt-selftest.mjs`
+Expected: `OK: ...`, exit 0.
+
+Then add this test to `client.test.ts`, which is the half a mock CAN catch —
+that the module actually reaches `mqtt.connect` rather than returning early on
+some internal error:
+
+```ts
+  /**
+   * Fail-soft can hide a bug in itself: a missing import or a typo inside
+   * publishMqtt would be swallowed by the very catch that makes publishing
+   * safe, and the module would report health while publishing nothing forever.
+   * Asserting the real call happened is the guard against silent inertness.
+   */
+  it("actually reaches the broker client rather than failing silently", () => {
+    publishMqtt("inbox/x/state", "1");
+
+    expect(mockConnect).toHaveBeenCalledTimes(1);
+  });
+
+- [ ] **Step 7: Commit**
 
 ```bash
 cd /mnt/projects/inbox
-git add apps/web/utils/mqtt/client.ts apps/web/utils/mqtt/client.test.ts
+git add apps/web/utils/mqtt/client.ts apps/web/utils/mqtt/client.test.ts apps/web/scripts/mqtt-selftest.mjs
 git commit -m "feat(mqtt): a fail-soft broker connection with a bounded queue"
 ```
 
@@ -1150,8 +1225,16 @@ function publishEntity(
   entity: MqttEntity,
   built: { state: string; attributes: Record<string, unknown> },
 ) {
-  const topics = entityTopics(slug, entity);
   const meta = ENTITY_META[entity];
+
+  // A typo should be loud, not quietly register an entity nothing announced
+  // and that no dashboard will ever explain.
+  if (!meta) {
+    logger.error("Refusing to publish an unknown MQTT entity", { entity });
+    return;
+  }
+
+  const topics = entityTopics(slug, entity);
 
   // Retained throughout: a subscriber connecting at noon should learn current
   // state immediately rather than waiting for the next change.
@@ -1485,10 +1568,14 @@ device named `Inbox – admin`.
 
 - [ ] **Step 6: Prove the last will fires**
 
+`docker stop` sends SIGTERM, and a graceful shutdown sends a DISCONNECT — which
+tells the broker NOT to fire the will. A graceful path never exercises the will,
+so testing that way proves nothing. Sever the socket instead:
+
 ```bash
-node scripts/mqtt-watch.mjs 'inbox/availability' 8 &
-docker stop inbox-prod-web-1 && sleep 6
-docker start inbox-prod-web-1
+node scripts/mqtt-watch.mjs 'inbox/availability' 12 &
+docker kill inbox-prod-web-1 && sleep 8   # SIGKILL: no DISCONNECT is sent
+docker compose -f docker-compose.prod.yml up -d web
 ```
 Expected: `offline` while stopped, `online` again after restart. This is the
 death detection no HTTP webhook can provide, so it is worth confirming rather
@@ -1505,6 +1592,135 @@ any HA automation bound to it still fires.
 Disable the bus for the account, then re-subscribe to
 `homeassistant/sensor/inbox_admin/#` and confirm the retained configs are gone
 and the HA device disappears.
+
+---
+
+### Task 10: Service health entities
+
+Added after Task 1, from the SlackAgent implementation notes: *"find what your
+code already knows and throws away; that list is your entity set."*
+
+A pass over the codebase found four things already computed and then dropped
+into a log nobody reads:
+
+| Already computed | Where it goes today |
+|---|---|
+| `reportA2aTokenHygiene()` — expiring and stale peer tokens | log only |
+| `logger.info("Agent run finished", …)` — steps, tool sequence, repeated calls, answered, hit-cap | log only |
+| A2A task terminal states — completed vs failed | log only |
+| Long-memory / DharaHIL reachability | swallowed warns |
+
+These are **service-level, not per-account**: no mail content, no addresses, no
+PII. So they need no opt-in, no slug and no consent lookup — which makes them
+cheaper than Tasks 5–8, not more expensive. They mirror SlackAgent's own three
+entities (`dependencies`, `peer_mitra`, `task_outcomes`), which is the whole
+point: the bus is for agent health, and content was the addition.
+
+Scope discipline: one entity per question a person would actually ask, not one
+per metric.
+
+| Entity | Question it answers | state | attributes |
+|---|---|---|---|
+| `dependencies` | Is anything Inbox needs broken? | count unhealthy | `{ unhealthy: string[] }` |
+| `peers` | Are my A2A credentials about to lapse? | count configured | `{ expiring: string[], stale: string[] }` |
+| `agent_runs` | Are agent runs healthy? | last outcome | `{ steps, repeated_tool_calls, answered, hit_step_cap }` |
+
+**Files:**
+- Modify: `apps/web/utils/mqtt/topics.ts` — add a `ServiceEntity` type and
+  `serviceTopics()` / `serviceDiscoveryConfig()` under device `inbox`
+- Modify: `apps/web/utils/mqtt/events.ts` — `publishServiceHealth()`
+- Modify: `apps/web/utils/ai/assistant/chat.ts:435` — publish alongside the
+  existing run-summary log, not instead of it
+- Modify: `apps/web/app/api/cron/a2a-tasks/route.ts` — publish dependencies and
+  peers on each cron pass, reusing `reportA2aTokenHygiene()`
+- Test: `apps/web/utils/mqtt/service-health.test.ts`
+
+**Interfaces:**
+- Consumes: `publishMqtt` (Task 3), `discoveryConfig` shape (Task 2).
+- Produces: `publishServiceHealth(entity: ServiceEntity, state: string, attributes: Record<string, unknown>): void`
+
+Device block for all three, distinct from the per-account devices:
+
+```json
+{
+  "identifiers": ["inbox"],
+  "name": "Inbox",
+  "manufacturer": "Dhara AI",
+  "model": "email-agent"
+}
+```
+
+- [ ] **Step 1: Write the failing test**
+
+```ts
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("server-only", () => ({}));
+
+const { mockPublish } = vi.hoisted(() => ({ mockPublish: vi.fn() }));
+vi.mock("@/utils/mqtt/client", () => ({
+  publishMqtt: mockPublish,
+  isMqttConfigured: () => true,
+}));
+
+import { publishServiceHealth } from "./events";
+
+describe("service health", () => {
+  it("publishes state, attributes and discovery under the service device", () => {
+    publishServiceHealth("dependencies", "0", { unhealthy: [] });
+
+    const topics = mockPublish.mock.calls.map(([t]) => t);
+    expect(topics).toEqual([
+      "homeassistant/sensor/inbox/dependencies/config",
+      "inbox/dependencies/state",
+      "inbox/dependencies/attributes",
+    ]);
+  });
+
+  /** No account, no mail, no addresses — this is why it needs no opt-in. */
+  it("carries no per-account identity", () => {
+    publishServiceHealth("peers", "2", { expiring: ["OpenClaw-Mitra"] });
+
+    expect(JSON.stringify(mockPublish.mock.calls)).not.toMatch(/@/);
+  });
+
+  /** A typo must be loud, not silently register an entity nothing announced. */
+  it("refuses an unknown entity", () => {
+    mockPublish.mockClear();
+    // @ts-expect-error deliberately invalid entity key
+    publishServiceHealth("nonsense", "1", {});
+
+    expect(mockPublish).not.toHaveBeenCalled();
+  });
+});
+```
+
+- [ ] **Step 2: Run it to verify it fails**
+
+Run: `npx vitest run utils/mqtt/service-health.test.ts`
+Expected: FAIL — `publishServiceHealth is not a function`
+
+- [ ] **Step 3: Implement, following the existing `publishEntity` shape**
+
+Reuse the retained-publish ordering (config, state, attributes) and the
+unknown-key guard already written in Task 6. Do not duplicate `publishEntity` —
+extract the shared body so both the per-account and service paths use it.
+
+- [ ] **Step 4: Wire the three sources**
+
+`agent_runs` from the existing summary in `chat.ts` (publish *alongside* the
+log, so the log keeps working when MQTT is unconfigured). `dependencies` and
+`peers` from the a2a-tasks cron, reusing `reportA2aTokenHygiene()`. Each call
+gets `.catch(() => {})` per the Global Constraints.
+
+- [ ] **Step 5: Run the suite and commit**
+
+```bash
+npx vitest run && npx tsc --noEmit -p tsconfig.build.json
+cd /mnt/projects/inbox
+git add apps/web/utils/mqtt apps/web/utils/ai/assistant/chat.ts apps/web/app/api/cron/a2a-tasks/route.ts
+git commit -m "feat(mqtt): publish service health the code already computed and discarded"
+```
 
 ---
 
