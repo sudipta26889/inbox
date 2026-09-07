@@ -5,6 +5,7 @@ import type { DharaHILDecision } from "@/utils/dharahil/client";
 import prisma from "@/utils/prisma";
 import { A2aTaskState } from "@/generated/prisma/enums";
 import { approveTask, rejectTask } from "./task-executor";
+import { publishPendingApprovalsUpdate } from "./protocol-handler";
 import { isApprovalGateRequired } from "@/utils/dharahil/required";
 
 const logger = createScopedLogger("a2a-dharahil");
@@ -105,12 +106,48 @@ export async function requestApprovalViaDharaHIL(
     // Submit to DharaHIL gateway
     const response = await dharahilClient.beforeExecute(request);
 
+    // The gateway can also decide immediately — auto-allow/auto-deny
+    // policies — instead of opening a request for a human to review. There is
+    // no request_id and no expires_at then. This used to fall straight into
+    // `new Date(undefined)` below, which Prisma rejects, and the catch turned
+    // a human's ALLOW into a rejected approval. Resolve the task through the
+    // normal decision path instead of treating "decided" as "failed to submit".
+    if (!response.request_id) {
+      logger.info("DharaHIL decided immediately, resolving task now", {
+        taskId: task.taskId,
+        action: response.action,
+      });
+
+      await handleDharaHILDecision(taskInternalId, {
+        action: response.action ?? "ERROR",
+        reason: (response as { reason?: string }).reason,
+      });
+
+      return "";
+    }
+
+    // A malformed expires_at must never reach Prisma — that is exactly what
+    // turned a human's decision into a rejected approval above. Skip storing
+    // it rather than let an unparseable value fail the whole update.
+    let expiresAt: Date | undefined;
+    if (response.expires_at) {
+      const parsed = new Date(response.expires_at);
+      if (Number.isNaN(parsed.getTime())) {
+        logger.error("DharaHIL returned an unparseable expires_at", {
+          taskId: task.taskId,
+          expiresAt: response.expires_at,
+        });
+      } else {
+        expiresAt = parsed;
+      }
+    }
+
     // Update approval record with DharaHIL request ID
     await prisma.a2aApproval.update({
       where: { taskId: task.id },
       data: {
         dharahilRequestId: response.request_id,
-        expiresAt: new Date(response.expires_at),
+        ...(expiresAt ? { expiresAt } : {}),
       },
     });
 
@@ -137,6 +174,10 @@ export async function requestApprovalViaDharaHIL(
         respondedAt: new Date(),
       },
     });
+
+    // This moves the approval out of "pending" directly, not through
+    // rejectTask, so the bus's retained count needs the same publish here.
+    await publishPendingApprovalsUpdate(task.emailAccountId);
 
     throw error;
   }
@@ -240,6 +281,10 @@ async function handleDharaHILDecision(
         respondedAt: new Date(),
       },
     });
+
+    // Status is written directly above rather than through approveTask/
+    // rejectTask, so the bus's retained count needs the same publish here too.
+    await publishPendingApprovalsUpdate(task.emailAccountId);
 
     // Note: A2A protocol doesn't have a "revise" state, so we keep it in auth_required
     // The client needs to create a new task with revised parameters
