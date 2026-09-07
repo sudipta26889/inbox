@@ -39,6 +39,7 @@ import {
 import { createOrGetLabelTool, listLabelsTool } from "./chat-label-tools";
 import { saveMemoryTool, searchMemoriesTool } from "./chat-memory-tools";
 import type { MessagingPlatform } from "@/utils/messaging/platforms";
+import { withRepeatGuard } from "@/utils/ai/assistant/repeat-guard";
 
 export const maxDuration = 120;
 
@@ -78,6 +79,11 @@ export type { SaveMemoryTool, SearchMemoriesTool } from "./chat-memory-tools";
 type AssistantChatOnStepFinish = NonNullable<
   Parameters<typeof toolCallAgentStream>[0]["onStepFinish"]
 >;
+
+/** ~1k tokens of grounding. Enough for real context, far short of crowding. */
+const MEMORY_CONTEXT_CHAR_BUDGET = 4000;
+
+const MAX_AGENT_STEPS = 10;
 
 export async function aiProcessAssistantChat({
   messages,
@@ -376,7 +382,7 @@ Behavior anchors (minimal examples):
       ? [
           {
             role: "user" as const,
-            content: `Memories from previous conversations:\n${memories.map((m) => (m.date ? `- [${m.date}] ${m.content}` : `- ${m.content}`)).join("\n")}`,
+            content: `Memories from previous conversations:\n${withinMemoryBudget(memories).join("\n")}`,
           },
         ]
       : []),
@@ -395,6 +401,8 @@ Behavior anchors (minimal examples):
     stablePrefixEndIndex,
   );
 
+  const run = { steps: 0, tools: [] as string[], textLength: 0 };
+
   const result = toolCallAgentStream({
     userAi: user.user,
     userId: user.userId,
@@ -409,47 +417,74 @@ Behavior anchors (minimal examples):
         text: step.text,
         toolCalls: step.toolCalls,
       });
+
+      run.steps += 1;
+      for (const call of step.toolCalls ?? []) {
+        run.tools.push(call.toolName);
+      }
+      if (step.text) run.textLength += step.text.length;
+
       await onStepFinish?.(step);
     },
-    maxSteps: 10,
-    tools: readOnly
-      ? {
-          getAccountOverview: getAccountOverviewTool(toolOptions),
-          searchInbox: searchInboxTool(toolOptions),
-          readEmail: readEmailTool(toolOptions),
-          searchMemories: searchMemoriesTool(toolOptions),
-        }
-      : {
-          getAssistantCapabilities: getAssistantCapabilitiesTool(toolOptions),
-          updateAssistantSettings: updateAssistantSettingsTool(toolOptions),
-          updateAssistantSettingsCompat:
-            updateAssistantSettingsCompatTool(toolOptions),
-          getAccountOverview: getAccountOverviewTool(toolOptions),
-          searchInbox: searchInboxTool(toolOptions),
-          readEmail: readEmailTool(toolOptions),
-          listLabels: listLabelsTool(toolOptions),
-          createOrGetLabel: createOrGetLabelTool(toolOptions),
-          manageInbox: manageInboxTool(toolOptions),
-          updateInboxFeatures: updateInboxFeaturesTool(toolOptions),
-          getUserRulesAndSettings: getUserRulesAndSettingsTool(toolOptions),
-          getLearnedPatterns: getLearnedPatternsTool(toolOptions),
-          createRule: createRuleTool(toolOptions),
-          updateRuleConditions: updateRuleConditionsTool(toolOptions),
-          updateRuleActions: updateRuleActionsTool(toolOptions),
-          updateLearnedPatterns: updateLearnedPatternsTool(toolOptions),
-          updatePersonalInstructions:
-            updatePersonalInstructionsTool(toolOptions),
-          addToKnowledgeBase: addToKnowledgeBaseTool(toolOptions),
-          searchMemories: searchMemoriesTool(toolOptions),
-          saveMemory: saveMemoryTool({ ...toolOptions, chatId }),
-          ...(emailSendToolsEnabled
-            ? {
-                sendEmail: sendEmailTool(toolOptions),
-                replyEmail: replyEmailTool(toolOptions),
-                forwardEmail: forwardEmailTool(toolOptions),
-              }
-            : {}),
-        },
+    onFinish: async () => {
+      // Names and counts only, at info. The trace above carries arguments and
+      // message text, which are PII and stay off in production — which left no
+      // aggregate signal at all, so the seven-identical-calls run was invisible
+      // until someone read a transcript. This is the smallest record that makes
+      // that class of failure queryable.
+      logger.info("Agent run finished", {
+        surface: responseSurface,
+        readOnly,
+        steps: run.steps,
+        // The literal signature of the bug: search_inbox seven times.
+        toolSequence: run.tools,
+        repeatedToolCalls: run.tools.length - new Set(run.tools).size,
+        answered: run.textLength > 0,
+        hitStepCap: run.steps >= MAX_AGENT_STEPS,
+      });
+    },
+    maxSteps: MAX_AGENT_STEPS,
+    tools: withRepeatGuard(
+      readOnly
+        ? {
+            getAccountOverview: getAccountOverviewTool(toolOptions),
+            searchInbox: searchInboxTool(toolOptions),
+            readEmail: readEmailTool(toolOptions),
+            searchMemories: searchMemoriesTool(toolOptions),
+          }
+        : {
+            getAssistantCapabilities: getAssistantCapabilitiesTool(toolOptions),
+            updateAssistantSettings: updateAssistantSettingsTool(toolOptions),
+            updateAssistantSettingsCompat:
+              updateAssistantSettingsCompatTool(toolOptions),
+            getAccountOverview: getAccountOverviewTool(toolOptions),
+            searchInbox: searchInboxTool(toolOptions),
+            readEmail: readEmailTool(toolOptions),
+            listLabels: listLabelsTool(toolOptions),
+            createOrGetLabel: createOrGetLabelTool(toolOptions),
+            manageInbox: manageInboxTool(toolOptions),
+            updateInboxFeatures: updateInboxFeaturesTool(toolOptions),
+            getUserRulesAndSettings: getUserRulesAndSettingsTool(toolOptions),
+            getLearnedPatterns: getLearnedPatternsTool(toolOptions),
+            createRule: createRuleTool(toolOptions),
+            updateRuleConditions: updateRuleConditionsTool(toolOptions),
+            updateRuleActions: updateRuleActionsTool(toolOptions),
+            updateLearnedPatterns: updateLearnedPatternsTool(toolOptions),
+            updatePersonalInstructions:
+              updatePersonalInstructionsTool(toolOptions),
+            addToKnowledgeBase: addToKnowledgeBaseTool(toolOptions),
+            searchMemories: searchMemoriesTool(toolOptions),
+            saveMemory: saveMemoryTool({ ...toolOptions, chatId }),
+            ...(emailSendToolsEnabled
+              ? {
+                  sendEmail: sendEmailTool(toolOptions),
+                  replyEmail: replyEmailTool(toolOptions),
+                  forwardEmail: forwardEmailTool(toolOptions),
+                }
+              : {}),
+          },
+      logger,
+    ),
   });
 
   return result;
@@ -656,4 +691,37 @@ Inline email cards:
 - The UI automatically resolves the full email metadata (sender, subject, date) from the thread ID, so do NOT repeat those details in the tag content.
 - Use a separate <emails> block per category group, with a markdown header (##) before each block.
 - Only use <email> tags for triage and inbox summary flows, not for every search result.`;
+}
+
+/**
+ * How much recalled memory is worth injecting.
+ *
+ * Capped by size rather than item count, because one long memory can crowd out
+ * the conversation while twenty short ones cost nothing. Recall degrades
+ * monotonically with input length — not only near the window limit — so
+ * unbounded grounding makes the model worse at using the grounding.
+ *
+ * Oldest-first order is preserved: the newest memories end up nearest the
+ * question, which is where they read best.
+ */
+export function withinMemoryBudget(
+  memories: { content: string; date?: string }[],
+): string[] {
+  const lines: string[] = [];
+  let budget = MEMORY_CONTEXT_CHAR_BUDGET;
+
+  // Walked newest-first so that when the budget runs out it is the OLDEST
+  // memories that are dropped, then flipped back for rendering.
+  for (const memory of [...memories].reverse()) {
+    const line = memory.date
+      ? `- [${memory.date}] ${memory.content}`
+      : `- ${memory.content}`;
+
+    if (line.length > budget) break;
+
+    budget -= line.length;
+    lines.unshift(line);
+  }
+
+  return lines;
 }
