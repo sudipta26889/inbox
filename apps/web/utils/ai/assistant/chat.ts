@@ -40,6 +40,7 @@ import { createOrGetLabelTool, listLabelsTool } from "./chat-label-tools";
 import { saveMemoryTool, searchMemoriesTool } from "./chat-memory-tools";
 import type { MessagingPlatform } from "@/utils/messaging/platforms";
 import { withRepeatGuard } from "@/utils/ai/assistant/repeat-guard";
+import { publishServiceHealth } from "@/utils/mqtt/events";
 
 export const maxDuration = 120;
 
@@ -442,6 +443,22 @@ Behavior anchors (minimal examples):
         answered: run.textLength > 0,
         hitStepCap: run.steps >= MAX_AGENT_STEPS,
       });
+
+      // Alongside the log above, not instead of it — the log must keep
+      // working even when MQTT is unconfigured, and this publish must never
+      // affect the run, so it fails soft.
+      const hitStepCap = run.steps >= MAX_AGENT_STEPS;
+      const answered = run.textLength > 0;
+      let outcome: "hit_step_cap" | "answered" | "no_answer" = "no_answer";
+      if (hitStepCap) outcome = "hit_step_cap";
+      else if (answered) outcome = "answered";
+
+      await publishServiceHealth("agent_runs", outcome, {
+        steps: run.steps,
+        repeated_tool_calls: run.tools.length - new Set(run.tools).size,
+        answered,
+        hit_step_cap: hitStepCap,
+      }).catch(() => {});
     },
     maxSteps: MAX_AGENT_STEPS,
     tools: withRepeatGuard(

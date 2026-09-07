@@ -69,6 +69,50 @@ export function discoveryConfig({
   };
 }
 
+/**
+ * Service-level entities: one shared device (`inbox`), no slug, no per-account
+ * identity. These report on Inbox's own health (dependencies, peer
+ * credentials, agent runs), never on mail content.
+ */
+export type ServiceEntity = "dependencies" | "peers" | "agent_runs";
+
+export function serviceTopics(entity: ServiceEntity) {
+  return {
+    state: `inbox/${entity}/state`,
+    attributes: `inbox/${entity}/attributes`,
+    config: `${DISCOVERY_PREFIX}/inbox/${entity}/config`,
+  };
+}
+
+export function serviceDiscoveryConfig({
+  entity,
+  name,
+  icon,
+}: {
+  entity: ServiceEntity;
+  name: string;
+  icon: string;
+}): Record<string, unknown> {
+  const topics = serviceTopics(entity);
+
+  return {
+    name,
+    unique_id: `inbox_${entity}`,
+    state_topic: topics.state,
+    json_attributes_topic: topics.attributes,
+    availability_topic: AVAILABILITY_TOPIC,
+    // One device for the whole service — distinct from discoveryConfig's
+    // inbox_<slug> devices, since there is no account to separate.
+    device: {
+      identifiers: ["inbox"],
+      name: "Inbox",
+      manufacturer: "Dhara AI",
+      model: "email-agent",
+    },
+    icon,
+  };
+}
+
 export function unreadPayload({
   unread,
   total,

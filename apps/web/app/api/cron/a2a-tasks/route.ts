@@ -8,6 +8,7 @@ import { A2aTaskState } from "@/generated/prisma/enums";
 import { executeTask } from "@/utils/a2a/task-executor";
 import { cleanupRateLimitRecords } from "@/utils/a2a/rate-limit";
 import { reportA2aTokenHygiene } from "@/utils/a2a/token-hygiene";
+import { publishServiceHealth } from "@/utils/mqtt/events";
 import {
   processPendingDharaHILApprovals,
   processExpiredDharaHILApprovals,
@@ -81,6 +82,30 @@ async function processA2aTasks(logger: Logger) {
 
   // Step 7: Surface peer credentials nobody is watching
   const tokenHygiene = await reportA2aTokenHygiene(logger);
+
+  // Publish alongside the log below, not instead of it. These reuse results
+  // already computed above rather than probing anything new, so they need no
+  // opt-in and no slug: nothing here is per-account.
+  const unhealthy = [
+    "error" in dharahilResult ? "dharahil" : null,
+    "error" in expiredResult ? "dharahil-expired-approvals" : null,
+    "error" in webhooksResult ? "webhooks" : null,
+    "error" in cleanupResult ? "cleanup" : null,
+  ].filter((name): name is string => name !== null);
+  await publishServiceHealth("dependencies", String(unhealthy.length), {
+    unhealthy,
+  }).catch(() => {});
+
+  const expiring = tokenHygiene.findings
+    .filter((finding) => finding.reason === "expiring")
+    .map((finding) => finding.clientName);
+  const stale = tokenHygiene.findings
+    .filter((finding) => finding.reason === "stale")
+    .map((finding) => finding.clientName);
+  await publishServiceHealth("peers", String(tokenHygiene.checked), {
+    expiring,
+    stale,
+  }).catch(() => {});
 
   logger.info("Finished A2A task processing", {
     pending: pendingResult,

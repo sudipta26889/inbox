@@ -8,17 +8,21 @@ import {
   entityTopics,
   isValidSlug,
   type MqttEntity,
+  serviceDiscoveryConfig,
+  type ServiceEntity,
+  serviceTopics,
   unreadPayload,
   urgentPayload,
 } from "@/utils/mqtt/topics";
 import prisma from "@/utils/prisma";
 
 /**
- * The four things Inbox tells the bus.
+ * The things Inbox tells the bus.
  *
- * Every publisher resolves opt-in first and builds nothing otherwise, so an
- * account that never enabled the bus cannot leak through a publisher added
- * later.
+ * The four per-account publishers resolve opt-in first and build nothing
+ * otherwise, so an account that never enabled the bus cannot leak through a
+ * publisher added later. The service publisher below carries no per-account
+ * identity, so it needs no such check.
  */
 
 const logger = createScopedLogger("mqtt-events");
@@ -28,6 +32,15 @@ const ENTITY_META: Record<MqttEntity, { name: string; icon: string }> = {
   urgent: { name: "Last urgent mail", icon: "mdi:alert" },
   digest: { name: "Digest", icon: "mdi:newspaper" },
   approvals: { name: "Pending approvals", icon: "mdi:account-check" },
+};
+
+const SERVICE_ENTITY_META: Record<
+  ServiceEntity,
+  { name: string; icon: string }
+> = {
+  dependencies: { name: "Dependencies", icon: "mdi:server-network" },
+  peers: { name: "Peer credentials", icon: "mdi:key-alert" },
+  agent_runs: { name: "Agent runs", icon: "mdi:robot" },
 };
 
 type Consent = { slug: string; includeDetail: boolean };
@@ -113,6 +126,32 @@ export async function publishApprovals({
 }
 
 /**
+ * Service-level health: no account, no mail, no addresses — so unlike the
+ * four publishers above, this needs no opt-in and no slug. Callers wrap every
+ * call in `.catch(() => {})`: this is a notification path and must never
+ * affect an agent run or a cron pass.
+ */
+export async function publishServiceHealth(
+  entity: ServiceEntity,
+  state: string,
+  attributes: Record<string, unknown>,
+): Promise<void> {
+  const meta = SERVICE_ENTITY_META[entity];
+
+  // A typo should be loud, not quietly register an entity nothing announced.
+  if (!meta) {
+    logger.error("Refusing to publish an unknown MQTT entity", { entity });
+    return;
+  }
+
+  publishRetained(
+    serviceTopics(entity),
+    serviceDiscoveryConfig({ entity, ...meta }),
+    { state, attributes },
+  );
+}
+
+/**
  * Retained topics outlive the account that made them: opting out or renaming a
  * slug would otherwise leave stale topics and orphaned Home Assistant entities
  * forever. An empty retained payload is how MQTT deletes one.
@@ -177,15 +216,26 @@ function publishEntity(
     return;
   }
 
-  const topics = entityTopics(slug, entity);
+  publishRetained(
+    entityTopics(slug, entity),
+    discoveryConfig({ slug, entity, ...meta }),
+    built,
+  );
+}
 
+/**
+ * The retained config/state/attributes publish shared by the per-account and
+ * service-level paths — the only difference between them is how the topics
+ * and discovery config are built.
+ */
+function publishRetained(
+  topics: { config: string; state: string; attributes: string },
+  config: Record<string, unknown>,
+  built: { state: string; attributes: Record<string, unknown> },
+) {
   // Retained throughout: a subscriber connecting at noon should learn current
   // state immediately rather than waiting for the next change.
-  publishMqtt(
-    topics.config,
-    JSON.stringify(discoveryConfig({ slug, entity, ...meta })),
-    { retain: true },
-  );
+  publishMqtt(topics.config, JSON.stringify(config), { retain: true });
   publishMqtt(topics.state, built.state, { retain: true });
   publishMqtt(topics.attributes, JSON.stringify(built.attributes), {
     retain: true,
