@@ -35,7 +35,7 @@ export const GET = withAuth("user/a2a-webhooks", async (request) => {
     return NextResponse.json({ error: "Client not found" }, { status: 404 });
   }
 
-  // This UI predates A2A §3.1.7 per-task config; it only ever manages the
+  // This route predates A2A §3.1.7 per-task config; it only ever manages the
   // client-level default (taskId NULL). Prisma's compound-unique input can't
   // carry null (SQL equality never matches NULL), so this is a plain filter
   // rather than findUnique.
@@ -122,7 +122,7 @@ export const POST = withAuth("user/a2a-webhooks", async (request) => {
   // Generate webhook secret (random 32-byte hex string)
   const secret = crypto.randomBytes(32).toString("hex");
 
-  // Create or update config. This UI predates A2A §3.1.7 per-task config; it
+  // Create or update config. This route predates A2A §3.1.7 per-task config; it
   // only ever manages the client-level default (taskId NULL). Prisma's
   // compound-unique input can't carry null, so this can't be an atomic
   // upsert — find the existing default row, then create or update by id.
@@ -183,7 +183,7 @@ export const DELETE = withAuth("user/a2a-webhooks", async (request) => {
     return NextResponse.json({ error: "Client not found" }, { status: 404 });
   }
 
-  // Delete webhook config. This UI predates A2A §3.1.7 per-task config; it
+  // Delete webhook config. This route predates A2A §3.1.7 per-task config; it
   // only ever manages the client-level default (taskId NULL). Prisma's
   // compound-unique input can't carry null, so find the row before deleting
   // it by id.

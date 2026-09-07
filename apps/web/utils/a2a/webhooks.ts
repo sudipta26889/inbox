@@ -77,18 +77,7 @@ export async function queueWebhook(
     return;
   }
 
-  // A2A §3.1.7 config is per task; a NULL taskId row is the client's default.
-  // `IN (taskId, NULL)` would silently drop the NULL row — SQL's IN never
-  // matches NULL — so the fallback is an explicit OR. Postgres also defaults
-  // DESC to NULLS FIRST, which would hand back the default even when a
-  // task-specific row exists, hence the explicit NULLS LAST.
-  const webhookConfig = await prisma.a2aWebhookConfig.findFirst({
-    where: {
-      clientId: task.clientId,
-      OR: [{ taskId: task.taskId }, { taskId: null }],
-    },
-    orderBy: { taskId: { sort: "desc", nulls: "last" } },
-  });
+  const webhookConfig = await getConfigForTask(task.clientId, task.taskId);
 
   if (!webhookConfig || !webhookConfig.enabled) {
     logger.trace("No webhook configured for client", {
@@ -96,6 +85,29 @@ export async function queueWebhook(
       event,
     });
     return;
+  }
+
+  // A disabled client default is a client-wide kill switch, not just a
+  // fallback for tasks with no row of their own: without this check, a peer
+  // disabled by the owner could resume delivery by calling `set` with a
+  // taskId, since the fresh task-specific row is created enabled and always
+  // wins the lookup above over the disabled default. Checked here, at
+  // delivery time, rather than by forcing new rows disabled at create time,
+  // so the switch also covers task-specific rows that already existed
+  // before the default was disabled.
+  if (webhookConfig.taskId !== null) {
+    const clientDefault = await prisma.a2aWebhookConfig.findFirst({
+      where: { clientId: task.clientId, taskId: null },
+      select: { enabled: true },
+    });
+
+    if (clientDefault && !clientDefault.enabled) {
+      logger.trace("Client default is disabled; suppressing task webhook", {
+        clientId: task.clientId,
+        event,
+      });
+      return;
+    }
   }
 
   // Check if this event is subscribed
@@ -214,19 +226,38 @@ export async function deliverWebhook(deliveryId: string): Promise<boolean> {
   });
 
   try {
+    // A2A §3.1.7's token: echoed back so the peer can verify this call came
+    // from us. Looked up fresh rather than snapshotted at queue time, so a
+    // token rotated after this delivery was queued still gets used. `taskId`
+    // here is the internal a2aTask row id (queueWebhook's own doing); the
+    // config lookup keys on the task's public taskId instead.
+    const task = await prisma.a2aTask.findUnique({
+      where: { id: delivery.taskId },
+      select: { taskId: true },
+    });
+    const webhookConfig = task
+      ? await getConfigForTask(delivery.clientId, task.taskId)
+      : null;
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      "User-Agent": "InboxZero-A2A-Webhook/1.0",
+      "X-Webhook-Signature": delivery.signature || "",
+      "X-Webhook-Event": delivery.event,
+      "X-Webhook-Delivery-ID": delivery.id,
+    };
+
+    if (webhookConfig?.token) {
+      headers["X-A2A-Notification-Token"] = webhookConfig.token;
+    }
+
     // Make HTTP request
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10_000); // 10 second timeout
 
     const response = await fetch(delivery.url, {
       method: delivery.method,
-      headers: {
-        "Content-Type": "application/json",
-        "User-Agent": "InboxZero-A2A-Webhook/1.0",
-        "X-Webhook-Signature": delivery.signature || "",
-        "X-Webhook-Event": delivery.event,
-        "X-Webhook-Delivery-ID": delivery.id,
-      },
+      headers,
       body: JSON.stringify(delivery.payload),
       signal: controller.signal,
     });
@@ -307,6 +338,25 @@ export async function deliverWebhook(deliveryId: string): Promise<boolean> {
 
     return false;
   }
+}
+
+/**
+ * Find the push notification config that applies to a task: its own
+ * task-specific row if one exists, else the client's default.
+ */
+function getConfigForTask(clientId: string, taskId: string) {
+  // A2A §3.1.7 config is per task; a NULL taskId row is the client's default.
+  // `IN (taskId, NULL)` would silently drop the NULL row — SQL's IN never
+  // matches NULL — so the fallback is an explicit OR. Postgres also defaults
+  // DESC to NULLS FIRST, which would hand back the default even when a
+  // task-specific row exists, hence the explicit NULLS LAST.
+  return prisma.a2aWebhookConfig.findFirst({
+    where: {
+      clientId,
+      OR: [{ taskId }, { taskId: null }],
+    },
+    orderBy: { taskId: { sort: "desc", nulls: "last" } },
+  });
 }
 
 /**

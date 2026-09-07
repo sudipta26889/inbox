@@ -2102,6 +2102,12 @@ model A2aWebhookConfig {
   // ============ Webhook Settings ============
   url             String   // Webhook endpoint URL
   secret          String   // HMAC signing secret
+  /// A2A §3.1.7 `pushNotificationConfig.token`, echoed back on each delivery
+  /// (`X-A2A-Notification-Token`) so the peer can verify the call came from
+  /// us. Unlike `secret` this isn't ours to protect — the peer supplied it —
+  /// but it's still a shared credential, so `toResponse` must never return
+  /// it either.
+  token           String?
   enabled         Boolean  @default(true)
 
   // ============ Events ============

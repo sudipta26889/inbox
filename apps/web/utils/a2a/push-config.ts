@@ -14,8 +14,8 @@ import prisma from "@/utils/prisma";
  * this only puts the standard-named RPC surface in front of it.
  *
  * A config with a NULL taskId is the client's default, which is what the
- * pre-§3.1.7 settings UI writes. queueWebhook prefers a task-specific row and
- * falls back to the default.
+ * pre-§3.1.7 POST /api/user/a2a-webhooks route writes. queueWebhook prefers
+ * a task-specific row and falls back to the default.
  */
 
 const DEFAULT_EVENTS: string[] = Object.values(WEBHOOK_EVENTS);
@@ -44,6 +44,15 @@ export async function handlePushConfigSet(
     throw new Error("pushNotificationConfig.url is required");
   }
 
+  // We don't implement any auth scheme (mTLS, OAuth, etc.) on the delivery
+  // side — only the token below. Accepting this silently would leave the
+  // peer believing a scheme it named is actually enforced.
+  if (pushNotificationConfig.authentication) {
+    throw new Error(
+      "pushNotificationConfig.authentication is not supported; use token instead",
+    );
+  }
+
   assertDeliverableUrl(pushNotificationConfig.url);
 
   // Scoped BEFORE the write, per §13.1: without this a peer could attach its
@@ -61,17 +70,23 @@ export async function handlePushConfigSet(
           taskId,
           url: pushNotificationConfig.url,
           secret: randomBytes(32).toString("hex"),
+          token: pushNotificationConfig.token,
           enabled: true,
           events: DEFAULT_EVENTS,
         },
         // No `enabled: true` here — this is the UPDATE path, and forcing it
         // on every `set` would silently undo a disable the owner made
-        // through the settings UI. Only CREATE defaults a new row to enabled.
-        update: { url: pushNotificationConfig.url },
+        // through POST /api/user/a2a-webhooks. (A disabled client default is
+        // still enforced client-wide regardless: see queueWebhook.)
+        update: {
+          url: pushNotificationConfig.url,
+          token: pushNotificationConfig.token,
+        },
       })
     : await upsertDefaultConfig(
         authContext.clientId,
         pushNotificationConfig.url,
+        pushNotificationConfig.token,
       );
 
   return toResponse(config);
@@ -179,18 +194,22 @@ async function assertTaskInScope(authContext: A2aAuthContext, taskId: string) {
 // existing row and race on create — the partial unique index still stops
 // duplicate rows, so the loser gets a P2002 rather than silently corrupting
 // state. Add a catch-and-retry-as-update here if that ever actually fires.
-async function upsertDefaultConfig(clientId: string, url: string) {
+async function upsertDefaultConfig(
+  clientId: string,
+  url: string,
+  token?: string,
+) {
   const existing = await prisma.a2aWebhookConfig.findFirst({
     where: { clientId, taskId: null },
   });
 
   if (existing) {
-    // No `enabled: true` here — this is the default row the settings UI's
-    // kill switch disables; forcing it back on every `set` would let a peer
-    // silently undo that.
+    // No `enabled: true` here — this is the default row that
+    // POST /api/user/a2a-webhooks's kill switch (enabled: false) disables;
+    // forcing it back on every `set` would let a peer silently undo that.
     return prisma.a2aWebhookConfig.update({
       where: { id: existing.id },
-      data: { url },
+      data: { url, token },
     });
   }
 
@@ -200,6 +219,7 @@ async function upsertDefaultConfig(clientId: string, url: string) {
       taskId: null,
       url,
       secret: randomBytes(32).toString("hex"),
+      token,
       enabled: true,
       events: DEFAULT_EVENTS,
     },
@@ -213,8 +233,11 @@ function toResponse(config: {
   enabled: boolean;
   events: string[];
 }): PushConfigResponse {
-  // No `secret`. It is the HMAC key we sign with; returning it would let the
-  // peer forge our own signatures.
+  // No `secret`, no `token`. `secret` is the HMAC key we sign with; `token`
+  // is the peer's own shared credential that we echo back on each delivery
+  // so it can verify the call came from us — returning either here would
+  // hand it to anyone who can query the config (e.g. via `list`), not just
+  // the peer receiving deliveries.
   return {
     pushNotificationConfigId: config.id,
     taskId: config.taskId,

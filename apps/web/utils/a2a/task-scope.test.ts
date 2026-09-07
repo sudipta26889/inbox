@@ -65,9 +65,16 @@ describe("every task query is scoped", () => {
       // Anchored to `a2aTask` specifically — an unrelated model's by-id call
       // elsewhere in the same file (e.g. `a2aWebhookConfig.update({ where: {
       // id } })`) must not be able to stand in for scoping a task query.
+      //
+      // Restricted to the SAME method set as `queries` above (find* only) —
+      // not `\w+`. A mutation (`update`/`delete`) by internal id is not one
+      // of the queries this guard counts in the first place, so it must not
+      // earn slack either: that let `handleTaskCancel`'s
+      // `prisma.a2aTask.update({ where: { id: task.id } })` mask a deleted
+      // `...taskScope(authContext)` on the scoped read a few lines above it.
       const byInternalId =
         source.match(
-          /prisma\.a2aTask\.\w+\(\s*\{\s*where:\s*\{\s*id:\s*[A-Za-z.]+\s*\}/g,
+          /prisma\.a2aTask\.(findUnique|findFirst|findMany)\(\s*\{\s*where:\s*\{\s*id:\s*[A-Za-z.]+\s*\}/g,
         )?.length ?? 0;
 
       expect(

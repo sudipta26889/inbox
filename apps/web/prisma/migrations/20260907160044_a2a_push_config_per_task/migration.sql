@@ -13,3 +13,8 @@ CREATE UNIQUE INDEX "a2a_webhook_configs_clientId_taskId_key"
 CREATE UNIQUE INDEX "a2a_webhook_configs_clientId_default_key"
   ON "a2a_webhook_configs" ("clientId")
   WHERE "taskId" IS NULL;
+
+-- A2A §3.1.7 pushNotificationConfig.token, echoed back on delivery so the
+-- peer can verify the call came from us. Still undeployed, so this rides
+-- along in the same migration rather than a new one.
+ALTER TABLE "a2a_webhook_configs" ADD COLUMN "token" TEXT;
