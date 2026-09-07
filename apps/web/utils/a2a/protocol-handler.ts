@@ -11,6 +11,7 @@ import type { A2aAuthContext } from "./auth";
 import { validateSkillAccess } from "./auth";
 import { A2aApprovalStatus, A2aTaskState } from "@/generated/prisma/enums";
 import { canonicalActionKey } from "@/utils/dharahil/prior-decision";
+import { publishApprovals } from "@/utils/mqtt/events";
 import { taskScope } from "@/utils/a2a/task-scope";
 import { checkA2aRequestRateLimit } from "@/utils/a2a/rate-limit";
 import { fromWireState, toWireState } from "@/utils/a2a/wire-state";
@@ -277,6 +278,19 @@ export async function handleMessageSend(
       contextId,
     });
 
+    // The bus should show the queue as it stands after this new approval, not
+    // before it. The catch is load-bearing and covers both steps: computing
+    // the summary is itself a database read, and a blip there — same as one
+    // in the publisher itself — must not fail approval creation.
+    await pendingApprovalsSummary(authContext.emailAccountId)
+      .then((approvalsSummary) =>
+        publishApprovals({
+          emailAccountId: authContext.emailAccountId,
+          ...approvalsSummary,
+        }),
+      )
+      .catch(() => {});
+
     // Submit to DharaHIL for human approval
     try {
       const { requestApprovalViaDharaHIL } = await import(
@@ -494,6 +508,19 @@ export async function handleTaskCancel(
     logger.info("Withdrew a pending approval for a canceled task", {
       taskId: task.taskId,
     });
+
+    // Task rows predate the emailAccountId column and may not carry one;
+    // there is nothing to report to the bus for those.
+    const emailAccountId = task.emailAccountId;
+    if (emailAccountId) {
+      // Same load-bearing catch as above: covers both the summary read and
+      // the publish, so a database blip cannot fail the cancellation.
+      await pendingApprovalsSummary(emailAccountId)
+        .then((approvalsSummary) =>
+          publishApprovals({ emailAccountId, ...approvalsSummary }),
+        )
+        .catch(() => {});
+    }
   }
 
   // Record state transition
@@ -583,4 +610,26 @@ function requireKnownState(value: string) {
   if (!state) throw new Error(`Unknown task state: ${value}`);
 
   return state;
+}
+
+/**
+ * Snapshot of an account's pending-approval queue for the MQTT bus: how many
+ * are waiting, how long the oldest has waited, and which skills they're for.
+ */
+async function pendingApprovalsSummary(emailAccountId: string) {
+  const pending = await prisma.a2aApproval.findMany({
+    where: { status: A2aApprovalStatus.pending, task: { emailAccountId } },
+    select: { skill: true, requestedAt: true },
+    orderBy: { requestedAt: "asc" },
+  });
+
+  const oldest = pending[0]?.requestedAt;
+
+  return {
+    pending: pending.length,
+    oldestWaitingSeconds: oldest
+      ? Math.floor((Date.now() - oldest.getTime()) / 1000)
+      : null,
+    actions: pending.map((approval) => approval.skill),
+  };
 }

@@ -43,12 +43,20 @@ vi.mock("@/utils/prisma", () => ({
     a2aApproval: {
       updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       create: vi.fn(),
+      findMany: vi.fn().mockResolvedValue([]),
     },
   },
 }));
 
 vi.mock("../task-executor", () => ({
   executeTask: vi.fn().mockResolvedValue(undefined),
+}));
+
+const { mockPublishApprovals } = vi.hoisted(() => ({
+  mockPublishApprovals: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("@/utils/mqtt/events", () => ({
+  publishApprovals: mockPublishApprovals,
 }));
 
 vi.mock("nanoid", () => ({
@@ -192,6 +200,9 @@ describe("A2A Protocol Handlers", () => {
 
       (prisma.a2aTaskHistory.create as any).mockResolvedValue({});
       (prisma.a2aApproval.create as any).mockResolvedValue({});
+      (prisma.a2aApproval.findMany as any).mockResolvedValue([
+        { skill: "calendar.create_event", requestedAt: new Date() },
+      ]);
 
       const result = await handleMessageSend(mockAuthContext, {
         contextId: "ctx-abc",
@@ -202,6 +213,16 @@ describe("A2A Protocol Handlers", () => {
       expect(result.state).toBe("TASK_STATE_AUTH_REQUIRED");
       expect(prisma.a2aApproval.create).toHaveBeenCalled();
       expect(executeTask).not.toHaveBeenCalled();
+
+      // The bus gets told about the newly created approval, for the account
+      // that owns it — not the peer that requested it.
+      expect(mockPublishApprovals).toHaveBeenCalledWith(
+        expect.objectContaining({
+          emailAccountId: mockAuthContext.emailAccountId,
+          pending: 1,
+          actions: ["calendar.create_event"],
+        }),
+      );
     });
 
     /**
@@ -390,6 +411,7 @@ describe("A2A Protocol Handlers", () => {
         id: "task-internal-123",
         taskId: "task-public-123",
         state: A2aTaskState.submitted,
+        emailAccountId: "email-account-456",
       };
 
       (prisma.a2aTask.findUnique as any).mockResolvedValue(mockTask);
@@ -398,6 +420,7 @@ describe("A2A Protocol Handlers", () => {
         state: A2aTaskState.canceled,
       });
       (prisma.a2aTaskHistory.create as any).mockResolvedValue({});
+      (prisma.a2aApproval.findMany as any).mockResolvedValue([]);
 
       const result = await handleTaskCancel(mockAuthContext, {
         taskId: "task-public-123",
@@ -420,6 +443,14 @@ describe("A2A Protocol Handlers", () => {
           data: expect.objectContaining({
             state: A2aTaskState.canceled,
           }),
+        }),
+      );
+
+      // The bus learns the queue shrank, for the task's own account.
+      expect(mockPublishApprovals).toHaveBeenCalledWith(
+        expect.objectContaining({
+          emailAccountId: "email-account-456",
+          pending: 0,
         }),
       );
     });

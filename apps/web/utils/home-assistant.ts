@@ -3,6 +3,7 @@ import { SafeError } from "@/utils/error";
 import prisma from "@/utils/prisma";
 import { sleep } from "@/utils/sleep";
 import { isMqttConfigured, publishMqtt } from "@/utils/mqtt/client";
+import { publishUrgent } from "@/utils/mqtt/events";
 import type { ExecutedRule } from "@/generated/prisma/client";
 
 const logger = createScopedLogger("home-assistant");
@@ -214,6 +215,18 @@ async function executeMqttPublish(
   // being up and on a per-user long-lived token. Same topic, same payload — only
   // the transport changed, so existing HA automations do not notice.
   publishMqtt(topic, JSON.stringify(payload));
+
+  // The legacy topic above keeps its full payload because an operator chose it
+  // for their own account. The bus is a broadcast, so it gets the consent-gated
+  // version instead. The catch is load-bearing: consentFor does a database read,
+  // and a database blip must not fail a rule execution.
+  await publishUrgent({
+    emailAccountId: executedRule.emailAccountId,
+    ruleName: rule.ruleName ?? "",
+    subject: email.subject,
+    from: email.from,
+  }).catch(() => {});
+
   // publishMqtt is fire-and-forget and fail-soft: it may no-op, queue, or drop.
   // Delivery is reported by the client module's own connection logging, so this
   // must not claim more than "handed over".

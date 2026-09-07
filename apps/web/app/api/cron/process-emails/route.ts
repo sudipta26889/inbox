@@ -4,6 +4,9 @@ import { withError } from "@/utils/middleware";
 import { hasCronSecret, hasPostCronSecret } from "@/utils/cron";
 import { captureException } from "@/utils/error";
 import type { Logger } from "@/utils/logger";
+import { getInboxStatsForChatContext } from "@/utils/ai/assistant/get-inbox-stats-for-chat-context";
+import { isMqttConfigured } from "@/utils/mqtt/client";
+import { publishUnread } from "@/utils/mqtt/events";
 import { enqueueBackgroundJob } from "@/utils/queue/dispatch";
 import { hasAiAccess, getPremiumUserFilter } from "@/utils/premium";
 
@@ -146,6 +149,25 @@ async function enqueueEmailProcessingJobs(logger: Logger) {
       });
 
       queued += 1;
+
+      // Skip the provider round trip entirely when MQTT isn't configured on
+      // this instance at all — no point paying for inbox stats nobody can
+      // consume. Per-account consent is still resolved inside publishUnread.
+      if (isMqttConfigured()) {
+        const stats = await getInboxStatsForChatContext({
+          emailAccountId: account.id,
+          provider: account.account?.provider || "google",
+          logger: accountLogger,
+        });
+
+        if (stats) {
+          await publishUnread({
+            emailAccountId: account.id,
+            unread: stats.unread,
+            total: stats.total,
+          }).catch(() => {});
+        }
+      }
     } catch (error) {
       failed += 1;
       accountLogger.error("Failed to enqueue email account for processing", {

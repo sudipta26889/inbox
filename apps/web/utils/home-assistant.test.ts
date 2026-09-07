@@ -4,13 +4,19 @@ import type { ExecutedRule } from "@/generated/prisma/client";
 
 vi.mock("server-only", () => ({}));
 
-const { mockPublish, mockIsMqttConfigured } = vi.hoisted(() => ({
-  mockPublish: vi.fn().mockReturnValue(undefined),
-  mockIsMqttConfigured: vi.fn().mockReturnValue(true),
-}));
+const { mockPublish, mockIsMqttConfigured, mockPublishUrgent } = vi.hoisted(
+  () => ({
+    mockPublish: vi.fn().mockReturnValue(undefined),
+    mockIsMqttConfigured: vi.fn().mockReturnValue(true),
+    mockPublishUrgent: vi.fn().mockResolvedValue(undefined),
+  }),
+);
 vi.mock("@/utils/mqtt/client", () => ({
   publishMqtt: mockPublish,
   isMqttConfigured: mockIsMqttConfigured,
+}));
+vi.mock("@/utils/mqtt/events", () => ({
+  publishUrgent: mockPublishUrgent,
 }));
 
 vi.mock("@/utils/prisma", () => ({
@@ -33,6 +39,7 @@ beforeEach(() => {
     homeAssistantToken: "token-1",
   });
   mockIsMqttConfigured.mockReturnValue(true);
+  mockPublishUrgent.mockResolvedValue(undefined);
 });
 
 const email = {
@@ -110,6 +117,35 @@ describe("home assistant mqtt action", () => {
       }),
     ).rejects.toThrow(/MQTT/);
     expect(mockPublish).not.toHaveBeenCalled();
+  });
+
+  it("also publishes the consent-gated event to the bus, alongside the legacy topic", async () => {
+    await executeHomeAssistantAction("user-1", email, rule, executedRule, {
+      type: "mqtt",
+      mqttTopic: "homeassistant/inbox/urgent",
+    });
+
+    expect(mockPublishUrgent).toHaveBeenCalledTimes(1);
+    expect(mockPublishUrgent).toHaveBeenCalledWith({
+      emailAccountId: "acct-1",
+      ruleName: "Urgent",
+      subject: "Invoice due",
+      from: "billing@vendor.com",
+    });
+  });
+
+  it("does not let a bus publish failure fail the rule action", async () => {
+    mockPublishUrgent.mockRejectedValue(new Error("bus down"));
+
+    await expect(
+      executeHomeAssistantAction("user-1", email, rule, executedRule, {
+        type: "mqtt",
+        mqttTopic: "homeassistant/inbox/urgent",
+      }),
+    ).resolves.toBeUndefined();
+
+    // The legacy topic still got its publish; only the bus side failed.
+    expect(mockPublish).toHaveBeenCalledTimes(1);
   });
 });
 

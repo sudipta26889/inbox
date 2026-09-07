@@ -12,6 +12,7 @@ import { hasCronSecret } from "@/utils/cron";
 import { captureException } from "@/utils/error";
 import type { Logger } from "@/utils/logger";
 import { withError } from "@/utils/middleware";
+import { publishDigest } from "@/utils/mqtt/events";
 import prisma from "@/utils/prisma";
 import { redis } from "@/utils/redis";
 
@@ -97,6 +98,19 @@ async function runDueDigests(logger: Logger, { force = false } = {}) {
 
       await saveDailyDigest(digest);
       await pushDailyDigestToRemoteAgents({ digest, logger: userLogger });
+
+      // One publish per account in the digest, each gated on that account's
+      // own bus opt-in. The catch is load-bearing: publishDigest reads the
+      // database to resolve consent, and a blip there must not fail a cron
+      // run that has already generated and saved the digest.
+      for (const account of digest.accounts) {
+        await publishDigest({
+          emailAccountId: account.emailAccountId,
+          items: account.text
+            .split("\n")
+            .filter((line) => line.trim().length > 0).length,
+        }).catch(() => {});
+      }
 
       await recordDigestRun({
         userId: user.id,
