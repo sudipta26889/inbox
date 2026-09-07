@@ -136,7 +136,7 @@ export const POST = withError("a2a", async (request: RequestWithLogger) => {
             },
             capabilities: {
               streaming: false,
-              pushNotifications: false,
+              pushNotifications: true,
               humanInTheLoop: true,
               stateTransitionHistory: true,
             },

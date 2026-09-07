@@ -44,6 +44,7 @@ describe("every task query is scoped", () => {
     "utils/a2a/protocol-handler.ts",
     "app/a2a/stream/route.ts",
     "app/a2a/route.ts",
+    "utils/a2a/push-config.ts",
   ];
 
   for (const file of files) {
@@ -61,8 +62,13 @@ describe("every task query is scoped", () => {
       // A lookup by the internal row id is already authorized: that id is only
       // ever obtained from a scoped read earlier in the same request, and it is
       // not a value a caller can supply — the protocol speaks in `taskId`.
+      // Anchored to `a2aTask` specifically — an unrelated model's by-id call
+      // elsewhere in the same file (e.g. `a2aWebhookConfig.update({ where: {
+      // id } })`) must not be able to stand in for scoping a task query.
       const byInternalId =
-        source.match(/where: \{ id: [A-Za-z.]+ \}/g)?.length ?? 0;
+        source.match(
+          /prisma\.a2aTask\.\w+\(\s*\{\s*where:\s*\{\s*id:\s*[A-Za-z.]+\s*\}/g,
+        )?.length ?? 0;
 
       expect(
         scoped + byInternalId,

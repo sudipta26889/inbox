@@ -64,7 +64,10 @@ export async function handlePushConfigSet(
           enabled: true,
           events: DEFAULT_EVENTS,
         },
-        update: { url: pushNotificationConfig.url, enabled: true },
+        // No `enabled: true` here — this is the UPDATE path, and forcing it
+        // on every `set` would silently undo a disable the owner made
+        // through the settings UI. Only CREATE defaults a new row to enabled.
+        update: { url: pushNotificationConfig.url },
       })
     : await upsertDefaultConfig(
         authContext.clientId,
@@ -182,9 +185,12 @@ async function upsertDefaultConfig(clientId: string, url: string) {
   });
 
   if (existing) {
+    // No `enabled: true` here — this is the default row the settings UI's
+    // kill switch disables; forcing it back on every `set` would let a peer
+    // silently undo that.
     return prisma.a2aWebhookConfig.update({
       where: { id: existing.id },
-      data: { url, enabled: true },
+      data: { url },
     });
   }
 

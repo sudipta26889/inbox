@@ -2089,6 +2089,14 @@ model A2aWebhookConfig {
   /// A2A v1.0 §3.1.7 scopes push config to a task. NULL is this client's
   /// default, which is what the pre-§3.1.7 UI at /api/user/a2a-webhooks
   /// writes and what queueWebhook falls back to.
+  ///
+  /// "One default row per client" is enforced by
+  /// `a2a_webhook_configs_clientId_default_key`, a partial unique index
+  /// (`ON "a2a_webhook_configs" ("clientId") WHERE "taskId" IS NULL`)
+  /// hand-maintained in the migration SQL — `@@unique` cannot express a
+  /// WHERE clause, so Prisma has no model of this index and `prisma migrate
+  /// dev` will show it as drift and offer a `DROP INDEX`. Do NOT accept that
+  /// drop: it silently re-allows unlimited default rows per client.
   taskId          String?
 
   // ============ Webhook Settings ============
