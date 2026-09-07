@@ -11,6 +11,7 @@ import {
   unreadPayload,
   urgentPayload,
 } from "./topics";
+import * as topicsModule from "./topics";
 
 describe("topics", () => {
   it("puts an account's entities under its own slug", () => {
@@ -114,24 +115,60 @@ describe("topics", () => {
     expect(attributes).toEqual({ at: "2026-09-07T05:00:00.000Z" });
   });
 
-  it("carries a real item count in the digest payload", () => {
-    expect(digestPayload({ items: 4, at: "2026-09-07T05:00:00.000Z" })).toEqual(
-      {
-        state: "ready",
-        attributes: { items: 4, at: "2026-09-07T05:00:00.000Z" },
-      },
-    );
+  it("carries no item count in the digest payload — none exists to report", () => {
+    expect(digestPayload({ at: "2026-09-07T05:00:00.000Z" })).toEqual({
+      state: "ready",
+      attributes: { at: "2026-09-07T05:00:00.000Z" },
+    });
   });
 
   /**
-   * No structured item count exists in the digest pipeline, so an absent
-   * count must stay absent — publishing `items: 0` would be a different lie
-   * (implying an empty digest rather than an uncounted one).
+   * The privacy rule as a structural guarantee, not a per-builder memory
+   * test. Every export named `*Payload` is called here and checked, so a
+   * builder added next month that starts leaking subject/from/an email
+   * address fails this suite even if nobody remembers to extend it.
    */
-  it("omits items entirely rather than publish a fabricated count", () => {
-    const { attributes } = digestPayload({ at: "2026-09-07T05:00:00.000Z" });
+  it("keeps every default payload builder free of subject, from, and email addresses", () => {
+    // A superset of every builder's parameters. Object destructuring just
+    // ignores the keys a given builder doesn't declare, so one shared object
+    // stands in for "each builder's default arguments" without this test
+    // needing to know each builder's individual shape.
+    const defaultArgs = {
+      unread: 512,
+      total: 865,
+      ruleName: "Urgent",
+      at: "2026-09-07T05:00:00.000Z",
+      pending: 0,
+      oldestWaitingSeconds: null,
+      actions: [] as string[],
+    };
 
-    expect(attributes).not.toHaveProperty("items");
-    expect(attributes).toEqual({ at: "2026-09-07T05:00:00.000Z" });
+    const builders = Object.entries(topicsModule).filter(
+      ([name, value]) =>
+        name.endsWith("Payload") && typeof value === "function",
+    ) as Array<
+      [
+        string,
+        (args: typeof defaultArgs) => { attributes: Record<string, unknown> },
+      ]
+    >;
+
+    // A builder list this test failed to find would silently pass everything.
+    expect(builders.length).toBeGreaterThanOrEqual(4);
+
+    for (const [name, build] of builders) {
+      const { attributes } = build(defaultArgs);
+
+      expect(attributes, `${name} must not carry a subject`).not.toHaveProperty(
+        "subject",
+      );
+      expect(attributes, `${name} must not carry a from`).not.toHaveProperty(
+        "from",
+      );
+      expect(
+        JSON.stringify(attributes),
+        `${name} must not carry an email address`,
+      ).not.toMatch(/@/);
+    }
   });
 });
