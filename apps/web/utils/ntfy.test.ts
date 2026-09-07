@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import prisma from "@/utils/__mocks__/prisma";
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/utils/prisma");
@@ -15,13 +16,14 @@ const { mockEnv } = vi.hoisted(() => {
       NTFY_BASE_URL: "https://ntfy.example.com",
       NTFY_TOPIC: "inbox",
       NTFY_TOKEN: "tk_test",
+      ADMINS: ["admin@example.com"] as string[] | undefined,
     } as Record<string, unknown>,
   };
 });
 
 vi.mock("@/env", () => ({ env: mockEnv }));
 
-import { isNtfyEnabled, notifyOwner } from "@/utils/ntfy";
+import { isNtfyEnabled, isOwnerEmailAccount, notifyOwner } from "@/utils/ntfy";
 
 describe("ntfy", () => {
   beforeEach(() => {
@@ -29,6 +31,7 @@ describe("ntfy", () => {
     mockEnv.NTFY_BASE_URL = "https://ntfy.example.com";
     mockEnv.NTFY_TOPIC = "inbox";
     mockEnv.NTFY_TOKEN = "tk_test";
+    mockEnv.ADMINS = ["admin@example.com"];
   });
 
   it("posts the message to the configured topic with bearer auth", async () => {
@@ -59,9 +62,13 @@ describe("ntfy", () => {
     ).resolves.toBeUndefined();
   });
 
-  it("does not throw on a non-2xx response", async () => {
+  it("warns and does not throw on a non-2xx response", async () => {
     // A 403 from ntfy is a successful HTTP round-trip carrying a refusal.
-    // fetch does not reject on it, so nothing else would notice.
+    // fetch does not reject on it, so this warn is the only signal that
+    // anything went wrong.
+    const warnSpy = vi
+      .spyOn(console, "warn")
+      .mockImplementation(() => undefined);
     const fetchMock = vi.fn().mockResolvedValue({
       ok: false,
       status: 403,
@@ -72,6 +79,10 @@ describe("ntfy", () => {
     await expect(
       notifyOwner({ title: "Urgent", message: "x" }),
     ).resolves.toBeUndefined();
+
+    expect(
+      warnSpy.mock.calls.map((call) => call.join(" ")).join("\n"),
+    ).toContain("ntfy refused the notification");
   });
 
   it("sends nothing at all when not configured", async () => {
@@ -88,8 +99,10 @@ describe("ntfy", () => {
   });
 
   it("strips newlines from header values", async () => {
-    // Title and Tags go into HTTP headers. An email subject containing CRLF
-    // would otherwise inject headers into our own request.
+    // Title and Tags go into HTTP headers. rule.ruleName is free text an
+    // account holder controls (Rule.name), so it could carry CRLF and inject
+    // headers into our own request — an email subject never reaches a
+    // header, only the request body.
     const fetchMock = vi
       .fn()
       .mockResolvedValue({ ok: true, status: 200, text: async () => "{}" });
@@ -102,5 +115,96 @@ describe("ntfy", () => {
 
     expect(fetchMock.mock.calls[0][1].headers.Title).not.toContain("\n");
     expect(fetchMock.mock.calls[0][1].headers.Title).not.toContain("\r");
+  });
+
+  it("truncates an over-long title to 200 characters without reintroducing a newline", async () => {
+    // Constructed so the CRLF sits exactly at the 200-character boundary:
+    // stripping before slicing keeps the length at 200, but slicing before
+    // stripping would cut through the "\r\n" and then collapse it away,
+    // silently shortening the result to 199 — this is what catches a
+    // reordering of the two operations.
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue({ ok: true, status: 200, text: async () => "{}" });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const title = `${"a".repeat(198)}\r\n${"b".repeat(10)}`;
+
+    await notifyOwner({ title, message: "body" });
+
+    expect(fetchMock.mock.calls[0][1].headers.Title).toHaveLength(200);
+  });
+
+  it.each([
+    ["an emoji", "🚨 Urgent"],
+    ["Devanagari script", "अत्यावश्यक"],
+    ["a control character", "a\x00b"],
+  ])("encodes a title containing %s so a real Headers object accepts it", async (_label, title) => {
+    // Node's fetch rejects header values outside Latin-1 (a ByteString
+    // conversion error) and raw control characters — a throw that lands
+    // inside notifyOwner's try/catch, silently dropping the notification
+    // while logging the unrelated lie "Could not reach ntfy". A plain
+    // object stub for fetch (as the other tests in this file use) never
+    // exercises that validation, which is exactly why the bug was
+    // invisible; constructing a real Headers object here does.
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue({ ok: true, status: 200, text: async () => "{}" });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await notifyOwner({ title, message: "body" });
+
+    const sentTitle = fetchMock.mock.calls[0][1].headers.Title;
+    expect(() => new Headers({ Title: sentTitle })).not.toThrow();
+  });
+
+  it("passes a plain Latin-1 title through unchanged", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue({ ok: true, status: 200, text: async () => "{}" });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await notifyOwner({ title: "Grüße", message: "body" });
+
+    expect(fetchMock.mock.calls[0][1].headers.Title).toBe("Grüße");
+  });
+});
+
+describe("isOwnerEmailAccount", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockEnv.NTFY_BASE_URL = "https://ntfy.example.com";
+    mockEnv.NTFY_TOPIC = "inbox";
+    mockEnv.NTFY_TOKEN = "tk_test";
+    mockEnv.ADMINS = ["admin@example.com"];
+  });
+
+  it("returns true for an admin account", async () => {
+    prisma.emailAccount.findUnique.mockResolvedValue({
+      user: { email: "admin@example.com" },
+    } as any);
+
+    await expect(isOwnerEmailAccount("account-1")).resolves.toBe(true);
+  });
+
+  it("returns false for a non-admin account", async () => {
+    prisma.emailAccount.findUnique.mockResolvedValue({
+      user: { email: "someone-else@example.com" },
+    } as any);
+
+    await expect(isOwnerEmailAccount("account-1")).resolves.toBe(false);
+  });
+
+  it("returns false when the account does not exist", async () => {
+    prisma.emailAccount.findUnique.mockResolvedValue(null);
+
+    await expect(isOwnerEmailAccount("missing-account")).resolves.toBe(false);
+  });
+
+  it("returns false without reading the database when ntfy is not configured", async () => {
+    mockEnv.NTFY_BASE_URL = "";
+
+    await expect(isOwnerEmailAccount("account-1")).resolves.toBe(false);
+    expect(prisma.emailAccount.findUnique).not.toHaveBeenCalled();
   });
 });

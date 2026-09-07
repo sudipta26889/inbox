@@ -94,7 +94,20 @@ export async function isOwnerEmailAccount(
 }
 
 function headerSafe(value: string): string {
-  // Title, Tags and Click become HTTP headers. A subject line carrying CRLF
-  // would inject headers into our own request.
-  return value.replace(/[\r\n]+/g, " ").slice(0, 200);
+  // Title, Tags and Click become HTTP headers. The only caller-supplied value
+  // that lands here is rule.ruleName — Rule.name is free text an account
+  // holder controls (an email subject only ever reaches the request body,
+  // never a header) — so it can carry CRLF, which must be stripped to
+  // prevent header injection.
+  const oneLine = value.replace(/[\r\n]+/g, " ").slice(0, 200);
+
+  // Node's fetch also rejects any header value outside Latin-1 (a
+  // ByteString conversion error) as well as raw control characters. That
+  // throw lands inside notifyOwner's catch, silently dropping the
+  // notification while logging the unrelated lie "Could not reach ntfy" —
+  // so anything outside that range rides as an RFC 2047 encoded-word
+  // instead, which ntfy decodes for Title.
+  return /^[\x20-\x7e\xa0-\xff]*$/.test(oneLine)
+    ? oneLine
+    : `=?UTF-8?B?${Buffer.from(oneLine).toString("base64")}?=`;
 }
