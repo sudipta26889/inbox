@@ -7,6 +7,7 @@ import {
   saveDigestScheduleBody,
   updateDigestItemsBody,
   toggleDigestBody,
+  updateMqttSettingsBody,
 } from "@/utils/actions/settings.validation";
 import { DEFAULT_PROVIDER, Provider } from "@/utils/llms/config";
 import prisma from "@/utils/prisma";
@@ -22,6 +23,7 @@ import { env } from "@/env";
 import { updateDigestItems, updateDigestSchedule } from "@/utils/digest/domain";
 import { updateAiSettings } from "@/utils/ai-settings/update-ai-settings";
 import { NotFoundError } from "@/utils/mcp-server/errors";
+import { updateMqttSettings } from "@/utils/mqtt/settings";
 
 export const updateEmailSettingsAction = actionClient
   .metadata({ name: "updateEmailSettings" })
@@ -172,3 +174,10 @@ export const toggleDigestAction = actionClient
       return { success: true };
     },
   );
+
+export const updateMqttSettingsAction = actionClient
+  .metadata({ name: "updateMqttSettings" })
+  .inputSchema(updateMqttSettingsBody)
+  .action(async ({ ctx: { emailAccountId }, parsedInput }) => {
+    return updateMqttSettings({ emailAccountId }, parsedInput);
+  });

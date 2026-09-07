@@ -31,6 +31,7 @@ import { OrgAnalyticsConsentSection } from "@/app/(app)/[emailAccountId]/setting
 import { ResetAnalyticsSection } from "@/app/(app)/[emailAccountId]/settings/ResetAnalyticsSection";
 import { WebhookSection } from "@/app/(app)/[emailAccountId]/settings/WebhookSection";
 import { HomeAssistantSection } from "@/app/(app)/[emailAccountId]/settings/HomeAssistantSection";
+import { MqttSection } from "@/app/(app)/[emailAccountId]/settings/MqttSection";
 import { TaskpilotIntegrationSection } from "@/app/(app)/settings/TaskpilotIntegrationSection";
 import { CopyRulesSection } from "@/app/(app)/[emailAccountId]/settings/CopyRulesSection";
 import { RuleImportExportSetting } from "@/app/(app)/[emailAccountId]/assistant/settings/RuleImportExportSetting";
@@ -156,6 +157,8 @@ export default function SettingsPage() {
         >
           <ItemCard>
             <HomeAssistantSection />
+            <ItemSeparator />
+            <MqttSection />
             <ItemSeparator />
             <TaskpilotIntegrationSection />
             <ItemSeparator />
