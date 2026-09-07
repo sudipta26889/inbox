@@ -291,6 +291,11 @@ export const env = createEnv({
     MQTT_PORT: z.coerce.number().optional(),
     MQTT_USERNAME: z.string().optional(),
     MQTT_PASSWORD: z.string().optional(),
+
+    // ntfy push notifications. All optional: no base URL means no pushing.
+    NTFY_BASE_URL: z.string().url().optional(),
+    NTFY_TOPIC: z.string().optional(),
+    NTFY_TOKEN: z.string().optional(),
   },
   client: {
     // stripe

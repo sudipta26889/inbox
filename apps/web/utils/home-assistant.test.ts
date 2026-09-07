@@ -5,19 +5,29 @@ import { SafeError } from "@/utils/error";
 
 vi.mock("server-only", () => ({}));
 
-const { mockPublish, mockIsMqttConfigured, mockPublishUrgent } = vi.hoisted(
-  () => ({
-    mockPublish: vi.fn().mockReturnValue(undefined),
-    mockIsMqttConfigured: vi.fn().mockReturnValue(true),
-    mockPublishUrgent: vi.fn().mockResolvedValue(undefined),
-  }),
-);
+const {
+  mockPublish,
+  mockIsMqttConfigured,
+  mockPublishUrgent,
+  mockIsOwnerEmailAccount,
+  mockNotifyOwner,
+} = vi.hoisted(() => ({
+  mockPublish: vi.fn().mockReturnValue(undefined),
+  mockIsMqttConfigured: vi.fn().mockReturnValue(true),
+  mockPublishUrgent: vi.fn().mockResolvedValue(undefined),
+  mockIsOwnerEmailAccount: vi.fn().mockResolvedValue(false),
+  mockNotifyOwner: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock("@/utils/mqtt/client", () => ({
   publishMqtt: mockPublish,
   isMqttConfigured: mockIsMqttConfigured,
 }));
 vi.mock("@/utils/mqtt/events", () => ({
   publishUrgent: mockPublishUrgent,
+}));
+vi.mock("@/utils/ntfy", () => ({
+  isOwnerEmailAccount: mockIsOwnerEmailAccount,
+  notifyOwner: mockNotifyOwner,
 }));
 
 vi.mock("@/utils/prisma", () => ({
@@ -49,6 +59,8 @@ beforeEach(() => {
   });
   mockIsMqttConfigured.mockReturnValue(true);
   mockPublishUrgent.mockResolvedValue(undefined);
+  mockIsOwnerEmailAccount.mockResolvedValue(false);
+  mockNotifyOwner.mockResolvedValue(undefined);
 });
 
 const email = {
@@ -155,6 +167,59 @@ describe("home assistant mqtt action", () => {
 
     // The legacy topic still got its publish; only the bus side failed.
     expect(mockPublish).toHaveBeenCalledTimes(1);
+  });
+
+  describe("ntfy push to the owner's phone", () => {
+    it("pushes to ntfy when the account belongs to the owner", async () => {
+      mockIsOwnerEmailAccount.mockResolvedValue(true);
+
+      await executeHomeAssistantAction("user-1", email, rule, executedRule, {
+        type: "mqtt",
+        mqttTopic: "homeassistant/inbox/urgent",
+      });
+
+      expect(mockIsOwnerEmailAccount).toHaveBeenCalledWith("acct-1");
+      expect(mockNotifyOwner).toHaveBeenCalledTimes(1);
+      expect(mockNotifyOwner).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "Urgent",
+          message: "Invoice due\nFrom: billing@vendor.com",
+        }),
+      );
+    });
+
+    /**
+     * The ntfy topic is instance-wide. Without this gate, a second user's
+     * urgent mail would push its subject line to the operator's phone.
+     */
+    it("does not push to ntfy for a non-owner account", async () => {
+      mockIsOwnerEmailAccount.mockResolvedValue(false);
+
+      await executeHomeAssistantAction("user-1", email, rule, executedRule, {
+        type: "mqtt",
+        mqttTopic: "homeassistant/inbox/urgent",
+      });
+
+      expect(mockNotifyOwner).not.toHaveBeenCalled();
+    });
+
+    /**
+     * isOwnerEmailAccount does a database read; a blip there must not fail a
+     * rule action that already delivered the MQTT message.
+     */
+    it("does not let a failing owner check fail the rule action", async () => {
+      mockIsOwnerEmailAccount.mockRejectedValue(new Error("db down"));
+
+      await expect(
+        executeHomeAssistantAction("user-1", email, rule, executedRule, {
+          type: "mqtt",
+          mqttTopic: "homeassistant/inbox/urgent",
+        }),
+      ).resolves.toBeUndefined();
+
+      expect(mockPublish).toHaveBeenCalledTimes(1);
+      expect(mockNotifyOwner).not.toHaveBeenCalled();
+    });
   });
 
   /**

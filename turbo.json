@@ -222,7 +222,11 @@
         "MQTT_HOST",
         "MQTT_PORT",
         "MQTT_USERNAME",
-        "MQTT_PASSWORD"
+        "MQTT_PASSWORD",
+
+        "NTFY_BASE_URL",
+        "NTFY_TOPIC",
+        "NTFY_TOKEN"
       ],
       "outputs": [".next/**", "!.next/cache/**"]
     },
@@ -302,7 +306,11 @@
         "MQTT_HOST",
         "MQTT_PORT",
         "MQTT_USERNAME",
-        "MQTT_PASSWORD"
+        "MQTT_PASSWORD",
+
+        "NTFY_BASE_URL",
+        "NTFY_TOPIC",
+        "NTFY_TOKEN"
       ],
       "outputs": [".next/**", "!.next/cache/**"]
     },

@@ -1,9 +1,11 @@
+import { env } from "@/env";
 import { createScopedLogger } from "@/utils/logger";
 import { SafeError } from "@/utils/error";
 import prisma from "@/utils/prisma";
 import { sleep } from "@/utils/sleep";
 import { isMqttConfigured, publishMqtt } from "@/utils/mqtt/client";
 import { publishUrgent } from "@/utils/mqtt/events";
+import { isOwnerEmailAccount, notifyOwner } from "@/utils/ntfy";
 import type { ExecutedRule } from "@/generated/prisma/client";
 
 const logger = createScopedLogger("home-assistant");
@@ -228,6 +230,26 @@ async function executeMqttPublish(
     subject: email.subject,
     from: email.from,
   }).catch(() => {});
+
+  // The bus tells Home Assistant that something urgent arrived; this tells the
+  // owner's phone what it was. Gated on ADMINS because the ntfy topic is
+  // instance-wide — see isOwnerEmailAccount. The try/catch is load-bearing for
+  // the same reason as publishUrgent's .catch() above: isOwnerEmailAccount
+  // does a database read, and a blip there must not fail a rule execution
+  // that already delivered the MQTT message.
+  try {
+    if (await isOwnerEmailAccount(executedRule.emailAccountId)) {
+      await notifyOwner({
+        title: rule.ruleName ?? "Urgent email",
+        message: `${email.subject}\nFrom: ${email.from}`,
+        priority: 4,
+        tags: ["email"],
+        click: `${env.NEXT_PUBLIC_BASE_URL}/mail`,
+      });
+    }
+  } catch (error) {
+    logger.warn("ntfy owner check failed", { error });
+  }
 
   // publishMqtt is fire-and-forget and fail-soft: it may no-op, queue, or drop.
   // Delivery is reported by the client module's own connection logging, so this

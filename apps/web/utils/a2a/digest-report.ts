@@ -4,6 +4,7 @@ import {
   SUPPORTED_AUTOMATION_MESSAGING_PROVIDERS,
 } from "@/utils/automation-jobs/messaging-channel";
 import type { Logger } from "@/utils/logger";
+import { notifyOwner } from "@/utils/ntfy";
 import prisma from "@/utils/prisma";
 import { redis } from "@/utils/redis";
 
@@ -62,6 +63,20 @@ export async function alertDigestFailure({
   logger: Logger;
 }) {
   try {
+    const failedAccounts = outcome.failedAccounts?.length
+      ? `\nAccounts affected: ${outcome.failedAccounts.join(", ")}`
+      : "";
+
+    // First, unconditionally: this needs no per-user channel setup, which is
+    // exactly the case the Telegram path below gives up on. Only owners reach
+    // this function — runDueDigests filters on isAdmin before calling it.
+    await notifyOwner({
+      title: "Morning digest failed",
+      message: `${outcome.date}: ${outcome.error ?? "Unknown error"}${failedAccounts}`,
+      priority: 4,
+      tags: ["warning"],
+    });
+
     const channel = await prisma.messagingChannel.findFirst({
       where: {
         isConnected: true,
@@ -84,10 +99,6 @@ export async function alertDigestFailure({
       });
       return;
     }
-
-    const failedAccounts = outcome.failedAccounts?.length
-      ? `\nAccounts affected: ${outcome.failedAccounts.join(", ")}`
-      : "";
 
     await sendAutomationMessage({
       channel,
