@@ -146,17 +146,10 @@ export function urgentPayload({
   };
 }
 
-export function digestPayload({
-  items,
-  at,
-}: {
-  /** Omitted entirely when no real item count exists — never a guessed 0. */
-  items?: number;
-  at: string;
-}) {
+export function digestPayload({ at }: { at: string }) {
   return {
     state: "ready",
-    attributes: { ...(items === undefined ? {} : { items }), at },
+    attributes: { at },
   };
 }
 

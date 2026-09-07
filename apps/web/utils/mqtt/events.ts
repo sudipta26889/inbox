@@ -79,9 +79,8 @@ export async function publishUrgent({
     "urgent",
     urgentPayload({
       ruleName,
-      // No structured per-day count exists in this pipeline — see
-      // digestPayload's `items` for the same precedent. Omitting the key
-      // beats publishing a plausible-looking but false "1" every time.
+      // No structured per-day count exists in this pipeline. Omitting the
+      // key beats publishing a plausible-looking but false "1" every time.
       at: new Date().toISOString(),
       ...(consent.includeDetail ? { detail: { subject, from } } : {}),
     }),
@@ -90,11 +89,8 @@ export async function publishUrgent({
 
 export async function publishDigest({
   emailAccountId,
-  items,
 }: {
   emailAccountId: string;
-  /** Omitted when no real item count exists — see digestPayload. */
-  items?: number;
 }): Promise<void> {
   const consent = await consentFor(emailAccountId);
   if (!consent) return;
@@ -102,7 +98,7 @@ export async function publishDigest({
   publishEntity(
     consent.slug,
     "digest",
-    digestPayload({ items, at: new Date().toISOString() }),
+    digestPayload({ at: new Date().toISOString() }),
   );
 }
 

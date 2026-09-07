@@ -138,7 +138,7 @@ describe("mqtt events", () => {
 
   describe("publishDigest", () => {
     it("publishes state, attributes and a discovery config", async () => {
-      await publishDigest({ emailAccountId: "a1", items: 3 });
+      await publishDigest({ emailAccountId: "a1" });
 
       const topics = mockPublish.mock.calls.map(([t]) => t);
       expect(topics).toEqual(
@@ -157,17 +157,17 @@ describe("mqtt events", () => {
         mqttEnabled: false,
       });
 
-      await publishDigest({ emailAccountId: "a1", items: 3 });
+      await publishDigest({ emailAccountId: "a1" });
 
       expect(mockPublish).not.toHaveBeenCalled();
     });
 
     /**
-     * No structured item count exists in the digest pipeline — an absent key
-     * is the point. Publishing `items: 0` would be a different lie (an empty
-     * digest rather than an uncounted one).
+     * No structured item count exists in the digest pipeline — there is no
+     * `items` param to supply one, so the published attributes can never
+     * carry a fabricated count.
      */
-    it("omits items from the published attributes when no count is supplied", async () => {
+    it("never publishes an items count", async () => {
       await publishDigest({ emailAccountId: "a1" });
 
       const attributes = mockPublish.mock.calls.find(([t]) =>

@@ -102,9 +102,7 @@ async function runDueDigests(logger: Logger, { force = false } = {}) {
       // One publish per account in the digest, each gated on that account's
       // own bus opt-in. The catch is load-bearing: publishDigest reads the
       // database to resolve consent, and a blip there must not fail a cron
-      // run that has already generated and saved the digest. No structured
-      // item count exists in this pipeline, so `items` is left unset rather
-      // than guessed from prose line-wrapping.
+      // run that has already generated and saved the digest.
       for (const account of digest.accounts) {
         await publishDigest({
           emailAccountId: account.emailAccountId,
