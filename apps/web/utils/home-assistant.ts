@@ -2,6 +2,7 @@ import { createScopedLogger } from "@/utils/logger";
 import { SafeError } from "@/utils/error";
 import prisma from "@/utils/prisma";
 import { sleep } from "@/utils/sleep";
+import { publishMqtt } from "@/utils/mqtt/client";
 import type { ExecutedRule } from "@/generated/prisma/client";
 
 const logger = createScopedLogger("home-assistant");
@@ -80,14 +81,7 @@ export const executeHomeAssistantAction = async (
         executedRule,
       );
     case "mqtt":
-      return executeMqttPublish(
-        homeAssistantUrl,
-        homeAssistantToken,
-        config.mqttTopic!,
-        email,
-        rule,
-        executedRule,
-      );
+      return executeMqttPublish(config.mqttTopic!, email, rule, executedRule);
     case "service_call":
       return executeServiceCall(
         homeAssistantUrl,
@@ -168,11 +162,9 @@ async function executeWebhookTrigger(
 }
 
 /**
- * Publish to MQTT topic via Home Assistant API
+ * Publish to MQTT topic directly on the broker
  */
 async function executeMqttPublish(
-  haUrl: string,
-  token: string,
   topic: string,
   email: EmailData,
   rule: RuleData,
@@ -196,38 +188,12 @@ async function executeMqttPublish(
     timestamp: new Date().toISOString(),
   };
 
-  const url = `${haUrl}/api/services/mqtt/publish`;
-
-  try {
-    const response = await Promise.race([
-      fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          topic,
-          payload: JSON.stringify(payload),
-        }),
-      }),
-      sleep(5000),
-    ]);
-
-    if (response instanceof Response && !response.ok) {
-      const errorText = await response.text();
-      logger.error("Home Assistant MQTT publish failed", {
-        status: response.status,
-        error: errorText,
-        topic,
-      });
-    } else {
-      logger.info("Home Assistant MQTT published", { topic });
-    }
-  } catch (error) {
-    logger.error("Home Assistant MQTT publish failed", { error, topic });
-    logger.info("Continuing after Home Assistant MQTT timeout/error");
-  }
+  // Published directly rather than asking Home Assistant to do it. The old path
+  // POSTed to /api/services/mqtt/publish, so every notification depended on HA
+  // being up and on a per-user long-lived token. Same topic, same payload — only
+  // the transport changed, so existing HA automations do not notice.
+  publishMqtt(topic, JSON.stringify(payload));
+  logger.info("MQTT published", { topic });
 }
 
 /**
