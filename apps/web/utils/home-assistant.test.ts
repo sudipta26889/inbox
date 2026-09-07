@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import { ExecutedRuleStatus } from "@/generated/prisma/enums";
 import type { ExecutedRule } from "@/generated/prisma/client";
+import { SafeError } from "@/utils/error";
 
 vi.mock("server-only", () => ({}));
 
@@ -24,6 +25,9 @@ vi.mock("@/utils/prisma", () => ({
     user: {
       findUnique: vi.fn(),
     },
+    emailAccount: {
+      findUnique: vi.fn(),
+    },
   },
 }));
 
@@ -31,12 +35,17 @@ import prisma from "@/utils/prisma";
 import { executeHomeAssistantAction } from "./home-assistant";
 
 const mockFindUnique = prisma.user.findUnique as Mock;
+const mockEmailAccountFindUnique = prisma.emailAccount.findUnique as Mock;
 
 beforeEach(() => {
   vi.clearAllMocks();
   mockFindUnique.mockResolvedValue({
     homeAssistantUrl: "http://ha.local:8123",
     homeAssistantToken: "token-1",
+  });
+  // This account's own MQTT topic slug — used only by topics under inbox/.
+  mockEmailAccountFindUnique.mockResolvedValue({
+    mqttTopicSlug: "acct-1-slug",
   });
   mockIsMqttConfigured.mockReturnValue(true);
   mockPublishUrgent.mockResolvedValue(undefined);
@@ -146,6 +155,101 @@ describe("home assistant mqtt action", () => {
 
     // The legacy topic still got its publish; only the bus side failed.
     expect(mockPublish).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * The three topics with HA automations already wired to them. Not under
+   * inbox/ and don't end in "config", so the new topic guard must let them
+   * all keep working exactly as before.
+   */
+  it.each([
+    "homeassistant/inbox/urgent",
+    "homeassistant/inbox/imp-notify",
+    "homeassistant/inbox/remittance",
+  ])("still allows the production topic %s", async (mqttTopic) => {
+    await executeHomeAssistantAction("user-1", email, rule, executedRule, {
+      type: "mqtt",
+      mqttTopic,
+    });
+
+    expect(mockPublish).toHaveBeenCalledTimes(1);
+    expect(mockPublish.mock.calls[0][0]).toBe(mqttTopic);
+  });
+
+  describe("cross-tenant topic guard", () => {
+    /**
+     * THE finding this guard exists for: any account holder can type a free-
+     * text MQTT topic into a rule. Without this guard, account "acct-1" could
+     * forge state into another tenant's `inbox/<their-slug>/...` namespace —
+     * the same namespace the A2A bus documents as authoritative.
+     */
+    it("refuses a topic under another tenant's inbox/ namespace", async () => {
+      await expect(
+        executeHomeAssistantAction("user-1", email, rule, executedRule, {
+          type: "mqtt",
+          mqttTopic: "inbox/some-other-tenant/urgent/state",
+        }),
+      ).rejects.toThrow(SafeError);
+
+      expect(mockPublish).not.toHaveBeenCalled();
+    });
+
+    it("refuses every inbox/ topic when the account has no slug of its own", async () => {
+      mockEmailAccountFindUnique.mockResolvedValue({ mqttTopicSlug: null });
+
+      await expect(
+        executeHomeAssistantAction("user-1", email, rule, executedRule, {
+          type: "mqtt",
+          mqttTopic: "inbox/acct-1-slug/urgent/state",
+        }),
+      ).rejects.toThrow(SafeError);
+
+      expect(mockPublish).not.toHaveBeenCalled();
+    });
+
+    it("allows an account to publish to its own inbox/<slug> namespace", async () => {
+      await executeHomeAssistantAction("user-1", email, rule, executedRule, {
+        type: "mqtt",
+        mqttTopic: "inbox/acct-1-slug/urgent/state",
+      });
+
+      expect(mockPublish).toHaveBeenCalledTimes(1);
+      expect(mockPublish.mock.calls[0][0]).toBe(
+        "inbox/acct-1-slug/urgent/state",
+      );
+    });
+
+    it.each([
+      "+",
+      "homeassistant/inbox/+",
+      "inbox/#",
+      "homeassistant/#",
+    ])("refuses a topic containing an MQTT wildcard (%s)", async (mqttTopic) => {
+      await expect(
+        executeHomeAssistantAction("user-1", email, rule, executedRule, {
+          type: "mqtt",
+          mqttTopic,
+        }),
+      ).rejects.toThrow(SafeError);
+
+      expect(mockPublish).not.toHaveBeenCalled();
+    });
+
+    /**
+     * A discovery config under homeassistant/ is how an entity gets defined
+     * (or redefined/deleted) in Home Assistant — writing one lets a rule
+     * hijack or delete another system's entity.
+     */
+    it("refuses writing a Home Assistant discovery config", async () => {
+      await expect(
+        executeHomeAssistantAction("user-1", email, rule, executedRule, {
+          type: "mqtt",
+          mqttTopic: "homeassistant/sensor/inbox_someone/urgent/config",
+        }),
+      ).rejects.toThrow(SafeError);
+
+      expect(mockPublish).not.toHaveBeenCalled();
+    });
   });
 });
 

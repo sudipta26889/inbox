@@ -196,6 +196,8 @@ async function executeMqttPublish(
     throw new SafeError("MQTT topic is required for MQTT integration");
   }
 
+  await assertMqttTopicAllowed(topic, executedRule.emailAccountId);
+
   const payload = {
     from: email.from,
     subject: email.subject,
@@ -345,5 +347,54 @@ async function executePersistentNotification(
   } catch (error) {
     logger.error("Home Assistant persistent notification failed", { error });
     logger.info("Continuing after Home Assistant notification timeout/error");
+  }
+}
+
+/**
+ * This is a shared broker: one MQTT password reaches every topic, and the
+ * topic string is free text — typed by any account holder in the rule UI,
+ * or set by the AI assistant or an admin tool. This is the single chokepoint
+ * every MQTT publish passes through, so it's where cross-tenant forgery has
+ * to be refused:
+ *
+ * - a wildcard (+ or #) would subscribe-shaped input into a publish, letting
+ *   one topic string touch a whole subtree it has no business touching
+ * - `inbox/<slug>/...` is the namespace the A2A bus documents as
+ *   authoritative for a tenant's own state, so only that tenant's own slug
+ *   may publish there
+ * - a Home Assistant discovery config (`homeassistant/.../config`) defines
+ *   or deletes an entity; writing someone else's would hijack it
+ *
+ * Everything else — arbitrary home-automation topics like
+ * `homeassistant/inbox/urgent` — is left alone; that freedom is the whole
+ * point of the feature.
+ */
+async function assertMqttTopicAllowed(
+  topic: string,
+  emailAccountId: string,
+): Promise<void> {
+  if (topic.includes("+") || topic.includes("#")) {
+    throw new SafeError("MQTT topic must not contain the + or # wildcards");
+  }
+
+  const segments = topic.split("/");
+
+  if (segments[0] === "inbox") {
+    const account = await prisma.emailAccount.findUnique({
+      where: { id: emailAccountId },
+      select: { mqttTopicSlug: true },
+    });
+
+    if (!account?.mqttTopicSlug || segments[1] !== account.mqttTopicSlug) {
+      throw new SafeError(
+        "MQTT topic under inbox/ must use this account's own topic slug",
+      );
+    }
+  }
+
+  if (segments[0] === "homeassistant" && segments.at(-1) === "config") {
+    throw new SafeError(
+      "MQTT topic must not publish a Home Assistant discovery config",
+    );
   }
 }
