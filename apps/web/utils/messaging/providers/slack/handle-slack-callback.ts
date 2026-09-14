@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { z } from "zod";
 import { type NextRequest, NextResponse } from "next/server";
 import { env } from "@/env";
@@ -243,7 +244,7 @@ function validateOAuthCallback(
 
   if (storedState && storedState !== receivedState) {
     logger.warn("Invalid state during Slack callback", {
-      receivedState,
+      receivedStateFingerprint: getOAuthStateFingerprint(receivedState),
       hasStoredState: !!storedState,
     });
     redirectUrl.searchParams.set("error", "invalid_state");
@@ -295,6 +296,10 @@ function extractEmailAccountIdFromState(state: string): string | null {
   } catch {
     return null;
   }
+}
+
+function getOAuthStateFingerprint(state: string) {
+  return `sha256:${createHash("sha256").update(state).digest("hex").slice(0, 12)}`;
 }
 
 function buildSettingsRedirectUrl(emailAccountId: string): URL {
