@@ -13,6 +13,9 @@ Conventions:
 - Check whether an upstream fix is already here: `git log --grep=<upstream-sha>`.
 - Local tags: `upstream-base` (fork divergence point), `upstream-audit/YYYY-MM-DD`
   (upstream/main SHA at each audit).
+- Branches: `main` is a **read-only mirror** of upstream at `upstream-base` — never
+  commit or open PRs against it. All fork work goes on `sudipta_main`, which is the
+  deployed branch. A PR merged to `main` does not reach production.
 - Repo config: `rerere.enabled` + `merge.conflictStyle=zdiff3` are set, so
   recurring conflicts resolve themselves on the second occurrence.
 
@@ -68,4 +71,5 @@ Range reviewed: `upstream-base` (59e496849, 2026-03-17) → `upstream-audit/2026
 
 | Area | Files | Why the fork differs |
 |---|---|---|
+| Reserved-recipient guard | `packages/resend/src/reserved-recipients.ts`, `packages/resend/src/send.tsx` | Fork-local (GRI-492). The private `sendEmail` asserts the resolved recipient is not an RFC 2606 / `test.com` fixture address, so none of the seven exported senders can put live mail on a reserved domain. Upstream has no equivalent — do not let a backport touching `send.tsx` drop the assert or restore the inline `to: test ? ... : to` ternary. |
 | Scheduled check-ins | `apps/web/utils/ai/automation-jobs/generate-check-in-message.ts`, `apps/web/utils/automation-jobs/message.ts`, `apps/web/utils/automation-jobs/messaging.ts`, `apps/web/utils/ai/assistant/chat.ts` (`readOnly`), `apps/web/utils/ai/assistant/get-recent-chat-memories.ts` | Upstream generates the check-in with `createGenerateObject` and a one-field `{ message }` schema, then silently falls back to `return trimmedPrompt` when generation throws. Against this fork's LiteLLM/Ollama gateway `responseFormat` is unsupported, so every run fails JSON parsing and Telegram receives the raw prompt instead of a digest. The fork runs the check-in through `aiProcessAssistantChat` in a new `readOnly` mode (read tools only, unattended) and lets failures fail the run instead of echoing the prompt. Upstream `main` (b3e10ebdb, 2026-09-06) still has the original code — re-check before backporting anything under `utils/automation-jobs/` or `utils/ai/automation-jobs/`. |

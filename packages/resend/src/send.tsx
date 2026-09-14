@@ -1,6 +1,7 @@
 import { render } from "@react-email/render";
 import { nanoid } from "nanoid";
 import { transporter } from "./client";
+import { assertDeliverableRecipient } from "./reserved-recipients";
 import type { ReactElement } from "react";
 import SummaryEmail, { type SummaryEmailProps } from "../emails/summary";
 import DigestEmail, {
@@ -52,13 +53,18 @@ const sendEmail = async ({
     return Promise.resolve({ data: null, error: null });
   }
 
+  // ponytail: single chokepoint — every exported sender funnels through here,
+  // so one assert covers all of them instead of seven per-caller guards.
+  const recipient = test ? "test@example.com" : to;
+  assertDeliverableRecipient(recipient);
+
   const text = await render(react, { plainText: true });
   const html = await render(react);
 
   try {
     const result = await transporter.sendMail({
       from,
-      to: test ? "test@example.com" : to,
+      to: recipient,
       subject,
       text,
       html,
