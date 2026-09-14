@@ -69,8 +69,6 @@
     "@next/mdx": "16.1.6",
     "@next/third-parties": "16.1.6",
     "@openrouter/ai-sdk-provider": "2.3.1",
-    "@portabletext/react": "6.0.3",
-    "@posthog/ai": "7.11.2",
     "@prisma/adapter-pg": "7.5.0",
     "@prisma/client": "7.5.0",
     "@radix-ui/react-alert-dialog": "1.1.15",
@@ -118,7 +116,6 @@
     "@vercel/speed-insights": "2.0.0",
     "ai": "6.0.116",
     "better-auth": "1.6.31",
-    "braintrust": "3.4.0",
     "capital-case": "2.0.0",
     "chat": "4.20.2",
     "cheerio": "1.2.0",
@@ -181,7 +178,6 @@
     "react-youtube": "10.1.0",
     "recharts": "2.15.4",
     "remark-gfm": "4.0.1",
-    "sanity-plugin-markdown": "8.0.5",
     "schema-dts": "1.1.5",
     "serialize-error": "13.0.1",
     "server-only": "0.0.1",
@@ -239,14 +235,7 @@
   "engines": {
     "node": ">=24.0.0"
   },
-  "optionalDependencies": {
-    "@sanity/client": "7.17.0",
-    "@sanity/icons": "3.7.4",
-    "@sanity/image-url": "2",
-    "@sanity/vision": "5",
-    "next-sanity": "12",
-    "sanity": "5.16.0"
-  },
+  "optionalDependencies": {},
   "pnpm": {
     "overrides": {
       "@types/react": "19.2.14",

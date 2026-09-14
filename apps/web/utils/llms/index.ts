@@ -16,8 +16,6 @@ import {
   TypeValidationError,
   type PrepareStepFunction,
 } from "ai";
-import type { LanguageModelV3 } from "@ai-sdk/provider";
-import { withTracing } from "@posthog/ai/vercel";
 import { jsonrepair } from "jsonrepair";
 import { env } from "@/env";
 import { saveAiUsage } from "@/utils/usage";
@@ -46,7 +44,6 @@ import {
 import { shouldForceNanoModel } from "@/utils/llms/model-usage-guard";
 import { Provider } from "@/utils/llms/config";
 import { createScopedLogger } from "@/utils/logger";
-import { getPosthogLlmClient, isPosthogLlmEvalApproved } from "@/utils/posthog";
 import {
   extractLLMErrorInfo,
   isTransientNetworkError,
@@ -126,15 +123,7 @@ export function createGenerateText({
           ...options,
           ...commonOptions,
           providerOptions,
-          model: withPosthogTracing({
-            model: candidate.model,
-            userEmail: emailAccount.email,
-            userId: emailAccount.userId,
-            emailAccountId: emailAccount.id,
-            label,
-            provider: candidate.provider,
-            modelName: candidate.modelName,
-          }),
+          model: candidate.model,
         },
         ...restArgs,
       );
@@ -280,15 +269,7 @@ export function createGenerateObject({
           ...options,
           ...commonOptions,
           providerOptions,
-          model: withPosthogTracing({
-            model: candidate.model,
-            userEmail: emailAccount.email,
-            userId: emailAccount.userId,
-            emailAccountId: emailAccount.id,
-            label,
-            provider: candidate.provider,
-            modelName: candidate.modelName,
-          }),
+          model: candidate.model,
         },
         ...restArgs,
       );
@@ -412,15 +393,7 @@ export async function chatCompletionStream({
       label,
       emailAccountId,
     });
-    const model = withPosthogTracing({
-      model: candidate.model,
-      userEmail,
-      userId,
-      emailAccountId,
-      label,
-      provider: candidate.provider,
-      modelName: candidate.modelName,
-    });
+    const model = candidate.model;
 
     try {
       return streamText({
@@ -551,15 +524,7 @@ export async function toolCallAgentStream({
       label,
       emailAccountId,
     });
-    const model = withPosthogTracing({
-      model: candidate.model,
-      userEmail,
-      userId,
-      emailAccountId,
-      label,
-      provider: candidate.provider,
-      modelName: candidate.modelName,
-    });
+    const model = candidate.model;
     const {
       tools: candidateTools,
       excludedTools,
@@ -1068,42 +1033,6 @@ function isJsonObject(
   value: JSONValue | undefined,
 ): value is Record<string, JSONValue> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function withPosthogTracing({
-  model,
-  userEmail,
-  userId,
-  emailAccountId,
-  label,
-  provider,
-  modelName,
-}: {
-  model: LanguageModelV3;
-  userEmail: string;
-  userId?: string;
-  emailAccountId?: string;
-  label: string;
-  provider: string;
-  modelName: string;
-}) {
-  const posthogClient = getPosthogLlmClient();
-  if (!posthogClient) return model;
-  const llmEvalsEnabled = isPosthogLlmEvalApproved(userEmail);
-
-  return withTracing(model, posthogClient, {
-    posthogDistinctId: userEmail,
-    posthogPrivacyMode: !llmEvalsEnabled,
-    posthogProperties: {
-      label,
-      $ai_span_name: label,
-      provider,
-      model: modelName,
-      emailAccountId,
-      llmEvalsEnabled,
-      ...(userId ? { userId } : {}),
-    },
-  });
 }
 
 /**
