@@ -1,5 +1,4 @@
 import { checkCommonErrors } from "@/utils/error";
-import { trackError } from "@/utils/posthog";
 import type { Logger } from "@/utils/logger";
 import { recordRateLimitFromApiError } from "@/utils/email/rate-limit";
 
@@ -26,14 +25,6 @@ export async function handleWebhookError(
       emailAccountId,
       logger,
       source: url,
-    });
-
-    await trackError({
-      email,
-      emailAccountId,
-      errorType: apiError.type,
-      type: "api",
-      url,
     });
 
     logger.warn("Error processing webhook", {

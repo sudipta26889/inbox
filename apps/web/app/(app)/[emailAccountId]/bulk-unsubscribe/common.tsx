@@ -15,7 +15,6 @@ import {
   ThumbsUpIcon,
   TrashIcon,
 } from "lucide-react";
-import { type PostHog, usePostHog } from "posthog-js/react";
 import type { UserResponse } from "@/app/api/user/me/route";
 import { Button } from "@/components/ui/button";
 import { ButtonLoader } from "@/components/Loading";
@@ -75,7 +74,6 @@ export function ActionCell<T extends Row>({
   emailAccountId: string;
   filter: NewsletterFilterType;
 }) {
-  const posthog = usePostHog();
 
   const isUnsubscribed = item.status === NewsletterStatus.UNSUBSCRIBED;
 
@@ -91,7 +89,6 @@ export function ActionCell<T extends Row>({
           item={item}
           hasUnsubscribeAccess={hasUnsubscribeAccess}
           mutate={mutate}
-          posthog={posthog}
           emailAccountId={emailAccountId}
           filter={filter}
         />
@@ -104,7 +101,6 @@ export function ActionCell<T extends Row>({
           item={item}
           hasUnsubscribeAccess={hasUnsubscribeAccess}
           mutate={mutate}
-          posthog={posthog}
           refetchPremium={refetchPremium}
           emailAccountId={emailAccountId}
         />
@@ -115,7 +111,6 @@ export function ActionCell<T extends Row>({
         userEmail={userEmail}
         emailAccountId={emailAccountId}
         labels={labels}
-        posthog={posthog}
         mutate={mutate}
       />
     </>
@@ -126,7 +121,6 @@ function UnsubscribeButton<T extends Row>({
   item,
   hasUnsubscribeAccess,
   mutate,
-  posthog,
   refetchPremium,
   emailAccountId,
 }: {
@@ -134,7 +128,6 @@ function UnsubscribeButton<T extends Row>({
   hasUnsubscribeAccess: boolean;
   mutate: () => Promise<void>;
   refetchPremium: () => Promise<UserResponse | null | undefined>;
-  posthog: PostHog;
   emailAccountId: string;
 }) {
   const [resubscribeDialogOpen, setResubscribeDialogOpen] = useState(false);
@@ -144,7 +137,6 @@ function UnsubscribeButton<T extends Row>({
       item,
       hasUnsubscribeAccess,
       mutate,
-      posthog,
       refetchPremium,
       emailAccountId,
     },
@@ -212,21 +204,18 @@ function ApproveButton<T extends Row>({
   item,
   hasUnsubscribeAccess,
   mutate,
-  posthog,
   emailAccountId,
   filter,
 }: {
   item: T;
   hasUnsubscribeAccess: boolean;
   mutate: () => Promise<void>;
-  posthog: PostHog;
   emailAccountId: string;
   filter: NewsletterFilterType;
 }) {
   const { onApprove, isApproved } = useApproveButton({
     item,
     mutate,
-    posthog,
     emailAccountId,
     filter,
   });
@@ -249,7 +238,6 @@ export function MoreDropdown<T extends Row>({
   userEmail,
   emailAccountId,
   labels,
-  posthog,
   mutate,
 }: {
   onOpenNewsletter?: (row: T) => void;
@@ -257,19 +245,16 @@ export function MoreDropdown<T extends Row>({
   userEmail: string;
   emailAccountId: string;
   labels: EmailLabel[];
-  posthog: PostHog;
   mutate: () => Promise<unknown>;
 }) {
   const { provider } = useAccount();
   const terminology = getEmailTerminology(provider);
   const { onBulkArchive, isBulkArchiving } = useBulkArchive({
     mutate,
-    posthog,
     emailAccountId,
   });
   const { onBulkDelete, isBulkDeleting } = useBulkDelete({
     mutate,
-    posthog,
     emailAccountId,
   });
 

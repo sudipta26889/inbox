@@ -55,10 +55,6 @@ vi.mock("@/utils/email/provider", () => ({
   createEmailProvider: mockCreateEmailProvider,
 }));
 
-vi.mock("@/utils/posthog", () => ({
-  posthogCaptureEvent: mockPosthogCaptureEvent,
-}));
-
 vi.mock("@/utils/senders/unsubscribe", () => ({
   unsubscribeSenderAndMark: mockUnsubscribeSenderAndMark,
 }));

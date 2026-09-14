@@ -3,14 +3,12 @@
 import Image from "next/image";
 import { Play } from "lucide-react";
 import { cn } from "@/utils";
-import { usePostHog } from "posthog-js/react";
 import {
   Dialog,
   DialogContent,
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { landingPageAnalytics } from "@/hooks/useAnalytics";
 
 interface HeroVideoProps {
   className?: string;
@@ -25,15 +23,12 @@ export default function HeroVideoDialog({
   thumbnailAlt = "Video thumbnail",
   className,
 }: HeroVideoProps) {
-  const posthog = usePostHog();
-
   return (
     <Dialog>
       <div className={cn("relative", className)}>
         <DialogTrigger asChild>
           <button
             type="button"
-            onClick={() => landingPageAnalytics.videoClicked(posthog)}
             aria-label="Play video"
             className="group relative cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 rounded-xl"
           >

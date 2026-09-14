@@ -5,7 +5,6 @@ import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { CheckIcon, SparklesIcon } from "lucide-react";
 import Link from "next/link";
-import { usePostHog } from "posthog-js/react";
 import { env } from "@/env";
 import { LoadingContent } from "@/components/LoadingContent";
 import { usePremium } from "@/components/PremiumAlert";
@@ -44,7 +43,6 @@ export type PricingProps = {
 };
 
 export default function Pricing(props: PricingProps) {
-  const posthog = usePostHog();
   const { premium, isLoading, error, data } = usePremium();
   const hasTrackedPricingView = useRef(false);
 
@@ -84,19 +82,11 @@ export default function Pricing(props: PricingProps) {
     if (isLoading || hasTrackedPricingView.current) return;
 
     hasTrackedPricingView.current = true;
-    posthog.capture("pricing_page_viewed", {
-      source: pricingSource,
-      isLoggedIn,
-      hasExistingSubscription,
-      showSkipUpgrade: Boolean(props.showSkipUpgrade),
-      displayedTiers: displayedTiers.map((tier) => tier.name),
-    });
   }, [
     displayedTiers,
     hasExistingSubscription,
     isLoading,
     isLoggedIn,
-    posthog,
     pricingSource,
     props.showSkipUpgrade,
   ]);
@@ -222,7 +212,6 @@ function PriceTier({
   userId: string | null | undefined;
   pricingSource: "welcome_upgrade" | "app_premium";
 }) {
-  const posthog = usePostHog();
   const [loading, setLoading] = useState(false);
 
   const isCurrentPlan = tier.tiers[frequency.value] === userPremiumTier;
@@ -311,17 +300,6 @@ function PriceTier({
         onClick={async () => {
           const upgradeToTier = tier.tiers[frequency.value];
 
-          posthog.capture("pricing_cta_clicked", {
-            source: pricingSource,
-            tier: tier.name,
-            billingTier: upgradeToTier ?? null,
-            frequency: frequency.value,
-            cta: getCTAText(),
-            isCurrentPlan,
-            isLoggedIn,
-            hasExternalCta: Boolean(tier.ctaLink),
-            hasActiveStripeSubscription,
-          });
 
           // Handle enterprise tier differently - redirect to sales page
           if (tier.ctaLink) {

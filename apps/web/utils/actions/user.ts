@@ -15,7 +15,6 @@ import {
   saveWritingStyleBody,
 } from "@/utils/actions/user.validation";
 import { clearLastEmailAccountCookie } from "@/utils/cookies.server";
-import { aliasPosthogUser } from "@/utils/posthog";
 import { cleanupAIDraftsForAccount } from "@/utils/ai/draft-cleanup";
 import { clearAccountTopics } from "@/utils/mqtt/events";
 
@@ -132,14 +131,6 @@ export const deleteEmailAccountAction = actionClientUser
           name: newPrimaryAccount.name,
           image: newPrimaryAccount.image,
         },
-      });
-
-      // Alias the old PostHog identity to the new one
-      after(async () => {
-        await aliasPosthogUser({
-          oldEmail,
-          newEmail: newPrimaryAccount.email,
-        });
       });
     }
 

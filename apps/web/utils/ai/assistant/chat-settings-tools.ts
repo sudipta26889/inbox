@@ -3,7 +3,6 @@ import { z } from "zod";
 import type { Prisma } from "@/generated/prisma/client";
 import type { Logger } from "@/utils/logger";
 import prisma from "@/utils/prisma";
-import { posthogCaptureEvent } from "@/utils/posthog";
 import { ActionType, MessagingProvider } from "@/generated/prisma/enums";
 import { describeCronSchedule } from "@/utils/automation-jobs/describe";
 import { DEFAULT_AUTOMATION_JOB_CRON } from "@/utils/automation-jobs/defaults";
@@ -507,8 +506,7 @@ async function trackToolCall({
   email: string;
   logger: Logger;
 }) {
-  logger.trace("Tracking tool call", { tool, email });
-  return posthogCaptureEvent(email, "AI Assistant Chat Tool Call", { tool });
+  logger.trace("Tool call", { tool, email });
 }
 
 async function executeUpdateAssistantSettings({

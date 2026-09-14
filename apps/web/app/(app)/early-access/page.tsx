@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { EarlyAccessFeatures } from "@/app/(app)/early-access/EarlyAccessFeatures";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -19,7 +18,6 @@ export default function RequestAccessPage() {
   return (
     <div className="container px-2 pt-2 sm:px-4 sm:pt-8">
       <div className="mx-auto max-w-2xl space-y-4 sm:space-y-8">
-        <EarlyAccessFeatures />
         {isGoogleProvider(provider) && (
           <>
             <Card>

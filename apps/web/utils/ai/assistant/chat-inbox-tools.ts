@@ -2,7 +2,6 @@ import { type InferUITool, tool } from "ai";
 import { z } from "zod";
 import type { Logger } from "@/utils/logger";
 import prisma from "@/utils/prisma";
-import { posthogCaptureEvent } from "@/utils/posthog";
 import { createEmailProvider } from "@/utils/email/provider";
 import { extractEmailAddress, splitRecipientList } from "@/utils/email";
 import { getRuleLabel } from "@/utils/rule/consts";
@@ -883,8 +882,7 @@ async function trackToolCall({
   email: string;
   logger: Logger;
 }) {
-  logger.info("Tracking tool call", { tool, email });
-  return posthogCaptureEvent(email, "AI Assistant Chat Tool Call", { tool });
+  logger.trace("Tool call", { tool, email });
 }
 
 async function listLabelNames({

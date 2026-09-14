@@ -11,7 +11,6 @@ import localFont from "next/font/local";
 import type { WebApplication, WithContext } from "schema-dts";
 import "../styles/globals.css";
 // ANALYTICS DISABLED FOR PRIVACY
-// import { PostHogPageview, PostHogProvider } from "@/providers/PostHogProvider";
 import { env } from "@/env";
 import { GlobalProviders } from "@/providers/GlobalProviders";
 // ANALYTICS DISABLED FOR PRIVACY

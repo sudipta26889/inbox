@@ -3,7 +3,6 @@ import type { DateRange } from "react-day-picker";
 import { BarChart } from "@/app/(app)/[emailAccountId]/stats/BarChart";
 import Link from "next/link";
 import { ExternalLinkIcon } from "lucide-react";
-import { usePostHog } from "posthog-js/react";
 import {
   Dialog,
   DialogContent,
@@ -45,7 +44,6 @@ export function NewsletterModal(props: {
 
   const { userLabels } = useLabels();
 
-  const posthog = usePostHog();
   const unsubscribeLink = newsletter
     ? getUserFacingUnsubscribeLink({
         unsubscribeLink: newsletter.unsubscribeLink,
@@ -101,7 +99,6 @@ export function NewsletterModal(props: {
                 userEmail={userEmail}
                 emailAccountId={emailAccountId}
                 labels={userLabels}
-                posthog={posthog}
                 mutate={mutate}
               />
             </div>

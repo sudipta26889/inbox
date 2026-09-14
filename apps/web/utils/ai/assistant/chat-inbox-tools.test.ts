@@ -13,9 +13,6 @@ import {
 vi.mock("server-only", () => ({}));
 vi.mock("@/utils/prisma");
 vi.mock("@/utils/email/provider");
-vi.mock("@/utils/posthog", () => ({
-  posthogCaptureEvent: vi.fn().mockResolvedValue(undefined),
-}));
 
 const TEST_EMAIL = "user@test.com";
 const logger = createScopedLogger("chat-inbox-tools-test");

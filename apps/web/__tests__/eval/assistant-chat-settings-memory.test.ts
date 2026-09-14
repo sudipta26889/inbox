@@ -37,11 +37,6 @@ const { mockPosthogCaptureEvent, mockRedis } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("@/utils/posthog", () => ({
-  posthogCaptureEvent: mockPosthogCaptureEvent,
-  getPosthogLlmClient: () => null,
-}));
-
 vi.mock("@/utils/redis", () => ({
   redis: mockRedis,
 }));

@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
 import { subDays } from "date-fns/subDays";
 import { ChevronDown } from "lucide-react";
-import { usePostHog } from "posthog-js/react";
 import {
   ArchiveIcon,
   CheckIcon,
@@ -173,7 +172,6 @@ export function BulkUnsubscribe() {
 
   const { typesArray } = useEmailsToIncludeFilter();
   const { filtersArray, filter, setFilter } = useNewsletterFilter();
-  const posthog = usePostHog();
 
   const [search, setSearch] = useState("");
 
@@ -219,7 +217,6 @@ export function BulkUnsubscribe() {
 
   const onOpenNewsletter = (newsletter: Newsletter) => {
     setOpenedNewsletter(newsletter);
-    posthog?.capture("Clicked Expand Sender");
   };
 
   const [selectedRow, setSelectedRow] = useState<Newsletter | undefined>();

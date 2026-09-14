@@ -2,7 +2,6 @@ import { deleteContact as deleteLoopsContact } from "@inbox/loops";
 import { deleteContact as deleteResendContact } from "@inbox/resend";
 import prisma from "@/utils/prisma";
 import { deleteTinybirdAiCalls } from "@inbox/tinybird-ai-analytics";
-import { deletePosthogUser, trackUserDeleted } from "@/utils/posthog";
 import { captureException } from "@/utils/error";
 import { unwatchEmails } from "@/utils/email/watch-manager";
 import { createEmailProvider } from "@/utils/email/provider";
@@ -129,7 +128,6 @@ async function deleteResources({
 
   const resourcesPromise = Promise.allSettled([
     deleteLoopsContact(emailAccountId),
-    deletePosthogUser({ email }),
     deleteResendContact({ email }),
     emailProvider
       ? unwatchEmails({
@@ -149,9 +147,6 @@ async function deleteResources({
 
     logger.info("Deleting user");
     await prisma.user.delete({ where: { id: userId } });
-
-    // posthod track deleted events
-    await trackUserDeleted(userId);
   } catch (error) {
     logger.error("Error during database user deletion process", {
       error,

@@ -45,7 +45,6 @@ export default async function AdminConfigPage() {
       qstash: !!env.QSTASH_TOKEN,
       tinybird: !!env.TINYBIRD_TOKEN,
       sentry: !!env.NEXT_PUBLIC_SENTRY_DSN,
-      posthog: !!env.NEXT_PUBLIC_POSTHOG_KEY,
       stripe: !!env.STRIPE_SECRET_KEY,
       lemonSqueezy: !!env.LEMON_SQUEEZY_API_KEY,
     },
@@ -128,12 +127,6 @@ export default async function AdminConfigPage() {
                 label="Sentry"
                 value={
                   info.integrations.sentry ? "Configured" : "Not configured"
-                }
-              />
-              <Row
-                label="PostHog"
-                value={
-                  info.integrations.posthog ? "Configured" : "Not configured"
                 }
               />
               <Row

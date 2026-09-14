@@ -13,10 +13,6 @@ vi.mock("@inbox/resend", () => ({
 vi.mock("@inbox/tinybird-ai-analytics", () => ({
   deleteTinybirdAiCalls: vi.fn().mockResolvedValue(undefined),
 }));
-vi.mock("@/utils/posthog", () => ({
-  deletePosthogUser: vi.fn().mockResolvedValue(undefined),
-  trackUserDeleted: vi.fn().mockResolvedValue(undefined),
-}));
 vi.mock("@/utils/error", () => ({
   captureException: vi.fn().mockReturnValue(undefined),
 }));

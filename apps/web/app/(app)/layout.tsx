@@ -6,7 +6,6 @@ import { after } from "next/server";
 import { Inter } from "next/font/google";
 import { SideNavWithTopNav } from "@/components/SideNavWithTopNav";
 import { auth } from "@/utils/auth";
-import { PostHogIdentify } from "@/providers/PostHogProvider";
 import { CommandK } from "@/components/CommandK";
 import { AppProviders } from "@/providers/AppProviders";
 import { AssessUser } from "@/app/(app)/[emailAccountId]/assess";
@@ -80,7 +79,6 @@ export default async function AppLayout({
           <EmailViewer />
           <AnnouncementDialog />
           <ErrorBoundary extra={{ component: "AppLayout" }}>
-            <PostHogIdentify />
 
             <CommandK />
             <QueueInitializer />

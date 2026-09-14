@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import * as Sentry from "@sentry/nextjs";
 import { captureException, checkCommonErrors, SafeError } from "@/utils/error";
 import { env } from "@/env";
-import { logErrorToPosthog } from "@/utils/error.server";
+import { setSentryErrorUser } from "@/utils/error.server";
 import { createScopedLogger, type Logger } from "@/utils/logger";
 import { flushLoggerSafely } from "@/utils/logger-flush";
 import { auth } from "@/utils/auth";
@@ -171,13 +171,7 @@ function withMiddleware<T extends NextRequest>(
           source: scope || getRequestPath(requestForError),
         });
 
-        await logErrorToPosthog(
-          "api",
-          getRequestPath(requestForError),
-          apiError.type,
-          "unknown",
-          reqLogger,
-        ); // TODO: add emailAccountId
+        await setSentryErrorUser(reqLogger);
 
         return NextResponse.json(
           { error: apiError.message, isKnownError: true },

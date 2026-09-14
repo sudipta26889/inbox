@@ -5,7 +5,6 @@ import { type SubmitHandler, useFieldArray, useForm } from "react-hook-form";
 import { useSession } from "@/utils/auth-client";
 import { zodResolver } from "@hookform/resolvers/zod";
 import useSWR from "swr";
-import { usePostHog } from "posthog-js/react";
 import { CrownIcon } from "lucide-react";
 import { capitalCase } from "capital-case";
 import { Button } from "@/components/ui/button";
@@ -162,7 +161,6 @@ function MultiAccountForm({
     name: "emailAddresses",
     control,
   });
-  const posthog = usePostHog();
 
   const extraSeats = fields.length - emailAccountsAccess - 1;
   const needsToPurchaseMoreSeats = isLifetime && extraSeats > 0;
@@ -208,11 +206,9 @@ function MultiAccountForm({
             error={errors.emailAddresses?.[i]?.email}
             onClickAdd={() => {
               append({ email: "" });
-              posthog.capture("Clicked Add User");
             }}
             onClickRemove={() => {
               remove(i);
-              posthog.capture("Clicked Remove User");
               if (fields.length === 1) {
                 append({ email: "" });
               }

@@ -3,7 +3,6 @@
 import type React from "react";
 import { useState } from "react";
 import Link from "next/link";
-import { usePostHog } from "posthog-js/react";
 import {
   ArchiveIcon,
   EyeIcon,
@@ -55,12 +54,10 @@ export function BulkUnsubscribeRowMobile({
   const name = item.fromName || extractNameFromEmail(item.name);
   const email = extractEmailAddress(item.name);
 
-  const posthog = usePostHog();
 
   const { approveLoading, onApprove } = useApproveButton({
     item,
     mutate,
-    posthog,
     emailAccountId,
     filter,
   });
@@ -70,13 +67,11 @@ export function BulkUnsubscribeRowMobile({
       hasUnsubscribeAccess,
       mutate,
       refetchPremium,
-      posthog,
       emailAccountId,
     },
   );
   const { onBulkArchive, isBulkArchiving } = useBulkArchive({
     mutate,
-    posthog,
     emailAccountId,
   });
   const hasUnsubscribeLink = unsubscribeLink !== "#";

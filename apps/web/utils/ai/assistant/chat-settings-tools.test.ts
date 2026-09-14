@@ -12,9 +12,6 @@ import {
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/utils/prisma");
-vi.mock("@/utils/posthog", () => ({
-  posthogCaptureEvent: vi.fn().mockResolvedValue(undefined),
-}));
 vi.mock("@/utils/premium", () => ({
   isActivePremium: vi.fn(),
 }));

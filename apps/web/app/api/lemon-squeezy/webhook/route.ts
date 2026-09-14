@@ -9,14 +9,6 @@ import prisma from "@/utils/prisma";
 import { withError } from "@/utils/middleware";
 import { env } from "@/env";
 import {
-  trackPaymentSuccess,
-  trackSubscriptionCustom,
-  trackSubscriptionTrialStarted,
-  trackSwitchedPremiumPlan,
-  trackTrialStarted,
-  trackUpgradedToPremium,
-} from "@/utils/posthog";
-import {
   cancelPremiumLemon,
   extendPremiumLemon,
   upgradeToPremiumLemon,
@@ -159,12 +151,7 @@ async function subscriptionCreated({
   const email = getEmailFromPremium(updatedPremium);
   if (email) {
     try {
-      await Promise.allSettled([
-        payload.data.attributes.status === "on_trial"
-          ? trackTrialStarted(email, payload.data.attributes)
-          : trackUpgradedToPremium(email, payload.data.attributes),
-        startedTrial(email, tier),
-      ]);
+      await startedTrial(email, tier);
     } catch (error) {
       logger.error("Error capturing event", {
         error,
@@ -202,14 +189,7 @@ async function subscriptionPlanChanged({
   const email = getEmailFromPremium(updatedPremium);
   if (email) {
     try {
-      await Promise.allSettled([
-        trackSwitchedPremiumPlan(
-          email,
-          payload.data.attributes.status,
-          payload.data.attributes,
-        ),
-        switchedPremiumPlan(email, tier),
-      ]);
+      await switchedPremiumPlan(email, tier);
     } catch (error) {
       logger.error("Error capturing event", {
         error,
@@ -288,17 +268,6 @@ async function subscriptionUpdated({
 
   const email = getEmailFromPremium(updatedPremium);
 
-  if (email) {
-    if (payload.data.attributes.status === "on_trial") {
-      await trackSubscriptionTrialStarted(email, payload.data.attributes);
-    } else {
-      await trackSubscriptionCustom(
-        email,
-        payload.data.attributes.status,
-        payload.data.attributes,
-      );
-    }
-  }
 
   return NextResponse.json({ ok: true });
 }
@@ -376,12 +345,6 @@ async function subscriptionPaymentSuccess({
 
   const email = premium?.admins?.[0]?.email || premium?.users?.[0]?.email;
   if (!email) throw new Error("No email found");
-  await trackPaymentSuccess({
-    email,
-    totalPaidUSD: payload.data.attributes.total_usd,
-    lemonSqueezyId: payload.data.id,
-    lemonSqueezyType: payload.data.type,
-  });
   return NextResponse.json({ ok: true });
 }
 

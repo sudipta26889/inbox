@@ -3,7 +3,6 @@
 import { useCallback, useState, useEffect } from "react";
 import { toast } from "sonner";
 import { useAction } from "next-safe-action/hooks";
-import type { PostHog } from "posthog-js/react";
 import { onAutoArchive, onDeleteFilter } from "@/utils/actions/client";
 import {
   setNewsletterStatusAction,
@@ -240,14 +239,12 @@ export function useUnsubscribe<T extends Row>({
   emailAccountId,
   hasUnsubscribeAccess,
   mutate,
-  posthog,
   refetchPremium,
 }: {
   item: T;
   emailAccountId: string;
   hasUnsubscribeAccess: boolean;
   mutate: () => Promise<void>;
-  posthog: PostHog;
   refetchPremium: () => Promise<UserResponse | null | undefined>;
 }) {
   const [unsubscribeLoading, setUnsubscribeLoading] = useState(false);
@@ -264,7 +261,6 @@ export function useUnsubscribe<T extends Row>({
     setUnsubscribeLoading(true);
 
     try {
-      posthog.capture("Clicked Unsubscribe");
 
       if (item.status === NewsletterStatus.UNSUBSCRIBED) {
         await setNewsletterStatusAction(emailAccountId, {
@@ -309,7 +305,6 @@ export function useUnsubscribe<T extends Row>({
     automaticUnsubscribeLink,
     mutate,
     refetchPremium,
-    posthog,
     emailAccountId,
     userFacingUnsubscribeLink,
   ]);
@@ -327,7 +322,6 @@ export function useUnsubscribe<T extends Row>({
 export function useBulkUnsubscribe<T extends Row>({
   hasUnsubscribeAccess,
   mutate,
-  posthog,
   refetchPremium,
   emailAccountId,
   onDeselectItem,
@@ -335,7 +329,6 @@ export function useBulkUnsubscribe<T extends Row>({
 }: {
   hasUnsubscribeAccess: boolean;
   mutate: MutateFn;
-  posthog: PostHog;
   refetchPremium: () => Promise<UserResponse | null | undefined>;
   emailAccountId: string;
   onDeselectItem?: (id: string) => void;
@@ -344,7 +337,6 @@ export function useBulkUnsubscribe<T extends Row>({
   const onBulkUnsubscribe = useCallback(
     async (items: T[]) => {
       if (!hasUnsubscribeAccess) return;
-      posthog.capture("Clicked Bulk Unsubscribe");
 
       await executeBulkOperation({
         items,
@@ -392,7 +384,6 @@ export function useBulkUnsubscribe<T extends Row>({
     [
       hasUnsubscribeAccess,
       mutate,
-      posthog,
       refetchPremium,
       emailAccountId,
       onDeselectItem,
@@ -432,14 +423,12 @@ export function useAutoArchive<T extends Row>({
   item,
   hasUnsubscribeAccess,
   mutate,
-  posthog,
   refetchPremium,
   emailAccountId,
 }: {
   item: T;
   hasUnsubscribeAccess: boolean;
   mutate: () => Promise<void>;
-  posthog: PostHog;
   refetchPremium: () => Promise<UserResponse | null | undefined>;
   emailAccountId: string;
 }) {
@@ -459,7 +448,6 @@ export function useAutoArchive<T extends Row>({
       emailAccountId,
     });
 
-    posthog.capture("Clicked Auto Archive");
 
     setAutoArchiveLoading(false);
   }, [
@@ -467,7 +455,6 @@ export function useAutoArchive<T extends Row>({
     mutate,
     refetchPremium,
     hasUnsubscribeAccess,
-    posthog,
     emailAccountId,
   ]);
 
@@ -582,7 +569,6 @@ export function useBulkAutoArchive<T extends Row>({
 export function useApproveButton<T extends Row>({
   item,
   mutate,
-  posthog,
   emailAccountId,
   filter,
 }: {
@@ -597,7 +583,6 @@ export function useApproveButton<T extends Row>({
       rollbackOnError?: boolean;
     },
   ) => Promise<void>;
-  posthog: PostHog;
   emailAccountId: string;
   filter: NewsletterFilterType;
 }) {
@@ -652,7 +637,6 @@ export function useApproveButton<T extends Row>({
     // Start optimistic update immediately (don't await - fire and forget for UI)
     mutate(optimisticUpdate, { revalidate: false });
 
-    posthog.capture("Clicked Approve Sender");
 
     try {
       // Delete any existing auto-archive filter without triggering a refetch
@@ -690,21 +674,16 @@ export function useApproveButton<T extends Row>({
 
 export function useBulkApprove<T extends Row>({
   mutate,
-  posthog,
   emailAccountId,
   onDeselectItem,
   filter,
 }: {
   mutate: MutateFn;
-  posthog: PostHog;
   emailAccountId: string;
   onDeselectItem?: (id: string) => void;
   filter: NewsletterFilterType;
 }) {
   const onBulkApprove = async (items: T[], unapprove?: boolean) => {
-    posthog.capture(
-      unapprove ? "Clicked Bulk Unapprove" : "Clicked Bulk Approve",
-    );
 
     const newStatus = unapprove ? null : NewsletterStatus.APPROVED;
     const actionPast = unapprove ? "unapproved" : "approved";
@@ -732,11 +711,9 @@ export function useBulkApprove<T extends Row>({
 
 export function useBulkArchive<T extends Row>({
   mutate,
-  posthog,
   emailAccountId,
 }: {
   mutate: () => Promise<unknown>;
-  posthog: PostHog;
   emailAccountId: string;
 }) {
   const { executeAsync: executeBulkArchive, isExecuting } = useAction(
@@ -749,7 +726,6 @@ export function useBulkArchive<T extends Row>({
   );
 
   const onBulkArchive = (items: T[]) => {
-    posthog.capture("Clicked Bulk Archive");
     const promise = executeBulkArchive({
       froms: items.map((item) => item.name),
     });
@@ -815,11 +791,9 @@ async function deleteAllFromSender({
 
 export function useDeleteAllFromSender<T extends Row>({
   item,
-  posthog,
   emailAccountId,
 }: {
   item: T;
-  posthog: PostHog;
   emailAccountId: string;
 }) {
   const [deleteAllLoading, setDeleteAllLoading] = useState(false);
@@ -827,7 +801,6 @@ export function useDeleteAllFromSender<T extends Row>({
   const onDeleteAll = async () => {
     setDeleteAllLoading(true);
 
-    posthog.capture("Clicked Delete All");
 
     await deleteAllFromSender({
       name: item.name,
@@ -844,11 +817,9 @@ export function useDeleteAllFromSender<T extends Row>({
 
 export function useBulkDelete<T extends Row>({
   mutate,
-  posthog,
   emailAccountId,
 }: {
   mutate: () => Promise<unknown>;
-  posthog: PostHog;
   emailAccountId: string;
 }) {
   const { executeAsync: executeBulkTrash, isExecuting } = useAction(
@@ -861,7 +832,6 @@ export function useBulkDelete<T extends Row>({
   );
 
   const onBulkDelete = (items: T[]) => {
-    posthog.capture("Clicked Bulk Delete");
 
     const promise = executeBulkTrash({ froms: items.map((item) => item.name) });
 

@@ -2,8 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePostHog } from "posthog-js/react";
-import type { PostHog } from "posthog-js";
 import { Label, Radio, RadioGroup } from "@headlessui/react";
 import { Sparkle } from "@/components/new-landing/icons/Sparkle";
 import { Zap } from "@/components/new-landing/icons/Zap";
@@ -31,7 +29,6 @@ import {
 import { Chat } from "@/components/new-landing/icons/Chat";
 import { type Tier, tiers } from "@/app/(app)/premium/config";
 import { Briefcase } from "@/components/new-landing/icons/Briefcase";
-import { landingPageAnalytics } from "@/hooks/useAnalytics";
 import { cn } from "@/utils";
 
 type PricingTier = Tier & {
@@ -89,7 +86,6 @@ const frequencies = ["annually", "monthly"];
 
 export function Pricing() {
   const [frequency, setFrequency] = useState(frequencies[0]);
-  const posthog = usePostHog();
 
   return (
     <Section id="pricing">
@@ -127,7 +123,6 @@ export function Pricing() {
                 tier={tier}
                 tierIndex={index}
                 isAnnual={frequency === "annually"}
-                posthog={posthog}
               />
             </CardWrapper>
           ))}
@@ -148,18 +143,7 @@ export function Pricing() {
                 </div>
               </div>
               <Button variant="secondary-two" size="lg" asChild>
-                <Link
-                  href="#"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={() =>
-                    landingPageAnalytics.pricingCtaClicked(
-                      posthog,
-                      "Enterprise",
-                      "Speak to sales",
-                    )
-                  }
-                >
+                <Link href="#" target="_blank" rel="noopener noreferrer">
                   <Chat />
                   <span className="relative z-10">Speak to sales</span>
                 </Link>
@@ -174,12 +158,11 @@ export function Pricing() {
 
 interface PricingCardProps {
   isAnnual: boolean;
-  posthog: PostHog;
   tier: PricingTier;
   tierIndex: number;
 }
 
-function PricingCard({ tier, tierIndex, isAnnual, posthog }: PricingCardProps) {
+function PricingCard({ tier, tierIndex, isAnnual }: PricingCardProps) {
   const { name, description, features } = tier;
   const price = isAnnual ? tier.price.annually : tier.price.monthly;
   const isFirstTier = !tierIndex;
@@ -218,17 +201,7 @@ function PricingCard({ tier, tierIndex, isAnnual, posthog }: PricingCardProps) {
             )}
           </div>
           <Button auto size="lg" variant={tier.button.variant} asChild>
-            <Link
-              href={tier.button.href}
-              target={tier.button.target}
-              onClick={() =>
-                landingPageAnalytics.pricingCtaClicked(
-                  posthog,
-                  tier.name,
-                  tier.button.content,
-                )
-              }
-            >
+            <Link href={tier.button.href} target={tier.button.target}>
               {tier.button.icon}
               {/* z-10 keeps text above gradient background on hover to prevent color shift */}
               <span className="relative z-10">{tier.button.content}</span>

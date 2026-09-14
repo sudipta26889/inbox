@@ -1,13 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { handleWebhookError } from "@/utils/webhook/error-handler";
 import { createScopedLogger } from "@/utils/logger";
-import { trackError } from "@/utils/posthog";
 import { recordRateLimitFromApiError } from "@/utils/email/rate-limit";
 
 vi.mock("server-only", () => ({}));
-vi.mock("@/utils/posthog", () => ({
-  trackError: vi.fn(),
-}));
 vi.mock("@/utils/email/rate-limit", () => ({
   recordRateLimitFromApiError: vi.fn().mockResolvedValue(null),
 }));
@@ -38,14 +34,6 @@ describe("handleWebhookError", () => {
       });
 
       await handleWebhookError(error, baseOptions);
-
-      expect(trackError).toHaveBeenCalledWith({
-        email: "test@example.com",
-        emailAccountId: "acc-123",
-        errorType: "Gmail Rate Limit Exceeded",
-        type: "api",
-        url: "/api/google/webhook",
-      });
     });
 
     it("tracks Gmail quota exceeded errors", async () => {
@@ -54,12 +42,6 @@ describe("handleWebhookError", () => {
       });
 
       await handleWebhookError(error, baseOptions);
-
-      expect(trackError).toHaveBeenCalledWith(
-        expect.objectContaining({
-          errorType: "Gmail Quota Exceeded",
-        }),
-      );
     });
 
     it("tracks Gmail insufficient permissions errors", async () => {
@@ -68,12 +50,6 @@ describe("handleWebhookError", () => {
       });
 
       await handleWebhookError(error, baseOptions);
-
-      expect(trackError).toHaveBeenCalledWith(
-        expect.objectContaining({
-          errorType: "Gmail Insufficient Permissions",
-        }),
-      );
     });
   });
 
@@ -89,12 +65,6 @@ describe("handleWebhookError", () => {
         url: "/api/outlook/webhook",
       });
 
-      expect(trackError).toHaveBeenCalledWith(
-        expect.objectContaining({
-          errorType: "Outlook Rate Limit",
-          url: "/api/outlook/webhook",
-        }),
-      );
       expect(mockRecordRateLimitFromApiError).toHaveBeenCalledWith(
         expect.objectContaining({
           apiErrorType: "Outlook Rate Limit",
@@ -113,12 +83,6 @@ describe("handleWebhookError", () => {
         ...baseOptions,
         url: "/api/outlook/webhook",
       });
-
-      expect(trackError).toHaveBeenCalledWith(
-        expect.objectContaining({
-          errorType: "Outlook Rate Limit",
-        }),
-      );
     });
 
     it("tracks Outlook MailboxConcurrency errors", async () => {
@@ -128,12 +92,6 @@ describe("handleWebhookError", () => {
         ...baseOptions,
         url: "/api/outlook/webhook",
       });
-
-      expect(trackError).toHaveBeenCalledWith(
-        expect.objectContaining({
-          errorType: "Outlook Rate Limit",
-        }),
-      );
     });
 
     it("continues processing when rate-limit recording returns no state", async () => {
@@ -149,12 +107,6 @@ describe("handleWebhookError", () => {
           url: "/api/outlook/webhook",
         }),
       ).resolves.toBeUndefined();
-
-      expect(trackError).toHaveBeenCalledWith(
-        expect.objectContaining({
-          errorType: "Outlook Rate Limit",
-        }),
-      );
     });
   });
 
@@ -165,7 +117,6 @@ describe("handleWebhookError", () => {
       await handleWebhookError(error, baseOptions);
 
       // Unknown errors should not be tracked via PostHog
-      expect(trackError).not.toHaveBeenCalled();
     });
 
     it("handles errors without crashing when email account is missing", async () => {
@@ -198,12 +149,6 @@ describe("handleWebhookError", () => {
       };
 
       await handleWebhookError(error, baseOptions);
-
-      expect(trackError).toHaveBeenCalledWith(
-        expect.objectContaining({
-          errorType: "Gmail Rate Limit Exceeded",
-        }),
-      );
     });
   });
 });

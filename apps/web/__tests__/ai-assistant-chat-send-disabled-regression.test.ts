@@ -51,10 +51,6 @@ vi.mock("@/utils/email/provider", () => ({
   createEmailProvider: mockCreateEmailProvider,
 }));
 
-vi.mock("@/utils/posthog", () => ({
-  posthogCaptureEvent: mockPosthogCaptureEvent,
-}));
-
 vi.mock("@/utils/prisma", () => ({
   default: mockPrisma,
 }));

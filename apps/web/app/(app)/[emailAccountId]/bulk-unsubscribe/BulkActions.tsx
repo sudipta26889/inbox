@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import { usePostHog } from "posthog-js/react";
 import {
   ArchiveIcon,
   Loader2Icon,
@@ -98,14 +97,12 @@ export function BulkActions({
   const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
   const [autoArchiveDialogOpen, setAutoArchiveDialogOpen] = useState(false);
 
-  const posthog = usePostHog();
   const { hasUnsubscribeAccess, mutate: refetchPremium } = usePremium();
   const { PremiumModal, openModal } = usePremiumModal();
   const { emailAccountId } = useAccount();
   const { onBulkUnsubscribe } = useBulkUnsubscribe({
     hasUnsubscribeAccess,
     mutate,
-    posthog,
     refetchPremium,
     emailAccountId,
     onDeselectItem: deselectItem,
@@ -114,7 +111,6 @@ export function BulkActions({
 
   const { onBulkApprove } = useBulkApprove({
     mutate,
-    posthog,
     emailAccountId,
     onDeselectItem: deselectItem,
     filter,
@@ -131,13 +127,11 @@ export function BulkActions({
 
   const { onBulkArchive, isBulkArchiving } = useBulkArchive({
     mutate,
-    posthog,
     emailAccountId,
   });
 
   const { onBulkDelete, isBulkDeleting } = useBulkDelete({
     mutate,
-    posthog,
     emailAccountId,
   });
 

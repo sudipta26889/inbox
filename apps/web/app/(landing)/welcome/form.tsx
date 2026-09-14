@@ -3,8 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { type SubmitHandler, useForm } from "react-hook-form";
 import { useRouter, useSearchParams } from "next/navigation";
-import { usePostHog } from "posthog-js/react";
-import type { Properties } from "posthog-js";
 import { survey } from "@/app/(landing)/welcome/survey";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/Input";
@@ -24,7 +22,6 @@ type Inputs = Record<"$survey_response" | `$survey_response_${number}`, string>;
 export const OnboardingForm = (props: { questionIndex: number }) => {
   const { questionIndex } = props;
 
-  const posthog = usePostHog();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [showOtherInput, setShowOtherInput] = useState(false);
@@ -72,17 +69,16 @@ export const OnboardingForm = (props: { questionIndex: number }) => {
   const isFinalQuestion = questionIndex === survey.questions.length - 1;
   const currentQuestion = survey.questions[questionIndex];
 
-  const submitPosthog = useCallback(
-    (responses: Properties) => {
+  const submitSurvey = useCallback(
+    (responses: Record<string, unknown>) => {
       analytics.onComplete({
         step: questionIndex + 1,
         stepKey: currentQuestion.key,
         totalSteps: survey.questions.length,
         destination: isPremium ? "setup" : "welcome-upgrade",
       });
-      posthog.capture("survey sent", { ...responses, $survey_id: surveyId });
     },
-    [posthog, analytics, questionIndex, currentQuestion.key, isPremium],
+    [analytics, questionIndex, currentQuestion.key, isPremium],
   );
 
   const onSubmit: SubmitHandler<Inputs> = useCallback(
@@ -125,7 +121,7 @@ export const OnboardingForm = (props: { questionIndex: number }) => {
 
       // submit on last question
       if (isFinalQuestion) {
-        submitPosthog(responses);
+        submitSurvey(responses);
         await completedOnboardingAction();
 
         if (isPremium) {
@@ -142,7 +138,7 @@ export const OnboardingForm = (props: { questionIndex: number }) => {
       questionIndex,
       router,
       searchParams,
-      submitPosthog,
+      submitSurvey,
       setValue,
       isFinalQuestion,
       analytics,
@@ -231,8 +227,7 @@ export const OnboardingForm = (props: { questionIndex: number }) => {
         {/* {!isFinalQuestion && (
           <SkipOnboardingButton
             searchParams={searchParams}
-            submitPosthog={submitPosthog}
-            posthog={posthog}
+            submitSurvey={submitSurvey}
             router={router}
           />
         )} */}
@@ -243,12 +238,12 @@ export const OnboardingForm = (props: { questionIndex: number }) => {
 
 // function SkipOnboardingButton({
 //   searchParams,
-//   submitPosthog,
+//   submitSurvey,
 //   posthog,
 //   router,
 // }: {
 //   searchParams: URLSearchParams;
-//   submitPosthog: (responses: Properties) => void;
+//   submitSurvey: (responses: Record<string, unknown>) => void;
 //   posthog: PostHog;
 //   router: AppRouterInstance;
 // }) {
@@ -263,9 +258,8 @@ export const OnboardingForm = (props: { questionIndex: number }) => {
 //       type="button"
 //       onClick={async () => {
 //         const responses = getResponses(searchParams);
-//         submitPosthog(responses);
-//         posthog.capture("survey dismissed", { $survey_id: surveyId });
-//         await completedOnboardingAction();
+//         submitSurvey(responses);
+////         await completedOnboardingAction();
 //         router.push("/setup");
 //       }}
 //     >

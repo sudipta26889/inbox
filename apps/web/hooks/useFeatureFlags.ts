@@ -1,17 +1,15 @@
-import {
-  useFeatureFlagEnabled,
-  useFeatureFlagVariantKey,
-} from "posthog-js/react";
 import { env } from "@/env";
 
+// ponytail: PostHog is gone, so each flag is just its env switch and every
+// experiment resolves to its control arm. The variant hooks are kept as
+// constants so the landing components reading them need no change.
+
 export function useCleanerEnabled() {
-  const posthogEnabled = useFeatureFlagEnabled("inbox-cleaner");
-  return env.NEXT_PUBLIC_CLEANER_ENABLED || posthogEnabled;
+  return env.NEXT_PUBLIC_CLEANER_ENABLED;
 }
 
 export function useFollowUpRemindersEnabled() {
-  const posthogEnabled = useFeatureFlagEnabled("follow-up-reminders");
-  return env.NEXT_PUBLIC_FOLLOW_UP_REMINDERS_ENABLED || posthogEnabled;
+  return env.NEXT_PUBLIC_FOLLOW_UP_REMINDERS_ENABLED;
 }
 
 export function useMeetingBriefsEnabled() {
@@ -19,71 +17,44 @@ export function useMeetingBriefsEnabled() {
 }
 
 export function useIntegrationsEnabled() {
-  const posthogEnabled = useFeatureFlagEnabled("integrations");
-  return env.NEXT_PUBLIC_INTEGRATIONS_ENABLED || posthogEnabled;
+  return env.NEXT_PUBLIC_INTEGRATIONS_ENABLED;
 }
 
 export function useSmartFilingEnabled() {
-  const posthogEnabled = useFeatureFlagEnabled("smart-filing");
-  return env.NEXT_PUBLIC_SMART_FILING_ENABLED || posthogEnabled;
+  return env.NEXT_PUBLIC_SMART_FILING_ENABLED;
 }
 
-const HERO_FLAG_NAME = "hero-copy-7";
-
 export type HeroVariant = "control" | "clean-up-in-minutes";
+export type PricingVariant = "control" | "basic-business" | "business-basic";
+export type PricingFrequencyDefault = "control" | "monthly";
+export type TestimonialsVariant = "control" | "senja-widget";
+export type HeroLayoutVariant = "control" | "social-proof-first";
+export type WelcomePricingVariant = "control" | "two-tiers";
 
-export function useHeroVariant() {
-  return (useFeatureFlagVariantKey(HERO_FLAG_NAME) as HeroVariant) || "control";
+export function useHeroVariant(): HeroVariant {
+  return "control";
 }
 
 export function useHeroVariantEnabled() {
-  return useFeatureFlagEnabled(HERO_FLAG_NAME);
+  return false;
 }
 
-export type PricingVariant = "control" | "basic-business" | "business-basic";
-
-export function usePricingVariant() {
-  return (
-    (useFeatureFlagVariantKey("pricing-options-2") as PricingVariant) ||
-    "control"
-  );
+export function usePricingVariant(): PricingVariant {
+  return "control";
 }
 
-export type PricingFrequencyDefault = "control" | "monthly";
-
-export function usePricingFrequencyDefault() {
-  return (
-    (useFeatureFlagVariantKey(
-      "pricing-frequency-default",
-    ) as PricingFrequencyDefault) || "control"
-  );
+export function usePricingFrequencyDefault(): PricingFrequencyDefault {
+  return "control";
 }
 
-export type TestimonialsVariant = "control" | "senja-widget";
-
-export function useTestimonialsVariant() {
-  return (
-    (useFeatureFlagVariantKey("testimonials") as TestimonialsVariant) ||
-    "control"
-  );
+export function useTestimonialsVariant(): TestimonialsVariant {
+  return "control";
 }
 
-export type HeroLayoutVariant = "control" | "social-proof-first";
-
-export function useHeroLayoutVariant() {
-  return (
-    (useFeatureFlagVariantKey(
-      "hero-social-proof-position",
-    ) as HeroLayoutVariant) || "control"
-  );
+export function useHeroLayoutVariant(): HeroLayoutVariant {
+  return "control";
 }
 
-export type WelcomePricingVariant = "control" | "two-tiers";
-
-export function useWelcomePricingVariant() {
-  return (
-    (useFeatureFlagVariantKey(
-      "welcome-pricing-tiers",
-    ) as WelcomePricingVariant) || "control"
-  );
+export function useWelcomePricingVariant(): WelcomePricingVariant {
+  return "control";
 }

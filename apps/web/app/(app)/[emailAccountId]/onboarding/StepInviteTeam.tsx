@@ -2,7 +2,6 @@
 
 import { useState, useCallback } from "react";
 import { ArrowRightIcon, UsersIcon } from "lucide-react";
-import { usePostHog } from "posthog-js/react";
 import { PageHeading, TypographyP } from "@/components/Typography";
 import { IconCircle } from "@/app/(app)/[emailAccountId]/onboarding/IconCircle";
 import { OnboardingWrapper } from "@/app/(app)/[emailAccountId]/onboarding/OnboardingWrapper";
@@ -29,27 +28,12 @@ export function StepInviteTeam({
   onNext: () => void;
   onSkip: () => void;
 }) {
-  const posthog = usePostHog();
   const [emails, setEmails] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleEmailsChange = useCallback((newEmails: string[]) => {
     setEmails(newEmails.map((e) => e.toLowerCase()));
   }, []);
-
-  const captureInviteSubmitted = useCallback(
-    (successfulInvites: number, failedInvites: number) => {
-      if (successfulInvites === 0) return;
-      posthog.capture("onboarding_invite_team_submitted", {
-        variant: "onboarding",
-        inviteCount: emails.length,
-        successfulInvites,
-        failedInvites,
-        hasExistingOrganization: Boolean(organizationId),
-      });
-    },
-    [posthog, emails.length, organizationId],
-  );
 
   const handleInviteAndContinue = useCallback(async () => {
     if (emails.length === 0) {
@@ -90,7 +74,6 @@ export function StepInviteTeam({
           });
         }
 
-        captureInviteSubmitted(successCount, errorCount);
         onNext();
       }
 
@@ -128,7 +111,6 @@ export function StepInviteTeam({
       });
     }
 
-    captureInviteSubmitted(successCount, errorCount);
     onNext();
   }, [
     emails,
@@ -136,8 +118,6 @@ export function StepInviteTeam({
     organizationId,
     userName,
     onNext,
-    posthog,
-    captureInviteSubmitted,
   ]);
 
   return (
@@ -180,11 +160,6 @@ export function StepInviteTeam({
             variant="ghost"
             className="w-full"
             onClick={() => {
-              posthog.capture("onboarding_invite_team_skipped", {
-                variant: "onboarding",
-                inviteCount: emails.length,
-                hasExistingOrganization: Boolean(organizationId),
-              });
               onSkip();
             }}
             disabled={isSubmitting}

@@ -16,7 +16,6 @@ import {
   type LogicalOperator,
 } from "@/generated/prisma/enums";
 import { saveLearnedPatterns } from "@/utils/rule/learned-patterns";
-import { posthogCaptureEvent } from "@/utils/posthog";
 import { filterNullProperties } from "@/utils";
 import {
   delayInMinutesSchema,
@@ -893,8 +892,7 @@ async function trackToolCall({
   email: string;
   logger: Logger;
 }) {
-  logger.info("Tracking tool call", { tool, email });
-  return posthogCaptureEvent(email, "AI Assistant Chat Tool Call", { tool });
+  logger.trace("Tool call", { tool, email });
 }
 
 function validateRuleWasReadRecently({

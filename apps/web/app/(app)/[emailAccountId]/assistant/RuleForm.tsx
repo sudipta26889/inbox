@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { type SubmitHandler, useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { usePostHog } from "posthog-js/react";
 import { env } from "@/env";
 import {
   PencilIcon,
@@ -151,7 +150,6 @@ export function RuleForm({
   const { folders, isLoading: foldersLoading } = useFolders(provider);
   const router = useRouter();
 
-  const posthog = usePostHog();
   const [attachmentSources, setAttachmentSources] = useState<
     AttachmentSourceInput[]
   >(
@@ -229,12 +227,6 @@ export function RuleForm({
 
           // Revalidate to get the real data from server
           if (mutate) mutate();
-          posthog.capture("User updated AI rule", {
-            conditions: data.conditions.map((condition) => condition.type),
-            actions: actionsToSubmit.map((action) => action.type),
-            runOnThreads: data.runOnThreads,
-            digest: data.digest,
-          });
           if (isDialog && onSuccess) {
             onSuccess();
           } else {
@@ -265,12 +257,6 @@ export function RuleForm({
               "Rule created, but draft attachment sources could not be saved.",
           });
 
-          posthog.capture("User created AI rule", {
-            conditions: data.conditions.map((condition) => condition.type),
-            actions: actionsToSubmit.map((action) => action.type),
-            runOnThreads: data.runOnThreads,
-            digest: data.digest,
-          });
           if (isDialog && onSuccess) {
             onSuccess();
           } else {
@@ -285,7 +271,6 @@ export function RuleForm({
     [
       attachmentSources,
       router,
-      posthog,
       emailAccountId,
       isDialog,
       onSuccess,

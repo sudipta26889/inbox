@@ -1,7 +1,6 @@
 "use server";
 
 import { z } from "zod";
-import { after } from "next/server";
 import uniq from "lodash/uniq";
 import sumBy from "lodash/sumBy";
 import prisma from "@/utils/prisma";
@@ -28,10 +27,6 @@ import { activateLicenseKeySchema } from "@/utils/actions/premium.validation";
 import { SafeError } from "@/utils/error";
 import { createPremiumForUser } from "@/utils/premium/create-premium";
 import { getStripe } from "@/ee/billing/stripe";
-import {
-  trackStripeCheckoutCreated,
-  trackStripeCustomerCreated,
-} from "@/utils/posthog";
 
 const TEN_YEARS = 10 * 365 * 24 * 60 * 60 * 1000;
 
@@ -510,8 +505,6 @@ export const generateCheckoutSessionAction = actionClientUser
           { idempotencyKey: userId },
         );
 
-        after(() => trackStripeCustomerCreated(user.email, newCustomer.id));
-
         const premium =
           user.premium || (await createPremiumForUser({ userId }));
 
@@ -540,14 +533,6 @@ export const generateCheckoutSessionAction = actionClientUser
           dubCustomerId: userId,
         },
       });
-
-      after(() =>
-        trackStripeCheckoutCreated(user.email, {
-          billingProvider: "stripe",
-          quantity,
-          tier,
-        }),
-      );
 
       return { url: checkout.url };
     },

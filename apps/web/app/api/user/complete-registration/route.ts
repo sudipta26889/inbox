@@ -3,7 +3,6 @@ import { cookies, headers } from "next/headers";
 import { auth } from "@/utils/auth";
 import { withError } from "@/utils/middleware";
 import { sendCompleteRegistrationEvent } from "@/utils/fb";
-import { trackUserSignedUp } from "@/utils/posthog";
 import prisma from "@/utils/prisma";
 import { ONE_HOUR_MS } from "@/utils/date";
 import type { ReadonlyHeaders } from "next/dist/server/web/spec-extension/adapters/headers";
@@ -95,6 +94,4 @@ async function storePosthogSignupEvent(
     });
     return;
   }
-
-  return trackUserSignedUp(email, userCreatedAt.createdAt);
 }

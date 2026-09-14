@@ -195,10 +195,6 @@ export const env = createEnv({
 
     API_KEY_SALT: z.string().optional(),
 
-    POSTHOG_API_SECRET: z.string().optional(),
-    POSTHOG_PROJECT_ID: z.string().optional(),
-    POSTHOG_LLM_EVALS_APPROVED_EMAILS: z.string().optional(),
-
     // Email sending via SMTP
     SMTP_HOST: z.string().optional(),
     SMTP_PORT: z.string().optional(),
@@ -320,9 +316,6 @@ export const env = createEnv({
     NEXT_PUBLIC_CALL_LINK: z
       .string()
       .default("https://cal.com/team/inbox-zero/feedback"),
-    NEXT_PUBLIC_POSTHOG_KEY: z.string().optional(),
-    NEXT_PUBLIC_POSTHOG_API_HOST: z.string().optional(),
-    NEXT_PUBLIC_POSTHOG_HERO_AB: z.string().optional(),
     NEXT_PUBLIC_POSTHOG_ONBOARDING_SURVEY_ID: z.string().optional(),
     NEXT_PUBLIC_BASE_URL: z.string(),
     NEXT_PUBLIC_BRAND_NAME: z.string().trim().min(1).default("Inbox"),
@@ -408,9 +401,6 @@ export const env = createEnv({
       process.env.NEXT_PUBLIC_COPILOT_MONTHLY_VARIANT_ID,
 
     NEXT_PUBLIC_CALL_LINK: process.env.NEXT_PUBLIC_CALL_LINK,
-    NEXT_PUBLIC_POSTHOG_KEY: process.env.NEXT_PUBLIC_POSTHOG_KEY,
-    NEXT_PUBLIC_POSTHOG_API_HOST: process.env.NEXT_PUBLIC_POSTHOG_API_HOST,
-    NEXT_PUBLIC_POSTHOG_HERO_AB: process.env.NEXT_PUBLIC_POSTHOG_HERO_AB,
     NEXT_PUBLIC_POSTHOG_ONBOARDING_SURVEY_ID:
       process.env.NEXT_PUBLIC_POSTHOG_ONBOARDING_SURVEY_ID,
     NEXT_PUBLIC_BASE_URL: getBaseUrl(),
