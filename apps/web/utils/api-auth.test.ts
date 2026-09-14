@@ -58,9 +58,11 @@ describe("api-auth", () => {
         scopes: ["RULES_READ"],
         emailAccount: {
           id: "email-account-id",
+          userId: "user-id",
           email: "user@example.com",
           account: {
             id: "account-id",
+            userId: "user-id",
             provider: "google",
           },
         },
@@ -102,7 +104,16 @@ describe("api-auth", () => {
         emailAccountId: "email-account-id",
         expiresAt: null,
         scopes: ["RULES_READ", "RULES_WRITE"],
-        emailAccount: null,
+        emailAccount: {
+          id: "email-account-id",
+          userId: "user-id",
+          email: "user@example.com",
+          account: {
+            id: "account-id",
+            userId: "user-id",
+            provider: "google",
+          },
+        },
         user: {
           accounts: [],
         },
@@ -113,6 +124,45 @@ describe("api-auth", () => {
         emailAccountId: "email-account-id",
         scopes: ["RULES_READ", "RULES_WRITE"],
       });
+    });
+
+    it("returns null when the scoped inbox relation is missing", async () => {
+      vi.mocked(hashApiKey).mockReturnValue("hashed-key");
+      prisma.apiKey.findUnique.mockResolvedValue({
+        id: "key-id",
+        userId: "user-id",
+        emailAccountId: "email-account-id",
+        expiresAt: null,
+        scopes: ["RULES_READ"],
+        emailAccount: null,
+        user: { accounts: [] },
+      } as never);
+
+      await expect(getUserFromApiKey("orphaned-key")).resolves.toBeNull();
+    });
+
+    it("returns null when the key's user does not own the email account", async () => {
+      vi.mocked(hashApiKey).mockReturnValue("hashed-key");
+      prisma.apiKey.findUnique.mockResolvedValue({
+        id: "key-id",
+        userId: "user-id",
+        emailAccountId: "email-account-id",
+        expiresAt: null,
+        scopes: ["RULES_READ"],
+        emailAccount: {
+          id: "email-account-id",
+          userId: "other-user-id",
+          email: "victim@example.com",
+          account: {
+            id: "account-id",
+            userId: "other-user-id",
+            provider: "google",
+          },
+        },
+        user: { accounts: [] },
+      } as never);
+
+      await expect(getUserFromApiKey("stolen-key")).resolves.toBeNull();
     });
   });
 
@@ -127,9 +177,11 @@ describe("api-auth", () => {
         scopes: ["RULES_READ"],
         emailAccount: {
           id: "email-account-id",
+          userId: "user-id",
           email: "user@example.com",
           account: {
             id: "account-id",
+            userId: "user-id",
             provider: "google",
           },
         },
@@ -153,9 +205,11 @@ describe("api-auth", () => {
         scopes: ["RULES_READ", "RULES_WRITE"],
         emailAccount: {
           id: "email-account-id",
+          userId: "user-id",
           email: "user@example.com",
           account: {
             id: "account-id",
+            userId: "user-id",
             provider: "google",
           },
         },
@@ -190,9 +244,11 @@ describe("api-auth", () => {
         scopes: ["STATS_READ"],
         emailAccount: {
           id: "email-account-id",
+          userId: "user-id",
           email: "user@example.com",
           account: {
             id: "account-id",
+            userId: "user-id",
             provider: "google",
           },
         },
