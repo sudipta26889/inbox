@@ -5,16 +5,22 @@ import {
   inviteMemberAction,
 } from "@/utils/actions/organization";
 
-const { mockEnv } = vi.hoisted(() => ({
+const { mockEnv, mockSendOrganizationInvitation } = vi.hoisted(() => ({
   mockEnv: {
     AUTO_ENABLE_ORG_ANALYTICS: false,
   },
+  mockSendOrganizationInvitation: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/utils/prisma");
 vi.mock("@/utils/auth", () => ({
   auth: vi.fn(async () => ({ user: { id: "u1", email: "test@test.com" } })),
+}));
+vi.mock("@/utils/organizations/invitations", () => ({
+  sendOrganizationInvitation: mockSendOrganizationInvitation,
+  assertDeliverableInvitationEmail: vi.fn(),
+  isReservedInvitationRecipient: vi.fn(() => false),
 }));
 vi.mock("@/env", async () => {
   const actual = await vi.importActual<typeof import("@/env")>("@/env");
@@ -34,6 +40,7 @@ describe("createInvitationAction", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockEnv.AUTO_ENABLE_ORG_ANALYTICS = false;
+    mockSendOrganizationInvitation.mockResolvedValue(undefined);
     (prisma.emailAccount.findUnique as any).mockResolvedValue({
       email: "test@test.com",
       account: { userId: "u1", provider: "google" },
@@ -43,12 +50,13 @@ describe("createInvitationAction", () => {
   it("invites member using emailAccountId as inviterId and sends email", async () => {
     prisma.emailAccount.findUnique.mockResolvedValue({
       id: "ea_inviter",
-      email: "inviter@test.com",
+      email: "inviter@sudiptadhara.in",
       name: "Inviter",
       account: { userId: "u1", provider: "google" },
     } as any);
     prisma.member.findFirst.mockResolvedValueOnce({
       organizationId: "org_1",
+      emailAccountId: "ea_inviter",
       role: "owner",
     } as any); // caller membership
     prisma.invitation.findFirst.mockResolvedValue(null as any); // no existing
@@ -56,18 +64,25 @@ describe("createInvitationAction", () => {
     prisma.organization.findUnique.mockResolvedValue({ name: "Acme" } as any);
 
     const res = await inviteMemberAction({
-      email: "user@test.com",
+      email: "teammate@grihatek.com",
       role: "member",
       organizationId: "org_1",
     });
 
     expect(prisma.invitation.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
+        email: "teammate@grihatek.com",
         role: "member",
         organizationId: "org_1",
       }),
       select: { id: true },
     });
+    expect(mockSendOrganizationInvitation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        email: "teammate@grihatek.com",
+        invitationId: "inv_1",
+      }),
+    );
     expect(res?.data).toBeUndefined();
   });
 

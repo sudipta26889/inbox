@@ -14,7 +14,10 @@ import {
 import prisma from "@/utils/prisma";
 import { SafeError } from "@/utils/error";
 import { getAuthorizedOrganizationAdminMembership } from "@/utils/organizations/access";
-import { sendOrganizationInvitation } from "@/utils/organizations/invitations";
+import {
+  assertDeliverableInvitationEmail,
+  sendOrganizationInvitation,
+} from "@/utils/organizations/invitations";
 import {
   claimPendingPremiumInvite,
   removeFromPendingInvites,
@@ -93,6 +96,14 @@ export const inviteMemberAction = actionClientUser
       if (role === "owner" && inviterMember.role !== "owner") {
         throw new SafeError(
           "Only existing owners can assign the owner role to new members.",
+        );
+      }
+
+      try {
+        assertDeliverableInvitationEmail(email);
+      } catch {
+        throw new SafeError(
+          "Cannot invite a reserved or test email address. Use a real mailbox.",
         );
       }
 
@@ -490,6 +501,17 @@ export const createOrganizationAndInviteAction = actionClient
       const results: { email: string; success: boolean; error?: string }[] = [];
 
       for (const email of emails) {
+        try {
+          assertDeliverableInvitationEmail(email);
+        } catch {
+          results.push({
+            email,
+            success: false,
+            error: "Reserved or test email address",
+          });
+          continue;
+        }
+
         const existing = await prisma.invitation.findFirst({
           where: {
             organizationId: organization.id,
