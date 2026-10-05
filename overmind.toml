@@ -1,0 +1,8 @@
+base-url = "https://overmind-api.sudiptadhara.in"
+project-id = "0415ae7d-054d-4bc0-940d-7249ee7ac9be"
+project-name = "inbox"
+repo_summary = ""
+trace-provider = "overmind"
+version = "0.2.1"
+
+[capabilities]
