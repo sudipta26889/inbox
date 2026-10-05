@@ -141,6 +141,9 @@ export const env = createEnv({
     QDRANT_URL: z.string().optional(),
     QDRANT_API_KEY: z.string().optional(),
 
+    OVERMIND_API_URL: z.string().optional(),
+    OVERMIND_API_KEY: z.string().optional(),
+
     OPENAI_ZERO_DATA_RETENTION: booleanString.optional().default(false),
 
     // Upstash HTTP client removed — using ioredis directly

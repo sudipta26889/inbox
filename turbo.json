@@ -46,6 +46,8 @@
         "AI_NANO_WEEKLY_SPEND_LIMIT_USD",
 
         "LLM_API_KEY",
+        "OVERMIND_API_URL",
+        "OVERMIND_API_KEY",
         "OPENAI_API_KEY",
         "OPENAI_ZERO_DATA_RETENTION",
         "AZURE_API_KEY",

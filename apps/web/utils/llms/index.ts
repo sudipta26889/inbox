@@ -51,6 +51,7 @@ import {
   withLLMRetry,
 } from "./retry";
 import { filterUnsupportedToolsForModel } from "./unsupported-tools";
+import { getTelemetryOptions } from "./overmind-telemetry";
 
 const logger = createScopedLogger("llms");
 
@@ -64,10 +65,9 @@ const NO_USER_AI_FIELDS: UserAIFields = {
 type LLMProviderOptions = Record<string, Record<string, JSONValue>>;
 
 const commonOptions: {
-  experimental_telemetry: { isEnabled: boolean };
   headers?: Record<string, string>;
   providerOptions?: LLMProviderOptions;
-} = { experimental_telemetry: { isEnabled: true } };
+} = {};
 
 export function createGenerateText({
   emailAccount,
@@ -122,6 +122,7 @@ export function createGenerateText({
         {
           ...options,
           ...commonOptions,
+          experimental_telemetry: getTelemetryOptions(label),
           providerOptions,
           model: candidate.model,
         },
@@ -268,6 +269,7 @@ export function createGenerateObject({
           },
           ...options,
           ...commonOptions,
+          experimental_telemetry: getTelemetryOptions(label),
           providerOptions,
           model: candidate.model,
         },
@@ -403,6 +405,7 @@ export async function chatCompletionStream({
         stopWhen: maxSteps ? stepCountIs(maxSteps) : undefined,
         prepareStep: maxSteps ? finalStepMustAnswer(maxSteps) : undefined,
         ...commonOptions,
+        experimental_telemetry: getTelemetryOptions(label),
         providerOptions: providerOptions,
         experimental_transform: smoothStream({ chunking: "word" }),
         onStepFinish,
@@ -557,6 +560,7 @@ export async function toolCallAgentStream({
       stopWhen: maxSteps ? stepCountIs(maxSteps) : undefined,
       prepareStep: maxSteps ? finalStepMustAnswer(maxSteps) : undefined,
       ...commonOptions,
+      experimental_telemetry: getTelemetryOptions(label),
       providerOptions,
       onFinish: async (result) => {
         const usagePromise = saveAiUsage({
