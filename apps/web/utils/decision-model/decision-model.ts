@@ -24,7 +24,7 @@ import {
 export type { DecisionQuestion };
 
 export type DecisionModelConfig = {
-  provider: "typesafe" | "openrouter";
+  provider: "typesafe" | "openrouter" | "litellm";
   modelId: string;
   url: string;
   apiKey: string;
@@ -57,6 +57,18 @@ export function getDecisionModelConfig(): DecisionModelConfig | null {
           url: "https://api.typesafe.ai/v1/systemone",
           apiKey,
         }
+      : null;
+  }
+  if (provider === "litellm") {
+    // LiteLLM's /systemone route passes the System One protocol straight
+    // through to TypeSafe, so no separate TypeSafe key is needed.
+    const apiKey = env.LLM_API_KEY?.trim();
+    const base = (env.LITELLM_BASE_URL || "http://localhost:4000/v1").replace(
+      /\/$/,
+      "",
+    );
+    return apiKey
+      ? { provider, modelId, url: `${base}/systemone`, apiKey }
       : null;
   }
   if (provider === "openrouter") {

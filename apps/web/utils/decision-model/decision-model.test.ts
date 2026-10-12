@@ -179,6 +179,19 @@ describe("getDecisionModelConfig", () => {
     });
   });
 
+  it("resolves LiteLLM's System One pass-through with the gateway key", () => {
+    mockEnv.DEFAULT_DECISION_MODEL = "litellm:typesafe/jev-latest";
+    mockEnv.LLM_API_KEY = "sk-gateway";
+    mockEnv.LITELLM_BASE_URL = "http://nuc.lan:4000/v1/";
+
+    expect(getDecisionModelConfig()).toMatchObject({
+      provider: "litellm",
+      modelId: "typesafe/jev-latest",
+      url: "http://nuc.lan:4000/v1/systemone",
+      apiKey: "sk-gateway",
+    });
+  });
+
   it("is off when the provider key is missing", () => {
     mockEnv.DEFAULT_DECISION_MODEL = "typesafe:jev-1.13.0";
 
