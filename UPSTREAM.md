@@ -25,6 +25,69 @@ for this stack most real CVEs are in dependencies, not app code.
 
 ---
 
+## Audit 2026-10-12
+
+Range reviewed: `upstream-audit/2026-09-14` (57e47b283) → `upstream-audit/2026-10-12`
+(41179be9f) — 403 commits. Triage complete; backports land in batches.
+
+Shape: 119 mail UI, 33 billing/marketing, 22 CI/docs, 19 Outlook, 15 desktop/mobile,
+11 meetings/calendar, 14 LLM/provider, 6 decision-model, 6 onboarding, 5 orgs, 153 other.
+Upstream also shipped a new SQLite mail engine (`f55fd1069` and ~20 `mail-sqlite`/
+`mail-engine` follow-ups) — skipped wholesale with the mail UI.
+
+### Picked (batch 1 — security, deployed 2026-10-12)
+
+| Upstream | PR | Subject | Notes |
+|---|---|---|---|
+| acf9fc39f, 127845990 | #3901, #3991 | Next.js 16.3.6 → 16.3.8 (next/og RCE) | version bump |
+| c4edc8550 | #3903 | Nodemailer 10.0.13 | version bump; address-comment test ported |
+| 4cbf34cbc, c03a06e3f | #3968, #3944 | proxy-addr / undici advisories | overrides, plus upstream's other CVE pins present in this tree |
+| 854b86bce | #4001 | mammoth ReDoS | version bump |
+| 405092ca4 | #3373 | Preserve forwarded content and Bcc recipients | BACKPORT — **missed in the 2026-09-14 audit** (landed 2026-08-24). Bcc recipients were silently never delivered on Gmail sends; plain-text forwards lost their body. Added an escaping `textToHtmlParagraphs`. |
+
+### Queued
+
+**Batch 2 — Jev decision layer** (approved plan: `.claude/scratchpad/jev-nano-decision-plan.md`)
+b73797a3b #3791, d87dca417 #3807, 063caf0a6 #3806, 245ad1d13 #4028, 603dc322b #4057 —
+adapted: System One fetch shim instead of AI SDK 7, plus shadow mode, a
+deepseek-v4-flash escalation band and lazy explanations. Prereq candidates:
+6a0cf8085 #3787 (conversation statuses on the rule), 151da383b #3817.
+
+**Batch 3 — security hardening (behavioural)**
+908d2170c #3724 (provider session required to link/reconnect a mailbox),
+8988e25bf #3708 (bind reconnects to the target mailbox),
+64830555b #3798 (attachment previews raster-only — SVG XSS),
+ccee1bcfa #3918 (reply bodies HTML-safe; the fork's `convertTextToHtmlParagraphs` does not escape),
+6e1d0cd73 #4109 (MCP rule writes annotated destructive),
+33dbb2b6e #3809 (inline profile photos out of the session cookie).
+Evaluate: 3438e6682 #3919 (outbound URL safety consolidated into a package — overlaps the fork's `validateWebhookUrl`).
+
+**Batch 4 — AI quality** (directly serves the cheaper-model goal)
+fcdc49dd0 #3910, b7fd5f5b1 #3928 (drafts stop stalling / guessing availability),
+fe0a3be14 #4077 (reply in the email's language), d55c1a5b2 #3880 (trim stale tool
+results in long loops — matters for small context windows), 05fafcd71 #3953,
+598c23c68 #3803, 2571ce497 #3795, 0488af760 #3808, e2c81ed5a #4010, 2b53b4083 #3805,
+db610cb26 #3804, ab32fac01 #3794, bd29cb7ad #3993, 7944319be #3950, 784fccc09 #3973,
+8ababe876 #4017 (choose-rule system-prompt caching — check against LiteLLM).
+
+**Batch 5 — Gmail and mail reliability**
+7e0325690 #3957 (follow-up scans exhausting quota), f801fff94 #3875, b12ad9283 #4027,
+071c11d81 #4033, 55a566fe7 #3985, 41fbcda08 #3749, 787458314 #4112, 47b75e015 #3861,
+a8f96364b #3922 (shared retry / Retry-After — overlaps the fork's #3097 backport),
+721abd362 #4063, 26eaed10e #4038, 20acbdfa4 #4037.
+
+**Separate decision — AI SDK 7** (074e09680 #3703, 93 files). Not required for Jev
+(see batch 2). Take it only if a later backport needs SDK 7 APIs.
+
+### Skipped wholesale (additions)
+
+- SQLite mail engine and its follow-ups; Composio/Pipedream/custom-MCP integrations
+  (integrations are disabled here); isolated browser unsubscribe worker; voice;
+  native iOS/APNs/StoreKit/emulator; cookie consent banner; Reply Zero page removal
+  (2b08584b4 — the fork keeps the page); loops/trial events; Tinybird datasource cleanup.
+
+---
+
 ## Audit 2026-09-14
 
 Range reviewed: `upstream-audit/2026-08-05` (10b19ebea) → `upstream-audit/2026-09-14`
