@@ -1956,7 +1956,8 @@ describe("findMatchingRules - Integration Tests", () => {
     });
 
     expect(result.matches[0]?.rule.id).toBe("cold-email-rule");
-    expect(result.reasoning).toBe("ai");
+    // Internal reason codes are not shown as reasoning.
+    expect(result.reasoning).toBe("");
   });
 
   it("should skip cold email detection when rule is not enabled", async () => {

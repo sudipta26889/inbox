@@ -238,7 +238,7 @@ function PrettyConditions({
     "from" | "to" | "subject" | "body" | "instructions" | "conditionalOperator"
   >;
 }) {
-  const conditions: string[] = [];
+  const conditions: { text: string; isInstructions?: boolean }[] = [];
 
   // Static conditions - grouped with commas
   const staticConditions: string[] = [];
@@ -246,10 +246,12 @@ function PrettyConditions({
   if (rule.subject) staticConditions.push(`Subject: "${rule.subject}"`);
   if (rule.to) staticConditions.push(`To: ${rule.to}`);
   if (rule.body) staticConditions.push(`Body: "${rule.body}"`);
-  if (staticConditions.length) conditions.push(staticConditions.join(", "));
+  if (staticConditions.length)
+    conditions.push({ text: staticConditions.join(", ") });
 
   // AI condition
-  if (rule.instructions) conditions.push(rule.instructions);
+  if (rule.instructions)
+    conditions.push({ text: rule.instructions, isInstructions: true });
 
   const operator =
     rule.conditionalOperator === LogicalOperator.AND ? "AND" : "OR";
@@ -257,8 +259,16 @@ function PrettyConditions({
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       {conditions.map((condition, index) => (
-        <div key={index} className="flex items-center gap-1.5">
-          <MutedText>{condition}</MutedText>
+        <div key={index} className="flex min-w-0 items-center gap-1.5">
+          <MutedText
+            className={
+              condition.isInstructions
+                ? "line-clamp-2 whitespace-pre-line break-words"
+                : undefined
+            }
+          >
+            {condition.text}
+          </MutedText>
           {index < conditions.length - 1 && (
             <Badge color="purple" className="text-xs">
               {operator}

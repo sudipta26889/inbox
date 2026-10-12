@@ -89,7 +89,7 @@ export async function findMatchingRules({
             matchReasons: [{ type: ConditionType.AI }],
           },
         ],
-        reasoning: coldEmailResult.aiReason || coldEmailResult.reason,
+        reasoning: getColdEmailReasoning(coldEmailResult),
       };
     }
   }
@@ -798,4 +798,16 @@ function getNormalizedEmailMatchHeaders(message: ParsedMessage) {
       message.headers.to,
     ),
   };
+}
+
+// Reason codes like "hasPreviousEmail" are internal; show the model's reason or
+// a readable sentence instead. Upstream 05fafcd71 (#3953).
+function getColdEmailReasoning(result: {
+  reason: string;
+  aiReason?: string | null;
+}) {
+  if (result.aiReason) return result.aiReason;
+  if (result.reason === "ai-already-labeled")
+    return "The sender matches a learned pattern for this rule.";
+  return "";
 }
