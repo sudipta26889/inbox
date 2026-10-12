@@ -34,8 +34,32 @@ describe("combineActionsWithAiArgs", () => {
 
       // Verify that template variables are properly replaced
       expect(result[0].content).toBe(
-        "Dear Mr. Johnson,\n\nThank you for your email. I'd be happy to help with your request.\n\nBest regards",
+        "Dear Mr. Johnson,\n\nThank you for your email. I&#x27;d be happy to help with your request.\n\nBest regards",
       );
+    });
+
+    it("escapes AI-filled values in reply bodies but keeps the user's template HTML", () => {
+      const actions = [
+        getAction({
+          id: "1",
+          type: ActionType.REPLY,
+          content: "<b>Hi</b> {{name}}",
+          label: "{{label}}",
+        }),
+      ];
+      const aiArgs = {
+        "REPLY-1": {
+          content: { var1: '<img src=x onerror="steal()">' },
+          label: { var1: "A&B" },
+        },
+      };
+
+      const [result] = combineActionsWithAiArgs(actions, aiArgs, null);
+
+      expect(result.content).toBe(
+        "<b>Hi</b> &lt;img src=x onerror=&quot;steal()&quot;&gt;",
+      );
+      expect(result.label).toBe("A&B");
     });
 
     it("stores attribution for template-generated draft content", () => {

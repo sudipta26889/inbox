@@ -273,7 +273,7 @@ async function confirmPendingReplyEmailAction({
   );
   await emailProvider.replyToEmail(
     message,
-    contentOverride || output.pendingAction.content,
+    escapeHtml(contentOverride || output.pendingAction.content),
   );
 
   const latestMessage = await getLatestMessageInThreadSafe(

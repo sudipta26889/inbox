@@ -1,4 +1,5 @@
 import prisma from "@/utils/prisma";
+import { escapeHtml } from "@/utils/string";
 import type { ParsedMessage } from "@/utils/types";
 import type { EmailProvider } from "@/utils/email/types";
 import type { Logger } from "@/utils/logger";
@@ -90,7 +91,7 @@ export async function processFilingReply({
   if (parseResult.reply) {
     const filebotReplyTo = getFilebotReplyTo({ userEmail });
     const filebotFrom = getFilebotFrom({ userEmail });
-    await emailProvider.replyToEmail(message, parseResult.reply, {
+    await emailProvider.replyToEmail(message, escapeHtml(parseResult.reply), {
       replyTo: filebotReplyTo,
       from: filebotFrom,
     });

@@ -166,4 +166,25 @@ describe("email formatting", () => {
       "First paragraph.<br><br>Second paragraph.<br><br>Third paragraph.",
     );
   });
+
+  it("escapes a plain-text original before quoting it", () => {
+    const { html } = createReplyContent({
+      textContent: "Thanks",
+      message: {
+        headers: {
+          from: "Sender <sender@example.com>",
+          date: "Thu, 6 Feb 2025 23:23:00 +0000",
+          subject: "Hi",
+          to: "me@example.com",
+        },
+        textPlain: 'Line one\n<img src=x onerror="steal()">',
+        textHtml: undefined,
+      } as Pick<ParsedMessage, "headers" | "textPlain" | "textHtml">,
+    });
+
+    expect(html).toContain(
+      "Line one<br>&lt;img src=x onerror=&quot;steal()&quot;&gt;",
+    );
+    expect(html).not.toContain("<img");
+  });
 });

@@ -34,7 +34,10 @@ export const createReplyContent = ({
 
   const messageContent =
     message.textHtml ||
-    (message.textPlain ? convertNewlinesToBr(message.textPlain) : "");
+    // The original sender controls this text, so it is escaped before quoting.
+    (message.textPlain
+      ? convertNewlinesToBr(escapeHtml(message.textPlain))
+      : "");
 
   const contentHtml =
     htmlContent || (textContent ? convertNewlinesToBr(textContent) : "");
