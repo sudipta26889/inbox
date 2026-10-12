@@ -57,14 +57,17 @@ adapted: System One fetch shim instead of AI SDK 7, plus shadow mode, a
 deepseek-v4-flash escalation band and lazy explanations. Prereq candidates:
 6a0cf8085 #3787 (conversation statuses on the rule), 151da383b #3817.
 
-**Batch 3 — security hardening (behavioural)**
-908d2170c #3724 (provider session required to link/reconnect a mailbox),
-8988e25bf #3708 (bind reconnects to the target mailbox),
-64830555b #3798 (attachment previews raster-only — SVG XSS),
-ccee1bcfa #3918 (reply bodies HTML-safe; the fork's `convertTextToHtmlParagraphs` does not escape),
-6e1d0cd73 #4109 (MCP rule writes annotated destructive),
-33dbb2b6e #3809 (inline profile photos out of the session cookie).
-Evaluate: 3438e6682 #3919 (outbound URL safety consolidated into a package — overlaps the fork's `validateWebhookUrl`).
+**Batch 3 — security hardening: DONE**
+
+| Upstream | PR | Outcome |
+|---|---|---|
+| 64830555b | #3798 | BACKPORT a8bc87e3a — attachments always served as `application/octet-stream` + `nosniff`, filename ASCII-sanitised with RFC 5987 name. Preview half N/A (fork has no previews). |
+| ccee1bcfa | #3918 | BACKPORT 15d8737c5 — escapes the quoted plain-text original (Gmail + Outlook), AI-filled template vars in DRAFT_EMAIL/REPLY, the assistant's confirmed reply, and filing-bot replies. AI drafts were already escaped. |
+| b2ceb6645 + 3438e6682 | #2123 + #3919 | BACKPORT 092dd68a6 — webhooks connect only to the addresses validation vetted (no DNS rebinding) and never follow redirects. **Missed by the 2026-08-05 audit** (it took the save-time half, #2141). |
+| 908d2170c | #3724 | Skipped — guards sessions from upstream's email-code sign-in (#3608), which the fork doesn't have; the fork's local auth bypass is hard-gated to NODE_ENV=development. |
+| 6e1d0cd73 | #4109 | Skipped — the fork's MCP admin write tools carry no annotations, so they already default to destructive + open-world per the MCP spec; upstream's bug was an explicit `destructiveHint: false`. |
+| 33dbb2b6e | #3809 | Skipped — inline `data:` profile photos come from Microsoft sign-in; Gmail-only instance, 0 of 5 users have one. Revisit if an Outlook account is connected. |
+| 8988e25bf | #3708 | Moved to batch 5 — reconnect binding is a correctness fix across the OAuth flow that needs a browser walkthrough, not a security fix. |
 
 **Batch 4 — AI quality** (directly serves the cheaper-model goal)
 fcdc49dd0 #3910, b7fd5f5b1 #3928 (drafts stop stalling / guessing availability),
@@ -75,6 +78,7 @@ db610cb26 #3804, ab32fac01 #3794, bd29cb7ad #3993, 7944319be #3950, 784fccc09 #3
 8ababe876 #4017 (choose-rule system-prompt caching — check against LiteLLM).
 
 **Batch 5 — Gmail and mail reliability**
+8988e25bf #3708 (bind reconnects to the target mailbox; needs a browser test),
 7e0325690 #3957 (follow-up scans exhausting quota), f801fff94 #3875, b12ad9283 #4027,
 071c11d81 #4033, 55a566fe7 #3985, 41fbcda08 #3749, 787458314 #4112, 47b75e015 #3861,
 a8f96364b #3922 (shared retry / Retry-After — overlaps the fork's #3097 backport),
