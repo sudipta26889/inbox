@@ -57,8 +57,10 @@ export default async function AppLayout({
   after(async () => {
     const email = session.user.email;
     try {
+      // By id: the session email can be a linked account's address, not the
+      // User row's own email, and then an email lookup matches nothing.
       await prisma.user.update({
-        where: { email },
+        where: { id: session.user.id },
         data: { lastLogin: new Date() },
       });
     } catch (error) {
