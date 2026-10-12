@@ -170,20 +170,22 @@ async function learnFromRemovedLabel({
 }) {
   logger = logger.with({ labelId });
 
-  // Find rule with matching label action
-  const rule = await prisma.rule.findFirst({
-    where: {
-      emailAccountId,
-      systemType: { not: null },
-      actions: {
-        some: {
-          labelId: labelId,
-          type: ActionType.LABEL,
-        },
-      },
-    },
-    select: { id: true, systemType: true },
-  });
+  // Find rule with matching label action. System rules first, so their
+  // learning is unchanged; otherwise a custom rule, whose AI-inferred sender
+  // pattern a removal contradicts.
+  const labelActionWhere = {
+    emailAccountId,
+    actions: { some: { labelId, type: ActionType.LABEL } },
+  };
+  const rule =
+    (await prisma.rule.findFirst({
+      where: { ...labelActionWhere, systemType: { not: null } },
+      select: { id: true, systemType: true },
+    })) ??
+    (await prisma.rule.findFirst({
+      where: { ...labelActionWhere, systemType: null },
+      select: { id: true, systemType: true },
+    }));
 
   await recordLabelRemovalLearning({
     sender,

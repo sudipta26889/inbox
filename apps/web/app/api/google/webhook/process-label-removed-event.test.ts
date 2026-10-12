@@ -2,7 +2,10 @@ import { vi, describe, it, expect, beforeEach } from "vitest";
 import { HistoryEventType } from "./types";
 import { handleLabelRemovedEvent } from "./process-label-removed-event";
 import type { gmail_v1 } from "@googleapis/gmail";
-import { saveLearnedPattern } from "@/utils/rule/learned-patterns";
+import {
+  removeAiLearnedPattern,
+  saveLearnedPattern,
+} from "@/utils/rule/learned-patterns";
 import { createScopedLogger } from "@/utils/logger";
 import {
   GroupItemSource,
@@ -29,6 +32,7 @@ vi.mock("@/utils/prisma", () => ({
 
 vi.mock("@/utils/rule/learned-patterns", () => ({
   saveLearnedPattern: vi.fn().mockResolvedValue(undefined),
+  removeAiLearnedPattern: vi.fn().mockResolvedValue(1),
 }));
 
 vi.mock("@/utils/gmail/label", () => ({
@@ -213,6 +217,23 @@ describe("process-label-removed-event", () => {
       expect(saveLearnedPattern).toHaveBeenCalledWith(
         expect.objectContaining({ ruleId: "rule-2" }),
       );
+    });
+
+    it("falls back to a custom rule and drops its AI pattern when no system rule owns the label", async () => {
+      vi.mocked(prisma.rule.findFirst)
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ id: "custom-rule", systemType: null } as any);
+
+      const historyItem = createLabelRemovedHistoryItem("123", "thread-123", [
+        "custom-label",
+      ]);
+
+      await handleLabelRemovedEvent(historyItem.item, defaultOptions, logger);
+
+      expect(removeAiLearnedPattern).toHaveBeenCalledWith(
+        expect.objectContaining({ ruleId: "custom-rule" }),
+      );
+      expect(saveLearnedPattern).not.toHaveBeenCalled();
     });
 
     it("should skip learning when no rule is found for the removed label", async () => {

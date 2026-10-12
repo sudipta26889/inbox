@@ -1,6 +1,7 @@
 import prisma from "@/utils/prisma";
 import type { Logger } from "@/utils/logger";
-import { GroupItemType, type GroupItemSource } from "@/generated/prisma/enums";
+import { GroupItemSource, GroupItemType } from "@/generated/prisma/enums";
+import { extractEmailAddress } from "@/utils/email";
 import { isDuplicateError } from "@/utils/prisma-helpers";
 
 /**
@@ -226,4 +227,35 @@ async function getOrCreateGroupForRule({
   }
 
   throw new Error(`Failed to create or find group for rule: ${ruleName}`);
+}
+
+/**
+ * Removes an AI-inferred sender pattern from one rule. Patterns can be stored
+ * as a bare address or a full "Name <address>" From header, so both match.
+ * Adapted from upstream 2b53b4083 (#3805).
+ */
+export async function removeAiLearnedPattern({
+  emailAccountId,
+  from,
+  ruleId,
+}: {
+  emailAccountId: string;
+  from: string;
+  ruleId: string;
+}) {
+  const address = extractEmailAddress(from) || from;
+  const { count } = await prisma.groupItem.deleteMany({
+    where: {
+      group: { emailAccountId, rule: { is: { id: ruleId } } },
+      type: GroupItemType.FROM,
+      source: GroupItemSource.AI,
+      exclude: false,
+      OR: [
+        { value: { equals: from, mode: "insensitive" } },
+        { value: { equals: address, mode: "insensitive" } },
+        { value: { endsWith: `<${address}>`, mode: "insensitive" } },
+      ],
+    },
+  });
+  return count;
 }
