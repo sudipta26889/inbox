@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { DRAFT_PIPELINE_VERSION } from "@/utils/ai/reply/draft-attribution";
 import { getEmail, getEmailAccount } from "@/__tests__/helpers";
 import {
   aiDraftReply,
@@ -258,7 +259,7 @@ describe("aiDraftReply formatting", () => {
     expect(result.attribution).toEqual({
       provider: "openai",
       modelName: "gpt-5.1-mini",
-      pipelineVersion: 1,
+      pipelineVersion: DRAFT_PIPELINE_VERSION,
     });
   });
 });
