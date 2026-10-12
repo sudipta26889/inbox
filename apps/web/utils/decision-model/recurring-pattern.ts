@@ -42,11 +42,14 @@ export async function decideRecurringPattern({
       `${RULE_KEY_PREFIX}${index}`,
       {
         type: "boolean",
-        instructions: `Will future emails from \`sender\` consistently match \`candidateRules[${index}]\` based on \`sampleEmails\`?`,
+        // Phrased as a judgement on the samples, not a forecast: a forecast
+        // made Jev hedge (0.75-0.88) on obvious senders such as calendar
+        // invites and order receipts that the LLM matched outright.
+        instructions: `Are all of \`sampleEmails\` from \`sender\` the same kind of message, and is that kind exactly what \`candidateRules[${index}]\` describes?`,
         criteria: {
-          true: "The sampled emails consistently serve one narrow purpose that clearly matches this rule.",
+          true: "Every sample is the same type of message — typically automated or templated, such as order confirmations, receipts, calendar invitations, alerts or newsletters — and this rule's instructions describe that type.",
           false:
-            "The samples vary in purpose, do not clearly match this rule, or come from a personal or general-purpose sender.",
+            "The samples are of different types, include personal or conversational messages, or are of a type this rule's instructions do not describe.",
         },
       },
     ]),
