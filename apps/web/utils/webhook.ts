@@ -4,6 +4,7 @@ import prisma from "@/utils/prisma";
 import { sleep } from "@/utils/sleep";
 import type { ExecutedRule } from "@/generated/prisma/client";
 import { validateWebhookUrl } from "@/utils/webhook-validation";
+import { sendPinnedWebhookRequest } from "@/utils/webhook-request";
 
 const logger = createScopedLogger("webhook");
 
@@ -48,13 +49,14 @@ export const callWebhook = async (
 
   try {
     await Promise.race([
-      fetch(url, {
-        method: "POST",
+      sendPinnedWebhookRequest({
+        url,
+        addresses: validation.addresses ?? [],
+        body: JSON.stringify(payload),
         headers: {
           "Content-Type": "application/json",
           "X-Webhook-Secret": user.webhookSecret || "",
         },
-        body: JSON.stringify(payload),
       }),
       sleep(1000),
     ]);

@@ -66,8 +66,9 @@ export function allowPrivateIps(): boolean {
 }
 
 export type WebhookUrlValidationResult =
-  | { valid: true }
-  | { valid: false; error: string };
+  // `addresses` are the vetted IPs; the request must connect to these and
+  // nothing else, or a second DNS lookup can rebind to a private address.
+  { valid: true; addresses?: string[] } | { valid: false; error: string };
 
 /**
  * Validates webhook URL format without DNS resolution.
@@ -139,7 +140,7 @@ export async function validateWebhookUrl(
       ? hostname.slice(1, -1)
       : hostname;
 
-  if (isIP(ipAddress)) return { valid: true };
+  if (isIP(ipAddress)) return { valid: true, addresses: [ipAddress] };
 
   // Resolve DNS and check if any resolved IP is private
   // Check both IPv4 (A records) and IPv6 (AAAA records) to prevent bypass
@@ -197,7 +198,7 @@ export async function validateWebhookUrl(
     }
   }
 
-  return { valid: true };
+  return { valid: true, addresses: allAddresses };
 }
 
 function isPrivateIP(ip: string): boolean {

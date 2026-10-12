@@ -366,7 +366,11 @@ describe("WEBHOOK_ALLOW_PRIVATE_IPS flag", () => {
       });
       vi.mocked(dns.resolve).mockRejectedValue(enotfound);
 
-      await expect(validateWebhookUrl(url)).resolves.toEqual({ valid: true });
+      const literal = new URL(url).hostname.replace(/^\[|\]$/g, "");
+      await expect(validateWebhookUrl(url)).resolves.toEqual({
+        valid: true,
+        addresses: [literal],
+      });
     });
 
     it("allows hostnames that resolve to a private IP", async () => {
