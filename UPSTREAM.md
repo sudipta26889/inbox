@@ -89,12 +89,20 @@ deepseek-v4-flash escalation band and lazy explanations. Prereq candidates:
 | 784fccc09 | #3973 | N/A — fork has no sender-stats.ts. |
 | 2571ce497 | #3795 | Deferred — filebot emails in thread status; 0 filings ever on this instance. Revisit if Drive filing is used. |
 
-**Batch 5 — Gmail and mail reliability**
-8988e25bf #3708 (bind reconnects to the target mailbox; needs a browser test),
-7e0325690 #3957 (follow-up scans exhausting quota), f801fff94 #3875, b12ad9283 #4027,
-071c11d81 #4033, 55a566fe7 #3985, 41fbcda08 #3749, 787458314 #4112, 47b75e015 #3861,
-a8f96364b #3922 (shared retry / Retry-After — overlaps the fork's #3097 backport),
-721abd362 #4063, 26eaed10e #4038, 20acbdfa4 #4037.
+**Batch 5 — Gmail and mail reliability: DONE**
+
+| Upstream | PR | Outcome |
+|---|---|---|
+| b12ad9283 | #4027 | BACKPORT 138fb4c31 — Apple Mail messages show the whole body, not only the signature part. |
+| 47b75e015 | #3861 | BACKPORT 4954b3c41 — `isDuplicateError` reads the pg adapter's constraint (fields or 63-char-truncated index name); all 8 keyed callers always returned false under `@prisma/adapter-pg`. |
+| 20acbdfa4 | #4037 | UPSTREAM d586e2dbb — a chat refetch no longer drops the in-progress assistant reply. |
+| 7e0325690 | #3957 | Skipped — the fork's follow-up scan is already bounded at 50, and `lastSyncedHistoryId` isn't advanced on a rate-limit skip, so no mail is lost. |
+| 071c11d81 | #4033 | Skipped — needs upstream's provider-health module; the AI half is OpenAI-quota-specific (fork runs on LiteLLM). |
+| f801fff94 | #3875 | Skipped — reuses upstream's sign-in rename flow (`utils/auth/rename-email.ts`), which the fork doesn't have; Workspace address renames are rare here. |
+| a8f96364b | #3922 | Skipped — refactor of the Microsoft retry loop; Gmail-only instance, and Retry-After parsing is already covered by the fork's #3097 backport. |
+| 721abd362 | #4063 | Skipped — mostly meeting-recorder media cleanup; the fork has no meeting recorder. |
+| 55a566fe7, 41fbcda08, 787458314, 26eaed10e | #3985, #3749, #4112, #4038 | Skipped — tied to upstream's rewritten mail/draft UI, email-editor package and resumable-chat transport (new deps); none apply cleanly to the fork's UI. |
+| 8988e25bf | #3708 | Deferred — reconnect binding spans the OAuth flow; take it with a browser walkthrough of reconnect. |
 
 **Separate decision — AI SDK 7** (074e09680 #3703, 93 files). Not required for Jev
 (see batch 2). Take it only if a later backport needs SDK 7 APIs.
