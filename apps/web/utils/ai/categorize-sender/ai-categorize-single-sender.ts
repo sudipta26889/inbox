@@ -1,11 +1,54 @@
 import { z } from "zod";
+import { createScopedLogger } from "@/utils/logger";
+import { decideSenderCategory } from "@/utils/decision-model/categorize-sender";
+import { runDecisionModelOrFallback } from "@/utils/decision-model/decision-model";
 import type { EmailAccountWithAI } from "@/utils/llms/types";
 import type { Category } from "@/generated/prisma/client";
 import { formatCategoriesForPrompt } from "@/utils/ai/categorize-sender/format-categories";
 import { getModel } from "@/utils/llms/model";
 import { createGenerateObject } from "@/utils/llms";
 
+const logger = createScopedLogger("categorize-sender");
+
 export async function aiCategorizeSender({
+  emailAccount,
+  sender,
+  previousEmails,
+  categories,
+}: {
+  emailAccount: EmailAccountWithAI;
+  sender: string;
+  previousEmails: { subject: string; snippet: string }[];
+  categories: Pick<Category, "name" | "description">[];
+}): Promise<{ rationale?: string; category: string } | null> {
+  return runDecisionModelOrFallback<{
+    rationale?: string;
+    category: string;
+  } | null>({
+    emailAccount,
+    logger: logger.with({ emailAccountId: emailAccount.id }),
+    feature: "categorize-sender",
+    subjectKey: sender,
+    decide: (config) =>
+      decideSenderCategory({
+        config,
+        emailAccount,
+        sender,
+        previousEmails,
+        categories,
+      }),
+    fallback: (account) =>
+      categorizeSenderWithLlm({
+        emailAccount: account,
+        sender,
+        previousEmails,
+        categories,
+      }),
+    same: (jev, llm) => jev?.category === llm?.category,
+  });
+}
+
+async function categorizeSenderWithLlm({
   emailAccount,
   sender,
   previousEmails,

@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { decideColdEmail } from "@/utils/decision-model/cold-email";
+import { runDecisionModelOrFallback } from "@/utils/decision-model/decision-model";
 import type { EmailAccountWithAI } from "@/utils/llms/types";
 import type { Rule } from "@/generated/prisma/client";
 import { GroupItemType } from "@/generated/prisma/enums";
@@ -89,12 +91,19 @@ export async function isColdEmail({
   }
 
   // run through ai to see if it's a cold email
-  const res = await aiIsColdEmail(
-    email,
+  const coldEmailPrompt =
+    coldEmailRule?.instructions || DEFAULT_COLD_EMAIL_PROMPT;
+  const res = await runDecisionModelOrFallback({
     emailAccount,
-    coldEmailRule?.instructions || DEFAULT_COLD_EMAIL_PROMPT,
-    modelType,
-  );
+    logger,
+    feature: "cold-email",
+    subjectKey: extractEmailAddress(email.from) || email.from,
+    decide: (config) =>
+      decideColdEmail({ config, email, emailAccount, coldEmailPrompt }),
+    fallback: (account) =>
+      aiIsColdEmail(email, account, coldEmailPrompt, modelType),
+    same: (jev, llm) => !!jev.coldEmail === !!llm.coldEmail,
+  });
 
   logger.info("AI is cold email?", {
     coldEmail: res.coldEmail,

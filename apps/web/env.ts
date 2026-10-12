@@ -105,6 +105,12 @@ export const env = createEnv({
     OLLAMA_CLOUD_API_KEY: z.string().optional(),
     OLLAMA_CLOUD_BASE_URL: z.string().optional(),
     TYPESAFE_API_KEY: z.string().optional(),
+    // Jev decision layer: "typesafe:jev-1.13.0" or "openrouter:typesafe/jev-1.13".
+    // Unset = off. Features run in shadow mode unless listed in DECISION_MODEL_LIVE.
+    DEFAULT_DECISION_MODEL: z.string().optional(),
+    DECISION_MODEL_LIVE: z.string().optional(),
+    // "provider:model" used when Jev is unsure, e.g. "litellm:deepseek-v4-flash".
+    DECISION_ESCALATION_MODEL: z.string().optional(),
     OPENAI_COMPATIBLE_BASE_URL: z.string().optional(),
     OPENAI_COMPATIBLE_MODEL: z.string().optional(),
     LITELLM_BASE_URL: z.string().optional(),

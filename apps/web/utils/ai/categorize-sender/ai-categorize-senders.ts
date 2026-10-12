@@ -1,4 +1,7 @@
 import { z } from "zod";
+import { createScopedLogger } from "@/utils/logger";
+import { decideBulkSenderCategories } from "@/utils/decision-model/categorize-sender";
+import { runDecisionModelOrFallback } from "@/utils/decision-model/decision-model";
 import { isDefined } from "@/utils/types";
 import type { EmailAccountWithAI } from "@/utils/llms/types";
 import type { Category } from "@/generated/prisma/client";
@@ -20,16 +23,47 @@ const categorizeSendersSchema = z.object({
   ),
 });
 
+const logger = createScopedLogger("categorize-senders");
+
+type SenderToCategorize = {
+  emailAddress: string;
+  emails: { subject: string; snippet: string }[];
+};
+
 export async function aiCategorizeSenders({
   emailAccount,
   senders,
   categories,
 }: {
   emailAccount: EmailAccountWithAI;
-  senders: {
-    emailAddress: string;
-    emails: { subject: string; snippet: string }[];
-  }[];
+  senders: SenderToCategorize[];
+  categories: Pick<Category, "name" | "description">[];
+}): Promise<{ category?: string; sender: string }[]> {
+  if (senders.length === 0) return [];
+
+  return runDecisionModelOrFallback({
+    emailAccount,
+    logger: logger.with({ emailAccountId: emailAccount.id }),
+    feature: "categorize-senders-bulk",
+    decide: (config) =>
+      decideBulkSenderCategories({ config, emailAccount, senders, categories }),
+    fallback: (account) =>
+      categorizeSendersWithLlm({ emailAccount: account, senders, categories }),
+    same: (jev, llm) =>
+      jev.length === llm.length &&
+      jev.every(
+        (j) => llm.find((l) => l.sender === j.sender)?.category === j.category,
+      ),
+  });
+}
+
+async function categorizeSendersWithLlm({
+  emailAccount,
+  senders,
+  categories,
+}: {
+  emailAccount: EmailAccountWithAI;
+  senders: SenderToCategorize[];
   categories: Pick<Category, "name" | "description">[];
 }): Promise<
   {

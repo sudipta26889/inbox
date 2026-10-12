@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { decideRecurringPattern } from "@/utils/decision-model/recurring-pattern";
+import { runDecisionModelOrFallback } from "@/utils/decision-model/decision-model";
 import type { EmailAccountWithAI } from "@/utils/llms/types";
 import type { EmailForLLM } from "@/utils/types";
 import { getModel } from "@/utils/llms/model";
@@ -17,6 +19,50 @@ const schema = z.object({
 export type DetectPatternResult = z.infer<typeof schema>;
 
 export async function aiDetectRecurringPattern({
+  emails,
+  emailAccount,
+  rules,
+  consistentRuleName,
+  logger,
+}: {
+  emails: EmailForLLM[];
+  emailAccount: EmailAccountWithAI;
+  rules: {
+    name: string;
+    instructions: string;
+  }[];
+  consistentRuleName?: string;
+  logger: Logger;
+}): Promise<DetectPatternResult | null> {
+  if (!emails[0]?.from) return null;
+
+  return runDecisionModelOrFallback<DetectPatternResult | null>({
+    emailAccount,
+    logger,
+    feature: "recurring-pattern",
+    subjectKey: emails[0].from,
+    decide: (config) =>
+      decideRecurringPattern({
+        config,
+        emails,
+        emailAccount,
+        rules,
+        consistentRuleName,
+      }),
+    fallback: (account) =>
+      detectRecurringPatternWithLlm({
+        emails,
+        emailAccount: account,
+        rules,
+        consistentRuleName,
+        logger,
+      }),
+    same: (jev, llm) =>
+      (jev?.matchedRule ?? null) === (llm?.matchedRule ?? null),
+  });
+}
+
+async function detectRecurringPatternWithLlm({
   emails,
   emailAccount,
   rules,

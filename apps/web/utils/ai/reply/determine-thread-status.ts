@@ -1,4 +1,7 @@
 import { z } from "zod";
+import { createScopedLogger } from "@/utils/logger";
+import { decideThreadStatus } from "@/utils/decision-model/thread-status";
+import { runDecisionModelOrFallback } from "@/utils/decision-model/decision-model";
 import { createGenerateObject } from "@/utils/llms";
 import type { EmailAccountWithAI } from "@/utils/llms/types";
 import type { EmailForLLM, RuleWithActions } from "@/utils/types";
@@ -7,6 +10,8 @@ import { getUserInfoPrompt, getEmailListPrompt } from "@/utils/ai/helpers";
 import type { ConversationStatus } from "@/utils/reply-tracker/conversation-status-config";
 import { SystemType } from "@/generated/prisma/enums";
 import { getRuleConfig } from "@/utils/rule/consts";
+
+const logger = createScopedLogger("determine-thread-status");
 
 export async function aiDetermineThreadStatus({
   emailAccount,
@@ -20,6 +25,44 @@ export async function aiDetermineThreadStatus({
   modelType?: ModelType;
   userSentLastEmail?: boolean;
   conversationRules?: RuleWithActions[];
+}): Promise<{ status: ConversationStatus; rationale: string }> {
+  return runDecisionModelOrFallback({
+    emailAccount,
+    logger: logger.with({ emailAccountId: emailAccount.id }),
+    feature: "thread-status",
+    subjectKey: threadMessages.at(-1)?.id,
+    decide: (config) =>
+      decideThreadStatus({
+        config,
+        emailAccount,
+        threadMessages,
+        userSentLastEmail,
+        conversationRules,
+      }),
+    fallback: (account) =>
+      determineThreadStatusWithLlm({
+        emailAccount: account,
+        threadMessages,
+        modelType,
+        userSentLastEmail,
+        conversationRules,
+      }),
+    same: (jev, llm) => jev.status === llm.status,
+  });
+}
+
+async function determineThreadStatusWithLlm({
+  emailAccount,
+  threadMessages,
+  modelType,
+  userSentLastEmail,
+  conversationRules,
+}: {
+  emailAccount: EmailAccountWithAI;
+  threadMessages: EmailForLLM[];
+  modelType?: ModelType;
+  userSentLastEmail: boolean;
+  conversationRules: RuleWithActions[];
 }): Promise<{ status: ConversationStatus; rationale: string }> {
   const system = `You are an AI assistant that analyzes email threads to determine their current status.
 
