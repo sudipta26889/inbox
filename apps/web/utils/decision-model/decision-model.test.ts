@@ -31,8 +31,8 @@ describe("runDecisionModelOrFallback", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     for (const key of Object.keys(mockEnv)) mockEnv[key] = undefined;
-    mockEnv.DEFAULT_DECISION_MODEL = "typesafe:jev-1.13.0";
-    mockEnv.TYPESAFE_API_KEY = "typesafe-key";
+    mockEnv.DEFAULT_DECISION_MODEL = "litellm:typesafe/jev-latest";
+    mockEnv.LLM_API_KEY = "sk-gateway";
     mockEnv.DECISION_ESCALATION_MODEL = "litellm:deepseek-v4-flash";
     prisma.decisionModelRun.create.mockResolvedValue({} as never);
   });
@@ -177,17 +177,6 @@ describe("getDecisionModelConfig", () => {
     for (const key of Object.keys(mockEnv)) mockEnv[key] = undefined;
   });
 
-  it("resolves TypeSafe direct", () => {
-    mockEnv.DEFAULT_DECISION_MODEL = "typesafe:jev-1.13.0";
-    mockEnv.TYPESAFE_API_KEY = "k";
-
-    expect(getDecisionModelConfig()).toMatchObject({
-      provider: "typesafe",
-      modelId: "jev-1.13.0",
-      url: "https://api.typesafe.ai/v1/systemone",
-    });
-  });
-
   it("resolves OpenRouter, keeping the slash in the model id", () => {
     mockEnv.DEFAULT_DECISION_MODEL = "openrouter:typesafe/jev-1.13";
     mockEnv.OPENROUTER_API_KEY = "k";
@@ -212,7 +201,7 @@ describe("getDecisionModelConfig", () => {
   });
 
   it("is off when the provider key is missing", () => {
-    mockEnv.DEFAULT_DECISION_MODEL = "typesafe:jev-1.13.0";
+    mockEnv.DEFAULT_DECISION_MODEL = "litellm:typesafe/jev-latest";
 
     expect(getDecisionModelConfig()).toBeNull();
   });

@@ -104,9 +104,8 @@ export const env = createEnv({
     // Direct Ollama Cloud, separate from the local Ollama above and from LiteLLM.
     OLLAMA_CLOUD_API_KEY: z.string().optional(),
     OLLAMA_CLOUD_BASE_URL: z.string().optional(),
-    TYPESAFE_API_KEY: z.string().optional(),
-    // Jev decision layer: "litellm:typesafe/jev-latest", "typesafe:jev-1.13.0"
-    // or "openrouter:typesafe/jev-1.13".
+    // Jev decision layer: "litellm:typesafe/jev-latest" (via LiteLLM's System One
+    // pass-through) or "openrouter:typesafe/jev-1.13".
     // Unset = off. Features run in shadow mode unless listed in DECISION_MODEL_LIVE.
     DEFAULT_DECISION_MODEL: z.string().optional(),
     DECISION_MODEL_LIVE: z.string().optional(),

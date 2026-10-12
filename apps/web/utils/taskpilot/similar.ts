@@ -5,7 +5,11 @@ const logger = createScopedLogger("taskpilot-similar");
 
 // ponytail: hardcoded knobs. promote to env if anyone needs to tune live.
 const COLLECTION = "taskpilot_tasks";
-const EMBED_MODEL = "nomic-embed-text"; // 768d, local via litellm
+// 768d, local via LiteLLM. Chosen over nomic-embed-text on 2026-10-12: it separates
+// duplicate tasks from unrelated ones, including Bengali/English pairs nomic
+// scores below unrelated English. Its scores run higher, so the recall threshold
+// (TASKPILOT_PREGATE_RECALL_THRESHOLD) was raised from 0.50 to 0.78 with it.
+const EMBED_MODEL = "embeddinggemma-2";
 
 export interface SimilarTaskHit {
   projectId: string;
@@ -141,7 +145,7 @@ async function embed(text: string): Promise<number[] | null> {
     },
     body: JSON.stringify({
       model: EMBED_MODEL,
-      input: text.slice(0, 8000), // ponytail: cap input. nomic context is 8k tokens
+      input: text.slice(0, 8000), // ponytail: cap input to bound request size
     }),
   });
   if (!res.ok) {

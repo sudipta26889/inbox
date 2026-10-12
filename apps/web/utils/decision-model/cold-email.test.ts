@@ -10,10 +10,10 @@ vi.mock("@/utils/usage", () => ({ saveAiUsage: vi.fn() }));
 vi.mock("@/env", () => ({ env: {} }));
 
 const config = {
-  provider: "typesafe" as const,
-  modelId: "jev-1.13.0",
-  url: "https://api.typesafe.ai/v1/systemone",
-  apiKey: "typesafe-key",
+  provider: "litellm" as const,
+  modelId: "typesafe/jev-latest",
+  url: "http://nuc.lan:4000/v1/systemone",
+  apiKey: "sk-gateway",
 };
 
 const email: EmailForLLM = {
@@ -49,7 +49,7 @@ describe("decideColdEmail", () => {
     await decide();
 
     const body = JSON.parse(fetchMock.mock.calls[0][1].body);
-    expect(body.model).toBe("jev-1.13.0");
+    expect(body.model).toBe("typesafe/jev-latest");
     expect(body.questions.cold_email.type).toBe("noul");
   });
 
