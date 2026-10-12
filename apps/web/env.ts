@@ -114,6 +114,8 @@ export const env = createEnv({
     // A live feature uses Jev's answer only at or above this confidence; below
     // it the escalation model decides. Default in getDecisionMinConfidence().
     DECISION_MIN_CONFIDENCE: z.coerce.number().min(0.5).max(1).optional(),
+    // "false" stops the LLM from double-checking live Jev decisions.
+    DECISION_LIVE_AUDIT: z.enum(["true", "false"]).optional(),
     OPENAI_COMPATIBLE_BASE_URL: z.string().optional(),
     OPENAI_COMPATIBLE_MODEL: z.string().optional(),
     LITELLM_BASE_URL: z.string().optional(),

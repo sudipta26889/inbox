@@ -130,7 +130,40 @@ describe("runDecisionModelOrFallback", () => {
       mockEnv.DECISION_MODEL_LIVE = "cold-email, test-feature";
     });
 
-    it("uses Jev's answer without calling the LLM", async () => {
+    it("uses Jev's answer even when the auditing LLM disagrees", async () => {
+      const result = await route({
+        decide: async () => "jev",
+        fallback: async () => "llm",
+      });
+      await flushRecording();
+
+      expect(result).toBe("jev");
+      expect(recorded()).toMatchObject({
+        mode: "live",
+        outcome: "decided-disagree",
+        jevResult: "jev",
+        llmResult: "llm",
+      });
+    });
+
+    it("keeps Jev's decision when the auditing LLM fails", async () => {
+      const result = await route({
+        decide: async () => "jev",
+        fallback: async () => {
+          throw new Error("No deployments available");
+        },
+      });
+      await flushRecording();
+
+      expect(result).toBe("jev");
+      expect(recorded()).toMatchObject({
+        outcome: "decided",
+        error: "Audit LLM: No deployments available",
+      });
+    });
+
+    it("skips the audit when DECISION_LIVE_AUDIT is false", async () => {
+      mockEnv.DECISION_LIVE_AUDIT = "false";
       const fallback = vi.fn(async () => "llm");
 
       const result = await route({ decide: async () => "jev", fallback });

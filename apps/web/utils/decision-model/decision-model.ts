@@ -132,7 +132,9 @@ export async function runDecisionModel({
  * - Shadow (default) → LLM decides; Jev runs in parallel and both answers are
  *   recorded. Jev never affects the result or adds latency.
  * - Live → Jev decides; an uncertain answer escalates to the escalation model,
- *   any other failure falls back to the account's own model.
+ *   any other failure falls back to the account's own model. Unless
+ *   DECISION_LIVE_AUDIT=false, the LLM also checks each Jev decision afterwards
+ *   and the agreement is recorded.
  */
 export async function runDecisionModelOrFallback<T>({
   emailAccount,
@@ -222,7 +224,30 @@ export async function runDecisionModelOrFallback<T>({
 
   try {
     const result = await decide(tracked);
-    record({ mode: "live", outcome: "decided", jevResult: result });
+    if (env.DECISION_LIVE_AUDIT === "false") {
+      record({ mode: "live", outcome: "decided", jevResult: result });
+      return result;
+    }
+    // Audit: the LLM checks each live Jev decision so its accuracy on this
+    // feature can be proven. Not awaited, so it never delays or changes it.
+    fallback(emailAccount).then(
+      (llmResult) =>
+        record({
+          mode: "live",
+          outcome: same(result, llmResult)
+            ? "decided-agree"
+            : "decided-disagree",
+          jevResult: result,
+          llmResult,
+        }),
+      (llmError: unknown) =>
+        record({
+          mode: "live",
+          outcome: "decided",
+          jevResult: result,
+          error: `Audit LLM: ${getErrorMessage(llmError)}`,
+        }),
+    );
     return result;
   } catch (error) {
     if (error instanceof DecisionUncertainError) {
