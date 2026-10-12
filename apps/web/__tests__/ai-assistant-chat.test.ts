@@ -403,7 +403,7 @@ describe("aiProcessAssistantChat", () => {
     const hiddenContext = args.messages.find(
       (message: { role: string; content: string }) =>
         message.role === "user" &&
-        message.content.includes("Hidden context for the user's request"),
+        message.content.includes("Hidden context (do not repeat)"),
     );
 
     expect(hiddenContext?.content).toContain(
@@ -461,7 +461,7 @@ describe("aiProcessAssistantChat", () => {
     const hiddenContext = args.messages.find(
       (message: { role: string; content: string }) =>
         message.role === "user" &&
-        message.content.includes("Hidden context for the user's request"),
+        message.content.includes("Hidden context (do not repeat)"),
     );
 
     expect(hiddenContext?.content).toContain(
@@ -518,7 +518,7 @@ describe("aiProcessAssistantChat", () => {
     const hiddenContext = args.messages.find(
       (message: { role: string; content: string }) =>
         message.role === "user" &&
-        message.content.includes("Hidden context for the user's request"),
+        message.content.includes("Hidden context (do not repeat)"),
     );
 
     expect(hiddenContext?.content).not.toContain(
@@ -580,7 +580,7 @@ describe("aiProcessAssistantChat", () => {
     const hiddenContext = args.messages.find(
       (message: { role: string; content: string }) =>
         message.role === "user" &&
-        message.content.includes("Hidden context for the user's request"),
+        message.content.includes("Hidden context (do not repeat)"),
     );
 
     expect(hiddenContext?.content).toContain(
@@ -643,7 +643,7 @@ describe("aiProcessAssistantChat", () => {
     const hiddenContext = args.messages.find(
       (message: { role: string; content: string }) =>
         message.role === "user" &&
-        message.content.includes("Hidden context for the user's request"),
+        message.content.includes("Hidden context (do not repeat)"),
     );
 
     expect(hiddenContext?.content).not.toContain(
@@ -703,7 +703,7 @@ describe("aiProcessAssistantChat", () => {
     const hiddenContext = args.messages.find(
       (message: { role: string; content: string }) =>
         message.role === "user" &&
-        message.content.includes("Hidden context for the user's request"),
+        message.content.includes("Hidden context (do not repeat)"),
     );
 
     expect(hiddenContext?.content).toContain(
@@ -774,7 +774,7 @@ describe("aiProcessAssistantChat", () => {
     const hiddenContext = args.messages.find(
       (message: { role: string; content: string }) =>
         message.role === "user" &&
-        message.content.includes("Hidden context for the user's request"),
+        message.content.includes("Hidden context (do not repeat)"),
     );
 
     expect(hiddenContext?.content).not.toContain(
