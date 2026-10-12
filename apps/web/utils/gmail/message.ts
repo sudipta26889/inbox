@@ -15,6 +15,7 @@ import { getAccessTokenFromClient } from "@/utils/gmail/client";
 import { GmailLabel } from "@/utils/gmail/label";
 import { isIgnoredSender } from "@/utils/filter-ignored-senders";
 import parse from "gmail-api-parse-message";
+import { gmailMessageBodies } from "./message-bodies";
 import { isRetryableError, withGmailRetry } from "@/utils/gmail/retry";
 
 const logger = createScopedLogger("gmail/message");
@@ -22,7 +23,28 @@ const logger = createScopedLogger("gmail/message");
 export function parseMessage(
   message: MessageWithPayload,
 ): ParsedMessage & { subject: string; date: string } {
-  const parsed = parse(message) as ParsedMessage;
+  // gmail-api-parse-message decodes every text part and keeps only the last.
+  // Hide the text first so that decode does not run twice.
+  const textBodies = collectTextBodies(message.payload);
+  const hiddenText: { body: gmail_v1.Schema$MessagePartBody; data: string }[] =
+    [];
+  let parsed: ParsedMessage;
+  try {
+    for (const body of textBodies) {
+      const data = body.data;
+      if (!data) continue;
+      hiddenText.push({ body, data });
+      body.data = undefined;
+    }
+    parsed = parse(message) as ParsedMessage;
+  } finally {
+    restoreTextBodies(hiddenText);
+  }
+  if (message.payload) {
+    const bodies = gmailMessageBodies(message.payload, message.snippet);
+    parsed.textHtml = bodies.html;
+    parsed.textPlain = bodies.plain;
+  }
   return {
     ...parsed,
     subject: parsed.headers?.subject || "",
@@ -345,4 +367,29 @@ export async function getSentMessages(gmail: gmail_v1.Gmail, maxResults = 20) {
     maxResults,
   });
   return messages.messages;
+}
+
+// Upstream b12ad9283 (#4027): Apple Mail splits a message into several text
+// parts around inline photos, and the parser keeps only the last one.
+function collectTextBodies(part?: gmail_v1.Schema$MessagePart | null) {
+  const bodies: gmail_v1.Schema$MessagePartBody[] = [];
+  const visit = (current?: gmail_v1.Schema$MessagePart | null) => {
+    if (!current) return;
+    const mime = current.mimeType?.toLowerCase() ?? "";
+    if (
+      current.body?.data &&
+      (mime.includes("text/html") || mime.includes("text/plain"))
+    ) {
+      bodies.push(current.body);
+    }
+    current.parts?.forEach(visit);
+  };
+  visit(part);
+  return bodies;
+}
+
+function restoreTextBodies(
+  hidden: { body: gmail_v1.Schema$MessagePartBody; data: string }[],
+) {
+  for (const item of hidden) item.body.data = item.data;
 }
