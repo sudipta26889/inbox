@@ -237,6 +237,28 @@ function selectModel(
         })(modelName),
       };
     }
+    case Provider.OLLAMA_CLOUD: {
+      if (!aiModel)
+        throw new SafeError(
+          "No model specified. Set an Ollama Cloud model in AI Model settings.",
+        );
+      // Env key only, never the per-user aiApiKey: on this deployment that field
+      // holds a LiteLLM virtual key, which must not be sent to ollama.com.
+      const apiKey = env.OLLAMA_CLOUD_API_KEY?.trim();
+      if (!apiKey)
+        throw new SafeError(
+          "OLLAMA_CLOUD_API_KEY is not set. Add it to the environment to use Ollama Cloud.",
+        );
+      return {
+        provider: Provider.OLLAMA_CLOUD,
+        modelName: aiModel,
+        model: createOllama({
+          baseURL: env.OLLAMA_CLOUD_BASE_URL || OLLAMA_CLOUD_DEFAULT_BASE_URL,
+          headers: { Authorization: `Bearer ${apiKey}` },
+          fetch: ollamaFetchWithToolNameFix,
+        })(aiModel),
+      };
+    }
     case Provider.OPENAI_COMPATIBLE: {
       const modelName = aiModel || env.OPENAI_COMPATIBLE_MODEL;
       if (!modelName)
@@ -633,6 +655,7 @@ function getProviderApiKey(provider: string) {
     [Provider.OPENROUTER]: resolveApiKey(null, env.OPENROUTER_API_KEY),
     [Provider.AI_GATEWAY]: resolveApiKey(null, env.AI_GATEWAY_API_KEY),
     [Provider.OLLAMA]: "ollama-local",
+    [Provider.OLLAMA_CLOUD]: env.OLLAMA_CLOUD_API_KEY?.trim() || undefined,
     // Returns a placeholder so the fallback chain doesn't skip this provider
     // when no API key is configured (many OpenAI-compatible servers don't require one)
     [Provider.OPENAI_COMPATIBLE]: env.LLM_API_KEY || "not-required",
@@ -918,6 +941,7 @@ const FUNCTIONS_PREFIX_RE = /"name"\s*:\s*"functions\.([^"]+)"/g;
 // the client instead of an indefinite spin. Non-cloud (local NUC) models
 // finish well under this ceiling in practice.
 const OLLAMA_FETCH_TIMEOUT_MS = 30_000;
+const OLLAMA_CLOUD_DEFAULT_BASE_URL = "https://ollama.com/api";
 const ollamaFetchWithToolNameFix: typeof fetch = async (input, init) => {
   const timeoutController = new AbortController();
   const timer = setTimeout(

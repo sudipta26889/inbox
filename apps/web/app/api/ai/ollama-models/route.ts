@@ -4,18 +4,25 @@ import { env } from "@/env";
 
 export type OllamaModelsResponse = { models: string[] };
 
-// ponytail: no auth to Ollama here — self-hosted at OLLAMA_BASE_URL. If you
-// ever front Ollama with a token, add an OLLAMA_API_KEY env and pass it here.
+// Local Ollama (OLLAMA_BASE_URL) needs no auth; `?cloud=1` lists Ollama Cloud
+// models with OLLAMA_CLOUD_API_KEY.
 export const GET = withEmailAccount("api/ai/ollama-models", async (req) => {
-  const base = env.OLLAMA_BASE_URL;
-  if (!base) return NextResponse.json({ models: [] });
+  const cloud = new URL(req.url).searchParams.get("cloud") === "1";
+  const base = cloud
+    ? env.OLLAMA_CLOUD_BASE_URL || "https://ollama.com/api"
+    : env.OLLAMA_BASE_URL;
+  const cloudKey = env.OLLAMA_CLOUD_API_KEY?.trim();
+  if (!base || (cloud && !cloudKey)) return NextResponse.json({ models: [] });
 
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 4000);
     const res = await fetch(`${base.replace(/\/$/, "")}/tags`, {
       signal: controller.signal,
-      headers: { Accept: "application/json" },
+      headers: {
+        Accept: "application/json",
+        ...(cloud ? { Authorization: `Bearer ${cloudKey}` } : {}),
+      },
       cache: "no-store",
     }).finally(() => clearTimeout(timer));
 

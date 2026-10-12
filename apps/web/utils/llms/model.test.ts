@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { createOllama } from "ollama-ai-provider-v2";
 import { getModel } from "./model";
 import { Provider } from "./config";
 import { env } from "@/env";
@@ -516,6 +517,52 @@ describe("Models", () => {
       expect(result.provider).toBe(Provider.OLLAMA);
       expect(result.modelName).toBe("llama3");
       expect(result.model).toBeDefined();
+    });
+
+    it("should configure Ollama Cloud with the env key and cloud base URL", () => {
+      vi.mocked(env).OLLAMA_CLOUD_API_KEY = "cloud-key";
+      vi.mocked(env).OLLAMA_CLOUD_BASE_URL = undefined;
+
+      const result = getModel({
+        aiApiKey: null,
+        aiProvider: Provider.OLLAMA_CLOUD,
+        aiModel: "nemotron-3-nano:30b",
+      });
+
+      expect(result.provider).toBe(Provider.OLLAMA_CLOUD);
+      expect(result.modelName).toBe("nemotron-3-nano:30b");
+      expect(vi.mocked(createOllama)).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          baseURL: "https://ollama.com/api",
+          headers: { Authorization: "Bearer cloud-key" },
+        }),
+      );
+    });
+
+    it("should never send the user's stored key to Ollama Cloud", () => {
+      vi.mocked(env).OLLAMA_CLOUD_API_KEY = "cloud-key";
+
+      getModel({
+        aiApiKey: "sk-litellm-virtual-key",
+        aiProvider: Provider.OLLAMA_CLOUD,
+        aiModel: "nemotron-3-nano:30b",
+      });
+
+      const options = vi.mocked(createOllama).mock.lastCall?.[0];
+      expect(options?.headers).toEqual({ Authorization: "Bearer cloud-key" });
+      expect(JSON.stringify(options)).not.toContain("sk-litellm-virtual-key");
+    });
+
+    it("should fail clearly when OLLAMA_CLOUD_API_KEY is missing", () => {
+      vi.mocked(env).OLLAMA_CLOUD_API_KEY = undefined;
+
+      expect(() =>
+        getModel({
+          aiApiKey: null,
+          aiProvider: Provider.OLLAMA_CLOUD,
+          aiModel: "nemotron-3-nano:30b",
+        }),
+      ).toThrow("OLLAMA_CLOUD_API_KEY is not set");
     });
 
     it("should budget reasoning for LiteLLM gateway aliases of reasoning models", () => {

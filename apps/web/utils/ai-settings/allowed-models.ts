@@ -21,6 +21,7 @@ export const ALLOWED_AI_PROVIDERS = [
   Provider.AI_GATEWAY,
   Provider.LITELLM,
   Provider.OLLAMA,
+  Provider.OLLAMA_CLOUD,
 ] as const;
 
 export type AllowedAiProvider = (typeof ALLOWED_AI_PROVIDERS)[number];

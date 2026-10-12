@@ -42,7 +42,11 @@ export function ModelSection() {
 
   const { data: dataOllamaModels, isLoading: isLoadingOllamaModels } =
     useSWR<OllamaModelsResponse>(
-      data?.aiProvider === Provider.OLLAMA ? "/api/ai/ollama-models" : null,
+      data?.aiProvider === Provider.OLLAMA
+        ? "/api/ai/ollama-models"
+        : data?.aiProvider === Provider.OLLAMA_CLOUD
+          ? "/api/ai/ollama-models?cloud=1"
+          : null,
     );
 
   return (
@@ -122,7 +126,7 @@ function ModelSectionForm(props: {
           label: model.id,
           value: model.id,
         })) || []
-      : aiProvider === Provider.OLLAMA
+      : aiProvider === Provider.OLLAMA || aiProvider === Provider.OLLAMA_CLOUD
         ? props.ollamaModels?.models.map((name) => ({
             label: name,
             value: name,

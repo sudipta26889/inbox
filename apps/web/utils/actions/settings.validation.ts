@@ -48,6 +48,7 @@ export const saveAiSettingsBody = z
       Provider.AI_GATEWAY,
       Provider.LITELLM,
       Provider.OLLAMA,
+      Provider.OLLAMA_CLOUD,
     ]),
     aiModel: z.string(),
     aiApiKey: z.string().optional(),
@@ -57,7 +58,9 @@ export const saveAiSettingsBody = z
       !val.aiApiKey &&
       val.aiProvider !== DEFAULT_PROVIDER &&
       val.aiProvider !== Provider.LITELLM &&
-      val.aiProvider !== Provider.OLLAMA
+      val.aiProvider !== Provider.OLLAMA &&
+      // Ollama Cloud authenticates with OLLAMA_CLOUD_API_KEY from the environment.
+      val.aiProvider !== Provider.OLLAMA_CLOUD
     ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

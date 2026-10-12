@@ -101,6 +101,10 @@ export const env = createEnv({
     PERPLEXITY_API_KEY: z.string().optional(),
     OLLAMA_BASE_URL: z.string().optional(),
     OLLAMA_MODEL: z.string().optional(),
+    // Direct Ollama Cloud, separate from the local Ollama above and from LiteLLM.
+    OLLAMA_CLOUD_API_KEY: z.string().optional(),
+    OLLAMA_CLOUD_BASE_URL: z.string().optional(),
+    TYPESAFE_API_KEY: z.string().optional(),
     OPENAI_COMPATIBLE_BASE_URL: z.string().optional(),
     OPENAI_COMPATIBLE_MODEL: z.string().optional(),
     LITELLM_BASE_URL: z.string().optional(),

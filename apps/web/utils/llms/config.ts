@@ -11,6 +11,7 @@ export const Provider = {
   OPENROUTER: "openrouter",
   AI_GATEWAY: "aigateway",
   OLLAMA: "ollama",
+  OLLAMA_CLOUD: "ollama-cloud",
   OPENAI_COMPATIBLE: "openai-compatible",
   LITELLM: "litellm",
 };
@@ -26,4 +27,5 @@ export const providerOptions: { label: string; value: string }[] = [
   { label: "OpenRouter", value: Provider.OPENROUTER },
   { label: "Vercel AI Gateway", value: Provider.AI_GATEWAY },
   { label: "Ollama", value: Provider.OLLAMA },
+  { label: "Ollama Cloud", value: Provider.OLLAMA_CLOUD },
 ];
