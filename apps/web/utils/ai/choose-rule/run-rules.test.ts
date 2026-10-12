@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   ensureConversationRuleContinuity,
-  CONVERSATION_TRACKING_META_RULE_ID,
   limitDraftEmailActions,
   runRules,
 } from "./run-rules";
+import { CONVERSATION_TRACKING_META_RULE_ID } from "@/utils/reply-tracker/conversation-status-config";
 import {
   ActionType,
   DraftReplyConfidence,

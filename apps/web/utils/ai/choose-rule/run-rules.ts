@@ -31,6 +31,7 @@ import type { EmailProvider } from "@/utils/email/types";
 import type { ModelType } from "@/utils/llms/model";
 import {
   CONVERSATION_STATUS_TYPES,
+  CONVERSATION_TRACKING_META_RULE_ID,
   isConversationStatusType,
 } from "@/utils/reply-tracker/conversation-status-config";
 import { maybeRouteToTaskPilot } from "@/utils/taskpilot/route";
@@ -68,8 +69,6 @@ export type RunRulesResult = {
   existing?: boolean;
   createdAt: Date;
 };
-
-export const CONVERSATION_TRACKING_META_RULE_ID = "conversation-tracking-meta";
 
 export const CONVERSATION_TRACKING_INSTRUCTIONS = `Conversations and communication with real people. This covers all conversation states: emails you need to reply to, emails you're awaiting replies on, FYI updates from people, and resolved discussions.
 

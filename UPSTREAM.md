@@ -50,8 +50,12 @@ Upstream also shipped a new SQLite mail engine (`f55fd1069` and ~20 `mail-sqlite
 **Batch 2a — Jev decision layer: LANDED** 25380f5f6 (BACKPORT of 063caf0a6 + 603dc322b) —
 cold-email, thread-status, categorize-sender (single + bulk), recurring-pattern, all in shadow mode.
 
-**Batch 2b — remaining Jev decision** (approved plan: `.claude/scratchpad/jev-nano-decision-plan.md`)
-Rule choice (choose-rule), which needs upstream's classification-feedback system.
+**Batch 2b — Jev rule choice: LANDED in shadow (2026-10-12)** — `decision-model/choose-rule.ts`,
+adapted from upstream's: no cold-email question (the fork decides cold email first)
+and no classification feedback (the fork has none; upstream treats it as optional).
+Multi-rule selection stays with the LLM, as upstream. Feature `choose-rule`, not in
+DECISION_MODEL_LIVE. Same day: thread-status, cold-email and categorize-sender went
+LIVE at DECISION_MIN_CONFIDENCE=0.95 with an LLM audit of every live decision.
 b73797a3b #3791, d87dca417 #3807, 063caf0a6 #3806, 245ad1d13 #4028, 603dc322b #4057 —
 adapted: System One fetch shim instead of AI SDK 7, plus shadow mode, a
 deepseek-v4-flash escalation band and lazy explanations. Prereq candidates:
@@ -102,7 +106,7 @@ deepseek-v4-flash escalation band and lazy explanations. Prereq candidates:
 | a8f96364b | #3922 | Skipped — refactor of the Microsoft retry loop; Gmail-only instance, and Retry-After parsing is already covered by the fork's #3097 backport. |
 | 721abd362 | #4063 | Skipped — mostly meeting-recorder media cleanup; the fork has no meeting recorder. |
 | 55a566fe7, 41fbcda08, 787458314, 26eaed10e | #3985, #3749, #4112, #4038 | Skipped — tied to upstream's rewritten mail/draft UI, email-editor package and resumable-chat transport (new deps); none apply cleanly to the fork's UI. |
-| 8988e25bf | #3708 | Deferred — reconnect binding spans the OAuth flow; take it with a browser walkthrough of reconnect. |
+| 8988e25bf | #3708 | BACKPORT 8b79a57c3 — ported by hand onto the fork's cookie-compared OAuth state (upstream uses signed state). Permissions-page reconnect sends login_hint and the callback refuses a different account. To verify on Sudipta's pending account reconnections. |
 
 **Separate decision — AI SDK 7** (074e09680 #3703, 93 files). Not required for Jev
 (see batch 2). Take it only if a later backport needs SDK 7 APIs.

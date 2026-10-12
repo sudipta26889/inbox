@@ -13,6 +13,8 @@ import {
 import { ConditionType } from "@/utils/config";
 import prisma from "@/utils/prisma";
 import { aiChooseRule } from "@/utils/ai/choose-rule/ai-choose-rule";
+import { decideRule } from "@/utils/decision-model/choose-rule";
+import { runDecisionModelOrFallback } from "@/utils/decision-model/decision-model";
 import { getEmailForLLM } from "@/utils/get-email-from-message";
 import type { EmailAccountWithAI } from "@/utils/llms/types";
 import type { Logger } from "@/utils/logger";
@@ -393,12 +395,35 @@ async function findMatchingRulesWithReasons(
   });
 
   if (potentialAiMatches.length) {
-    const fullResult = await aiChooseRule({
-      email: getEmailForLLM(message),
-      rules: potentialAiMatches,
-      emailAccount,
-      modelType,
-    });
+    const email = getEmailForLLM(message);
+    const chooseWithLlm = (account: EmailAccountWithAI) =>
+      aiChooseRule({
+        email,
+        rules: potentialAiMatches,
+        emailAccount: account,
+        modelType,
+      });
+    // Jev picks one rule; multi-rule selection stays with the LLM, as upstream.
+    const selectsMultipleRules =
+      emailAccount.multiRuleSelectionEnabled &&
+      potentialAiMatches.some((rule) => !rule.systemType);
+    const fullResult = selectsMultipleRules
+      ? await chooseWithLlm(emailAccount)
+      : await runDecisionModelOrFallback({
+          emailAccount,
+          logger,
+          feature: "choose-rule",
+          subjectKey: message.threadId,
+          decide: (config) =>
+            decideRule({
+              config,
+              email,
+              emailAccount,
+              rules: potentialAiMatches,
+            }),
+          fallback: chooseWithLlm,
+          same: (jev, llm) => getPrimaryRuleId(jev) === getPrimaryRuleId(llm),
+        });
 
     const result = {
       rules: filterMultipleSystemRules(fullResult.rules),
@@ -810,4 +835,12 @@ function getColdEmailReasoning(result: {
   if (result.reason === "ai-already-labeled")
     return "The sender matches a learned pattern for this rule.";
   return "";
+}
+
+function getPrimaryRuleId(result: {
+  rules: { rule: { id: string }; isPrimary?: boolean }[];
+}) {
+  const primary =
+    result.rules.find((match) => match.isPrimary) ?? result.rules[0];
+  return primary?.rule.id ?? null;
 }

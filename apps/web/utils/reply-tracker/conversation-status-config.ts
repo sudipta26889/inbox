@@ -20,3 +20,7 @@ export function isConversationStatusType(
 
   return CONVERSATION_STATUS_TYPES.includes(systemType);
 }
+
+// The synthetic rule that stands in for every conversation-status rule while
+// rules are chosen.
+export const CONVERSATION_TRACKING_META_RULE_ID = "conversation-tracking-meta";
