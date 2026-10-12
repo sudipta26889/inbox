@@ -47,7 +47,11 @@ Upstream also shipped a new SQLite mail engine (`f55fd1069` and ~20 `mail-sqlite
 
 ### Queued
 
-**Batch 2 — Jev decision layer** (approved plan: `.claude/scratchpad/jev-nano-decision-plan.md`)
+**Batch 2a — Jev decision layer: LANDED** 25380f5f6 (BACKPORT of 063caf0a6 + 603dc322b) —
+cold-email, thread-status, categorize-sender (single + bulk), recurring-pattern, all in shadow mode.
+
+**Batch 2b — remaining Jev decision** (approved plan: `.claude/scratchpad/jev-nano-decision-plan.md`)
+Rule choice (choose-rule), which needs upstream's classification-feedback system.
 b73797a3b #3791, d87dca417 #3807, 063caf0a6 #3806, 245ad1d13 #4028, 603dc322b #4057 —
 adapted: System One fetch shim instead of AI SDK 7, plus shadow mode, a
 deepseek-v4-flash escalation band and lazy explanations. Prereq candidates:
@@ -195,6 +199,7 @@ Range reviewed: `upstream-base` (59e496849, 2026-03-17) → `upstream-audit/2026
 
 | Area | Files | Why the fork differs |
 |---|---|---|
+| Decision model (Jev) | `apps/web/utils/decision-model/*`, call sites in `cold-email/is-cold-email.ts`, `ai/reply/determine-thread-status.ts`, `ai/categorize-sender/*`, `ai/choose-rule/ai-detect-recurring-pattern.ts` | Upstream's decision-model is Jev-or-LLM on AI SDK 7. The fork calls the System One API directly (AI SDK 6), adds **shadow mode** (LLM decides, Jev recorded in `DecisionModelRun`; features go live one at a time via `DECISION_MODEL_LIVE`), and **escalates** uncertain answers to `DECISION_ESCALATION_MODEL` rather than the account's own model. Do NOT backport upstream's `isDecisionModelEnabledForUser` rule that skips users with their own `aiApiKey` — every user here has one (a LiteLLM key), so it would silently turn Jev off. Thread-status criteria are the fork's own, not upstream's #3787 definitions. |
 | PostHog removed | `apps/web/utils/posthog.ts` (deleted), `apps/web/providers/PostHogProvider.tsx` (deleted), `apps/web/hooks/useFeatureFlags.ts`, `apps/web/hooks/useAnalytics.ts`, `apps/web/ee/billing/stripe/posthog-events.ts` (deleted) | Analytics are removed from this deployment, and `posthog-js` was the last path to a critical protobufjs advisory. Feature flags are env-only and the landing A/B experiments resolve to their control arms. Upstream keeps adding `posthog.capture` calls and `useFeatureFlagEnabled` gates — a backport touching onboarding, bulk-unsubscribe, pricing, rules or the assistant tools must drop those hunks rather than reintroduce the dependency. `useOnboardingAnalytics` survives as a no-op shape and `NEXT_PUBLIC_POSTHOG_ONBOARDING_SURVEY_ID` is kept deliberately (it identifies stored onboarding answers). |
 | Reserved-recipient guard | `packages/resend/src/reserved-recipients.ts`, `packages/resend/src/send.tsx` | Fork-local (GRI-492). The private `sendEmail` asserts the resolved recipient is not an RFC 2606 / `test.com` fixture address, so none of the seven exported senders can put live mail on a reserved domain. Upstream has no equivalent — do not let a backport touching `send.tsx` drop the assert or restore the inline `to: test ? ... : to` ternary. |
 | Scheduled check-ins | `apps/web/utils/ai/automation-jobs/generate-check-in-message.ts`, `apps/web/utils/automation-jobs/message.ts`, `apps/web/utils/automation-jobs/messaging.ts`, `apps/web/utils/ai/assistant/chat.ts` (`readOnly`), `apps/web/utils/ai/assistant/get-recent-chat-memories.ts` | Upstream generates the check-in with `createGenerateObject` and a one-field `{ message }` schema, then silently falls back to `return trimmedPrompt` when generation throws. Against this fork's LiteLLM/Ollama gateway `responseFormat` is unsupported, so every run fails JSON parsing and Telegram receives the raw prompt instead of a digest. The fork runs the check-in through `aiProcessAssistantChat` in a new `readOnly` mode (read tools only, unattended) and lets failures fail the run instead of echoing the prompt. Upstream `main` (b3e10ebdb, 2026-09-06) still has the original code — re-check before backporting anything under `utils/automation-jobs/` or `utils/ai/automation-jobs/`. |
