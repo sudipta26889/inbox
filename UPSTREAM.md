@@ -69,13 +69,25 @@ deepseek-v4-flash escalation band and lazy explanations. Prereq candidates:
 | 33dbb2b6e | #3809 | Skipped — inline `data:` profile photos come from Microsoft sign-in; Gmail-only instance, 0 of 5 users have one. Revisit if an Outlook account is connected. |
 | 8988e25bf | #3708 | Moved to batch 5 — reconnect binding is a correctness fix across the OAuth flow that needs a browser walkthrough, not a security fix. |
 
-**Batch 4 — AI quality** (directly serves the cheaper-model goal)
-fcdc49dd0 #3910, b7fd5f5b1 #3928 (drafts stop stalling / guessing availability),
-fe0a3be14 #4077 (reply in the email's language), d55c1a5b2 #3880 (trim stale tool
-results in long loops — matters for small context windows), 05fafcd71 #3953,
-598c23c68 #3803, 2571ce497 #3795, 0488af760 #3808, e2c81ed5a #4010, 2b53b4083 #3805,
-db610cb26 #3804, ab32fac01 #3794, bd29cb7ad #3993, 7944319be #3950, 784fccc09 #3973,
-8ababe876 #4017 (choose-rule system-prompt caching — check against LiteLLM).
+**Batch 4 — AI quality: DONE**
+
+| Upstream | PR | Outcome |
+|---|---|---|
+| fcdc49dd0 + b7fd5f5b1 | #3910, #3928 | BACKPORT 609f64a7d — drafts answer as the user instead of "I'll check and get back to you"; never guess availability (the fork already forbade it). Targeted rules only: upstream's draft prompt has ~27 revisions the fork lacks. DRAFT_PIPELINE_VERSION 1 → 2. |
+| fe0a3be14 | #4077 | BACKPORT b3de7ff93 — assistant replies/forwards in the email's language, not the chat's. |
+| d55c1a5b2 | #3880 | BACKPORT e899761df — trim stale tool results in long agent loops; composed with the fork's finalStepMustAnswer in utils/llms. |
+| 05fafcd71 | #3953 | BACKPORT 1d1ba3640 — readable cold-email match reasons; long rule instructions clamped in the UI. |
+| 598c23c68 | #3803 | BACKPORT 0f98c94b2 — hidden email context labelled untrusted (prompt-injection guard); create-rule asks for the action when unspecified. |
+| e2c81ed5a | #4010 | BACKPORT 7e650a00b — "Not cold email" removes the label from archived mail (Gmail queries defaulted to the inbox), paginated to 500. |
+| 2b53b4083 | #3805 | BACKPORT be0e39338 — custom-rule label removals drop the AI sender pattern that kept re-adding the label. Cleanup migration not ported (needs ClassificationFeedback). |
+| 0488af760 | #3808 | UPSTREAM ef47e60ff — bulk sender categorization keeps going past a bad sender. |
+| bd29cb7ad | #3993 | BACKPORT aca657174 — surrogate-safe truncation; also applied to the Jev email state. |
+| 7944319be | #3950 | BACKPORT e37375d7e — script part only: `\p{M}` kept so Bengali/Hindi words aren't split at vowel signs (draft-attachment search, slugify). |
+| db610cb26 | #3804 | Skipped — enabling chat-created rules immediately relies on upstream's chat confirmation flow (assistant-chat-confirmation.ts) the fork lacks; porting it alone removes a safety gate. |
+| 8ababe876 | #4017 | Skipped — provider prompt-cache markers do nothing on the fork's LiteLLM/Ollama models. |
+| ab32fac01 | #3794 | Skipped — self-hoster opt-out for pattern learning; not wanted. |
+| 784fccc09 | #3973 | N/A — fork has no sender-stats.ts. |
+| 2571ce497 | #3795 | Deferred — filebot emails in thread status; 0 filings ever on this instance. Revisit if Drive filing is used. |
 
 **Batch 5 — Gmail and mail reliability**
 8988e25bf #3708 (bind reconnects to the target mailbox; needs a browser test),
