@@ -72,9 +72,10 @@ function withMiddleware<T extends NextRequest>(
 ): NextHandler {
   return async (req, context) => {
     const requestId = req.headers.get("x-request-id") || randomUUID();
+    const requestPath = getRequestPath(req);
     const baseLogger = createScopedLogger(scope || "api").with({
       requestId,
-      url: getRequestPath(req),
+      url: requestPath,
     });
     const requestTimer =
       options?.requestTiming !== undefined
@@ -98,7 +99,7 @@ function withMiddleware<T extends NextRequest>(
 
         // If middleware returned a Response, return it directly
         if (middlewareResult instanceof Response) {
-          flushLogger(reqWithLogger);
+          flushLogger(reqWithLogger, requestPath);
           return middlewareResult;
         }
 
@@ -110,11 +111,11 @@ function withMiddleware<T extends NextRequest>(
       // Execute the handler with the (potentially) enhanced request
       const response = await handler(enhancedReq as T, context);
 
-      flushLogger(enhancedReq);
+      flushLogger(enhancedReq, requestPath);
 
       return response;
     } catch (error) {
-      flushLogger(requestForError);
+      flushLogger(requestForError, requestPath);
 
       // redirects work by throwing an error. allow these
       if (error instanceof Error && error.message === "NEXT_REDIRECT") {
@@ -616,12 +617,12 @@ function getRequestPath(req: NextRequest) {
   return req.nextUrl.pathname;
 }
 
-function flushLogger(req: NextRequest) {
+// The path comes from the original request: requests enhanced by auth
+// middleware throw on nextUrl, and after() runs once the request is revoked.
+function flushLogger(req: NextRequest, url: string) {
   const reqWithLogger = req as RequestWithLogger;
   if (reqWithLogger.logger) {
     const loggerToFlush = reqWithLogger.logger;
-    // Read before after(): the request proxy is revoked once the response ends.
-    const url = getRequestPath(req);
     after(async () => {
       await flushLoggerSafely(loggerToFlush, { url });
     });

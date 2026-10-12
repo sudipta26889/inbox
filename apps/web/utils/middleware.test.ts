@@ -131,6 +131,22 @@ describe("Middleware", () => {
       expect(responseBody).toEqual({ success: true });
     });
 
+    it("still responds when the request's nextUrl is unreadable after the handler", async () => {
+      // Auth-enhanced and revoked requests throw on nextUrl in production.
+      const handler = vi.fn(async (req: NextRequest) => {
+        Object.defineProperty(req, "nextUrl", {
+          get() {
+            throw new TypeError("Cannot create proxy with a non-object");
+          },
+        });
+        return NextResponse.json({ success: true });
+      });
+
+      const response = await withError(handler)(mockReq, mockContext);
+
+      expect(response.status).toBe(200);
+    });
+
     it("should return 400 for ZodError", async () => {
       const zodError = new ZodError([
         { path: ["field"], message: "Required" },
