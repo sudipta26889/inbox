@@ -6,6 +6,7 @@ import type { EmailForLLM, RuleWithActions } from "@/utils/types";
 import {
   type DecisionModelConfig,
   DecisionUncertainError,
+  getDecisionMinConfidence,
   runDecisionModel,
 } from "./decision-model";
 import { getDecisionEmailState } from "./email-state";
@@ -15,7 +16,6 @@ import { getDecisionEmailState } from "./email-state";
 // (#3787); these are the fork's own criteria from aiDetermineThreadStatus.
 const STATUS_QUESTION_KEY = "thread_status";
 const MAX_MESSAGE_CONTENT_LENGTH = 4000;
-export const MIN_STATUS_CONFIDENCE = 0.6;
 
 const STATUS_CRITERIA: Record<ConversationStatus, string> = {
   [SystemType.TO_REPLY]:
@@ -95,9 +95,10 @@ export async function decideThreadStatus({
   if (!statuses.includes(answer.choice as ConversationStatus)) {
     throw new Error("Decision model returned an unknown thread status");
   }
-  if (answer.confidence < MIN_STATUS_CONFIDENCE) {
+  const minConfidence = getDecisionMinConfidence();
+  if (answer.confidence < minConfidence) {
     throw new DecisionUncertainError(
-      `Thread status confidence ${answer.confidence.toFixed(2)} is below ${MIN_STATUS_CONFIDENCE}`,
+      `Thread status confidence ${answer.confidence.toFixed(2)} is below ${minConfidence}`,
     );
   }
 

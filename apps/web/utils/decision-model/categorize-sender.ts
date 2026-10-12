@@ -4,6 +4,7 @@ import {
   type DecisionModelConfig,
   type DecisionQuestion,
   DecisionUncertainError,
+  getDecisionMinConfidence,
   runDecisionModel,
 } from "./decision-model";
 
@@ -13,7 +14,6 @@ import {
 const CATEGORY_KEY_PREFIX = "category_";
 const SENDER_KEY_PREFIX = "sender_";
 const UNKNOWN_KEY = "unknown";
-export const MIN_CATEGORY_CONFIDENCE = 0.6;
 
 type CategoryOption = Pick<Category, "name" | "description">;
 type SenderInput = {
@@ -135,12 +135,13 @@ async function decideSenderCategories({
     label,
   });
 
+  const minConfidence = getDecisionMinConfidence();
   return senders.map((sender, index) => {
     const answer = response.answers[`${SENDER_KEY_PREFIX}${index}`];
     if (
       answer?.type !== "choice" ||
       answer.choice === UNKNOWN_KEY ||
-      answer.confidence < MIN_CATEGORY_CONFIDENCE
+      answer.confidence < minConfidence
     ) {
       return { sender: sender.emailAddress, category: undefined };
     }

@@ -4,16 +4,16 @@ import { DEFAULT_COLD_EMAIL_PROMPT } from "@/utils/cold-email/prompt";
 import {
   type DecisionModelConfig,
   DecisionUncertainError,
+  getDecisionMinConfidence,
   runDecisionModel,
 } from "./decision-model";
 import { getDecisionEmailState } from "./email-state";
 
 // Adapted from upstream inbox-zero `utils/decision-model/cold-email.ts`.
-// Upstream marks cold at >= 0.75 and otherwise not cold. Here the middle band
-// is uncertain and escalates: a false positive hides real mail.
+// Upstream marks cold at >= 0.75 and otherwise not cold. Here only a confident
+// answer either way decides; the middle band escalates, since a false positive
+// hides real mail.
 const COLD_EMAIL_KEY = "cold_email";
-export const MIN_COLD_EMAIL_PROBABILITY = 0.75;
-export const MAX_NOT_COLD_EMAIL_PROBABILITY = 0.25;
 
 export async function decideColdEmail({
   config,
@@ -58,17 +58,15 @@ export async function decideColdEmail({
   }
 
   const probability = answer.probability;
-  if (
-    probability > MAX_NOT_COLD_EMAIL_PROBABILITY &&
-    probability < MIN_COLD_EMAIL_PROBABILITY
-  ) {
+  const minConfidence = getDecisionMinConfidence();
+  if (probability > 1 - minConfidence && probability < minConfidence) {
     throw new DecisionUncertainError(
       `Cold-email probability ${probability.toFixed(2)} is inside the uncertain band`,
     );
   }
 
   return {
-    coldEmail: probability >= MIN_COLD_EMAIL_PROBABILITY,
+    coldEmail: probability >= minConfidence,
     reason: `Decision model cold-email probability: ${probability.toFixed(2)}`,
   };
 }

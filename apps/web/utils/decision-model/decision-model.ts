@@ -74,6 +74,11 @@ export function getDecisionModelConfig(): DecisionModelConfig | null {
   return null;
 }
 
+// 0.95: on TaskPilot's 398 labelled items every Jev answer at >= 0.95 was right.
+export function getDecisionMinConfidence() {
+  return env.DECISION_MIN_CONFIDENCE ?? 0.95;
+}
+
 export function isDecisionFeatureLive(feature: string) {
   return (env.DECISION_MODEL_LIVE ?? "")
     .split(",")

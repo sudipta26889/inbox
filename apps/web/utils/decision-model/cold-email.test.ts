@@ -29,13 +29,13 @@ describe("decideColdEmail", () => {
     vi.unstubAllGlobals();
   });
 
-  it("marks cold at or above the cold threshold", async () => {
-    stubJev(0.9);
+  it("marks cold at or above the confidence bar", async () => {
+    stubJev(0.97);
     await expect(decide()).resolves.toMatchObject({ coldEmail: true });
   });
 
-  it("marks not cold at or below the not-cold threshold", async () => {
-    stubJev(0.1);
+  it("marks not cold at or below the not-cold bar", async () => {
+    stubJev(0.03);
     await expect(decide()).resolves.toMatchObject({ coldEmail: false });
   });
 
@@ -44,8 +44,13 @@ describe("decideColdEmail", () => {
     await expect(decide()).rejects.toBeInstanceOf(DecisionUncertainError);
   });
 
+  it("escalates a fairly confident answer below the 0.95 default bar", async () => {
+    stubJev(0.9);
+    await expect(decide()).rejects.toBeInstanceOf(DecisionUncertainError);
+  });
+
   it("sends the yes/no question to the API as a noul", async () => {
-    const fetchMock = stubJev(0.9);
+    const fetchMock = stubJev(0.97);
     await decide();
 
     const body = JSON.parse(fetchMock.mock.calls[0][1].body);

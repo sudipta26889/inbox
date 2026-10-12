@@ -111,6 +111,9 @@ export const env = createEnv({
     DECISION_MODEL_LIVE: z.string().optional(),
     // "provider:model" used when Jev is unsure, e.g. "litellm:deepseek-v4-flash".
     DECISION_ESCALATION_MODEL: z.string().optional(),
+    // A live feature uses Jev's answer only at or above this confidence; below
+    // it the escalation model decides. Default in getDecisionMinConfidence().
+    DECISION_MIN_CONFIDENCE: z.coerce.number().min(0.5).max(1).optional(),
     OPENAI_COMPATIBLE_BASE_URL: z.string().optional(),
     OPENAI_COMPATIBLE_MODEL: z.string().optional(),
     LITELLM_BASE_URL: z.string().optional(),
