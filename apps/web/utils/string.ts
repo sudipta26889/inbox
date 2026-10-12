@@ -77,12 +77,15 @@ export function formatBulletList(list: string[]) {
 }
 
 export function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .trim()
-    .replace(/[^\p{L}\p{N}\s_-]/gu, "")
-    .replace(/[\s_-]+/g, "-")
-    .replace(/^-+|-+$/g, "");
+  return (
+    text
+      .toLowerCase()
+      .trim()
+      // \p{M} keeps combining marks (e.g. Bengali/Hindi vowel signs) inside words.
+      .replace(/[^\p{L}\p{M}\p{N}\s_-]/gu, "")
+      .replace(/[\s_-]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+  );
 }
 
 export function convertNewlinesToBr(text: string): string {

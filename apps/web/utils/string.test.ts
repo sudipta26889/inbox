@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   removeExcessiveWhitespace,
   truncate,
+  slugify,
   generalizeSubject,
   convertNewlinesToBr,
   escapeHtml,
@@ -12,6 +13,14 @@ import {
 // pnpm test utils/string.test.ts
 
 describe("string utils", () => {
+  describe("slugify", () => {
+    it("keeps combining marks so Bengali words stay intact", () => {
+      expect(slugify("প্রজেক্টের বাজেট অনুমোদন দরকার")).toBe(
+        "প্রজেক্টের-বাজেট-অনুমোদন-দরকার",
+      );
+    });
+  });
+
   describe("truncate", () => {
     it("does not split an emoji into a lone surrogate", () => {
       // "😀" is two UTF-16 code units; a cut after 3 units would split it.

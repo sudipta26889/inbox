@@ -828,7 +828,10 @@ function computeDiscoveryScore({
 
 function getSearchTokens(text: string) {
   return [
-    ...new Set(normalizeSearchText(text).match(/[\p{L}\p{N}]{3,}/gu) || []),
+    // \p{M}: without it, Bengali/Hindi words split at every vowel sign.
+    ...new Set(
+      normalizeSearchText(text).match(/[\p{L}\p{M}\p{N}]{3,}/gu) || [],
+    ),
   ].slice(0, 50);
 }
 
