@@ -34,8 +34,10 @@ const getAuthUrl = ({
 
 export const GET = withAuth("outlook/linking/auth-url", async (request) => {
   const userId = request.auth.userId;
-  const reconnectEmailAccountId =
-    request.nextUrl.searchParams.get("emailAccountId");
+  // Not request.nextUrl: withAuth hands over a cloned request without it.
+  const reconnectEmailAccountId = new URL(request.url).searchParams.get(
+    "emailAccountId",
+  );
   const reconnectTarget = reconnectEmailAccountId
     ? await findReconnectTarget({
         emailAccountId: reconnectEmailAccountId,
