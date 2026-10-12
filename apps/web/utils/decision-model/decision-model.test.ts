@@ -89,6 +89,25 @@ describe("runDecisionModelOrFallback", () => {
       expect(recorded()).toMatchObject({ outcome: "uncertain" });
     });
 
+    it("records Jev's answer when the LLM fails, and still surfaces the LLM error", async () => {
+      await expect(
+        route({
+          decide: async () => "jev",
+          fallback: async () => {
+            throw new Error("No deployments available");
+          },
+        }),
+      ).rejects.toThrow("No deployments available");
+      await flushRecording();
+
+      expect(recorded()).toMatchObject({
+        mode: "shadow",
+        outcome: "llm-error",
+        jevResult: "jev",
+        error: "LLM: No deployments available",
+      });
+    });
+
     it("never lets a Jev failure break the decision", async () => {
       const result = await route({
         decide: async () => {

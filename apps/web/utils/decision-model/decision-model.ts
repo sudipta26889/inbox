@@ -187,7 +187,24 @@ export async function runDecisionModelOrFallback<T>({
       (result) => ({ ok: true as const, result }),
       (error: unknown) => ({ ok: false as const, error }),
     );
-    const llmResult = await fallback(emailAccount);
+    let llmResult: T;
+    try {
+      llmResult = await fallback(emailAccount);
+    } catch (llmError) {
+      // Still a decision for the LLM, so the error propagates unchanged — but
+      // keep Jev's answer: these are the cases where the comparison matters most.
+      jev.then((jevRun) =>
+        record({
+          mode: "shadow",
+          outcome: "llm-error",
+          jevResult: jevRun.ok ? jevRun.result : undefined,
+          error: `LLM: ${getErrorMessage(llmError)}${
+            jevRun.ok ? "" : ` | Jev: ${getErrorMessage(jevRun.error)}`
+          }`,
+        }),
+      );
+      throw llmError;
+    }
 
     // ponytail: not awaited, so a slow or failing Jev call can never delay or
     // break the decision the LLM already made.

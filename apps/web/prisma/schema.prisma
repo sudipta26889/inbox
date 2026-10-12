@@ -2250,7 +2250,7 @@ model DecisionModelRun {
 
   feature    String // "cold-email" | "thread-status" | "categorize-sender" | ...
   mode       String // "shadow" | "live"
-  outcome    String // shadow: agree | disagree | uncertain | error; live: decided | escalated | fallback
+  outcome    String // shadow: agree | disagree | uncertain | error | llm-error; live: decided | escalated | fallback
   model      String?
   subjectKey String? // join key for later labels: sender address or thread id
   jevResult  Json?
