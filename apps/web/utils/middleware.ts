@@ -620,8 +620,10 @@ function flushLogger(req: NextRequest) {
   const reqWithLogger = req as RequestWithLogger;
   if (reqWithLogger.logger) {
     const loggerToFlush = reqWithLogger.logger;
+    // Read before after(): the request proxy is revoked once the response ends.
+    const url = getRequestPath(req);
     after(async () => {
-      await flushLoggerSafely(loggerToFlush, { url: getRequestPath(req) });
+      await flushLoggerSafely(loggerToFlush, { url });
     });
   }
 }
