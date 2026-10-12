@@ -85,6 +85,8 @@ describe("convertTextToHtmlParagraphs", () => {
   });
 });
 
+// Upstream c4edc8550 (#3903): address comments must not let a header resolve
+// to a different domain. Guards the nodemailer 10 upgrade on the Gmail send path.
 describe("createMail", () => {
   it("keeps BCC recipients in raw messages sent through the Gmail API", async () => {
     const raw = await createMail({
@@ -98,5 +100,38 @@ describe("createMail", () => {
     const message = Buffer.from(raw, "base64url").toString("utf8");
 
     expect(message).toContain("Bcc: hidden@example.com");
+  });
+
+  describe.each([
+    ["from", "From"],
+    ["to", "To"],
+    ["cc", "Cc"],
+    ["bcc", "Bcc"],
+    ["replyTo", "Reply-To"],
+  ] as const)("angle-bracket %s addresses", (field, header) => {
+    it.each([
+      "recipient@example.com(comment)",
+      "recipient(comment)@example.com",
+      "recipient@(comment)example.com",
+      "recipient@example.com(comment)evil.example",
+      '"recipient"@example.com(comment)evil.example',
+    ])("strips comments from %s", async (address) => {
+      const options: Parameters<typeof createMail>[0] = {
+        from: "sender@example.com",
+        to: "recipient@example.com",
+        subject: "Comment parsing",
+        text: "Message",
+      };
+      options[field] = `Recipient <${address}>`;
+
+      const raw = await createMail(options);
+      const message = Buffer.from(raw, "base64url").toString("utf8");
+
+      const headerLine = message
+        .split("\r\n")
+        .find((line) => line.startsWith(`${header}: `));
+
+      expect(headerLine).toMatch(/<(?:recipient|"recipient")@example\.com>$/);
+    });
   });
 });
