@@ -219,7 +219,7 @@ function serializeContent(content: ModelMessage["content"]): string {
  * count the tag and the provider options too, which is noise — take the
  * value, and fall back to the whole thing for shapes we do not know.
  */
-function measureToolOutput(output: ToolResultPart["output"]): string {
+export function measureToolOutput(output: ToolResultPart["output"]): string {
   if ("value" in output) {
     return typeof output.value === "string"
       ? output.value

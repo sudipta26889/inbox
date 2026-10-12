@@ -1,3 +1,4 @@
+import { trimStaleToolResults } from "@/utils/ai/assistant/trim-stale-tool-results";
 import {
   APICallError,
   type ModelMessage,
@@ -403,7 +404,7 @@ export async function chatCompletionStream({
         messages,
         tools,
         stopWhen: maxSteps ? stepCountIs(maxSteps) : undefined,
-        prepareStep: maxSteps ? finalStepMustAnswer(maxSteps) : undefined,
+        prepareStep: prepareAgentStep(maxSteps),
         ...commonOptions,
         experimental_telemetry: getTelemetryOptions(label),
         providerOptions: providerOptions,
@@ -558,7 +559,7 @@ export async function toolCallAgentStream({
       model,
       tools: candidateTools,
       stopWhen: maxSteps ? stepCountIs(maxSteps) : undefined,
-      prepareStep: maxSteps ? finalStepMustAnswer(maxSteps) : undefined,
+      prepareStep: prepareAgentStep(maxSteps),
       ...commonOptions,
       experimental_telemetry: getTelemetryOptions(label),
       providerOptions,
@@ -1057,4 +1058,17 @@ export function finalStepMustAnswer(
 ): PrepareStepFunction<Record<string, Tool>> {
   return ({ stepNumber }) =>
     stepNumber >= maxSteps - 1 ? { activeTools: [] } : {};
+}
+
+// Every agent step: drop stale tool output once it piles up, then apply the
+// final-step rule. Returns nothing when neither applies.
+function prepareAgentStep(
+  maxSteps?: number,
+): PrepareStepFunction<Record<string, Tool>> {
+  const finalStep = maxSteps ? finalStepMustAnswer(maxSteps) : undefined;
+  return async (options) => {
+    const override = (await finalStep?.(options)) ?? {};
+    const messages = trimStaleToolResults(options.messages);
+    return messages === options.messages ? override : { ...override, messages };
+  };
 }
