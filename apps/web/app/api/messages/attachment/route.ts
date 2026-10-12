@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { withEmailProvider } from "@/utils/middleware";
 import { attachmentQuery } from "@/app/api/messages/validation";
+import { getAttachmentDownloadHeaders } from "./download-headers";
 
 export const GET = withEmailProvider("messages/attachment", async (request) => {
   const { emailProvider } = request;
@@ -25,12 +26,7 @@ export const GET = withEmailProvider("messages/attachment", async (request) => {
 
   const decodedData = Buffer.from(attachmentData.data, "base64");
 
-  const headers = new Headers();
-  headers.set("Content-Type", query.mimeType);
-  headers.set(
-    "Content-Disposition",
-    `attachment; filename="${query.filename}"`,
-  );
-
-  return new NextResponse(decodedData, { headers });
+  return new NextResponse(decodedData, {
+    headers: getAttachmentDownloadHeaders(query.filename),
+  });
 });
