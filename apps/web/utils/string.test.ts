@@ -13,6 +13,14 @@ import {
 
 describe("string utils", () => {
   describe("truncate", () => {
+    it("does not split an emoji into a lone surrogate", () => {
+      // "😀" is two UTF-16 code units; a cut after 3 units would split it.
+      const result = truncate("ab😀cd", 3);
+
+      expect(result).toBe("ab...");
+      expect(JSON.stringify(result)).not.toMatch(/\\ud[89ab]/i);
+    });
+
     it("should truncate strings longer than specified length", () => {
       expect(truncate("hello world", 5)).toBe("hello...");
     });

@@ -19,7 +19,7 @@ export function textToHtmlParagraphs(text?: string | null): string {
 }
 
 export function truncate(str: string, length: number) {
-  return str.length > length ? `${str.slice(0, length)}...` : str;
+  return str.length > length ? `${sliceHead(str, length)}...` : str;
 }
 
 export function trimToNonEmptyString(value: unknown): string | undefined {
@@ -87,4 +87,19 @@ export function slugify(text: string): string {
 
 export function convertNewlinesToBr(text: string): string {
   return text.replace(/\r\n/g, "\n").replace(/\n/g, "<br>");
+}
+
+// slice() counts UTF-16 code units, so a cut can land inside an emoji or other
+// astral character and leave a lone surrogate. Some LLM APIs reject a request
+// body that contains one as invalid JSON, so drop the half character instead.
+// Upstream bd29cb7ad (#3993).
+export function sliceHead(str: string, length: number) {
+  const head = str.slice(0, length);
+  return isHighSurrogate(head.charCodeAt(head.length - 1))
+    ? head.slice(0, -1)
+    : head;
+}
+
+function isHighSurrogate(code: number) {
+  return code >= 0xd8_00 && code <= 0xdb_ff;
 }

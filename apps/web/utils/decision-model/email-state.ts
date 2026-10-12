@@ -1,4 +1,5 @@
 import type { EmailForLLM } from "@/utils/types";
+import { sliceHead } from "@/utils/string";
 
 // Backport of upstream inbox-zero `utils/decision-model/email-state.ts`.
 export function getDecisionEmailState(
@@ -11,7 +12,7 @@ export function getDecisionEmailState(
     cc: email.cc ?? null,
     replyTo: email.replyTo ?? null,
     subject: email.subject,
-    content: email.content.slice(0, maxContentLength),
+    content: sliceHead(email.content, maxContentLength),
     date: email.date?.toISOString() ?? null,
     hasListUnsubscribeHeader: !!email.listUnsubscribe,
     attachments:
