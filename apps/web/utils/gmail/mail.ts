@@ -61,9 +61,13 @@ const encodeMessage = (message: Buffer) => {
     .replace(/=+$/, "");
 };
 
-const createMail = async (options: Mail.Options) => {
+export const createMail = async (options: Mail.Options) => {
   const mailComposer = new MailComposer(options);
-  const message = await mailComposer.compile().build();
+  const compiledMessage = mailComposer.compile();
+  // Gmail reads recipients from the raw headers; without this Bcc is stripped
+  // and Bcc recipients are silently never delivered.
+  compiledMessage.keepBcc = true;
+  const message = await compiledMessage.build();
   return encodeMessage(message);
 };
 

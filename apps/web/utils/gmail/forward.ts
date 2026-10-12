@@ -1,6 +1,6 @@
 import { formatEmailDate } from "@/utils/gmail/reply";
 import type { ParsedMessage } from "@/utils/types";
-import { escapeHtml } from "@/utils/string";
+import { escapeHtml, textToHtmlParagraphs } from "@/utils/string";
 
 export const forwardEmailSubject = (subject: string) => {
   return `Fwd: ${subject}`;
@@ -14,6 +14,8 @@ export const forwardEmailHtml = ({
   message: ParsedMessage;
 }) => {
   const quotedDate = formatEmailDate(new Date(message.headers.date));
+  const messageContent =
+    message.textHtml || textToHtmlParagraphs(message.textPlain);
 
   // Escape content and subject to prevent prompt injection attacks
   return `<div dir="ltr">${escapeHtml(content)}<br><br>
@@ -24,7 +26,7 @@ Date: ${quotedDate}<br>
 Subject: ${escapeHtml(message.headers.subject)}<br>
 To: ${formatToEmailWithName(message.headers.to)}<br>
 </div><br><br>
-${message.textHtml}
+${messageContent}
 </div></div>`.trim();
 };
 

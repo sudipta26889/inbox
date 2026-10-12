@@ -4,6 +4,20 @@ export function escapeHtml(text: string): string {
   return he.escape(text);
 }
 
+export function textToHtmlParagraphs(text?: string | null): string {
+  if (!text) return "";
+
+  return text
+    .replace(/\r\n/g, "\n")
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.trim())
+    .filter((paragraph) => paragraph !== "")
+    .map(
+      (paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/g, "<br />")}</p>`,
+    )
+    .join("");
+}
+
 export function truncate(str: string, length: number) {
   return str.length > length ? `${str.slice(0, length)}...` : str;
 }

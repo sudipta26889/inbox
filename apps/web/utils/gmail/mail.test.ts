@@ -7,6 +7,7 @@ vi.mock("server-only", () => ({}));
 import {
   buildReplyMessageText,
   convertTextToHtmlParagraphs,
+  createMail,
 } from "@/utils/gmail/mail";
 
 describe("convertTextToHtmlParagraphs", () => {
@@ -81,5 +82,21 @@ describe("convertTextToHtmlParagraphs", () => {
     expect(plainText).toContain("John Doe <john@example.com> wrote:");
     expect(plainText).toContain("> Original message content");
     expect(plainText).not.toContain("<a href=");
+  });
+});
+
+describe("createMail", () => {
+  it("keeps BCC recipients in raw messages sent through the Gmail API", async () => {
+    const raw = await createMail({
+      from: "sender@example.com",
+      to: "recipient@example.com",
+      bcc: "hidden@example.com",
+      subject: "Test",
+      text: "Message",
+    });
+
+    const message = Buffer.from(raw, "base64url").toString("utf8");
+
+    expect(message).toContain("Bcc: hidden@example.com");
   });
 });
