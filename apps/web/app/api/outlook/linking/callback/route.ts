@@ -5,6 +5,7 @@ import { OUTLOOK_LINKING_STATE_COOKIE_NAME } from "@/utils/outlook/constants";
 import { withError } from "@/utils/middleware";
 import { captureException, SafeError } from "@/utils/error";
 import { validateOAuthCallback } from "@/utils/oauth/callback-validation";
+import { isReconnectTargetMismatch } from "@/utils/oauth/reconnect-target";
 import { handleAccountLinking } from "@/utils/oauth/account-linking";
 import { mergeAccount } from "@/utils/user/merge-account";
 import { handleOAuthCallbackError } from "@/utils/oauth/error-handler";
@@ -71,7 +72,7 @@ export const GET = withError("outlook/linking/callback", async (request) => {
     return validation.response;
   }
 
-  const { targetUserId, code } = validation;
+  const { targetUserId, code, reconnectEmailAccountId } = validation;
 
   const cachedResult = await getOAuthCodeResult(code);
   if (cachedResult) {
@@ -181,6 +182,24 @@ export const GET = withError("outlook/linking/callback", async (request) => {
       hasStoredRefreshToken: !!existingAccount?.refresh_token,
       logger,
     });
+
+    if (
+      isReconnectTargetMismatch({
+        reconnectEmailAccountId,
+        matchedEmailAccountId: existingAccount?.emailAccount?.id,
+      })
+    ) {
+      logger.warn("Reconnect authorized a different provider account", {
+        targetUserId,
+        reconnectEmailAccountId,
+        matchedEmailAccountId: existingAccount?.emailAccount?.id ?? null,
+      });
+      const redirectUrl = new URL("/accounts", env.NEXT_PUBLIC_BASE_URL);
+      redirectUrl.searchParams.set("error", "reconnect_account_mismatch");
+      const response = NextResponse.redirect(redirectUrl);
+      response.cookies.delete(OUTLOOK_LINKING_STATE_COOKIE_NAME);
+      return response;
+    }
 
     const linkingResult = await handleAccountLinking({
       existingAccountId: existingAccount?.id || null,

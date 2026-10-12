@@ -309,6 +309,13 @@ function getAccountErrorMessage(
       description: `This account already exists in ${BRAND_NAME}. Please select 'Yes, it's an existing ${BRAND_NAME} account' to merge.`,
       toastDescription: `This account already exists in ${BRAND_NAME}. Please select 'Yes, it's an existing ${BRAND_NAME} account' to merge.`,
     },
+    reconnect_account_mismatch: {
+      title: "Wrong account signed in",
+      description:
+        "You signed in with a different account than the one you were reconnecting. Sign out of that provider, or pick the original account, and try again.",
+      toastDescription:
+        "You signed in with a different account than the one you were reconnecting. Sign out of that provider, or pick the original account, and try again.",
+    },
     already_linked_to_self: {
       title: "Account already linked",
       description: "This account is already linked to your profile.",

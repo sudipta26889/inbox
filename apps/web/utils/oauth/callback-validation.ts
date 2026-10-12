@@ -15,6 +15,7 @@ type ValidationResult =
   | {
       success: true;
       targetUserId: string;
+      reconnectEmailAccountId: string | null;
       code: string;
     }
   | {
@@ -50,6 +51,7 @@ export function validateOAuthCallback({
   let decodedState: {
     userId: string;
     nonce: string;
+    reconnectEmailAccountId?: string;
   };
   try {
     decodedState = parseOAuthState(storedState);
@@ -80,6 +82,7 @@ export function validateOAuthCallback({
   return {
     success: true,
     targetUserId: decodedState.userId,
+    reconnectEmailAccountId: decodedState.reconnectEmailAccountId ?? null,
     code,
   };
 }

@@ -88,6 +88,25 @@ describe("validateOAuthCallback", () => {
     if (result.success) {
       expect(result.targetUserId).toBe("user-id");
       expect(result.code).toBe("valid-code");
+      expect(result.reconnectEmailAccountId).toBeNull();
     }
+  });
+
+  it("carries a reconnect's target mailbox through from the state", () => {
+    vi.mocked(parseOAuthState).mockReturnValue({
+      userId: "user-id",
+      nonce: "nonce",
+      reconnectEmailAccountId: "mailbox-id",
+    });
+
+    const result = validateOAuthCallback({
+      code: "valid-code",
+      receivedState: "state",
+      storedState: "state",
+      stateCookieName: "test_cookie",
+      logger,
+    });
+
+    expect(result.success && result.reconnectEmailAccountId).toBe("mailbox-id");
   });
 });
