@@ -5,7 +5,7 @@ import type { ReplyItem } from "@/utils/morning-report/reply-state";
 
 vi.mock("server-only", () => ({}));
 
-import { sanitizeSelection } from "./select-items";
+import { sanitizeSelection, stripLinksAndMarkup } from "./select-items";
 
 const candidate = { id: "1.1", subject: "EMI on Card" } as Candidate;
 const reply = { id: "1.r1", kind: "awaiting" } as ReplyItem;
@@ -74,5 +74,29 @@ describe("sanitizeSelection", () => {
     expect(note).not.toMatch(/https?:|www\.|evil|bad\.com|[<>]/);
     expect(note).toContain("Pay now at");
     expect(note).toContain("hi");
+  });
+});
+
+describe("stripLinksAndMarkup", () => {
+  it.each([
+    "₹2,62,900 EMI",
+    "A/c XX1234 debited",
+    "due Oct 31",
+    "2.5G/USB hub",
+    "card 7005",
+    "EMI 3/12",
+    "e.g. a refund, Rs.500 charged",
+  ])("keeps %s intact", (text) => {
+    expect(stripLinksAndMarkup(text)).toBe(text);
+  });
+
+  it.each([
+    ["lookalike-bank.co", /lookalike-bank\.co/],
+    ["pay at bank.com today", /bank\.com/],
+    ["see Login.HDFC-Secure.Verify.IN now", /\.IN|Verify\.IN/],
+  ])("neutralises bare domain in %s", (text, linkLike) => {
+    const out = stripLinksAndMarkup(text);
+    expect(out).not.toMatch(linkLike);
+    expect(out).toContain("[.]");
   });
 });

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { Candidate } from "./candidates";
 import {
   accountTag,
@@ -6,6 +6,8 @@ import {
   type RenderInput,
   renderMorningReport,
 } from "./render";
+
+vi.mock("server-only", () => ({}));
 
 const now = new Date("2026-10-13T03:30:00Z"); // Tue 09:00 IST
 
@@ -176,6 +178,19 @@ describe("renderMorningReport", () => {
     expect(text).toContain(
       "• me@gmail.com: calendar could not be read, so today's meetings may be missing",
     );
+  });
+
+  it("neutralises a bare domain in the subject fallback", () => {
+    const text = renderMorningReport(
+      input({
+        candidates: [
+          cand("1.1", "me@gmail.com", "a@x.com", "Verify at lookalike-bank.co"),
+        ],
+        selection: { items: [{ id: "1.1", section: "security", note: "" }] },
+      }),
+    );
+    expect(text).not.toContain("lookalike-bank.co");
+    expect(text).toContain("lookalike-bank [.] co");
   });
 
   it("says so in one line when nothing needs attention", () => {

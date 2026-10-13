@@ -144,10 +144,7 @@ export function sanitizeSelection(
     items.push({
       id: item.id,
       section,
-      note: stripLinksAndMarkup(item.note)
-        .replace(/\s+/g, " ")
-        .trim()
-        .slice(0, MAX_NOTE_CHARS),
+      note: stripLinksAndMarkup(item.note).slice(0, MAX_NOTE_CHARS),
     });
   }
 
@@ -169,11 +166,21 @@ function neutralise(text: string, max = Number.POSITIVE_INFINITY) {
   return text.slice(0, max).replace(/</g, "‹").replace(/>/g, "›");
 }
 
-// Notes reach Telegram, so a link lifted from an email must never survive.
-function stripLinksAndMarkup(text: string) {
+// Text from emails reaches Telegram, so a link lifted from one must never
+// survive, and Telegram auto-links bare domains. Bare "word.tld" tokens (2-24
+// letters after the last dot, so "Rs.500", "2.5G" and "e.g." are untouched) are
+// defanged rather than dropped, which keeps a lookalike sender readable.
+// Known cost: "report.pdf" is defanged too.
+export function stripLinksAndMarkup(text: string) {
   return text
     .replace(/<[^>]*>/g, " ")
     .replace(/\b(?:https?:\/\/|www\.)\S+/gi, " ")
-    .replace(/\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}\/\S*/gi, " ")
-    .replace(/[<>]/g, "");
+    .replace(/\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,24}\/\S*/gi, " ")
+    .replace(
+      /\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,24}(?![a-z0-9-])/gi,
+      (domain) => domain.replace(/\./g, " [.] "),
+    )
+    .replace(/[<>]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }

@@ -2,9 +2,10 @@ import type { CalendarEvent } from "@/utils/calendar/event-types";
 import { formatInUserTimezone, ONE_DAY_MS } from "@/utils/date";
 import { extractEmailAddress } from "@/utils/email";
 import { prefixPath } from "@/utils/path";
-import type {
-  ReportSection,
-  ReportSelection,
+import {
+  type ReportSection,
+  type ReportSelection,
+  stripLinksAndMarkup,
 } from "@/utils/ai/morning-report/select-items";
 import { type Candidate, normalizeSubject } from "./candidates";
 import type { ConnectionProblem } from "./health";
@@ -146,7 +147,9 @@ function selectedLines(input: RenderInput) {
     const key = candidate
       ? `${extractEmailAddress(candidate.from).toLowerCase()}|${normalizeSubject(candidate.subject)}`
       : item.id;
-    const base = item.note || candidate?.subject || reply?.subject || "";
+    const base =
+      item.note ||
+      stripLinksAndMarkup(candidate?.subject ?? reply?.subject ?? "");
     const age = reply
       ? ` · ${Math.max(0, Math.floor((input.now.getTime() - reply.sentAt.getTime()) / ONE_DAY_MS))}d`
       : "";
