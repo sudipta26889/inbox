@@ -10,6 +10,7 @@ vi.mock("@/utils/calendar/event-provider", () => ({
     .mockResolvedValue([{ fetchEvents: mockFetchEvents }]),
 }));
 
+import { createCalendarEventProviders } from "@/utils/calendar/event-provider";
 import { fetchTodayEvents } from "./calendar";
 
 const logger = createScopedLogger("test");
@@ -50,5 +51,38 @@ describe("fetchTodayEvents", () => {
       maxResults: 50,
     });
     expect(events.map((e) => e.id)).toEqual(["2"]);
+  });
+
+  it("keeps events from healthy providers and logs the failed one", async () => {
+    const rejecting = vi.fn().mockRejectedValue(new Error("invalid_grant"));
+    const resolving = vi.fn().mockResolvedValue({
+      nextPageToken: null,
+      events: [
+        {
+          id: "ok",
+          title: "Design review",
+          startTime: new Date("2026-10-13T10:00:00Z"),
+          endTime: new Date("2026-10-13T11:00:00Z"),
+          attendees: [],
+        },
+      ],
+    });
+    vi.mocked(createCalendarEventProviders).mockResolvedValueOnce([
+      { fetchEvents: rejecting },
+      { fetchEvents: resolving },
+    ] as never);
+    const warn = vi.spyOn(logger, "warn");
+
+    const events = await fetchTodayEvents({
+      emailAccountId: "ea",
+      timeZone: "Asia/Calcutta",
+      now: new Date("2026-10-13T03:30:00Z"),
+      logger,
+    });
+
+    expect(events.map((e) => e.id)).toEqual(["ok"]);
+    expect(warn).toHaveBeenCalledWith("Morning report calendar fetch failed", {
+      error: expect.any(Error),
+    });
   });
 });

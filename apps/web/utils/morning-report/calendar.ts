@@ -34,9 +34,15 @@ export async function fetchTodayEvents({
   );
 
   return results
-    .flatMap((result) =>
-      result.status === "fulfilled" ? result.value.events : [],
-    )
+    .flatMap((result) => {
+      if (result.status === "rejected") {
+        logger.warn("Morning report calendar fetch failed", {
+          error: result.reason,
+        });
+        return [];
+      }
+      return result.value.events;
+    })
     .filter((event) => !CANCELLED_TITLE.test(event.title))
     .sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
 }
