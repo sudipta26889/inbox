@@ -22,6 +22,7 @@ import { renderMorningReport } from "./render";
 const MAX_WINDOW_MS = 7 * ONE_DAY_MS;
 // A normal day's window is ~24h; anything clearly longer means a day was lost.
 const MISSED_RUN_THRESHOLD_MS = ONE_DAY_MS + 2 * ONE_HOUR_MS;
+const MAILBOX_TIMEOUT_MS = 150_000;
 const MEMORY_QUERY =
   "morning report: what matters to me, which senders or threads need no reply";
 
@@ -30,6 +31,7 @@ export type MorningReport = {
   since: Date;
   accounts: { emailAccountId: string; email: string }[];
   failures: { emailAccountId: string; email: string; error: string }[];
+  readEmailAccountIds: string[];
 };
 
 export async function buildMorningReport({
@@ -52,7 +54,6 @@ export async function buildMorningReport({
     orderBy: { createdAt: "asc" },
   });
   const timeZone = emailAccounts[0]?.timezone || "UTC";
-  const since = await getReportWindowStart({ userId, now });
   const problems = await findConnectionProblems({ userId });
 
   // Reading a mailbox already known to be disconnected only produces a second,
@@ -62,27 +63,40 @@ export async function buildMorningReport({
       .filter((p) => p.problem === "mailbox")
       .map((p) => p.emailAccountId),
   );
-  const readable = emailAccounts.filter(
-    (a) => !brokenMailboxes.has(a.id) && a.account?.provider,
+  const candidatesToRead = emailAccounts.filter(
+    (a) => !brokenMailboxes.has(a.id),
   );
+  const readable = candidatesToRead.filter((a) => a.account?.provider);
 
   const results = await Promise.allSettled(
-    readable.map((emailAccount, index) =>
-      readMailbox({
-        emailAccountId: emailAccount.id,
-        accountEmail: emailAccount.email,
-        providerName: emailAccount.account?.provider ?? "",
-        accountIndex: index + 1,
-        since,
-        now,
-        timeZone,
-        logger: logger.with({ emailAccountId: emailAccount.id }),
-      }),
+    readable.map(async (emailAccount, index) =>
+      withTimeout(
+        readMailbox({
+          emailAccountId: emailAccount.id,
+          accountEmail: emailAccount.email,
+          providerName: emailAccount.account?.provider ?? "",
+          accountIndex: index + 1,
+          since: await getReportWindowStart({
+            emailAccountId: emailAccount.id,
+            now,
+          }),
+          now,
+          timeZone,
+          logger: logger.with({ emailAccountId: emailAccount.id }),
+        }),
+        MAILBOX_TIMEOUT_MS,
+      ),
     ),
   );
 
   const reads: MailboxRead[] = [];
-  const failures: MorningReport["failures"] = [];
+  const failures: MorningReport["failures"] = candidatesToRead
+    .filter((a) => !a.account?.provider)
+    .map((a) => ({
+      emailAccountId: a.id,
+      email: a.email,
+      error: "no mail provider connected",
+    }));
   results.forEach((result, index) => {
     const emailAccount = readable[index];
     if (result.status === "fulfilled") {
@@ -108,6 +122,10 @@ export async function buildMorningReport({
       `No mailbox could be read (${emailAccounts.map((a) => a.email).join(", ")})`,
     );
   }
+
+  const since = new Date(
+    Math.min(...reads.map((read) => read.since.getTime())),
+  );
 
   const emailAccount = await getEmailAccountWithAi({
     emailAccountId: reads[0].emailAccountId,
@@ -165,33 +183,39 @@ export async function buildMorningReport({
       email,
     })),
     failures,
+    readEmailAccountIds: reads.map((read) => read.emailAccountId),
   };
 }
 
 export async function getReportWindowStart({
-  userId,
+  emailAccountId,
   now,
 }: {
-  userId: string;
+  emailAccountId: string;
   now: Date;
 }) {
-  const lastSent = await redis.get<string>(lastSentKey(userId));
-  if (!lastSent) return new Date(now.getTime() - ONE_DAY_MS);
+  const defaultStart = new Date(now.getTime() - ONE_DAY_MS);
+  const lastSent = await redis.get<string>(lastSentKey(emailAccountId));
+  if (!lastSent) return defaultStart;
+  const sentAt = new Date(lastSent).getTime();
+  if (Number.isNaN(sentAt)) return defaultStart;
   return new Date(
-    Math.max(new Date(lastSent).getTime(), now.getTime() - MAX_WINDOW_MS),
+    Math.min(now.getTime(), Math.max(sentAt, now.getTime() - MAX_WINDOW_MS)),
   );
 }
 
 export async function markReportSent({
-  userId,
+  emailAccountIds,
   at,
 }: {
-  userId: string;
+  emailAccountIds: string[];
   at: Date;
 }) {
   // No TTL: this is the window's anchor, and losing it after a long outage
   // would silently shrink the next report to 24h.
-  await redis.set(lastSentKey(userId), at.toISOString());
+  await Promise.all(
+    emailAccountIds.map((id) => redis.set(lastSentKey(id), at.toISOString())),
+  );
 }
 
 type MailboxRead = Awaited<ReturnType<typeof readMailbox>>;
@@ -255,6 +279,7 @@ async function readMailbox({
   return {
     emailAccountId,
     accountEmail,
+    since,
     candidates,
     replies,
     events: events.map((event) => ({ accountEmail, event })),
@@ -281,6 +306,17 @@ function mergeCounts(counts: Record<string, number>[]) {
   return merged;
 }
 
-function lastSentKey(userId: string) {
-  return `morning-report:last-sent:${userId}`;
+function lastSentKey(emailAccountId: string) {
+  return `morning-report:last-sent:${emailAccountId}`;
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error("Timed out reading mailbox")),
+      ms,
+    );
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
