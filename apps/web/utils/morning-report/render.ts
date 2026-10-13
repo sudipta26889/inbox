@@ -27,15 +27,6 @@ const SECTION_HEADERS: Record<ReportSection, string> = {
   reply: "✉️ Reply needed",
   waiting: "⏳ Waiting on others",
 };
-const PERSONAL_DOMAINS = new Set([
-  "gmail.com",
-  "googlemail.com",
-  "outlook.com",
-  "hotmail.com",
-  "live.com",
-  "yahoo.com",
-  "icloud.com",
-]);
 
 export type RenderInput = {
   now: Date;
@@ -90,12 +81,10 @@ export function renderMorningReport(input: RenderInput): string {
     ]);
   }
 
-  const footer = footerLine(input);
-  if (footer) blocks.push([footer]);
-
-  return capLength(
-    [header, ...blocks].map((block) => block.join("\n")).join("\n\n"),
-  );
+  const body = [header, ...blocks]
+    .map((block) => block.join("\n"))
+    .join("\n\n");
+  return capLength(body, footerLine(input));
 }
 
 export function accountTag(email: string) {
@@ -112,7 +101,9 @@ function problemLines(input: RenderInput) {
       : `• ${problem.email}: calendar access expired, today's meetings may be missing. Reconnect it in Settings.`,
   );
   for (const failure of input.failures) {
-    lines.push(`• ${failure.email}: could not be read (${failure.error})`);
+    lines.push(
+      `• ${failure.email}: could not be read (${truncate(failure.error, 150)})`,
+    );
   }
   if (input.unverifiedReplyCount) {
     lines.push(
@@ -145,7 +136,7 @@ function selectedLines(input: RenderInput) {
       : item.id;
     const base = item.note || candidate?.subject || reply?.subject || "";
     const age = reply
-      ? ` · ${Math.floor((input.now.getTime() - reply.sentAt.getTime()) / ONE_DAY_MS)}d`
+      ? ` · ${Math.max(0, Math.floor((input.now.getTime() - reply.sentAt.getTime()) / ONE_DAY_MS))}d`
       : "";
 
     const section = bySection.get(item.section) ?? new Map();
@@ -214,16 +205,30 @@ function footerLine({ bulkCounts, staleReplyCount }: RenderInput) {
   return parts.length ? `Skipped: ${parts.join(" · ")}` : null;
 }
 
-function capLength(text: string) {
-  if (text.length <= MAX_REPORT_CHARS) return text;
-  const lines = text.split("\n");
+function capLength(body: string, footer: string | null) {
+  const suffix = footer ? `\n\n${footer}` : "";
+  if (body.length + suffix.length <= MAX_REPORT_CHARS) return body + suffix;
+  const lines = body.split("\n");
   const kept: string[] = [];
   let length = 0;
   const reserve = 60;
   for (const line of lines) {
-    if (length + line.length + 1 > MAX_REPORT_CHARS - reserve) break;
+    if (length + line.length + 1 > MAX_REPORT_CHARS - suffix.length - reserve)
+      break;
     kept.push(line);
     length += line.length + 1;
   }
-  return `${kept.join("\n")}\n…and ${lines.length - kept.length} more lines — open Inbox for the rest.`;
+  // Drop a trailing blank line or a section header whose items were cut.
+  while (
+    kept.length > 1 &&
+    (kept.at(-1) === "" ||
+      (kept.at(-2) === "" && !kept.at(-1)?.startsWith("•")))
+  ) {
+    kept.pop();
+  }
+  return `${kept.join("\n")}\n…and ${lines.length - kept.length} more lines — open Inbox for the rest.${suffix}`;
+}
+
+function truncate(text: string, max: number) {
+  return text.length > max ? `${text.slice(0, max)}…` : text;
 }

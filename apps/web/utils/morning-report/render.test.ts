@@ -175,26 +175,69 @@ describe("renderMorningReport", () => {
     );
   });
 
-  it("caps length on whole lines", () => {
-    const many = Array.from({ length: 200 }, (_, i) =>
-      cand(`1.${i + 1}`, "me@gmail.com", `s${i}@x.com`, `Subject ${i}`),
+  it("caps length on whole lines and keeps the Skipped footer", () => {
+    const text = renderMorningReport(
+      input({ ...manyItems(), bulkCounts: { Marketing: 3 } }),
     );
+    expect(text.length).toBeLessThanOrEqual(MAX_REPORT_CHARS);
+    expect(text).toMatch(
+      /…and \d+ more lines — open Inbox for the rest\.\n\nSkipped: 3 Marketing$/,
+    );
+  });
+
+  it("ends with the marker when there is no footer", () => {
+    const text = renderMorningReport(input(manyItems()));
+    expect(text.length).toBeLessThanOrEqual(MAX_REPORT_CHARS);
+    expect(text).toMatch(/…and \d+ more lines — open Inbox for the rest\.$/);
+    expect(text).not.toMatch(/\n\n…and/);
+  });
+
+  it("truncates long read-failure errors", () => {
+    const text = renderMorningReport(
+      input({ failures: [{ email: "a@b.com", error: "e".repeat(400) }] }),
+    );
+    expect(text).toContain(`(${"e".repeat(150)}…)`);
+    expect(text).not.toContain("e".repeat(151));
+  });
+
+  it("never renders a negative reply age", () => {
     const text = renderMorningReport(
       input({
-        candidates: many,
+        replyItems: [
+          {
+            id: "1.r1",
+            accountEmail: "me@gmail.com",
+            kind: "needs_reply",
+            threadId: "t",
+            counterpart: "L",
+            subject: "Q",
+            sentAt: new Date("2026-10-14T03:30:00Z"),
+          },
+        ],
         selection: {
-          items: many.map((c) => ({
-            id: c.id,
-            section: "action" as const,
-            note: `Item ${c.id} ${"y".repeat(60)}`,
-          })),
+          items: [{ id: "1.r1", section: "reply", note: "Reply to L" }],
         },
       }),
     );
-    expect(text.length).toBeLessThanOrEqual(MAX_REPORT_CHARS);
-    expect(text).toMatch(/…and \d+ more lines — open Inbox for the rest\.$/);
+    expect(text).toContain("• Reply to L · 0d [gmail]");
   });
 });
+
+function manyItems(): Partial<RenderInput> {
+  const many = Array.from({ length: 200 }, (_, i) =>
+    cand(`1.${i + 1}`, "me@gmail.com", `s${i}@x.com`, `Subject ${i}`),
+  );
+  return {
+    candidates: many,
+    selection: {
+      items: many.map((c) => ({
+        id: c.id,
+        section: "action" as const,
+        note: `Item ${c.id} ${"y".repeat(60)}`,
+      })),
+    },
+  };
+}
 
 function input(overrides: Partial<RenderInput>): RenderInput {
   return {
