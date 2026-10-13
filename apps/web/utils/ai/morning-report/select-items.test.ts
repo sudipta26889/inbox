@@ -5,7 +5,11 @@ import type { ReplyItem } from "@/utils/morning-report/reply-state";
 
 vi.mock("server-only", () => ({}));
 
-import { sanitizeSelection, stripLinksAndMarkup } from "./select-items";
+import {
+  sanitizeSelection,
+  selectionSchema,
+  stripLinksAndMarkup,
+} from "./select-items";
 
 const candidate = { id: "1.1", subject: "EMI on Card" } as Candidate;
 const reply = { id: "1.r1", kind: "awaiting" } as ReplyItem;
@@ -98,5 +102,22 @@ describe("stripLinksAndMarkup", () => {
     const out = stripLinksAndMarkup(text);
     expect(out).not.toMatch(linkLike);
     expect(out).toContain("[.]");
+  });
+});
+
+describe("selectionSchema", () => {
+  it("accepts the near-misses a gateway model produces without the JSON schema", () => {
+    const parsed = selectionSchema.parse([
+      { id: 1.3, section: "Money", note: "ICICI EMI" },
+      { id: "2.1", section: "Deadlines" },
+      { id: "1.r1", section: "Needs Reply", note: null },
+      { id: "1.4", section: "something odd", note: "x" },
+    ]);
+    expect(parsed.items).toEqual([
+      { id: "1.3", section: "money", note: "ICICI EMI" },
+      { id: "2.1", section: "deadline", note: "" },
+      { id: "1.r1", section: "reply", note: "" },
+      { id: "1.4", section: "action", note: "x" },
+    ]);
   });
 });

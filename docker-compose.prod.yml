@@ -22,6 +22,10 @@ services:
       - "5500:5500"
     environment:
       NODE_ENV: "production"
+      # Node 24 races IPv6/IPv4 with a 250 ms per-attempt budget. IPv6 is
+      # unreachable from this host and Telegram's IPv4 answers slower than that,
+      # so every fetch to api.telegram.org timed out (ETIMEDOUT).
+      NODE_OPTIONS: "--network-family-autoselection-attempt-timeout=2000"
       NEXT_PUBLIC_BASE_URL: "https://inbox.sudiptadhara.in"
       NEXT_PUBLIC_BYPASS_PREMIUM_CHECKS: "true"
       NEXT_PUBLIC_MCP_SERVER_ENABLED: "true"
