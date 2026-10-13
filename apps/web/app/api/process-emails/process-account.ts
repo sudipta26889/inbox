@@ -147,21 +147,28 @@ export async function processEmailsForAccount({
         logger,
       });
 
-      const sentProcessed = await processRecentSentMessages({
-        gmail,
-        emailAccountId: validatedEmailAccount.id,
-        options: {
-          provider,
-          rules: validatedEmailAccount.rules,
-          hasAutomationRules,
-          hasAiAccess: userHasAiAccess,
-          emailAccount: validatedEmailAccount,
+      // Best-effort: a sent-mail failure must never block inbox processing.
+      try {
+        const sentProcessed = await processRecentSentMessages({
+          gmail,
+          emailAccountId: validatedEmailAccount.id,
+          options: {
+            provider,
+            rules: validatedEmailAccount.rules,
+            hasAutomationRules,
+            hasAiAccess: userHasAiAccess,
+            emailAccount: validatedEmailAccount,
+            logger,
+          },
           logger,
-        },
-        logger,
-      });
-      if (sentProcessed) {
-        logger.info("Processed recent sent messages", { count: sentProcessed });
+        });
+        if (sentProcessed) {
+          logger.info("Processed recent sent messages", {
+            count: sentProcessed,
+          });
+        }
+      } catch (error) {
+        logger.error("Sent-mail catch-up failed", { error });
       }
 
       // Fetch unread emails from inbox
