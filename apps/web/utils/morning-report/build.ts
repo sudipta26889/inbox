@@ -79,6 +79,7 @@ export async function buildMorningReport({
           since: await getReportWindowStart({
             emailAccountId: emailAccount.id,
             now,
+            logger,
           }),
           now,
           timeZone,
@@ -201,18 +202,26 @@ export async function buildMorningReport({
 export async function getReportWindowStart({
   emailAccountId,
   now,
+  logger,
 }: {
   emailAccountId: string;
   now: Date;
+  logger: Logger;
 }) {
   const defaultStart = new Date(now.getTime() - ONE_DAY_MS);
   const lastSent = await redis.get<string>(lastSentKey(emailAccountId));
   if (!lastSent) return defaultStart;
   const sentAt = new Date(lastSent).getTime();
   if (Number.isNaN(sentAt)) return defaultStart;
-  return new Date(
-    Math.min(now.getTime(), Math.max(sentAt, now.getTime() - MAX_WINDOW_MS)),
-  );
+  // A future anchor would give an empty window and silently report nothing.
+  if (sentAt > now.getTime()) {
+    logger.warn("Morning report anchor is in the future; using 24h", {
+      emailAccountId,
+      lastSent,
+    });
+    return defaultStart;
+  }
+  return new Date(Math.max(sentAt, now.getTime() - MAX_WINDOW_MS));
 }
 
 export async function markReportSent({

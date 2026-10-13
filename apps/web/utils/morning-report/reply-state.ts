@@ -8,8 +8,8 @@ import prisma from "@/utils/prisma";
 import type { ParsedMessage } from "@/utils/types";
 
 // Trackers older than this are counted as stale, not listed. Most are rot
-// from before outbound replies were processed (the process-sent.ts flow that
-// Task 8 creates); listing them would bury the current queue.
+// from before sent mail was processed (replies never resolved their tracker);
+// listing them would bury the current queue.
 const REPLY_WINDOW_DAYS = 30;
 // ponytail: bounds thread fetches per mailbox; raise if a real queue is longer.
 const MAX_THREADS_CHECKED = 40;
@@ -28,7 +28,7 @@ export type ReplyItem = {
   sentAt: Date;
 };
 
-// staleCount: in-window-excluded trackers older than the window.
+// staleCount: open trackers older than the window, counted but not listed.
 // unverifiedCount: trackers we could not check against the live thread (past
 // the cap, or the fetch threw). Neither is treated as resolved or deleted.
 export type ReplyState = {
