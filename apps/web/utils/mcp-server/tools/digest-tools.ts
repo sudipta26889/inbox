@@ -33,7 +33,8 @@ export async function getDailyDigestTool(
 
   const digest = await getDailyDigest({ userId: context.userId, date });
 
-  if (!digest) {
+  // Digests stored before the consolidated report have no text.
+  if (!digest?.text) {
     return {
       date,
       timeZone,

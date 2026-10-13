@@ -115,34 +115,41 @@ async function runDueDigests(logger: Logger, { force = false } = {}) {
         text: digest.text,
         logger: userLogger,
       });
-      // Per mailbox: one that failed today keeps its old anchor, so tomorrow
-      // covers its missed day.
-      await markReportSent({
-        emailAccountIds: digest.readEmailAccountIds,
-        at: startedAt,
-      });
+      // Delivered: nothing below may fail the run, or the released latch
+      // would re-send a duplicate report and alert that none was sent.
+      try {
+        // Per mailbox: one that failed today keeps its old anchor, so
+        // tomorrow covers its missed day.
+        await markReportSent({
+          emailAccountIds: digest.readEmailAccountIds,
+          at: startedAt,
+        });
 
-      // After delivery: a retry after a failed send must not push twice.
-      await pushDailyDigestToRemoteAgents({ digest, logger: userLogger });
+        await pushDailyDigestToRemoteAgents({ digest, logger: userLogger });
 
-      // The catch is load-bearing: publishDigest reads the database to resolve
-      // consent, and a blip there must not fail a run that already delivered.
-      for (const account of digest.accounts) {
-        await publishDigest({
-          emailAccountId: account.emailAccountId,
-        }).catch(() => {});
+        // The catch is load-bearing: publishDigest reads the database to
+        // resolve consent.
+        for (const emailAccountId of digest.readEmailAccountIds) {
+          await publishDigest({ emailAccountId }).catch(() => {});
+        }
+
+        await recordDigestRun({
+          userId: user.id,
+          outcome: {
+            status: "ok",
+            date,
+            at: new Date().toISOString(),
+            accounts: digest.readEmailAccountIds.length,
+            failedAccounts: digest.failures.map((failure) => failure.email),
+          },
+        });
+      } catch (postDeliveryError) {
+        userLogger.error(
+          "Morning report delivered but post-delivery step failed",
+          { error: postDeliveryError },
+        );
+        captureException(postDeliveryError);
       }
-
-      await recordDigestRun({
-        userId: user.id,
-        outcome: {
-          status: "ok",
-          date,
-          at: new Date().toISOString(),
-          accounts: digest.accounts.length - digest.failures.length,
-          failedAccounts: digest.failures.map((failure) => failure.email),
-        },
-      });
 
       userLogger.info("Sent morning report", {
         date,

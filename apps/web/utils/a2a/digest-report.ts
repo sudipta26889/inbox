@@ -107,7 +107,7 @@ export async function alertDigestFailure({
 
     await sendAutomationMessage({
       channel,
-      text: `Morning digest failed for ${outcome.date}.\n${outcome.error ?? "Unknown error"}${failedAccounts}\n\nNo morning report was sent. The next poll this hour retries.`,
+      text: `Morning digest failed for ${outcome.date}.\n${outcome.error ?? "Unknown error"}${failedAccounts}\n\nNo morning report was sent. A later poll inside the 09:00 hour retries.`,
       logger,
     });
   } catch (error) {
