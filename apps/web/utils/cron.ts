@@ -11,8 +11,11 @@ export function hasCronSecret(request: RequestWithLogger) {
   const authHeader = request.headers.get("authorization");
   const valid = secureCompare(authHeader, `Bearer ${env.CRON_SECRET}`);
 
+  // Never log the header itself: it carries the presented secret.
   if (!valid)
-    request.logger.error("Unauthorized cron request:", { authHeader });
+    request.logger.error("Unauthorized cron request", {
+      hasAuthHeader: !!authHeader,
+    });
 
   return valid;
 }
