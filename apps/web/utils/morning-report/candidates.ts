@@ -90,18 +90,20 @@ export function foldCandidates({
   rulesByMessage: Map<string, RuleTag[]>;
 }) {
   const bulkCounts: Record<string, number> = {};
-  // ponytail: one representative per sender+subject shape; distinct content
-  // under an identical subject (two balance alerts) shows only the newest, with
-  // its count. Keep extra snippets if that ever hides something.
+  // ponytail: key is sender + normalized subject. Long hashes and bank refs fold;
+  // short numbers (amounts, card endings) stay distinct. Same-subject mail still
+  // shows only the newest, with its count. Keep extra snippets if that hides something.
   const groups = new Map<string, Candidate>();
 
   for (const message of [...messages].sort(sortByInternalDate("desc"))) {
     const rules = rulesByMessage.get(message.id) ?? [];
-    const bulk = rules.find(
-      (rule) => rule.systemType && BULK_SYSTEM_TYPES.has(rule.systemType),
-    );
-    if (bulk) {
-      bulkCounts[bulk.name] = (bulkCounts[bulk.name] ?? 0) + 1;
+    const isBulk =
+      rules.length > 0 &&
+      rules.every(
+        (rule) => rule.systemType && BULK_SYSTEM_TYPES.has(rule.systemType),
+      );
+    if (isBulk) {
+      bulkCounts[rules[0].name] = (bulkCounts[rules[0].name] ?? 0) + 1;
       continue;
     }
 
@@ -123,7 +125,7 @@ export function foldCandidates({
       subject,
       snippet: cleanSnippet(message.snippet),
       date: internalDateToDate(message.internalDate),
-      rules: rules.map((rule) => rule.name),
+      rules: [...new Set(rules.map((rule) => rule.name))],
       count: 1,
     });
   }
@@ -140,7 +142,7 @@ export function normalizeSubject(subject: string) {
   return subject
     .toLowerCase()
     .replace(/^((re|fwd?|aw):\s*)+/g, "")
-    .replace(/\b[0-9a-z]*\d[0-9a-z]*\b/g, "#")
+    .replace(/\b(?=[0-9a-z]*\d)[0-9a-z]{7,}\b/g, "#")
     .replace(/\s+/g, " ")
     .trim();
 }
