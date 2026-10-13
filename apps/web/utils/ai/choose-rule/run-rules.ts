@@ -35,6 +35,7 @@ import {
   isConversationStatusType,
 } from "@/utils/reply-tracker/conversation-status-config";
 import { maybeRouteToTaskPilot } from "@/utils/taskpilot/route";
+import { fanOutEmailAnalysis } from "@/utils/email-fanout";
 import { getEmailUrlForMessage } from "@/utils/url";
 import {
   determineConversationStatus,
@@ -222,6 +223,14 @@ export async function runRules({
         },
         canCreate: false,
       }).catch(() => undefined);
+      fanOutEmailAnalysis({
+        message,
+        accountEmail: emailAccount.email,
+        rules: [],
+        skippedReason: reason,
+        mitraAlreadyNotified: false,
+        logger,
+      });
     }
 
     return [
@@ -303,6 +312,25 @@ export async function runRules({
       },
       canCreate,
     }).catch(() => undefined);
+    fanOutEmailAnalysis({
+      message,
+      accountEmail: emailAccount.email,
+      rules: executedRules.flatMap((er) =>
+        er.rule
+          ? [
+              {
+                name: er.rule.name,
+                systemType: er.rule.systemType,
+                reason: er.reason,
+              },
+            ]
+          : [],
+      ),
+      mitraAlreadyNotified: executedRules.some((er) =>
+        er.actionItems?.some((ai) => ai.type === ActionType.A2A_NOTIFY),
+      ),
+      logger,
+    });
   }
 
   return executedRules;

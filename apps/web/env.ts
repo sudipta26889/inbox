@@ -295,6 +295,13 @@ export const env = createEnv({
     // A2A Outbound Agent Notifications
     A2A_REMOTE_AGENTS: z.string().optional(),
     A2A_REMOTE_AGENT_TOKEN: z.string().optional(),
+    // "true" sends every non-noise email's analysis to A2A_REMOTE_AGENTS (Mitra),
+    // not only emails whose rule has an A2A_NOTIFY action.
+    A2A_FANOUT_ALL_EMAILS: z.enum(["true", "false"]).optional(),
+    // MeetEcho PKM receiver for every non-noise email; blank = off.
+    MEETECHO_INBOX_INGEST_URL: z.string().optional(),
+    // A2A token issued in MeetEcho (scope transcriptions:write).
+    MEETECHO_A2A_TOKEN: z.string().optional(),
 
     // Long-term agentic memory (MCP). Scoped per email account via project_id.
     LONGMEMORY_BASE_URL: z.string().url().optional(),
