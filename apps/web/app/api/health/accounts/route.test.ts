@@ -42,11 +42,13 @@ describe("GET /api/health/accounts", () => {
       {
         id: "ea-1",
         email: "ok@example.com",
+        watchEmailsExpirationDate: new Date("2026-10-20T02:34:23Z"),
         account: { provider: "google", disconnectedAt: null },
       },
       {
         id: "ea-2",
         email: "revoked@example.com",
+        watchEmailsExpirationDate: null,
         account: { provider: "google", disconnectedAt },
       },
     ] as never);
@@ -56,6 +58,7 @@ describe("GET /api/health/accounts", () => {
 
     expect(response.status).toBe(200);
     expect(body).toMatchObject({ connectedCount: 1, disconnectedCount: 1 });
+    expect(body.accounts[0].watchExpiresAt).toBe("2026-10-20T02:34:23.000Z");
     expect(body.accounts[1]).toMatchObject({
       email: "revoked@example.com",
       connected: false,

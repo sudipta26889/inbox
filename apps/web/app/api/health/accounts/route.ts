@@ -8,9 +8,12 @@ export type GetAccountsHealthResponse = Awaited<
   ReturnType<typeof getAccountsHealth>
 >;
 
-// Per-mailbox connection state for GuardianAI. A mailbox whose Google/Microsoft
-// grant was revoked (invalid_grant) is marked disconnected by
+// Per-mailbox connection and push-watch state for GuardianAI. A mailbox whose
+// Google/Microsoft grant was revoked (invalid_grant) is marked disconnected by
 // cleanup-invalid-tokens, and stays so until its owner signs in again.
+// watchExpiresAt moves forward on every successful renewal (cron, every 6 h),
+// so a watch that stops renewing shows up as a date that stops moving —
+// read-only, unlike calling /api/watch/all, which re-registers watches.
 export const GET = withError("health/accounts", async (request) => {
   // Fails closed: unlike /api/health, this lists mailboxes.
   if (!env.HEALTH_API_KEY) {
@@ -33,6 +36,7 @@ async function getAccountsHealth() {
     select: {
       id: true,
       email: true,
+      watchEmailsExpirationDate: true,
       account: { select: { provider: true, disconnectedAt: true } },
     },
     orderBy: { email: "asc" },
@@ -44,6 +48,7 @@ async function getAccountsHealth() {
     provider: emailAccount.account?.provider ?? null,
     connected: !emailAccount.account?.disconnectedAt,
     disconnectedAt: emailAccount.account?.disconnectedAt ?? null,
+    watchExpiresAt: emailAccount.watchEmailsExpirationDate,
   }));
 
   return {
