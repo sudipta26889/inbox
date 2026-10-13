@@ -136,6 +136,9 @@ export const getCalendarClientWithRefresh = async ({
             accessToken: null,
             refreshToken: null,
             expiresAt: null,
+            // The card only reads isConnected; with tokens gone and this left
+            // true, the page showed a healthy calendar that nothing could read.
+            isConnected: false,
           },
         });
         logger.info("Cleared stale calendar tokens", { emailAccountId });

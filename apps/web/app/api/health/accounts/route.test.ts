@@ -83,7 +83,7 @@ describe("GET /api/health/accounts", () => {
           disconnectedAt: null,
           refresh_token: null,
         },
-        calendarConnections: [{ refreshToken: null }],
+        calendarConnections: [{ isConnected: true, refreshToken: null }],
       },
     ] as never);
 

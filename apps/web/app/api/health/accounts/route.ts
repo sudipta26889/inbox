@@ -41,8 +41,7 @@ async function getAccountsHealth() {
         select: { provider: true, disconnectedAt: true, refresh_token: true },
       },
       calendarConnections: {
-        where: { isConnected: true },
-        select: { refreshToken: true },
+        select: { isConnected: true, refreshToken: true },
       },
     },
     orderBy: { email: "asc" },
@@ -59,8 +58,8 @@ async function getAccountsHealth() {
       Boolean(emailAccount.account?.refresh_token),
     disconnectedAt: emailAccount.account?.disconnectedAt ?? null,
     watchExpiresAt: emailAccount.watchEmailsExpirationDate,
-    calendarConnected: emailAccount.calendarConnections.every((c) =>
-      Boolean(c.refreshToken),
+    calendarConnected: emailAccount.calendarConnections.every(
+      (c) => c.isConnected && Boolean(c.refreshToken),
     ),
   }));
 

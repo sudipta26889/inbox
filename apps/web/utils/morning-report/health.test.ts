@@ -12,7 +12,7 @@ describe("findConnectionProblems", () => {
         id: "ok",
         email: "ok@x.com",
         account: { disconnectedAt: null, refresh_token: "r" },
-        calendarConnections: [{ refreshToken: "c" }],
+        calendarConnections: [{ isConnected: true, refreshToken: "c" }],
       },
       {
         id: "deca",
@@ -24,12 +24,27 @@ describe("findConnectionProblems", () => {
         id: "cal",
         email: "cal@x.com",
         account: { disconnectedAt: null, refresh_token: "r" },
-        calendarConnections: [{ refreshToken: null }],
+        calendarConnections: [{ isConnected: true, refreshToken: null }],
       },
     ] as never);
 
     expect(await findConnectionProblems({ userId: "u" })).toEqual([
       { emailAccountId: "deca", email: "me@deca.com", problem: "mailbox" },
+      { emailAccountId: "cal", email: "cal@x.com", problem: "calendar" },
+    ]);
+  });
+
+  it("flags a calendar marked disconnected even if a token is still stored", async () => {
+    prisma.emailAccount.findMany.mockResolvedValue([
+      {
+        id: "cal",
+        email: "cal@x.com",
+        account: { disconnectedAt: null, refresh_token: "r" },
+        calendarConnections: [{ isConnected: false, refreshToken: "c" }],
+      },
+    ] as never);
+
+    expect(await findConnectionProblems({ userId: "u" })).toEqual([
       { emailAccountId: "cal", email: "cal@x.com", problem: "calendar" },
     ]);
   });

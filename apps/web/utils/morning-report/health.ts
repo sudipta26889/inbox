@@ -18,8 +18,7 @@ export async function findConnectionProblems({
       email: true,
       account: { select: { disconnectedAt: true, refresh_token: true } },
       calendarConnections: {
-        where: { isConnected: true },
-        select: { refreshToken: true },
+        select: { isConnected: true, refreshToken: true },
       },
     },
     orderBy: { createdAt: "asc" },
@@ -41,7 +40,11 @@ export async function findConnectionProblems({
 
     // Calendar invalid_grant wipes tokens but leaves isConnected=true, and
     // event fetching then skips the connection without a word.
-    if (emailAccount.calendarConnections.some((c) => !c.refreshToken)) {
+    if (
+      emailAccount.calendarConnections.some(
+        (c) => !c.isConnected || !c.refreshToken,
+      )
+    ) {
       problems.push({ ...base, problem: "calendar" });
     }
 

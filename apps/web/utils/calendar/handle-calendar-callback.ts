@@ -100,6 +100,7 @@ export async function handleCalendarCallback(
           accessToken,
           refreshToken,
           expiresAt: expiresAt ? new Date(expiresAt) : null,
+          isConnected: true,
         },
       });
 
