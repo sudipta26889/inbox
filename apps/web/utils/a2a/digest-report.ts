@@ -9,7 +9,7 @@ import prisma from "@/utils/prisma";
 import { redis } from "@/utils/redis";
 
 /**
- * Make the 05:00 digest report its own outcome.
+ * Make the morning digest report its own outcome.
  *
  * The cron container invokes the route as `curl ... || true`, so the exit
  * status and the response body — including `failed: 1` — are discarded. A run
@@ -32,6 +32,26 @@ export type DigestRunOutcome = {
   failedAccounts?: string[];
   error?: string;
 };
+
+export async function findOwnerMessagingChannel(userId: string) {
+  const channel = await prisma.messagingChannel.findFirst({
+    where: {
+      isConnected: true,
+      provider: { in: SUPPORTED_AUTOMATION_MESSAGING_PROVIDERS },
+      emailAccount: { userId },
+    },
+    select: {
+      provider: true,
+      accessToken: true,
+      providerUserId: true,
+      channelId: true,
+      isConnected: true,
+    },
+    orderBy: { createdAt: "asc" },
+  });
+
+  return channel && isAutomationMessagingChannelReady(channel) ? channel : null;
+}
 
 export async function recordDigestRun({
   userId,
@@ -77,23 +97,8 @@ export async function alertDigestFailure({
       tags: ["warning"],
     });
 
-    const channel = await prisma.messagingChannel.findFirst({
-      where: {
-        isConnected: true,
-        provider: { in: SUPPORTED_AUTOMATION_MESSAGING_PROVIDERS },
-        emailAccount: { userId },
-      },
-      select: {
-        provider: true,
-        accessToken: true,
-        providerUserId: true,
-        channelId: true,
-        isConnected: true,
-      },
-      orderBy: { createdAt: "asc" },
-    });
-
-    if (!channel || !isAutomationMessagingChannelReady(channel)) {
+    const channel = await findOwnerMessagingChannel(userId);
+    if (!channel) {
       logger.warn("No messaging channel to report digest failure on", {
         userId,
       });
@@ -102,7 +107,7 @@ export async function alertDigestFailure({
 
     await sendAutomationMessage({
       channel,
-      text: `Morning digest failed for ${outcome.date}.\n${outcome.error ?? "Unknown error"}${failedAccounts}\n\nNothing was sent to your agents. The next scheduled run will retry.`,
+      text: `Morning digest failed for ${outcome.date}.\n${outcome.error ?? "Unknown error"}${failedAccounts}\n\nNo morning report was sent. The next poll this hour retries.`,
       logger,
     });
   } catch (error) {

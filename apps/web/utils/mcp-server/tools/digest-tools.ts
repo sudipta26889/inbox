@@ -1,8 +1,4 @@
-import {
-  getDailyDigest,
-  getLocalDate,
-  type DailyDigest,
-} from "@/utils/a2a/daily-digest";
+import { getDailyDigest, getLocalDate } from "@/utils/a2a/daily-digest";
 import { createScopedLogger } from "@/utils/logger";
 import prisma from "@/utils/prisma";
 import type { McpToolContext } from "./registry";
@@ -51,14 +47,9 @@ export async function getDailyDigestTool(
     timeZone,
     available: true,
     generatedAt: digest.generatedAt,
-    accounts: digest.accounts.map(
-      (account: DailyDigest["accounts"][number]) => ({
-        email: account.email,
-        digest: account.text,
-      }),
-    ),
-    unavailableAccounts: digest.failures.map(
-      (failure: DailyDigest["failures"][number]) => failure.email,
-    ),
+    since: digest.since,
+    report: digest.text,
+    accounts: digest.accounts.map((account) => account.email),
+    unavailableAccounts: digest.failures.map((failure) => failure.email),
   };
 }

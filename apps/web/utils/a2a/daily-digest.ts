@@ -3,9 +3,8 @@ import {
   resolveA2aEndpoint,
   sendA2aMessage,
 } from "@/utils/a2a-client";
-import { aiGenerateAutomationCheckInMessage } from "@/utils/ai/automation-jobs/generate-check-in-message";
 import type { Logger } from "@/utils/logger";
-import prisma from "@/utils/prisma";
+import { buildMorningReport } from "@/utils/morning-report/build";
 import { redis } from "@/utils/redis";
 
 // Kept two days so a subscriber that misses a morning can still fetch
@@ -13,98 +12,39 @@ import { redis } from "@/utils/redis";
 // back beyond the next day. Move to Prisma if digest history is ever wanted.
 const DIGEST_TTL_SECONDS = 60 * 60 * 48;
 
-export const DEFAULT_DIGEST_PROMPT =
-  "Give me a brief morning update: anything urgent or time-sensitive, emails still waiting on my reply, and anything I am awaiting a response on that has gone quiet. Keep it short - a few bullet points. If nothing needs attention, say so in one line.";
-
 export type DailyDigest = {
   userId: string;
   date: string;
   generatedAt: string;
-  accounts: { emailAccountId: string; email: string; text: string }[];
+  since: string;
+  text: string;
+  accounts: { emailAccountId: string; email: string }[];
+  readEmailAccountIds: string[];
   failures: { emailAccountId: string; email: string; error: string }[];
 };
 
 export async function buildDailyDigest({
   userId,
   date,
-  prompt = DEFAULT_DIGEST_PROMPT,
+  now,
   logger,
 }: {
   userId: string;
   date: string;
-  prompt?: string;
+  now: Date;
   logger: Logger;
 }): Promise<DailyDigest> {
-  const emailAccounts = await prisma.emailAccount.findMany({
-    where: { userId },
-    select: { id: true, email: true },
-    orderBy: { createdAt: "asc" },
-  });
-
-  const results = await Promise.allSettled(
-    emailAccounts.map((emailAccount) =>
-      aiGenerateAutomationCheckInMessage({
-        prompt,
-        emailAccountId: emailAccount.id,
-        logger: logger.with({ emailAccountId: emailAccount.id }),
-      }),
-    ),
-  );
-
-  const accounts: DailyDigest["accounts"] = [];
-  const failures: DailyDigest["failures"] = [];
-
-  results.forEach((result, index) => {
-    const emailAccount = emailAccounts[index];
-    if (!emailAccount) return;
-
-    if (result.status === "fulfilled") {
-      accounts.push({
-        emailAccountId: emailAccount.id,
-        email: emailAccount.email,
-        text: result.value,
-      });
-      return;
-    }
-
-    const error =
-      result.reason instanceof Error
-        ? result.reason.message
-        : "Failed to generate digest";
-    logger.error("Digest generation failed for account", {
-      emailAccountId: emailAccount.id,
-      error: result.reason,
-    });
-    failures.push({
-      emailAccountId: emailAccount.id,
-      email: emailAccount.email,
-      error,
-    });
-  });
-
+  const report = await buildMorningReport({ userId, now, logger });
   return {
     userId,
     date,
-    generatedAt: new Date().toISOString(),
-    accounts,
-    failures,
+    generatedAt: now.toISOString(),
+    since: report.since.toISOString(),
+    text: report.text,
+    accounts: report.accounts,
+    readEmailAccountIds: report.readEmailAccountIds,
+    failures: report.failures,
   };
-}
-
-export function formatDailyDigest(digest: DailyDigest) {
-  const sections = digest.accounts.map(
-    (account) => `[${account.email}]\n${account.text}`,
-  );
-
-  if (digest.failures.length) {
-    sections.push(
-      `Could not generate a digest for: ${digest.failures
-        .map((failure) => failure.email)
-        .join(", ")}`,
-    );
-  }
-
-  return sections.join("\n\n---\n\n");
 }
 
 /**
@@ -128,21 +68,18 @@ export async function pushDailyDigestToRemoteAgents({
     return { pushed: 0, failed: 0 };
   }
 
-  const text = formatDailyDigest(digest);
-
   const results = await Promise.allSettled(
     agentUrls.map(async (agentUrl) => {
       const endpoint = await resolveA2aEndpoint(agentUrl);
       const result = await sendA2aMessage(endpoint, {
-        text: `Daily inbox digest for ${digest.date}\n\n${text}`,
+        text: `Daily inbox digest for ${digest.date}\n\n${digest.text}`,
         data: {
           kind: "inbox.daily_digest",
           date: digest.date,
           generated_at: digest.generatedAt,
-          accounts: digest.accounts.map((account) => ({
-            email: account.email,
-            text: account.text,
-          })),
+          since: digest.since,
+          text: digest.text,
+          accounts: digest.accounts.map((account) => account.email),
           failed_accounts: digest.failures.map((failure) => failure.email),
         },
         contextId: `inbox-digest-${digest.date}`,

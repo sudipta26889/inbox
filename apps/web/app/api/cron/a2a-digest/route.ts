@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { alertDigestFailure, recordDigestRun } from "@/utils/a2a/digest-report";
+import {
+  alertDigestFailure,
+  findOwnerMessagingChannel,
+  recordDigestRun,
+} from "@/utils/a2a/digest-report";
 import {
   buildDailyDigest,
   getLocalDate,
@@ -8,10 +12,12 @@ import {
   saveDailyDigest,
 } from "@/utils/a2a/daily-digest";
 import { isAdmin } from "@/utils/admin";
+import { sendAutomationMessage } from "@/utils/automation-jobs/messaging";
 import { hasCronSecret } from "@/utils/cron";
 import { captureException } from "@/utils/error";
 import type { Logger } from "@/utils/logger";
 import { withError } from "@/utils/middleware";
+import { markReportSent } from "@/utils/morning-report/build";
 import { publishDigest } from "@/utils/mqtt/events";
 import prisma from "@/utils/prisma";
 import { redis } from "@/utils/redis";
@@ -21,7 +27,7 @@ export const maxDuration = 300;
 // The cron container polls on a fixed interval rather than at exact times, so
 // this route fires on the first poll inside the target hour and a Redis latch
 // keeps the rest of the hour idempotent.
-const DIGEST_HOUR = 5;
+const DIGEST_HOUR = 9;
 const LATCH_TTL_SECONDS = 60 * 60 * 26;
 
 export const GET = withError("cron/a2a-digest", async (request) => {
@@ -32,7 +38,7 @@ export const GET = withError("cron/a2a-digest", async (request) => {
 
   // ?force=true runs now regardless of the hour, and regenerates even if today
   // already ran. Same cron-secret gate; for verifying the path without waiting
-  // for 05:00 local.
+  // for 09:00 local.
   const force = new URL(request.url).searchParams.get("force") === "true";
 
   const result = await runDueDigests(request.logger, { force });
@@ -86,23 +92,41 @@ async function runDueDigests(logger: Logger, { force = false } = {}) {
     }
 
     try {
+      // The window's next start is when this run began, so mail that lands
+      // while the report is being built is not skipped tomorrow.
+      const startedAt = new Date();
       const digest = await buildDailyDigest({
         userId,
         date,
+        now: startedAt,
         logger: userLogger,
       });
 
-      if (!digest.accounts.length) {
-        throw new Error("No account produced a digest");
-      }
-
       await saveDailyDigest(digest);
+
+      const channel = await findOwnerMessagingChannel(userId);
+      if (!channel) {
+        throw new Error(
+          "No connected chat channel to deliver the morning report",
+        );
+      }
+      await sendAutomationMessage({
+        channel,
+        text: digest.text,
+        logger: userLogger,
+      });
+      // Per mailbox: one that failed today keeps its old anchor, so tomorrow
+      // covers its missed day.
+      await markReportSent({
+        emailAccountIds: digest.readEmailAccountIds,
+        at: startedAt,
+      });
+
+      // After delivery: a retry after a failed send must not push twice.
       await pushDailyDigestToRemoteAgents({ digest, logger: userLogger });
 
-      // One publish per account in the digest, each gated on that account's
-      // own bus opt-in. The catch is load-bearing: publishDigest reads the
-      // database to resolve consent, and a blip there must not fail a cron
-      // run that has already generated and saved the digest.
+      // The catch is load-bearing: publishDigest reads the database to resolve
+      // consent, and a blip there must not fail a run that already delivered.
       for (const account of digest.accounts) {
         await publishDigest({
           emailAccountId: account.emailAccountId,
@@ -115,14 +139,13 @@ async function runDueDigests(logger: Logger, { force = false } = {}) {
           status: "ok",
           date,
           at: new Date().toISOString(),
-          accounts: digest.accounts.length,
+          accounts: digest.accounts.length - digest.failures.length,
           failedAccounts: digest.failures.map((failure) => failure.email),
         },
       });
 
-      userLogger.info("Generated daily digest", {
+      userLogger.info("Sent morning report", {
         date,
-        accounts: digest.accounts.length,
         failures: digest.failures.length,
       });
       generated += 1;

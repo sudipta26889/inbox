@@ -823,7 +823,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
   get_daily_digest: {
     name: "get_daily_digest",
     description:
-      "Get the stored cross-account morning digest: what is urgent, what is waiting on a reply, and what has gone quiet, per connected email account. Generated once each morning and kept for two days.",
+      "Get the stored morning report: one consolidated text across all connected email accounts covering money, deadlines, security, today's meetings, replies owed and replies awaited. Generated once each morning (09:00 local) and kept for two days.",
     inputSchema: {
       type: "object",
       properties: {

@@ -15,7 +15,10 @@ vi.mock("@/utils/automation-jobs/messaging", () => ({
   sendAutomationMessage: mockSendAutomationMessage,
 }));
 
-import { alertDigestFailure } from "@/utils/a2a/digest-report";
+import {
+  alertDigestFailure,
+  findOwnerMessagingChannel,
+} from "@/utils/a2a/digest-report";
 
 const logger = createScopedLogger("test");
 
@@ -73,5 +76,23 @@ describe("alertDigestFailure", () => {
 
     expect(mockNotifyOwner).toHaveBeenCalledTimes(1);
     expect(mockSendAutomationMessage).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("findOwnerMessagingChannel", () => {
+  it("returns the first ready channel and null when none is ready", async () => {
+    prisma.messagingChannel.findFirst.mockResolvedValueOnce({
+      provider: MessagingProvider.TELEGRAM,
+      accessToken: null,
+      providerUserId: "42",
+      channelId: null,
+      isConnected: true,
+    } as never);
+    expect(await findOwnerMessagingChannel("user-1")).toMatchObject({
+      providerUserId: "42",
+    });
+
+    prisma.messagingChannel.findFirst.mockResolvedValueOnce(null);
+    expect(await findOwnerMessagingChannel("user-1")).toBeNull();
   });
 });
