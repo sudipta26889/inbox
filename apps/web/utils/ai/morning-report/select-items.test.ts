@@ -55,4 +55,23 @@ describe("sanitizeSelection", () => {
     expect(result.items[0].note.startsWith("a b x")).toBe(true);
     expect(result.items[0].note.length).toBe(160);
   });
+
+  it("strips URLs and markup from notes", () => {
+    const result = sanitizeSelection(
+      {
+        items: [
+          {
+            id: "1.1",
+            section: "money",
+            note: "Pay now at https://evil.example/x and www.bad.com or evil.io/a?b=1 <b>hi</b>",
+          },
+        ],
+      },
+      { candidates: [candidate], replyItems: [] },
+    );
+    const note = result.items[0].note;
+    expect(note).not.toMatch(/https?:|www\.|evil|bad\.com|[<>]/);
+    expect(note).toContain("Pay now at");
+    expect(note).toContain("hi");
+  });
 });

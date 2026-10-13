@@ -10,6 +10,9 @@ import type { Candidate } from "@/utils/morning-report/candidates";
 import type { ReplyItem } from "@/utils/morning-report/reply-state";
 
 const MAX_NOTE_CHARS = 160;
+const MAX_FIELD_CHARS = 200;
+const MAX_MEMORIES = 30;
+const MAX_MEMORY_CHARS = 300;
 
 export const REPORT_SECTIONS = [
   "money",
@@ -57,12 +60,13 @@ export async function aiSelectReportItems({
 Sections:
 - money: bills/statements with an amount or due date, EMI conversions, incoming or held funds (remittances), low balances, unexpected or large charges, failed payments.
 - deadline: anything that must be done by a stated date (compliance, KYC, phase-outs, renewals, expiring access).
-- security: access or permission requests, new sign-ins, suspicious or spoofed mail, OTPs paired with charges, crash or outage alerts for the person's own products.
+- security: access or permission requests (including GitHub/GitLab org or repo access requests), new sign-ins, suspicious or spoofed mail, OTPs paired with charges, crash or outage alerts for the person's own products.
 - action: something else the person must personally do soon (fix a rejected build, approve a request, attend to a ticket).
 - reply: ONLY from the "THEY WAIT FOR ME" list. Skip automated senders, contact-form spam, auto-acknowledgements, and anything the person's notes say needs no reply.
 - waiting: ONLY from the "I WAIT FOR THEM" list. Skip if the counterpart is automated.
 
 Rules:
+- Failed CI runs are noise unless the line shows a release or store build the person must fix.
 - Skip routine noise: CI runs, shipping updates, cashback, newsletters, routine receipts, logs, marketing.
 - When the same thing arrived in several mailboxes or several times, pick it once.
 - note: at most 120 characters, plain text, built only from facts in that line (sender, amounts, dates, card/account endings). Lead with what matters, e.g. "TATA card statement Oct — check amount and due date".
@@ -73,7 +77,12 @@ ${PROMPT_SECURITY_INSTRUCTIONS}`;
   const prompt = `Now: ${formatInUserTimezone(now, timeZone, "EEEE d MMM yyyy, HH:mm")} (${timeZone})
 
 <person_notes>
-${memories.map((memory) => `- ${memory.content}`).join("\n") || "(none)"}
+${
+  memories
+    .slice(0, MAX_MEMORIES)
+    .map((memory) => `- ${neutralise(memory.content, MAX_MEMORY_CHARS)}`)
+    .join("\n") || "(none)"
+}
 </person_notes>
 
 <emails>
@@ -133,7 +142,10 @@ export function sanitizeSelection(
     items.push({
       id: item.id,
       section,
-      note: item.note.replace(/\s+/g, " ").trim().slice(0, MAX_NOTE_CHARS),
+      note: stripLinksAndMarkup(item.note)
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, MAX_NOTE_CHARS),
     });
   }
 
@@ -142,11 +154,24 @@ export function sanitizeSelection(
 
 function formatCandidateLine(candidate: Candidate, timeZone: string) {
   const repeats = candidate.count > 1 ? ` (x${candidate.count})` : "";
-  return `[${candidate.id}] ${formatInUserTimezone(candidate.date, timeZone, "d MMM HH:mm")} | to ${candidate.accountEmail} | from ${candidate.from} | ${candidate.subject}${repeats} | rules: ${candidate.rules.join(", ") || "none"} | ${candidate.snippet}`;
+  return `[${candidate.id}] ${formatInUserTimezone(candidate.date, timeZone, "d MMM HH:mm")} | to ${candidate.accountEmail} | from ${neutralise(candidate.from, MAX_FIELD_CHARS)} | ${neutralise(candidate.subject, MAX_FIELD_CHARS)}${repeats} | rules: ${candidate.rules.join(", ") || "none"} | ${neutralise(candidate.snippet)}`;
 }
 
 function formatReplyLine(item: ReplyItem, timeZone: string) {
   const direction =
     item.kind === "needs_reply" ? "THEY WAIT FOR ME" : "I WAIT FOR THEM";
-  return `[${item.id}] ${direction} since ${formatInUserTimezone(item.sentAt, timeZone, "d MMM")} | ${item.accountEmail} | ${item.counterpart} | ${item.subject}`;
+  return `[${item.id}] ${direction} since ${formatInUserTimezone(item.sentAt, timeZone, "d MMM")} | ${item.accountEmail} | ${neutralise(item.counterpart, MAX_FIELD_CHARS)} | ${neutralise(item.subject, MAX_FIELD_CHARS)}`;
+}
+
+function neutralise(text: string, max = Number.POSITIVE_INFINITY) {
+  return text.slice(0, max).replace(/</g, "‹").replace(/>/g, "›");
+}
+
+// Notes reach Telegram, so a link lifted from an email must never survive.
+function stripLinksAndMarkup(text: string) {
+  return text
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\b(?:https?:\/\/|www\.)\S+/gi, " ")
+    .replace(/\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}\/\S*/gi, " ")
+    .replace(/[<>]/g, "");
 }
