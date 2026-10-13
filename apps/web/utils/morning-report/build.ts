@@ -136,7 +136,7 @@ export async function buildMorningReport({
   const candidates = reads.flatMap((read) => read.candidates.candidates);
   const replyItems = reads.flatMap((read) => read.replies.items);
 
-  const selection = sanitizeSelection(
+  const { droppedCount, ...selection } = sanitizeSelection(
     await aiSelectReportItems({
       emailAccount,
       candidates,
@@ -148,6 +148,13 @@ export async function buildMorningReport({
     { candidates, replyItems },
   );
 
+  if (droppedCount) {
+    logger.warn("Morning report model returned unknown item IDs", {
+      droppedCount,
+      kept: selection.items.length,
+    });
+  }
+
   const text = renderMorningReport({
     now,
     timeZone,
@@ -155,6 +162,7 @@ export async function buildMorningReport({
     previousRunMissed:
       now.getTime() - since.getTime() > MISSED_RUN_THRESHOLD_MS,
     selection,
+    selectionFailed: droppedCount > 0 && selection.items.length === 0,
     candidates,
     replyItems,
     events: reads.flatMap((read) => read.events),

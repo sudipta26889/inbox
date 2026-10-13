@@ -175,6 +175,33 @@ describe("renderMorningReport", () => {
     );
   });
 
+  it("counts reviewed emails the model did not pick, so a quiet report cannot hide them", () => {
+    const text = renderMorningReport(
+      input({
+        candidates: [
+          cand("1.1", "me@gmail.com", "a@x.com", "One"),
+          cand("1.2", "me@gmail.com", "b@x.com", "Two"),
+          cand("1.3", "me@gmail.com", "c@x.com", "Three"),
+        ],
+        selection: { items: [{ id: "1.2", section: "action", note: "Two" }] },
+      }),
+    );
+    expect(text).toContain("Skipped: 2 other emails reviewed");
+  });
+
+  it("flags unusable model output instead of reporting an all-clear", () => {
+    const text = renderMorningReport(
+      input({
+        candidates: [cand("1.1", "me@gmail.com", "a@x.com", "One")],
+        selectionFailed: true,
+      }),
+    );
+    expect(text).toContain(
+      "• The report model returned unusable output; check the app for today's mail",
+    );
+    expect(text).toContain("Skipped: 1 other emails reviewed");
+  });
+
   it("caps length on whole lines and keeps the Skipped footer", () => {
     const text = renderMorningReport(
       input({ ...manyItems(), bulkCounts: { Marketing: 3 } }),
@@ -255,6 +282,7 @@ function input(overrides: Partial<RenderInput>): RenderInput {
     problems: [],
     failures: [],
     truncatedAccounts: [],
+    selectionFailed: false,
     baseUrl: "https://inbox.example.com",
     ...overrides,
   };

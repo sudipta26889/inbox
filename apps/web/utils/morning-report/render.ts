@@ -34,6 +34,7 @@ export type RenderInput = {
   since: Date;
   previousRunMissed: boolean;
   selection: ReportSelection;
+  selectionFailed: boolean;
   candidates: Candidate[];
   replyItems: ReplyItem[];
   events: { accountEmail: string; event: CalendarEvent }[];
@@ -103,6 +104,11 @@ function problemLines(input: RenderInput) {
   for (const failure of input.failures) {
     lines.push(
       `• ${failure.email}: could not be read (${truncate(failure.error, 150)})`,
+    );
+  }
+  if (input.selectionFailed) {
+    lines.push(
+      "• The report model returned unusable output; check the app for today's mail",
     );
   }
   if (input.unverifiedReplyCount) {
@@ -194,12 +200,23 @@ function eventLines({ events, timeZone }: RenderInput) {
     .map((entry) => `• ${entry.line} [${entry.tags.join(", ")}]`);
 }
 
-function footerLine({ bulkCounts, staleReplyCount }: RenderInput) {
+function footerLine({
+  bulkCounts,
+  staleReplyCount,
+  candidates,
+  selection,
+}: RenderInput) {
   const parts: string[] = [];
+  const candidateIds = new Set(candidates.map((c) => c.id));
+  const picked = new Set(
+    selection.items.map((i) => i.id).filter((id) => candidateIds.has(id)),
+  );
+  const otherReviewed = candidateIds.size - picked.size;
   const bulk = Object.entries(bulkCounts)
     .sort(([, a], [, b]) => b - a)
     .map(([name, count]) => `${count} ${name}`);
   if (bulk.length) parts.push(bulk.join(", "));
+  if (otherReviewed) parts.push(`${otherReviewed} other emails reviewed`);
   if (staleReplyCount)
     parts.push(`${staleReplyCount} reply threads older than 30 days`);
   return parts.length ? `Skipped: ${parts.join(" · ")}` : null;

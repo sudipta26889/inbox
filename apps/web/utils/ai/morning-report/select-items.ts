@@ -55,7 +55,7 @@ export async function aiSelectReportItems({
 }): Promise<ReportSelection> {
   if (!candidates.length && !replyItems.length) return { items: [] };
 
-  const system = `You pick what belongs in a person's morning email report. You may ONLY reference IDs from the lists given. Anything you do not pick is summarised as a count; leaving out noise is correct, leaving out money, deadlines or security is the failure that matters.
+  const system = `You pick what belongs in a person's morning email report. You may ONLY reference IDs from the lists given. Anything you do not pick is only counted in the footer ("N other emails reviewed"), never shown; leaving out noise is correct, leaving out money, deadlines or security is the failure that matters.
 
 Sections:
 - money: bills/statements with an amount or due date, EMI conversions, incoming or held funds (remittances), low balances, unexpected or large charges, failed payments.
@@ -116,11 +116,12 @@ export function sanitizeSelection(
     candidates,
     replyItems,
   }: { candidates: Candidate[]; replyItems: ReplyItem[] },
-): ReportSelection {
+): ReportSelection & { droppedCount: number } {
   const candidateIds = new Set(candidates.map((candidate) => candidate.id));
   const replyKinds = new Map(replyItems.map((item) => [item.id, item.kind]));
   const seen = new Set<string>();
   const items: ReportSelection["items"] = [];
+  let droppedCount = 0;
 
   for (const item of selection.items) {
     if (seen.has(item.id)) continue;
@@ -135,6 +136,7 @@ export function sanitizeSelection(
           ? "action"
           : item.section;
     } else {
+      droppedCount++;
       continue;
     }
 
@@ -149,7 +151,7 @@ export function sanitizeSelection(
     });
   }
 
-  return { items };
+  return { items, droppedCount };
 }
 
 function formatCandidateLine(candidate: Candidate, timeZone: string) {

@@ -25,6 +25,7 @@ describe("sanitizeSelection", () => {
     expect(result.items).toEqual([
       { id: "1.1", section: "money", note: "₹2,62,900 EMI" },
     ]);
+    expect(result.droppedCount).toBe(1);
   });
 
   it("forces reply items into their verified section and keeps candidates out of reply sections", () => {
