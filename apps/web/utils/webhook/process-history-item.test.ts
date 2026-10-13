@@ -7,6 +7,7 @@ import {
 } from "@/__tests__/mocks/email-provider.mock";
 import { getEmailAccount } from "@/__tests__/helpers";
 import { createScopedLogger } from "@/utils/logger";
+import { runRules } from "@/utils/ai/choose-rule/run-rules";
 import { handleOutboundMessage } from "@/utils/reply-tracker/handle-outbound";
 import { DraftReplyConfidence } from "@/generated/prisma/enums";
 
@@ -194,6 +195,36 @@ describe("Provider Edge Cases", () => {
       );
 
       expect(handleOutboundMessage).toHaveBeenCalled();
+    });
+
+    it("never sends a sent message to runRules (and so never to fan-out)", async () => {
+      const provider = createMockEmailProvider({
+        getMessage: vi.fn().mockResolvedValue(
+          getMockParsedMessage({
+            labelIds: ["SENT"],
+            headers: {
+              from: "user@test.com",
+              to: "recipient@example.com",
+              subject: "Test",
+              date: "2024-01-01",
+            },
+          }),
+        ),
+        isSentMessage: vi.fn().mockReturnValue(true),
+      });
+
+      await processHistoryItem(
+        { messageId: "msg-123", threadId: "thread-123" },
+        {
+          ...baseOptions,
+          provider,
+          hasAutomationRules: true,
+          hasAiAccess: true,
+        },
+      );
+
+      expect(handleOutboundMessage).toHaveBeenCalledTimes(1);
+      expect(runRules).not.toHaveBeenCalled();
     });
 
     it("skips outbound handling for filebot notification messages", async () => {

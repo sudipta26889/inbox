@@ -61,6 +61,15 @@ export async function markOutboundThreadStatusProcessed({
   return result === 1;
 }
 
+export async function isOutboundThreadStatusProcessed(
+  key: Omit<OutboundThreadStatusKey, "lockToken">,
+) {
+  return (
+    (await redis.get<string>(getOutboundThreadStatusKey(key))) ===
+    PROCESSED_STATUS
+  );
+}
+
 export async function clearOutboundThreadStatusLock({
   emailAccountId,
   threadId,

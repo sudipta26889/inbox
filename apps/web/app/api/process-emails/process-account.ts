@@ -11,6 +11,7 @@ import prisma from "@/utils/prisma";
 import type { Logger } from "@/utils/logger";
 import { logErrorWithDedupe } from "@/utils/log-error-with-dedupe";
 import { GmailLabel } from "@/utils/gmail/label";
+import { processRecentSentMessages } from "./process-sent";
 
 const BATCH_SIZE = 50; // Process up to 50 emails per run
 
@@ -145,6 +146,23 @@ export async function processEmailsForAccount({
         emailAccountId: validatedEmailAccount.id,
         logger,
       });
+
+      const sentProcessed = await processRecentSentMessages({
+        gmail,
+        emailAccountId: validatedEmailAccount.id,
+        options: {
+          provider,
+          rules: validatedEmailAccount.rules,
+          hasAutomationRules,
+          hasAiAccess: userHasAiAccess,
+          emailAccount: validatedEmailAccount,
+          logger,
+        },
+        logger,
+      });
+      if (sentProcessed) {
+        logger.info("Processed recent sent messages", { count: sentProcessed });
+      }
 
       // Fetch unread emails from inbox
       const response = await gmail.users.messages.list({
