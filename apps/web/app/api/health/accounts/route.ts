@@ -37,7 +37,13 @@ async function getAccountsHealth() {
       id: true,
       email: true,
       watchEmailsExpirationDate: true,
-      account: { select: { provider: true, disconnectedAt: true } },
+      account: {
+        select: { provider: true, disconnectedAt: true, refresh_token: true },
+      },
+      calendarConnections: {
+        where: { isConnected: true },
+        select: { refreshToken: true },
+      },
     },
     orderBy: { email: "asc" },
   });
@@ -46,9 +52,16 @@ async function getAccountsHealth() {
     emailAccountId: emailAccount.id,
     email: emailAccount.email,
     provider: emailAccount.account?.provider ?? null,
-    connected: !emailAccount.account?.disconnectedAt,
+    // A wiped token without disconnectedAt fails every call with "No refresh
+    // token" while looking connected. refresh_token only feeds this boolean.
+    connected:
+      !emailAccount.account?.disconnectedAt &&
+      Boolean(emailAccount.account?.refresh_token),
     disconnectedAt: emailAccount.account?.disconnectedAt ?? null,
     watchExpiresAt: emailAccount.watchEmailsExpirationDate,
+    calendarConnected: emailAccount.calendarConnections.every((c) =>
+      Boolean(c.refreshToken),
+    ),
   }));
 
   return {

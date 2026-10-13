@@ -43,13 +43,19 @@ describe("GET /api/health/accounts", () => {
         id: "ea-1",
         email: "ok@example.com",
         watchEmailsExpirationDate: new Date("2026-10-20T02:34:23Z"),
-        account: { provider: "google", disconnectedAt: null },
+        account: {
+          provider: "google",
+          disconnectedAt: null,
+          refresh_token: "r",
+        },
+        calendarConnections: [],
       },
       {
         id: "ea-2",
         email: "revoked@example.com",
         watchEmailsExpirationDate: null,
-        account: { provider: "google", disconnectedAt },
+        account: { provider: "google", disconnectedAt, refresh_token: "r" },
+        calendarConnections: [],
       },
     ] as never);
 
@@ -64,6 +70,31 @@ describe("GET /api/health/accounts", () => {
       connected: false,
       disconnectedAt: disconnectedAt.toISOString(),
     });
+  });
+
+  it("treats a wiped refresh token as disconnected and flags expired calendars", async () => {
+    prisma.emailAccount.findMany.mockResolvedValue([
+      {
+        id: "ea-3",
+        email: "wiped@example.com",
+        watchEmailsExpirationDate: null,
+        account: {
+          provider: "google",
+          disconnectedAt: null,
+          refresh_token: null,
+        },
+        calendarConnections: [{ refreshToken: null }],
+      },
+    ] as never);
+
+    const body = await (await GET(request("health-key"), context)).json();
+
+    expect(body).toMatchObject({ connectedCount: 0, disconnectedCount: 1 });
+    expect(body.accounts[0]).toMatchObject({
+      connected: false,
+      calendarConnected: false,
+    });
+    expect(body.accounts[0]).not.toHaveProperty("refresh_token");
   });
 });
 

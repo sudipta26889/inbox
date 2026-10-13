@@ -16,7 +16,8 @@ export async function getAutomationJobMessage({
   const trimmedPrompt = prompt?.trim();
 
   // No silent fallback: echoing the prompt back looks like the check-in worked
-  // when it didn't. Let it throw so the run is recorded FAILED and retried.
+  // when it didn't. Let it throw so the run is recorded FAILED —
+  // nothing retries a FAILED run; the next cron slot is the next attempt.
   if (trimmedPrompt) {
     return await aiGenerateAutomationCheckInMessage({
       prompt: trimmedPrompt,
