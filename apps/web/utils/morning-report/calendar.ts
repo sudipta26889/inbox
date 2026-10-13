@@ -17,9 +17,9 @@ export async function fetchTodayEvents({
   timeZone: string;
   now: Date;
   logger: Logger;
-}): Promise<CalendarEvent[]> {
+}): Promise<{ events: CalendarEvent[]; failed: boolean }> {
   const providers = await createCalendarEventProviders(emailAccountId, logger);
-  if (!providers.length) return [];
+  if (!providers.length) return { events: [], failed: false };
 
   const timeMax = new Date(endOfDay(new TZDate(now, timeZone)).getTime());
 
@@ -33,7 +33,7 @@ export async function fetchTodayEvents({
     ),
   );
 
-  return results
+  const events = results
     .flatMap((result) => {
       if (result.status === "rejected") {
         logger.warn("Morning report calendar fetch failed", {
@@ -45,4 +45,6 @@ export async function fetchTodayEvents({
     })
     .filter((event) => !CANCELLED_TITLE.test(event.title))
     .sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
+
+  return { events, failed: results.some((r) => r.status === "rejected") };
 }

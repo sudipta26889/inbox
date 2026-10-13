@@ -35,6 +35,7 @@ export type RenderInput = {
   previousRunMissed: boolean;
   selection: ReportSelection;
   selectionFailed: boolean;
+  calendarFailures: string[];
   candidates: Candidate[];
   replyItems: ReplyItem[];
   events: { accountEmail: string; event: CalendarEvent }[];
@@ -104,6 +105,11 @@ function problemLines(input: RenderInput) {
   for (const failure of input.failures) {
     lines.push(
       `• ${failure.email}: could not be read (${truncate(failure.error, 150)})`,
+    );
+  }
+  for (const email of input.calendarFailures) {
+    lines.push(
+      `• ${email}: calendar could not be read, so today's meetings may be missing`,
     );
   }
   if (input.selectionFailed) {

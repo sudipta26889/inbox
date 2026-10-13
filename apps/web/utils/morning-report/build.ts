@@ -162,6 +162,9 @@ export async function buildMorningReport({
     previousRunMissed:
       now.getTime() - since.getTime() > MISSED_RUN_THRESHOLD_MS,
     selection,
+    calendarFailures: reads
+      .filter((read) => read.calendarFailed)
+      .map((read) => read.accountEmail),
     selectionFailed: droppedCount > 0 && selection.items.length === 0,
     candidates,
     replyItems,
@@ -253,7 +256,7 @@ async function readMailbox({
     logger,
   });
 
-  const [candidates, replies, events, context] = await Promise.all([
+  const [candidates, replies, calendar, context] = await Promise.all([
     collectCandidates({
       accountIndex,
       accountEmail,
@@ -272,7 +275,7 @@ async function readMailbox({
     fetchTodayEvents({ emailAccountId, timeZone, now, logger }).catch(
       (error) => {
         logger.warn("Morning report calendar read failed", { error });
-        return [];
+        return { events: [], failed: true };
       },
     ),
     loadAgentContext({
@@ -290,7 +293,8 @@ async function readMailbox({
     since,
     candidates,
     replies,
-    events: events.map((event) => ({ accountEmail, event })),
+    calendarFailed: calendar.failed,
+    events: calendar.events.map((event) => ({ accountEmail, event })),
     memories: context.memories,
   };
 }

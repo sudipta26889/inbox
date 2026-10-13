@@ -169,6 +169,15 @@ describe("renderMorningReport", () => {
     );
   });
 
+  it("says when a calendar could not be read", () => {
+    const text = renderMorningReport(
+      input({ calendarFailures: ["me@gmail.com"] }),
+    );
+    expect(text).toContain(
+      "• me@gmail.com: calendar could not be read, so today's meetings may be missing",
+    );
+  });
+
   it("says so in one line when nothing needs attention", () => {
     expect(renderMorningReport(input({}))).toBe(
       "☀️ Morning report — Tue 13 Oct\n\nNothing needs you today.",
@@ -283,6 +292,7 @@ function input(overrides: Partial<RenderInput>): RenderInput {
     failures: [],
     truncatedAccounts: [],
     selectionFailed: false,
+    calendarFailures: [],
     baseUrl: "https://inbox.example.com",
     ...overrides,
   };

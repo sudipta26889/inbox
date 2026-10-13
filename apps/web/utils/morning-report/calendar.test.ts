@@ -38,12 +38,13 @@ describe("fetchTodayEvents", () => {
     });
     const now = new Date("2026-10-13T03:30:00Z"); // 09:00 IST
 
-    const events = await fetchTodayEvents({
+    const { events, failed } = await fetchTodayEvents({
       emailAccountId: "ea",
       timeZone: "Asia/Calcutta",
       now,
       logger,
     });
+    expect(failed).toBe(false);
 
     expect(mockFetchEvents).toHaveBeenCalledWith({
       timeMin: now,
@@ -73,13 +74,14 @@ describe("fetchTodayEvents", () => {
     ] as never);
     const warn = vi.spyOn(logger, "warn");
 
-    const events = await fetchTodayEvents({
+    const { events, failed } = await fetchTodayEvents({
       emailAccountId: "ea",
       timeZone: "Asia/Calcutta",
       now: new Date("2026-10-13T03:30:00Z"),
       logger,
     });
 
+    expect(failed).toBe(true);
     expect(events.map((e) => e.id)).toEqual(["ok"]);
     expect(warn).toHaveBeenCalledWith("Morning report calendar fetch failed", {
       error: expect.any(Error),
