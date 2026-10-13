@@ -4,8 +4,9 @@
  * never processed sent mail before Gmail push went live on 2026-10-12.
  *
  * Dry run by default; prints counts per mailbox.
- * Run from apps/web on the host (--conditions=react-server lets the server-only import chain load):
- *   pnpm exec dotenv -e .env -- pnpm exec tsx --conditions=react-server scripts/resolve-replied-trackers.ts [--apply] [--email someone@example.com]
+ * Run from apps/web on the host (the shim lets the server-only import chain load):
+ *   NODE_ENV=production NODE_OPTIONS="--require ./scripts/server-only-shim.cjs" \
+ *     pnpm exec dotenv -e .env -- pnpm exec tsx scripts/resolve-replied-trackers.ts [--apply] [--email someone@example.com]
  */
 import { ThreadTrackerType } from "@/generated/prisma/enums";
 import { createEmailProvider } from "@/utils/email/provider";
