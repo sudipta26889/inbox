@@ -9,9 +9,9 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-GUARDIAN_URL="${GUARDIAN_URL:-http://localhost:8890}"
-# Read from GuardianAI's own env so the secret is never copied into this repo.
-GUARDIAN_API_TOKEN="${GUARDIAN_API_TOKEN:-$(grep -m1 '^GUARDIAN_API_TOKEN=' /mnt/projects/GuardianAI/.env 2>/dev/null | cut -d= -f2- | tr -d '"')}"
+GUARDIAN_URL="${GUARDIAN_URL:-http://db.lan:8890}"   # GuardianAI runs on db-server since 2026-10-22
+# Token lives outside both repos (mode 600), so the secret is never copied into this repo.
+GUARDIAN_API_TOKEN="${GUARDIAN_API_TOKEN:-$(cat "${GUARDIAN_TOKEN_FILE:-$HOME/.config/guardianai/api_token}" 2>/dev/null)}"
 GUARDIAN_AUTH=(-H "Authorization: Bearer $GUARDIAN_API_TOKEN")
 COMPOSE=(docker compose -f docker-compose.prod.yml)
 
