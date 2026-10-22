@@ -11,6 +11,8 @@ export type BulkRunState = {
   // (the global inbox cache may not contain all fetched threads)
   fetchedThreads: Map<string, Thread>;
   stoppedCount: number | null;
+  // All pages fetched and queued; the run is finished once the AI queue drains
+  fetchDone: boolean;
   runResult: { count: number } | null;
 };
 
@@ -28,6 +30,7 @@ export const initialBulkRunState: BulkRunState = {
   processedThreadIds: new Set(),
   fetchedThreads: new Map(),
   stoppedCount: null,
+  fetchDone: false,
   runResult: null,
 };
 
@@ -43,6 +46,7 @@ export function bulkRunReducer(
         processedThreadIds: new Set(),
         fetchedThreads: new Map(),
         stoppedCount: null,
+        fetchDone: false,
         runResult: null,
       };
 
@@ -69,12 +73,13 @@ export function bulkRunReducer(
         return {
           ...state,
           status: "idle",
+          fetchDone: true,
           runResult: { count: 0 },
         };
       }
 
-      // Keep current status (processing or paused)
-      return state;
+      // Keep current status (processing or paused) until the queue drains
+      return { ...state, fetchDone: true };
 
     case "PAUSE":
       if (state.status !== "processing") return state;

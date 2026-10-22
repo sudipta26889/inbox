@@ -56,6 +56,7 @@ describe("bulkRunReducer", () => {
         processedThreadIds: new Set(["thread1", "thread2"]),
         fetchedThreads: new Map([["thread1", thread]]),
         stoppedCount: 2,
+        fetchDone: true,
         runResult: { count: 5 },
       };
 
@@ -201,6 +202,7 @@ describe("bulkRunReducer", () => {
       const result = bulkRunReducer(state, { type: "COMPLETE", count: 5 });
 
       expect(result.status).toBe("processing");
+      expect(result.fetchDone).toBe(true);
     });
 
     it("does not override stopped status", () => {
@@ -310,6 +312,7 @@ describe("bulkRunReducer", () => {
         ...initialBulkRunState,
         status: "stopped",
         stoppedCount: 5,
+        fetchDone: true,
       };
 
       const result = bulkRunReducer(state, {
@@ -345,6 +348,7 @@ describe("bulkRunReducer", () => {
         processedThreadIds: new Set(["t1", "t2"]),
         fetchedThreads: new Map([["t1", thread]]),
         stoppedCount: 5,
+        fetchDone: true,
         runResult: { count: 10 },
       };
 

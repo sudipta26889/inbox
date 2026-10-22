@@ -72,7 +72,8 @@ export function BulkRunRules() {
   const completed = state.processedThreadIds.size - remaining;
   const isProcessing = queue.size > 0;
   const isPaused = state.status === "paused";
-  const isBusy = isProcessing || state.status === "processing";
+  const isFetching = state.status === "processing" && !state.fetchDone;
+  const isBusy = isProcessing || isFetching;
 
   // Warn user before leaving page during processing (includes initial fetch)
   useBeforeUnload(isBusy);
@@ -223,7 +224,9 @@ export function BulkRunRules() {
                       />
                     )}
 
-                    {(state.status === "idle" || state.status === "stopped") &&
+                    {(state.status === "idle" ||
+                      state.status === "stopped" ||
+                      state.fetchDone) &&
                       !isProcessing && (
                         <Button
                           type="button"
