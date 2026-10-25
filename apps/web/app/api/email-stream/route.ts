@@ -24,9 +24,9 @@ export const GET = withAuth("email-stream", async (request) => {
     );
   }
 
-  const email = await getEmailAccount({ userId, emailAccountId });
+  const access = await getEmailAccount({ userId, emailAccountId });
 
-  if (!email)
+  if (!access)
     return NextResponse.json({ error: "Invalid account ID" }, { status: 403 });
 
   request.logger.info("Processing GET request for email stream", {

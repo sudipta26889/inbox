@@ -9,6 +9,7 @@ import { createScopedLogger } from "@/utils/logger";
 import { flushLoggerSafely } from "@/utils/logger-flush";
 import prisma from "@/utils/prisma";
 import { isAdmin } from "@/utils/admin";
+import { accessibleEmailAccountWhere } from "@/utils/redis/account-validation";
 import { captureException, SafeError } from "@/utils/error";
 import { env } from "@/env";
 
@@ -90,9 +91,9 @@ export const actionClient = baseClient
     const userId = session.user.id;
     const emailAccountId = bindArgsClientInputs[0] as string;
 
-    // validate user owns this email
+    // validate user owns, or has been shared, this email
     const emailAccount = await prisma.emailAccount.findUnique({
-      where: { id: emailAccountId },
+      where: { id: emailAccountId, ...accessibleEmailAccountWhere(userId) },
       select: {
         email: true,
         account: {
@@ -103,7 +104,7 @@ export const actionClient = baseClient
         },
       },
     });
-    if (!emailAccount || emailAccount?.account.userId !== userId) {
+    if (!emailAccount) {
       ctx.logger.error("Unauthorized", metadata);
       throw new SafeError("Unauthorized");
     }
@@ -111,11 +112,15 @@ export const actionClient = baseClient
     Sentry.setTag("emailAccountId", emailAccountId);
     Sentry.setUser({ id: userId, email: userEmail });
 
+    // Shared accounts act as the owner so downstream { id, userId } checks hold.
+    const ownerUserId = emailAccount.account.userId;
+
     const logger = ctx.logger.with({
       userId,
       userEmail,
       emailAccountId,
       provider: emailAccount.account.provider,
+      ...(ownerUserId !== userId && { ownerUserId, sharedAccess: true }),
     });
     logger.info("Calling action");
 
@@ -123,7 +128,7 @@ export const actionClient = baseClient
       return next({
         ctx: {
           logger,
-          userId,
+          userId: ownerUserId,
           userEmail,
           session,
           emailAccountId,

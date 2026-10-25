@@ -32,7 +32,7 @@ export function useOrgAccess() {
     };
   }
 
-  const isAccountOwner = emailAccount.userId === session.user.id;
+  const isAccountOwner = emailAccount.hasFullAccess;
 
   const accountInfo = isAccountOwner
     ? null

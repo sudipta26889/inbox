@@ -108,7 +108,8 @@ model User {
 
   apiKeys ApiKey[]
 
-  emailAccounts EmailAccount[]
+  emailAccounts       EmailAccount[]
+  sharedEmailAccounts EmailAccountShare[]
 
   // Referral relationships
   referralsMade    Referral[] @relation("ReferrerUser")
@@ -219,6 +220,7 @@ model EmailAccount {
   responseTimes    ResponseTime[]
 
   members               Member[]
+  shares                EmailAccountShare[]
   invitations           Invitation[]
   ssoproviders          SsoProvider[]
   calendarConnections   CalendarConnection[]
@@ -241,6 +243,19 @@ model EmailAccount {
 
   @@index([userId])
   @@index([lastSummaryEmailAt])
+}
+
+// Grants another user full access to an email account they don't own.
+model EmailAccountShare {
+  id             String       @id @default(cuid())
+  createdAt      DateTime     @default(now())
+  emailAccountId String
+  emailAccount   EmailAccount @relation(fields: [emailAccountId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([emailAccountId, userId])
+  @@index([userId])
 }
 
 model Organization {

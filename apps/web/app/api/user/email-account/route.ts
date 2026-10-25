@@ -5,9 +5,9 @@ import { SafeError } from "@/utils/error";
 import { getEmailProviderRateLimitState } from "@/utils/email/rate-limit";
 import type { Logger } from "@/utils/logger";
 
-export type EmailAccountFullResponse = Awaited<
-  ReturnType<typeof getEmailAccount>
-> | null;
+export type EmailAccountFullResponse =
+  | (Awaited<ReturnType<typeof getEmailAccount>> & { hasFullAccess: boolean })
+  | null;
 
 async function getEmailAccount({
   emailAccountId,
@@ -73,7 +73,10 @@ export const GET = withEmailAccount(
       logger: request.logger,
     });
 
-    return NextResponse.json(emailAccount);
+    // Owners and shared users resolve to the owner's userId; org admins keep their own.
+    const hasFullAccess = request.auth.userId === emailAccount.userId;
+
+    return NextResponse.json({ ...emailAccount, hasFullAccess });
   },
   { allowOrgAdmins: true },
 );
