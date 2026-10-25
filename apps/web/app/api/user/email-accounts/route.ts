@@ -6,7 +6,7 @@ import {
   parseLastEmailAccountCookieValue,
 } from "@/utils/cookies";
 import { withAuth } from "@/utils/middleware";
-import { accessibleEmailAccountWhere } from "@/utils/redis/account-validation";
+import { accessibleEmailAccountWhere } from "@/utils/email-account-access";
 
 export type GetEmailAccountsResponse = Awaited<
   ReturnType<typeof getEmailAccounts>

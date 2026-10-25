@@ -9,7 +9,7 @@ import { createScopedLogger } from "@/utils/logger";
 import { flushLoggerSafely } from "@/utils/logger-flush";
 import prisma from "@/utils/prisma";
 import { isAdmin } from "@/utils/admin";
-import { accessibleEmailAccountWhere } from "@/utils/redis/account-validation";
+import { accessibleEmailAccountWhere } from "@/utils/email-account-access";
 import { captureException, SafeError } from "@/utils/error";
 import { env } from "@/env";
 

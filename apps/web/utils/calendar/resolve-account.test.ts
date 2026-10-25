@@ -34,7 +34,10 @@ describe("resolveCalendarAccount", () => {
     });
 
     expect(prisma.emailAccount.findFirst).toHaveBeenCalledWith({
-      where: { id: "acct-1", userId: "user-1" },
+      where: {
+        id: "acct-1",
+        OR: [{ userId: "user-1" }, { shares: { some: { userId: "user-1" } } }],
+      },
       select: { id: true, email: true, timezone: true },
     });
     expect(result.account.email).toBe("me@example.com");
@@ -56,7 +59,10 @@ describe("resolveCalendarAccount", () => {
     });
 
     expect(prisma.emailAccount.findFirst).toHaveBeenCalledWith({
-      where: { userId: "user-1", email: "work@example.com" },
+      where: {
+        OR: [{ userId: "user-1" }, { shares: { some: { userId: "user-1" } } }],
+        email: "work@example.com",
+      },
       select: { id: true, email: true, timezone: true },
     });
     expect(result.account.id).toBe("acct-2");
@@ -79,7 +85,10 @@ describe("resolveCalendarAccount", () => {
     // clause this test would pass while leaking other users' accounts, since
     // EmailAccount.email is globally unique.
     expect(prisma.emailAccount.findFirst).toHaveBeenCalledWith({
-      where: { userId: "user-1", email: "someone@else.com" },
+      where: {
+        OR: [{ userId: "user-1" }, { shares: { some: { userId: "user-1" } } }],
+        email: "someone@else.com",
+      },
       select: { id: true, email: true, timezone: true },
     });
   });

@@ -21,6 +21,9 @@ vi.mock("@/utils/prisma", () => ({
     a2aApproval: {
       update: vi.fn(),
     },
+    emailAccount: {
+      findFirst: vi.fn().mockResolvedValue({ userId: "user-123" }),
+    },
   },
 }));
 

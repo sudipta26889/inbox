@@ -1,4 +1,5 @@
 import prisma from "@/utils/prisma";
+import { accessibleEmailAccountWhere } from "@/utils/email-account-access";
 import type { Logger } from "@/utils/logger";
 import type { CalendarEventProvider } from "@/utils/calendar/event-types";
 import { createCalendarEventProviders } from "@/utils/calendar/event-provider";
@@ -25,14 +26,14 @@ export async function resolveCalendarAccount({
 }> {
   const account = from
     ? await prisma.emailAccount.findFirst({
-        where: { userId, email: from },
+        where: { ...accessibleEmailAccountWhere(userId), email: from },
         select: { id: true, email: true, timezone: true },
       })
     : // Scoped by userId even on the default path: this module is the ownership
       // boundary for calendar access, so it defends itself rather than trusting
       // every caller to have composed emailAccountId safely.
       await prisma.emailAccount.findFirst({
-        where: { id: emailAccountId, userId },
+        where: { id: emailAccountId, ...accessibleEmailAccountWhere(userId) },
         select: { id: true, email: true, timezone: true },
       });
 

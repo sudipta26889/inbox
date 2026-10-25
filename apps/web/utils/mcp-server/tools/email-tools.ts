@@ -1,4 +1,6 @@
 import prisma from "@/utils/prisma";
+import { accessibleEmailAccountWhere } from "@/utils/email-account-access";
+import { getCallerUserId } from "@/utils/mcp-server/tool-context";
 import { getGmailClientWithRefresh } from "@/utils/gmail/client";
 import { createOutlookClient } from "@/utils/outlook/client";
 import type { Attachment as MailAttachment } from "nodemailer/lib/mailer";
@@ -177,7 +179,7 @@ export async function searchEmailsMultiAccount(
   // Get email accounts - either specific one or all
   const emailAccounts = await prisma.emailAccount.findMany({
     where: {
-      userId: context.userId,
+      ...accessibleEmailAccountWhere(getCallerUserId(context)),
       ...(params.emailAccountId ? { id: params.emailAccountId } : {}),
     },
     include: { account: true },
@@ -342,8 +344,11 @@ export async function getEmail(
 
   // Helper function to fetch email from a specific account
   const fetchFromAccount = async (accountId: string) => {
-    const emailAccount = await prisma.emailAccount.findUnique({
-      where: { id: accountId },
+    const emailAccount = await prisma.emailAccount.findFirst({
+      where: {
+        id: accountId,
+        ...accessibleEmailAccountWhere(getCallerUserId(context)),
+      },
       include: { account: true },
     });
 
@@ -518,7 +523,7 @@ export async function getEmail(
 
     const allAccounts = await prisma.emailAccount.findMany({
       where: {
-        userId: context.userId,
+        ...accessibleEmailAccountWhere(getCallerUserId(context)),
         id: { not: targetAccountId },
       },
     });
@@ -548,7 +553,7 @@ export async function listEmailAccounts(
   });
 
   const emailAccounts = await prisma.emailAccount.findMany({
-    where: { userId: context.userId },
+    where: accessibleEmailAccountWhere(getCallerUserId(context)),
     select: {
       id: true,
       email: true,
@@ -991,19 +996,22 @@ async function resolveFromAccount(context: McpToolContext, from?: string) {
     if (!from.includes("@")) {
       throw new Error(
         `Invalid 'from' parameter: "${from}". The 'from' must be a valid email address. ` +
-          `Available accounts: ${await listAccountEmails(context.userId)}`,
+          `Available accounts: ${await listAccountEmails(getCallerUserId(context))}`,
       );
     }
 
     const fromAccount = await prisma.emailAccount.findFirst({
-      where: { userId: context.userId, email: from },
+      where: {
+        ...accessibleEmailAccountWhere(getCallerUserId(context)),
+        email: from,
+      },
       select: { id: true },
     });
 
     if (!fromAccount) {
       throw new Error(
         `Email account '${from}' not found. ` +
-          `You must use one of your configured accounts: ${await listAccountEmails(context.userId)}`,
+          `You must use one of your configured accounts: ${await listAccountEmails(getCallerUserId(context))}`,
       );
     }
 
@@ -1023,7 +1031,7 @@ async function resolveFromAccount(context: McpToolContext, from?: string) {
 
 async function listAccountEmails(userId: string) {
   const accounts = await prisma.emailAccount.findMany({
-    where: { userId },
+    where: accessibleEmailAccountWhere(userId),
     select: { email: true },
   });
   return accounts.map((a) => a.email).join(", ");

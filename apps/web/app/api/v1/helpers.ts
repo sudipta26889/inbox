@@ -1,4 +1,5 @@
 import prisma from "@/utils/prisma";
+import { accessibleEmailAccountWhere } from "@/utils/email-account-access";
 import type { StatsApiKeyPrincipal } from "@/utils/api-auth";
 
 /**
@@ -19,8 +20,8 @@ export async function getEmailAccountId({
 }): Promise<string | undefined> {
   if (email) {
     // check user owns email account
-    const emailAccount = await prisma.emailAccount.findUnique({
-      where: { email, userId },
+    const emailAccount = await prisma.emailAccount.findFirst({
+      where: { email, ...accessibleEmailAccountWhere(userId) },
       select: { id: true },
     });
 
@@ -29,8 +30,8 @@ export async function getEmailAccountId({
 
   if (!accountId) return undefined;
 
-  const emailAccount = await prisma.emailAccount.findUnique({
-    where: { accountId, userId },
+  const emailAccount = await prisma.emailAccount.findFirst({
+    where: { accountId, ...accessibleEmailAccountWhere(userId) },
     select: { id: true },
   });
 

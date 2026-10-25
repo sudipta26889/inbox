@@ -5,6 +5,7 @@ import { generateSecureToken } from "@/utils/mcp-server/pkce";
 import { validateRedirectUri } from "@/utils/mcp-server/redirect-uri";
 import { validateScopes } from "@/utils/mcp-server/tokens";
 import prisma from "@/utils/prisma";
+import { accessibleEmailAccountWhere } from "@/utils/email-account-access";
 
 export async function OPTIONS() {
   return new NextResponse(null, {
@@ -66,7 +67,7 @@ export const POST = withAuth(
     const emailAccount = await prisma.emailAccount.findFirst({
       where: {
         id: emailAccountId,
-        userId,
+        ...accessibleEmailAccountWhere(userId),
       },
     });
 

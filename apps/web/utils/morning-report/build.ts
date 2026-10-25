@@ -11,6 +11,7 @@ import { ONE_DAY_MS, ONE_HOUR_MS } from "@/utils/date";
 import { createEmailProvider } from "@/utils/email/provider";
 import type { Logger } from "@/utils/logger";
 import prisma from "@/utils/prisma";
+import { accessibleEmailAccountWhere } from "@/utils/email-account-access";
 import { redis } from "@/utils/redis";
 import { getEmailAccountWithAi } from "@/utils/user/get";
 import { collectCandidates } from "./candidates";
@@ -44,7 +45,7 @@ export async function buildMorningReport({
   logger: Logger;
 }): Promise<MorningReport> {
   const emailAccounts = await prisma.emailAccount.findMany({
-    where: { userId },
+    where: accessibleEmailAccountWhere(userId),
     select: {
       id: true,
       email: true,

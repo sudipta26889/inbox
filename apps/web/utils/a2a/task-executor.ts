@@ -3,7 +3,7 @@ import prisma from "@/utils/prisma";
 import type { Prisma } from "@/generated/prisma/client";
 import { A2aTaskState } from "@/generated/prisma/enums";
 import { getTool } from "@/utils/mcp-server/tools/registry";
-import type { McpToolContext } from "@/utils/mcp-server/tools/registry";
+import { buildMcpToolContext } from "@/utils/mcp-server/tool-context";
 import {
   getSkillDefinition,
   publishPendingApprovalsUpdate,
@@ -85,12 +85,15 @@ export async function executeTask(taskId: string): Promise<void> {
     }
 
     // Prepare MCP tool context
-    const mcpContext: McpToolContext = {
+    const mcpContext = await buildMcpToolContext({
       userId: task.userId,
       emailAccountId: task.emailAccountId || "",
       clientId: task.clientId || "",
       scopes: [skillDef.requiredScope],
-    };
+    });
+    if (!mcpContext) {
+      throw new Error("Access to the task's email account has been revoked");
+    }
 
     // Execute the MCP tool
     logger.info("Executing MCP tool for A2A task", {

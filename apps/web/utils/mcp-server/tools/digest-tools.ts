@@ -1,6 +1,7 @@
 import { getDailyDigest, getLocalDate } from "@/utils/a2a/daily-digest";
 import { createScopedLogger } from "@/utils/logger";
 import prisma from "@/utils/prisma";
+import { getCallerUserId } from "@/utils/mcp-server/tool-context";
 import type { McpToolContext } from "./registry";
 
 const logger = createScopedLogger("mcp-digest-tools");
@@ -23,7 +24,7 @@ export async function getDailyDigestTool(
   });
 
   const emailAccount = await prisma.emailAccount.findFirst({
-    where: { userId: context.userId },
+    where: { userId: getCallerUserId(context) },
     select: { timezone: true },
     orderBy: { createdAt: "asc" },
   });
@@ -31,7 +32,10 @@ export async function getDailyDigestTool(
   const timeZone = emailAccount?.timezone || "UTC";
   const date = params.date || getLocalDate(timeZone);
 
-  const digest = await getDailyDigest({ userId: context.userId, date });
+  const digest = await getDailyDigest({
+    userId: getCallerUserId(context),
+    date,
+  });
 
   // Digests stored before the consolidated report have no text.
   if (!digest?.text) {

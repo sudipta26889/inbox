@@ -7,6 +7,8 @@ import { mapDomainError } from "@/utils/mcp-server/error-mapper";
 import { NotFoundError, ValidationError } from "@/utils/mcp-server/errors";
 import type { McpToolContext } from "@/utils/mcp-server/tools/registry";
 import prisma from "@/utils/prisma";
+import { accessibleEmailAccountWhere } from "@/utils/email-account-access";
+import { getCallerUserId } from "@/utils/mcp-server/tool-context";
 import { taskpilotCache } from "@/utils/taskpilot/cache";
 import { TaskpilotClient } from "@/utils/taskpilot/client";
 import { getTaskpilotConfigForUser } from "@/utils/taskpilot/config";
@@ -42,7 +44,10 @@ export async function convertToTaskpilotTask(
 
   try {
     const emailAccount = await prisma.emailAccount.findFirst({
-      where: { id: emailAccountId, userId: context.userId },
+      where: {
+        id: emailAccountId,
+        ...accessibleEmailAccountWhere(getCallerUserId(context)),
+      },
       select: {
         id: true,
         email: true,

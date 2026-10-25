@@ -126,7 +126,10 @@ describe("createDraft", () => {
     });
 
     expect(prisma.emailAccount.findFirst).toHaveBeenCalledWith({
-      where: { userId: "user-1", email: "work@example.com" },
+      where: {
+        OR: [{ userId: "user-1" }, { shares: { some: { userId: "user-1" } } }],
+        email: "work@example.com",
+      },
       select: { id: true },
     });
     expect(prisma.emailAccount.findUnique).toHaveBeenCalledWith({

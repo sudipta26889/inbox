@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import prisma from "@/utils/prisma";
+import { accessibleEmailAccountWhere } from "@/utils/email-account-access";
 import { withAccountApiKey } from "@/utils/api-middleware";
 
 export const GET = withAccountApiKey("v1/accounts", [], async (request) => {
   const { userId, emailAccountId: keyEmailAccountId } = request.apiAuth;
 
   const emailAccounts = await prisma.emailAccount.findMany({
-    where: { userId },
+    where: accessibleEmailAccountWhere(userId),
     select: {
       id: true,
       email: true,

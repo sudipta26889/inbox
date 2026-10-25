@@ -1,6 +1,7 @@
 import { createScopedLogger } from "@/utils/logger";
 import type { McpToolContext } from "./registry";
 import { resolveCalendarAccount } from "@/utils/calendar/resolve-account";
+import { getCallerUserId } from "@/utils/mcp-server/tool-context";
 import { toEventTime, allDayEndDate } from "@/utils/calendar/event-time";
 import type { EventTime, NotifyLevel } from "@/utils/calendar/event-time";
 import type {
@@ -48,7 +49,7 @@ export async function searchCalendar(
   });
 
   const { providers } = await resolveCalendarAccount({
-    userId: context.userId,
+    userId: getCallerUserId(context),
     emailAccountId: context.emailAccountId,
     from: params.from,
     logger,
@@ -129,7 +130,7 @@ export async function getCalendarEvent(
   });
 
   const { providers } = await resolveCalendarAccount({
-    userId: context.userId,
+    userId: getCallerUserId(context),
     emailAccountId: context.emailAccountId,
     from: params.from,
     logger,
@@ -196,7 +197,7 @@ export async function getCalendarAvailability(
   });
 
   const { providers } = await resolveCalendarAccount({
-    userId: context.userId,
+    userId: getCallerUserId(context),
     emailAccountId: context.emailAccountId,
     from: params.from,
     logger,
@@ -314,7 +315,7 @@ export async function createCalendarEvent(
   });
 
   const { account, providers } = await resolveCalendarAccount({
-    userId: context.userId,
+    userId: getCallerUserId(context),
     emailAccountId: context.emailAccountId,
     from: params.from,
     logger,
@@ -468,7 +469,7 @@ export async function listCalendars(
   logger.info("MCP tool: list_calendars", { userId: context.userId });
 
   const { account, providers } = await resolveCalendarAccount({
-    userId: context.userId,
+    userId: getCallerUserId(context),
     emailAccountId: context.emailAccountId,
     from: params.from,
     logger,
@@ -530,7 +531,7 @@ export async function updateCalendarEvent(
   });
 
   const { account, providers } = await resolveCalendarAccount({
-    userId: context.userId,
+    userId: getCallerUserId(context),
     emailAccountId: context.emailAccountId,
     from: params.from,
     logger,
@@ -688,7 +689,7 @@ export async function deleteCalendarEvent(
   });
 
   const { providers } = await resolveCalendarAccount({
-    userId: context.userId,
+    userId: getCallerUserId(context),
     emailAccountId: context.emailAccountId,
     from: params.from,
     logger,
@@ -780,7 +781,7 @@ export async function respondToCalendarEvent(
   });
 
   const { providers } = await resolveCalendarAccount({
-    userId: context.userId,
+    userId: getCallerUserId(context),
     emailAccountId: context.emailAccountId,
     from: params.from,
     logger,
@@ -826,7 +827,7 @@ export async function listCalendarEventInstances(
   });
 
   const { providers } = await resolveCalendarAccount({
-    userId: context.userId,
+    userId: getCallerUserId(context),
     emailAccountId: context.emailAccountId,
     from: params.from,
     logger,

@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/utils/auth";
 import prisma from "@/utils/prisma";
-import { accessibleEmailAccountWhere } from "@/utils/redis/account-validation";
+import { accessibleEmailAccountWhere } from "@/utils/email-account-access";
 
 export async function checkUserOwnsEmailAccount({
   emailAccountId,

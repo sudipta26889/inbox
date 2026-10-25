@@ -1,6 +1,7 @@
 import "server-only";
 import { redis } from "@/utils/redis";
 import prisma from "@/utils/prisma";
+import { accessibleEmailAccountWhere } from "@/utils/email-account-access";
 
 const EXPIRATION = 60 * 60; // 1 hour
 
@@ -17,11 +18,6 @@ function getValidationKey({
   emailAccountId: string;
 }): string {
   return `account-access:${userId}:${emailAccountId}`;
-}
-
-/** Prisma filter: email accounts the user owns or has been shared. */
-export function accessibleEmailAccountWhere(userId: string) {
-  return { OR: [{ userId }, { shares: { some: { userId } } }] };
 }
 
 /**

@@ -10,6 +10,8 @@ import { env } from "@/env";
 import { createScopedLogger } from "@/utils/logger";
 import { auth } from "@/utils/auth";
 import prisma from "@/utils/prisma";
+import { accessibleEmailAccountWhere } from "@/utils/email-account-access";
+import { buildMcpToolContext } from "@/utils/mcp-server/tool-context";
 import { formatToolResponse } from "@/utils/mcp-server/format-response";
 
 const logger = createScopedLogger("mcp-server");
@@ -155,7 +157,7 @@ export const POST = withError(
         // Fetch all email accounts for the user to provide context
         const emailAccounts = userId
           ? await prisma.emailAccount.findMany({
-              where: { userId },
+              where: accessibleEmailAccountWhere(userId),
               select: {
                 id: true,
                 email: true,
@@ -279,14 +281,23 @@ export const POST = withError(
           );
         }
 
+        const toolContext = await buildMcpToolContext({
+          userId,
+          emailAccountId,
+          clientId: clientId || "",
+          scopes,
+        });
+        if (!toolContext) {
+          return createErrorResponse(
+            message.id,
+            -32_003,
+            "Access to this email account has been revoked. Reconnect and pick another account.",
+          );
+        }
+
         try {
           const result = await tool.handler(
-            {
-              userId,
-              emailAccountId,
-              clientId: clientId || "",
-              scopes,
-            },
+            toolContext,
             message.params?.arguments || {},
           );
 

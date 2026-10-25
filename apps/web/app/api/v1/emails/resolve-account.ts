@@ -1,4 +1,5 @@
 import prisma from "@/utils/prisma";
+import { accessibleEmailAccountWhere } from "@/utils/email-account-access";
 
 export async function resolveUserAccount({
   userId,
@@ -8,7 +9,7 @@ export async function resolveUserAccount({
   requestedAccountId: string;
 }): Promise<{ emailAccountId: string; provider: string } | null> {
   const emailAccount = await prisma.emailAccount.findFirst({
-    where: { id: requestedAccountId, userId },
+    where: { id: requestedAccountId, ...accessibleEmailAccountWhere(userId) },
     select: {
       id: true,
       account: { select: { provider: true } },

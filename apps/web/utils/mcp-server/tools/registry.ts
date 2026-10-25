@@ -9,9 +9,12 @@ import type { McpResult } from "../envelope";
  */
 
 export interface McpToolContext {
+  /** The authenticated user; differs from `userId` when the bound account is shared with them. */
+  callerUserId?: string;
   clientId: string;
   emailAccountId: string;
   scopes: string[];
+  /** Owner of the bound email account. */
   userId: string;
 }
 
