@@ -56,6 +56,16 @@ describe("tool annotations", () => {
     expect(byName.send_email?.annotations?.readOnlyHint).toBeUndefined();
   });
 
+  it("offers get_attachment to a read-only token as a read-only tool", () => {
+    const tool = getAllTools(["email:read"]).find(
+      (t) => t.name === "get_attachment",
+    );
+
+    expect(MCP_TOOLS.get_attachment?.requiredScope).toBe("email:read");
+    expect(tool?.annotations?.readOnlyHint).toBe(true);
+    expect(tool?.inputSchema.required).toEqual(["messageId", "attachmentId"]);
+  });
+
   it("distinguishes sending from drafting", () => {
     const byName = Object.fromEntries(
       getAllTools().map((tool) => [tool.name, tool]),

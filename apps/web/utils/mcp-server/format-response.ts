@@ -16,6 +16,7 @@ export function formatEmailAsMarkdown(email: {
   textHtml?: string;
   snippet?: string;
   attachments?: Array<{
+    attachmentId?: string;
     filename: string;
     mimeType: string;
     size: number;
@@ -52,6 +53,9 @@ export function formatEmailAsMarkdown(email: {
       md += `#### ${index + 1}. ${attachment.filename}\n\n`;
       md += `- **Type:** ${attachment.mimeType}\n`;
       md += `- **Size:** ${(attachment.size / 1024).toFixed(2)} KB\n`;
+      if (attachment.attachmentId) {
+        md += `- **Attachment ID:** \`${attachment.attachmentId}\`\n`;
+      }
 
       if (attachment.content) {
         if (attachment.content.error) {
@@ -224,6 +228,10 @@ export function formatToolResponse(toolName: string, result: any): string {
           return md;
         }
         return formatEmailAsMarkdown(result);
+
+      case "get_attachment":
+        // Raw JSON, not a markdown fence: callers parse it to get the base64 bytes.
+        return JSON.stringify(result);
 
       case "send_email":
         return `# Email Sent Successfully\n\n- **Message ID:** \`${result.messageId}\`\n${result.threadId ? `- **Thread ID:** \`${result.threadId}\`\n` : ""}`;

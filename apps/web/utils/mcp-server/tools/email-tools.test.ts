@@ -3,6 +3,7 @@ import prisma from "@/utils/__mocks__/prisma";
 import {
   createDraft,
   deleteDraft,
+  getAttachment,
   getDraftDetail,
   listDrafts,
   updateDraft,
@@ -11,6 +12,21 @@ import type { McpToolContext } from "./registry";
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/utils/prisma");
+
+const gmailMessagesGet = vi.fn();
+const gmailAttachmentsGet = vi.fn();
+const gmailMessagesModify = vi.fn();
+vi.mock("@/utils/gmail/client", () => ({
+  getGmailClientWithRefresh: vi.fn(async () => ({
+    users: {
+      messages: {
+        get: gmailMessagesGet,
+        modify: gmailMessagesModify,
+        attachments: { get: gmailAttachmentsGet },
+      },
+    },
+  })),
+}));
 
 const providerCreateDraft = vi.fn();
 const providerUpdateDraft = vi.fn();
@@ -361,3 +377,122 @@ describe("deleteDraft", () => {
     expect(result.success).toBe(false);
   });
 });
+
+describe("getAttachment", () => {
+  const pdfBytes = Buffer.from("%PDF-1.7 locked statement");
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    prisma.emailAccount.findFirst.mockResolvedValue(googleAccount as never);
+    gmailMessagesGet.mockResolvedValue({
+      data: gmailMessageWithAttachment({ attachmentId: "att-1", size: 1024 }),
+    });
+    gmailAttachmentsGet.mockResolvedValue({
+      data: { data: pdfBytes.toString("base64url") },
+    });
+  });
+
+  it("returns the attachment bytes as base64 without touching the message", async () => {
+    const result = await getAttachment(context, {
+      messageId: "msg-1",
+      attachmentId: "att-1",
+    });
+
+    expect(result).toEqual({
+      filename: "statement.pdf",
+      mimeType: "application/pdf",
+      size: pdfBytes.length,
+      data: pdfBytes.toString("base64"),
+    });
+    expect(gmailAttachmentsGet).toHaveBeenCalledWith({
+      userId: "me",
+      messageId: "msg-1",
+      id: "att-1",
+    });
+    expect(gmailMessagesModify).not.toHaveBeenCalled();
+    expect(prisma.emailAccount.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: "account-default",
+        OR: [{ userId: "user-1" }, { shares: { some: { userId: "user-1" } } }],
+      },
+      include: { account: true },
+    });
+  });
+
+  it("refuses an attachment advertised over 15 MB without downloading it", async () => {
+    gmailMessagesGet.mockResolvedValue({
+      data: gmailMessageWithAttachment({
+        attachmentId: "att-1",
+        size: 16 * 1024 * 1024,
+      }),
+    });
+
+    await expect(
+      getAttachment(context, { messageId: "msg-1", attachmentId: "att-1" }),
+    ).rejects.toThrow("over the 15 MB get_attachment limit");
+    expect(gmailAttachmentsGet).not.toHaveBeenCalled();
+  });
+
+  it("still enforces the limit on the downloaded bytes when the id has rotated", async () => {
+    gmailAttachmentsGet.mockResolvedValue({
+      data: { data: Buffer.alloc(15 * 1024 * 1024 + 1).toString("base64url") },
+    });
+
+    await expect(
+      getAttachment(context, { messageId: "msg-1", attachmentId: "att-old" }),
+    ).rejects.toThrow("over the 15 MB get_attachment limit");
+  });
+
+  it("returns no filename when the id has rotated but the download works", async () => {
+    const result = await getAttachment(context, {
+      messageId: "msg-1",
+      attachmentId: "att-old",
+    });
+
+    expect(result.filename).toBeUndefined();
+    expect(result.data).toBe(pdfBytes.toString("base64"));
+  });
+
+  it("refuses a non-Gmail account clearly", async () => {
+    prisma.emailAccount.findFirst.mockResolvedValue({
+      id: "account-outlook",
+      email: "me@outlook.com",
+      account: { provider: "microsoft" },
+    } as never);
+
+    await expect(
+      getAttachment(context, {
+        messageId: "msg-1",
+        attachmentId: "att-1",
+        emailAccountId: "account-outlook",
+      }),
+    ).rejects.toThrow("get_attachment supports Gmail accounts only");
+    expect(gmailAttachmentsGet).not.toHaveBeenCalled();
+  });
+});
+
+function gmailMessageWithAttachment({
+  attachmentId,
+  size,
+}: {
+  attachmentId: string;
+  size: number;
+}) {
+  return {
+    id: "msg-1",
+    threadId: "thread-1",
+    payload: {
+      mimeType: "multipart/mixed",
+      headers: [{ name: "Subject", value: "Statement" }],
+      parts: [
+        {
+          partId: "1",
+          mimeType: "application/pdf",
+          filename: "statement.pdf",
+          headers: [],
+          body: { attachmentId, size },
+        },
+      ],
+    },
+  };
+}

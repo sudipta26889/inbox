@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { formatEmailAsMarkdown } from "@/utils/mcp-server/format-response";
+import {
+  formatEmailAsMarkdown,
+  formatToolResponse,
+} from "@/utils/mcp-server/format-response";
 
 vi.mock("server-only", () => ({}));
 
@@ -51,5 +54,39 @@ describe("formatEmailAsMarkdown", () => {
     });
 
     expect(md).toContain("_[truncated: 50 more characters]_");
+  });
+});
+
+describe("formatEmailAsMarkdown attachments", () => {
+  it("prints each attachment's id so get_attachment can fetch it", () => {
+    const md = formatEmailAsMarkdown({
+      ...base,
+      textPlain: "see attached",
+      attachments: [
+        {
+          attachmentId: "ANGjdJ8abc",
+          filename: "statement.pdf",
+          mimeType: "application/pdf",
+          size: 2048,
+        },
+      ],
+    });
+
+    expect(md).toContain("- **Attachment ID:** `ANGjdJ8abc`");
+  });
+});
+
+describe("formatToolResponse get_attachment", () => {
+  it("returns parseable JSON rather than markdown", () => {
+    const result = {
+      filename: "statement.pdf",
+      mimeType: "application/pdf",
+      size: 3,
+      data: "YWJj",
+    };
+
+    expect(JSON.parse(formatToolResponse("get_attachment", result))).toEqual(
+      result,
+    );
   });
 });

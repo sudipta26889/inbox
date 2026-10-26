@@ -21,10 +21,13 @@ import { extractEmailId } from "./url-parser";
 import { getThread } from "@/utils/gmail/thread";
 import {
   downloadAndParseAttachments,
+  downloadGmailAttachment,
   type GmailAttachment,
 } from "@/utils/gmail/attachment";
 
 const logger = createScopedLogger("mcp-email-tools");
+
+const MAX_ATTACHMENT_BYTES = 15 * 1024 * 1024;
 
 type DraftAttachmentInput = {
   filename: string;
@@ -344,30 +347,12 @@ export async function getEmail(
 
   // Helper function to fetch email from a specific account
   const fetchFromAccount = async (accountId: string) => {
-    const emailAccount = await prisma.emailAccount.findFirst({
-      where: {
-        id: accountId,
-        ...accessibleEmailAccountWhere(getCallerUserId(context)),
-      },
-      include: { account: true },
-    });
-
-    if (!emailAccount) {
-      throw new Error(`Email account ${accountId} not found`);
-    }
+    const emailAccount = await findAccessibleEmailAccount(context, accountId);
 
     const isGmail = isGoogleProvider(emailAccount.account?.provider);
 
     if (isGmail) {
-      const gmail = await getGmailClientWithRefresh({
-        accessToken: emailAccount.account?.access_token,
-        refreshToken: emailAccount.account?.refresh_token,
-        expiresAt: emailAccount.account?.expires_at
-          ? new Date(emailAccount.account.expires_at).getTime()
-          : null,
-        emailAccountId: emailAccount.id,
-        logger,
-      });
+      const gmail = await getGmailClientForAccount(emailAccount);
 
       // Try to fetch as a thread first if it looks like a UI thread ID
       if (isLikelyThreadId) {
@@ -503,42 +488,58 @@ export async function getEmail(
     }
   };
 
-  // Try the target account first
-  try {
-    return await fetchFromAccount(targetAccountId);
-  } catch (error) {
-    // If emailAccountId was explicitly specified, don't try other accounts
-    if (params.emailAccountId) {
-      throw error;
-    }
+  return withAccountFallback(
+    context,
+    params.emailAccountId,
+    fetchFromAccount,
+    (accountCount) =>
+      `Email ID "${emailId}" not found in any of your ${accountCount} linked email accounts.`,
+  );
+}
 
-    // Otherwise, try all linked accounts
-    logger.info(
-      "Email not found in default account, trying all linked accounts",
-      {
-        userId: context.userId,
-        defaultAccountId: targetAccountId,
-      },
-    );
-
-    const allAccounts = await prisma.emailAccount.findMany({
-      where: {
-        ...accessibleEmailAccountWhere(getCallerUserId(context)),
-        id: { not: targetAccountId },
-      },
-    });
-
-    for (const account of allAccounts) {
-      try {
-        return await fetchFromAccount(account.id);
-      } catch (err) {}
-    }
-
-    // If we get here, email wasn't found in any account
-    throw new Error(
-      `Email ID "${emailId}" not found in any of your ${allAccounts.length + 1} linked email accounts.`,
-    );
+/**
+ * Download one Gmail attachment as base64. Read-only: it never modifies the
+ * message (no label, read-state or other write).
+ */
+export async function getAttachment(
+  context: McpToolContext,
+  params: { messageId: string; attachmentId: string; emailAccountId?: string },
+) {
+  if (!params.messageId || !params.attachmentId) {
+    throw new Error("messageId and attachmentId are required");
   }
+
+  logger.info("MCP tool: get_attachment", {
+    userId: context.userId,
+    requestedAccountId: params.emailAccountId,
+    messageId: params.messageId,
+  });
+
+  const { gmail, attachment } = await withAccountFallback(
+    context,
+    params.emailAccountId,
+    (accountId) => findGmailAttachment(context, accountId, params),
+    (accountCount) =>
+      `Message "${params.messageId}" not found in any of your ${accountCount} linked email accounts (get_attachment supports Gmail accounts only).`,
+  );
+
+  // Check the advertised size first so an oversized file is never downloaded.
+  if (attachment) assertAttachmentSize(attachment.size);
+
+  const buffer = await downloadGmailAttachment(
+    params.messageId,
+    params.attachmentId,
+    gmail,
+    logger,
+  );
+  assertAttachmentSize(buffer.length);
+
+  return {
+    filename: attachment?.filename,
+    mimeType: attachment?.mimeType,
+    size: buffer.length,
+    data: buffer.toString("base64"),
+  };
 }
 
 /**
@@ -1027,6 +1028,113 @@ async function resolveFromAccount(context: McpToolContext, from?: string) {
   if (!emailAccount) throw new Error("Email account not found");
 
   return emailAccount;
+}
+
+async function findAccessibleEmailAccount(
+  context: McpToolContext,
+  accountId: string,
+) {
+  const emailAccount = await prisma.emailAccount.findFirst({
+    where: {
+      id: accountId,
+      ...accessibleEmailAccountWhere(getCallerUserId(context)),
+    },
+    include: { account: true },
+  });
+
+  if (!emailAccount) {
+    throw new Error(`Email account ${accountId} not found`);
+  }
+
+  return emailAccount;
+}
+
+function getGmailClientForAccount(
+  emailAccount: Awaited<ReturnType<typeof findAccessibleEmailAccount>>,
+) {
+  return getGmailClientWithRefresh({
+    accessToken: emailAccount.account?.access_token,
+    refreshToken: emailAccount.account?.refresh_token,
+    expiresAt: emailAccount.account?.expires_at
+      ? new Date(emailAccount.account.expires_at).getTime()
+      : null,
+    emailAccountId: emailAccount.id,
+    logger,
+  });
+}
+
+/**
+ * Message ids are account-specific. An explicit account is final; otherwise
+ * try the bound account, then every other account the caller can access.
+ */
+async function withAccountFallback<T>(
+  context: McpToolContext,
+  explicitAccountId: string | undefined,
+  fetchFromAccount: (accountId: string) => Promise<T>,
+  notFoundMessage: (accountCount: number) => string,
+): Promise<T> {
+  const targetAccountId = explicitAccountId || context.emailAccountId;
+
+  try {
+    return await fetchFromAccount(targetAccountId);
+  } catch (error) {
+    if (explicitAccountId) throw error;
+
+    logger.info("Not found in default account, trying all linked accounts", {
+      userId: context.userId,
+      defaultAccountId: targetAccountId,
+    });
+
+    const allAccounts = await prisma.emailAccount.findMany({
+      where: {
+        ...accessibleEmailAccountWhere(getCallerUserId(context)),
+        id: { not: targetAccountId },
+      },
+    });
+
+    for (const account of allAccounts) {
+      try {
+        return await fetchFromAccount(account.id);
+      } catch {}
+    }
+
+    throw new Error(notFoundMessage(allAccounts.length + 1));
+  }
+}
+
+async function findGmailAttachment(
+  context: McpToolContext,
+  accountId: string,
+  params: { messageId: string; attachmentId: string },
+) {
+  const emailAccount = await findAccessibleEmailAccount(context, accountId);
+
+  if (!isGoogleProvider(emailAccount.account?.provider)) {
+    throw new Error(
+      `get_attachment supports Gmail accounts only; account ${accountId} uses ${emailAccount.account?.provider || "an unknown provider"}.`,
+    );
+  }
+
+  const gmail = await getGmailClientForAccount(emailAccount);
+  // Also proves the message lives in this account before any download.
+  const message = parseMessage(
+    await getGmailMessage(params.messageId, gmail, "full"),
+  );
+  // ponytail: Gmail can rotate attachment ids between reads, so a miss here
+  // only drops filename/mimeType; the download itself still works.
+  const attachment = message.attachments?.find(
+    (a) => a.attachmentId === params.attachmentId,
+  );
+
+  return { gmail, attachment };
+}
+
+function assertAttachmentSize(size: number) {
+  if (size > MAX_ATTACHMENT_BYTES) {
+    throw new Error(
+      `Attachment is ${(size / 1024 / 1024).toFixed(1)} MB, over the ${MAX_ATTACHMENT_BYTES / 1024 / 1024} MB get_attachment limit.`,
+    );
+  }
 }
 
 async function listAccountEmails(userId: string) {

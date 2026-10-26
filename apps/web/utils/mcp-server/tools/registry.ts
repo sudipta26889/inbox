@@ -97,6 +97,36 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
     requiredScope: "email:read",
   },
 
+  get_attachment: {
+    name: "get_attachment",
+    description:
+      "Download the raw bytes of one email attachment (Gmail accounts only), e.g. a password-protected PDF that get_email could not parse. Read-only: the message is never modified. Returns JSON {filename?, mimeType?, size, data} where data is base64. Attachments over 15 MB are refused. Get messageId and attachmentId from get_email (the Attachment ID line under each attachment).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        messageId: {
+          type: "string",
+          description: "The email (message) ID that holds the attachment.",
+        },
+        attachmentId: {
+          type: "string",
+          description: "The attachment ID shown by get_email.",
+        },
+        emailAccountId: {
+          type: "string",
+          description:
+            "Optional: Email account ID the message belongs to (the accountId from get_email or search_emails). If not provided, the default account is tried first, then your other linked accounts.",
+        },
+      },
+      required: ["messageId", "attachmentId"],
+    },
+    handler: async (context, params) => {
+      const { getAttachment } = await import("./email-tools");
+      return getAttachment(context, toolParams(params));
+    },
+    requiredScope: "email:read",
+  },
+
   send_email: {
     name: "send_email",
     description:
