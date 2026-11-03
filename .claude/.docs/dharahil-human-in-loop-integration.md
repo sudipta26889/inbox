@@ -77,7 +77,7 @@ DharaHIL acts as a safety gate between AI agents and critical actions. When an A
 ```bash
 # DharaHIL Gateway Configuration
 DHARAHIL_BASE_URL=https://dharahil-gateway.sudiptadhara.in
-DHARAHIL_API_KEY=dhara_sk_12f85b7abc1d1e23b83dd85c67e049271b91680edbc4d2787c59b42d8f83b6c9
+DHARAHIL_API_KEY=REDACTED
 DHARAHIL_TENANT_ID=0ff30ba6-44c0-4c1b-89e6-5936cca0cc29
 DHARAHIL_APP_ID=69938d75-c4e7-4715-b575-0fb29da4b9ce
 DHARAHIL_ENVIRONMENT=production
