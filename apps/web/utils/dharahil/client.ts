@@ -68,7 +68,7 @@ export class DharaHILClient {
     this.apiKey =
       config?.apiKey ||
       process.env.DHARAHIL_API_KEY ||
-      "dhara_sk_12f85b7abc1d1e23b83dd85c67e049271b91680edbc4d2787c59b42d8f83b6c9";
+      "";
     this.tenantId =
       config?.tenantId ||
       process.env.DHARAHIL_TENANT_ID ||

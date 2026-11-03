@@ -37,8 +37,8 @@ services:
       DHARAHIL_TENANT_ID: "0ff30ba6-44c0-4c1b-89e6-5936cca0cc29"
       DHARAHIL_APP_ID: "69938d75-c4e7-4715-b575-0fb29da4b9ce"
       DHARAHIL_ENVIRONMENT: "production"
-      DATABASE_URL: "postgresql://inbox_zero_user:fdJ5GJ6IYEwdar9gd94jAoFY@db.lan:5432/inbox_zero_db?schema=public"
-      DIRECT_URL: "postgresql://inbox_zero_user:fdJ5GJ6IYEwdar9gd94jAoFY@db.lan:5432/inbox_zero_db?schema=public"
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL in the shell or a compose env file}
+      DIRECT_URL: ${DIRECT_URL:?set DIRECT_URL in the shell or a compose env file}
       REDIS_URL: "redis://:YyD0Tp54vIhmH9gyrbtDu7vDtv8zc5gL@db.lan:6379/3"
       INTERNAL_API_URL: "http://web:5500"
       # Required at runtime; values resolved from ./apps/web/.env (or host env).

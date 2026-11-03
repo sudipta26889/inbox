@@ -13,8 +13,8 @@
 | Tenant ID | `0ff30ba6-44c0-4c1b-89e6-5936cca0cc29` |
 | App ID | `69938d75-c4e7-4715-b575-0fb29da4b9ce` |
 | Environment | `production` |
-| API Key | `dhara_sk_12f85b7abc1d1e23b83dd85c67e049271b91680edbc4d2787c59b42d8f83b6c9` |
-| Required Header | `X-DHARA-API-KEY: dhara_sk_12f85b7abc1d1e23b83dd85c67e049271b91680edbc4d2787c59b42d8f83b6c9` |
+| API Key | `REDACTED` |
+| Required Header | `X-DHARA-API-KEY: REDACTED` |
 
 ---
 
@@ -34,7 +34,7 @@ from dharahil.langgraph_adapter import wrap_tool_with_dharahil
 
 client = DharaHILClient(
     base_url="https://dharahil-gateway.sudiptadhara.in",
-    api_key="dhara_sk_12f85b7abc1d1e23b83dd85c67e049271b91680edbc4d2787c59b42d8f83b6c9",
+    api_key="REDACTED",
     tenant_id="0ff30ba6-44c0-4c1b-89e6-5936cca0cc29",
     app_id="69938d75-c4e7-4715-b575-0fb29da4b9ce",
     environment="production",
@@ -53,7 +53,7 @@ wrapped_tool = wrap_tool_with_dharahil(
 
 ```bash
 curl -X POST https://dharahil-gateway.sudiptadhara.in/v1/requests \
-  -H "X-DHARA-API-KEY: dhara_sk_12f85b7abc1d1e23b83dd85c67e049271b91680edbc4d2787c59b42d8f83b6c9" \
+  -H "X-DHARA-API-KEY: REDACTED" \
   -H "Content-Type: application/json" \
   -d '{
     "tenant_id": "0ff30ba6-44c0-4c1b-89e6-5936cca0cc29",
