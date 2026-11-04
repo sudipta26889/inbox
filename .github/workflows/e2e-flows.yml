@@ -196,9 +196,9 @@ jobs:
       - name: Run E2E Flow Tests
         run: |
           if [ -n "${{ github.event.inputs.test_file }}" ]; then
-            pnpm -F inbox-zero-ai test-e2e:flows ${{ github.event.inputs.test_file }}
+            pnpm --fail-if-no-match -F inbox-ai test-e2e:flows ${{ github.event.inputs.test_file }}
           else
-            pnpm -F inbox-zero-ai test-e2e:flows
+            pnpm --fail-if-no-match -F inbox-ai test-e2e:flows
           fi
         env:
           NEXT_PUBLIC_BASE_URL: ${{ env.NGROK_URL }}

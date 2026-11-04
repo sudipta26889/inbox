@@ -56,10 +56,10 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Check Prisma enum imports
-        run: pnpm -F inbox-zero-ai check-enums
+        run: pnpm --fail-if-no-match -F inbox-ai check-enums
 
       - name: Run tests
-        run: pnpm -F inbox-zero-ai test
+        run: pnpm --fail-if-no-match -F inbox-ai test
         env:
           RUN_AI_TESTS: false
           DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/postgres"
