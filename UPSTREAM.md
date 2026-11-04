@@ -39,7 +39,7 @@ those named here; the rest were judged from file lists and subjects, so a miss c
 
 | Batch | Upstream | Why |
 |---|---|---|
-| 0 | fork-local | Body size limit at the edge plus a zod 4.6.6 override: a 2 MB invalid `scopes` array on the public social sign-in route used about 1.2 GB of heap when parsed alone (GHSA-mrhx-c7xc-m3w5, better-auth's own zod) |
+| 0 | fork-local | Request body limits on public routes, plus a dependency override |
 | 1 | 1797f8438, ffd9f3015, f2d956756 | Next.js 16.4.x: Server Actions DoS GHSA-p3m5-59mp-jv5r; also brings `sharp` 0.35.5. nodemailer 10.3.1 and dompurify 3.4.x in the same pass |
 | 2 | 7e0325690 (history half), dfb122fbb, e090cba4a | A Gmail rate limit partway through a batch can move the history pointer past mail, so rules never run on it. These three go together |
 | 2 | c1fe110bb, b1495f9b4 | Reply actions drop configured CC and BCC; manual replies ignore Reply-To |
