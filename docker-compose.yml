@@ -1,6 +1,8 @@
 name: inbox
 services:
   web:
+    # Off unless asked for: see "Dev and deploy" in AGENTS.md before starting this.
+    profiles: ["next-dev"]
     # next dev forks workers; without an init, a dead one stays a zombie and blocks docker stop.
     init: true
     build:
@@ -13,8 +15,7 @@ services:
       - "5500:5500"
     environment:
       INTERNAL_API_URL: "http://web:5500"
-      # next dev with webpack thrashes in GC at the default ~2 GB heap.
-      NODE_OPTIONS: "--max-old-space-size=5120"
+      NODE_OPTIONS: "--max-old-space-size=3072"
     depends_on:
       - db
       - redis
@@ -29,23 +30,22 @@ services:
       - /app/apps/web/node_modules
       # Persist .next build cache across restarts
       - inbox-next-cache:/app/apps/web/.next
-    restart: always
     networks:
       - inbox-network
 
   db:
+    profiles: ["next-dev"]
     image: postgres:18-alpine
     env_file:
       - ./apps/web/.env.local
     volumes:
       - inbox-dev-db:/var/lib/postgresql
-    restart: always
     networks:
       - inbox-network
 
   redis:
+    profiles: ["next-dev"]
     image: redis:7-alpine
-    restart: always
     networks:
       - inbox-network
 
@@ -104,7 +104,6 @@ services:
       - ./apps/web/.env.local
     depends_on:
       - web
-    restart: always
     networks:
       - inbox-network
 
