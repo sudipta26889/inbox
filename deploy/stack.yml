@@ -4,7 +4,7 @@
 name: inbox-prod
 services:
   web:
-    image: ghcr.io/sudipta26889/inbox-web:latest
+    image: ghcr.io/sudipta26889/inbox-web:${IMAGE_TAG:-latest}
     ports:
       - "5500:5500"
     environment:
