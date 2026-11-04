@@ -9,7 +9,7 @@
 - Run AI tests: `pnpm test-ai`
 - Run single test: `pnpm test __tests__/test-file.test.ts`
 - Run specific AI test: `pnpm test-ai ai-categorize-senders`
-- Type-check build (skips Prisma migrate): `pnpm --filter inbox-zero-ai exec next build`
+- Type-check build (skips Prisma migrate): `pnpm --filter inbox-ai exec next build`
 - Do not run `dev` or `build` unless explicitly asked
 - Run `pnpm install` before running tests or build if not already done
 - Before writing or updating tests, review `.claude/skills/testing/SKILL.md`.
@@ -17,7 +17,7 @@
 
 ## Dev and deploy
 - Develop on the Mac mini (`/Volumes/Storage/Workspace/inbox`), never on the NUC. `.env` and `apps/web/.env` hold production values, so dev must never read them; dev uses `apps/web/.env.local`.
-- Do not run `next dev` in the shared OrbStack VM. It also hosts SudiptasCFO production. A cold start reaches about 5 GB of the VM's 8 GB and is OOM-killed at a 5 GB limit; on 2026-11-04 one of those kills coincided with the VM filesystem going read-only. The stack is `docker compose --profile next-dev up -d` (http://dharabot.lan:5500, local Postgres and Redis, crons with `--profile cron` as well), and it stays off until the owner chooses a dev path. Production image builds run in CI, not in this VM.
+- Do not run `next dev` in the shared OrbStack VM. It also hosts another production app. A cold start reaches about 5 GB of the VM's 8 GB and is OOM-killed at a 5 GB limit; on 2026-11-04 one of those kills coincided with the VM filesystem going read-only. The stack is `docker compose --profile next-dev up -d` (http://dharabot.lan:5500, local Postgres and Redis, crons with `--profile cron` as well), and it stays off until the owner chooses a dev path. Production image builds run in CI, not in this VM.
 - Dev login is the bypass button on `/login` (`LOCAL_AUTH_BYPASS_ENABLED`, a separate test user, active only when `NODE_ENV=development`).
 - Deploy = push to `sudipta_main` (not `main`, which stays as it is): `.github/workflows/deploy.yml` tests, builds `ghcr.io/sudipta26889/inbox-web`, and calls the Portainer webhook for stack `inbox-prod` (NAS Portainer, endpoint 11, on the NUC, `deploy/stack.yml`).
 - New env key: also add it to `deploy/stack.yml` as `${KEY:-}` and to the stack Env. New `NEXT_PUBLIC_*`: add it as a build arg in `deploy.yml` and an `ARG`/`ENV` in `docker/Dockerfile.prod`.
