@@ -2,7 +2,7 @@ name: Local Bypass Smoke
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, sudipta_main]
     paths:
       - "apps/web/**"
       - "packages/**"

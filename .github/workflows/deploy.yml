@@ -1,10 +1,10 @@
 name: Test, Build & Deploy
 
-# main: tests, then the image to GHCR, then a Portainer redeploy of stack inbox-prod
+# sudipta_main: tests, then the image to GHCR, then a Portainer redeploy of stack inbox-prod
 # (deploy/stack.yml). Each stage needs the previous one, so a failing test never ships.
 on:
   push:
-    branches: [main]
+    branches: [sudipta_main]
     paths-ignore:
       - "docs/**"
       - "**/*.md"
@@ -90,7 +90,7 @@ jobs:
             [ "$code" = 409 ] || break
             sleep 15
           done
-          [ "$code" -lt 300 ] || { echo "::error::webhook returned $code"; exit 1; }
+          [ "$code" -ge 200 ] && [ "$code" -lt 300 ] || { echo "::error::webhook returned $code"; exit 1; }
       - name: Wait for the new version
         env:
           PORTAINER_WEBHOOK_URL: ${{ secrets.PORTAINER_WEBHOOK_URL }}
