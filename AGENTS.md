@@ -17,12 +17,14 @@
 
 ## Dev and deploy
 - Develop on the Mac mini (`/Volumes/Storage/Workspace/inbox`), never on the NUC. `.env` and `apps/web/.env` hold production values, so dev must never read them; dev uses `apps/web/.env.local`.
-- Do not run `next dev` in the shared OrbStack VM. It also hosts another production app. A cold start reaches about 5 GB of the VM's 8 GB and is OOM-killed at a 5 GB limit; on 2026-11-04 one of those kills coincided with the VM filesystem going read-only. The stack is `docker compose --profile next-dev up -d` (http://dharabot.lan:5500, local Postgres and Redis, crons with `--profile cron` as well), and it stays off.
-- The dev path is a local stack from the CI-built production image, using `.env.local` with local Postgres and Redis, never `.env`. Build it after the first image exists. It has no hot reload. Production image builds run in CI, not in this VM.
+- Do not run `next dev` in the shared OrbStack VM. It also hosts another production app. A cold start reaches about 5 GB of the VM's 8 GB and is OOM-killed at a 5 GB limit; on 2026-11-04 one of those kills coincided with the VM filesystem going read-only. The stack is `docker compose --profile next-dev up -d` (http://dharabot.lan:5500, crons with `--profile cron` as well), and it stays off.
+- The dev path is a local stack from the CI-built production image, using `.env.local`, never `.env`. Build it after the first image exists. It has no hot reload. Production image builds run in CI, not in this VM.
 - Dev login is the bypass button on `/login` (`LOCAL_AUTH_BYPASS_ENABLED`, a separate test user, active only when `NODE_ENV=development`).
 - Deploy = push to `sudipta_main` (not `main`, which stays as it is): `.github/workflows/deploy.yml` tests, builds `ghcr.io/sudipta26889/inbox-web`, and calls the Portainer webhook for stack `inbox-prod` (NAS Portainer, endpoint 11, on the NUC, `deploy/stack.yml`).
+- Production is Git-backed stack `inbox-prod`, id 209, on NAS Portainer endpoint 11, ref `refs/heads/sudipta_main`. Every non-docs push to `sudipta_main` deploys to production. Rollback: pin an older `:<sha>` image in the stack, or `git revert` and push.
 - New env key: also add it to `deploy/stack.yml` as `${KEY:-}` and to the stack Env. New `NEXT_PUBLIC_*`: add it as a build arg in `deploy.yml` and an `ARG`/`ENV` in `docker/Dockerfile.prod`.
 - No symlinks in the repo: Portainer refuses to clone them.
+- One homelab, one database server: every database, including dev, lives on `db.lan` (PostgreSQL, MariaDB, Valkey, Qdrant, Neo4j, RabbitMQ; see http://db.lan). Dev gets its own database and user there. Never add a local database container.
 
 ## MCP
 To add this system in claude code user need to use `claude mcp add --transport http EmailCalendar https://inbox.sudiptadhara.in/mcp-server --scope user`

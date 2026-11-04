@@ -16,9 +16,6 @@ services:
     environment:
       INTERNAL_API_URL: "http://web:5500"
       NODE_OPTIONS: "--max-old-space-size=3072"
-    depends_on:
-      - db
-      - redis
     volumes:
       # Mount source code for hot reload - code changes reflect immediately
       - ./apps/web:/app/apps/web:cached
@@ -30,22 +27,6 @@ services:
       - /app/apps/web/node_modules
       # Persist .next build cache across restarts
       - inbox-next-cache:/app/apps/web/.next
-    networks:
-      - inbox-network
-
-  db:
-    profiles: ["next-dev"]
-    image: postgres:18-alpine
-    env_file:
-      - ./apps/web/.env.local
-    volumes:
-      - inbox-dev-db:/var/lib/postgresql
-    networks:
-      - inbox-network
-
-  redis:
-    profiles: ["next-dev"]
-    image: redis:7-alpine
     networks:
       - inbox-network
 
@@ -109,7 +90,6 @@ services:
 
 volumes:
   inbox-next-cache:
-  inbox-dev-db:
 
 networks:
   inbox-network:
