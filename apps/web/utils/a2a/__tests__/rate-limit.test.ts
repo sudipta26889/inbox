@@ -6,6 +6,7 @@ import {
   checkIpRateLimit,
   checkRateLimit,
   cleanupRateLimitRecords,
+  getClientIp,
   getRateLimitHeaders,
   recordRequest,
 } from "../rate-limit";
@@ -333,6 +334,35 @@ describe("A2A Rate Limiting", () => {
       });
 
       expect(headers["Retry-After"]).toBe("30");
+    });
+  });
+
+  describe("getClientIp", () => {
+    const withHeaders = (headers: Record<string, string>) =>
+      new Request("http://localhost/a2a", { headers });
+
+    it("gives the same result whatever the first X-Forwarded-For entry is", () => {
+      const first = withHeaders({
+        "X-Forwarded-For": "1.1.1.1, 9.9.9.9",
+        "X-Real-IP": "9.9.9.9",
+      });
+      const second = withHeaders({
+        "X-Forwarded-For": "2.2.2.2, 9.9.9.9",
+        "X-Real-IP": "9.9.9.9",
+      });
+
+      expect(getClientIp(first)).toBe("9.9.9.9");
+      expect(getClientIp(second)).toBe("9.9.9.9");
+    });
+
+    it("falls back to X-Forwarded-For when X-Real-IP is absent", () => {
+      const request = withHeaders({ "X-Forwarded-For": "1.1.1.1, 9.9.9.9" });
+
+      expect(getClientIp(request)).toBe("1.1.1.1");
+    });
+
+    it("returns unknown with no address headers", () => {
+      expect(getClientIp(withHeaders({}))).toBe("unknown");
     });
   });
 });

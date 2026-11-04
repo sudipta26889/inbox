@@ -13,6 +13,11 @@ import prisma from "@/utils/prisma";
 import { accessibleEmailAccountWhere } from "@/utils/email-account-access";
 import { buildMcpToolContext } from "@/utils/mcp-server/tool-context";
 import { formatToolResponse } from "@/utils/mcp-server/format-response";
+import {
+  bodyTooLargeResponse,
+  MCP_BODY_LIMIT,
+  readJsonWithLimit,
+} from "@/utils/request-body-limit";
 
 const logger = createScopedLogger("mcp-server");
 
@@ -39,29 +44,6 @@ export const POST = withError(
     const reqLogger = request.logger || logger;
 
     try {
-      const message = await request.json();
-
-      reqLogger.info("MCP request received", {
-        method: message.method,
-        id: message.id,
-      });
-
-      if (message.jsonrpc !== "2.0") {
-        return createErrorResponse(
-          message.id,
-          -32_600,
-          "Invalid Request: jsonrpc must be '2.0'",
-        );
-      }
-
-      if (!message.method || typeof message.method !== "string") {
-        return createErrorResponse(
-          message.id,
-          -32_600,
-          "Invalid Request: missing or invalid method",
-        );
-      }
-
       let userId: string | undefined;
       let emailAccountId: string | undefined;
       let clientId: string | undefined;
@@ -95,7 +77,6 @@ export const POST = withError(
         scopes = tokenPayload.scope ? tokenPayload.scope.split(" ") : [];
 
         reqLogger.info("Authenticated MCP request via Bearer token", {
-          method: message.method,
           userId,
           clientId,
         });
@@ -146,10 +127,34 @@ export const POST = withError(
         ];
 
         reqLogger.info("Authenticated MCP request via session", {
-          method: message.method,
           userId,
           emailAccountId,
         });
+      }
+
+      const body = await readJsonWithLimit(request, MCP_BODY_LIMIT);
+      if (!body.ok) return createBodyErrorResponse(body.status);
+      const message = body.value as any;
+
+      reqLogger.info("MCP request received", {
+        method: message.method,
+        id: message.id,
+      });
+
+      if (message.jsonrpc !== "2.0") {
+        return createErrorResponse(
+          message.id,
+          -32_600,
+          "Invalid Request: jsonrpc must be '2.0'",
+        );
+      }
+
+      if (!message.method || typeof message.method !== "string") {
+        return createErrorResponse(
+          message.id,
+          -32_600,
+          "Invalid Request: missing or invalid method",
+        );
       }
 
       // Handle initialize
@@ -357,5 +362,27 @@ function createErrorResponse(
   return NextResponse.json(
     { jsonrpc: "2.0", id, error: { code, message } },
     { status: code === -32_700 ? 400 : 200, headers: CORS_HEADERS },
+  );
+}
+
+function createBodyErrorResponse(status: 400 | 413): Response {
+  if (status === 413) {
+    return bodyTooLargeResponse(
+      {
+        jsonrpc: "2.0",
+        id: null,
+        error: { code: -32_600, message: "Request body too large" },
+      },
+      CORS_HEADERS,
+    );
+  }
+
+  return NextResponse.json(
+    {
+      jsonrpc: "2.0",
+      id: null,
+      error: { code: -32_700, message: "Parse error: Invalid JSON" },
+    },
+    { status, headers: CORS_HEADERS },
   );
 }
