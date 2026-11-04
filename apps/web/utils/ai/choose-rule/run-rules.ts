@@ -18,7 +18,7 @@ import prisma from "@/utils/prisma";
 import { withPrismaRetry } from "@/utils/prisma-retry";
 import type { MatchReason } from "@/utils/ai/choose-rule/types";
 import { serializeMatchReasons } from "@/utils/ai/choose-rule/types";
-import { sanitizeActionFields } from "@/utils/action-item";
+import { sanitizeActionFields } from "@/utils/action-item-sanitize";
 import { extractEmailAddress } from "@/utils/email";
 import { filterNullProperties } from "@/utils";
 import { analyzeSenderPattern } from "@/app/api/ai/analyze-sender-pattern/call-analyze-pattern-api";

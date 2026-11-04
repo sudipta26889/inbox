@@ -1,9 +1,6 @@
 import { describe, it, expect } from "vitest";
-import {
-  getActionFields,
-  sanitizeActionFields,
-  actionInputs,
-} from "./action-item";
+import { getActionFields, actionInputs } from "./action-item";
+import { sanitizeActionFields } from "./action-item-sanitize";
 import { ActionType, AttachmentSourceType } from "@/generated/prisma/enums";
 
 describe("actionInputs", () => {
