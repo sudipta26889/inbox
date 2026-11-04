@@ -26,6 +26,8 @@ jobs:
 
   build-and-push:
     needs: test
+    # workflow_dispatch can run on any branch; only this one may publish :latest.
+    if: github.ref == 'refs/heads/sudipta_main'
     runs-on: ubuntu-latest
     permissions:
       contents: read
