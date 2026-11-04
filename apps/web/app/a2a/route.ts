@@ -29,6 +29,12 @@ import {
   handlePushConfigList,
   handlePushConfigSet,
 } from "@/utils/a2a/push-config";
+import {
+  A2A_BODY_LIMIT,
+  bodyTooLargeResponse,
+  MCP_PUBLIC_FORM_LIMIT,
+  readJsonWithLimit,
+} from "@/utils/request-body-limit";
 import { env } from "@/env";
 
 const logger = createScopedLogger("a2a");
@@ -58,8 +64,47 @@ export const POST = withError("a2a", async (request: RequestWithLogger) => {
   const reqLogger = request.logger || logger;
 
   try {
-    // Parse JSON-RPC request
-    const message = await request.json();
+    // Try to authenticate request
+    const authHeader = request.headers.get("Authorization");
+    const authContext = authHeader
+      ? await authenticateA2aRequest(authHeader)
+      : null;
+
+    // For unauthenticated requests, apply IP-based rate limiting
+    if (!authContext) {
+      const clientIp = getClientIp(request);
+      const ipRateLimitResult = await checkIpRateLimit(clientIp);
+
+      if (!ipRateLimitResult.allowed) {
+        const rateLimitResponse = createRateLimitResponse(ipRateLimitResult);
+        return NextResponse.json(
+          {
+            jsonrpc: "2.0",
+            id: null,
+            error: {
+              code: -32_003,
+              message: rateLimitResponse.body.error_description,
+              data: rateLimitResponse.body,
+            },
+          },
+          {
+            status: rateLimitResponse.status,
+            headers: {
+              ...CORS_HEADERS,
+              ...rateLimitResponse.headers,
+            },
+          },
+        );
+      }
+    }
+
+    // Only initialize works without credentials, and it is tiny.
+    const body = await readJsonWithLimit(
+      request,
+      authContext ? A2A_BODY_LIMIT : MCP_PUBLIC_FORM_LIMIT,
+    );
+    if (!body.ok) return createBodyErrorResponse(body.status);
+    const message = body.value as any;
 
     reqLogger.info("A2A request received", {
       method: message.method,
@@ -81,40 +126,6 @@ export const POST = withError("a2a", async (request: RequestWithLogger) => {
         -32_600,
         "Invalid Request: missing or invalid method",
       );
-    }
-
-    // Try to authenticate request
-    const authHeader = request.headers.get("Authorization");
-    const authContext = authHeader
-      ? await authenticateA2aRequest(authHeader)
-      : null;
-
-    // For unauthenticated requests, apply IP-based rate limiting
-    if (!authContext) {
-      const clientIp = getClientIp(request);
-      const ipRateLimitResult = await checkIpRateLimit(clientIp);
-
-      if (!ipRateLimitResult.allowed) {
-        const rateLimitResponse = createRateLimitResponse(ipRateLimitResult);
-        return NextResponse.json(
-          {
-            jsonrpc: "2.0",
-            id: message.id,
-            error: {
-              code: -32_003,
-              message: rateLimitResponse.body.error_description,
-              data: rateLimitResponse.body,
-            },
-          },
-          {
-            status: rateLimitResponse.status,
-            headers: {
-              ...CORS_HEADERS,
-              ...rateLimitResponse.headers,
-            },
-          },
-        );
-      }
     }
 
     // Handle initialize (no authentication required for discovery)
@@ -341,5 +352,27 @@ function createJsonRpcErrorResponse(
       status: code === -32_700 ? 400 : 200, // Parse errors are 400, others are 200
       headers: CORS_HEADERS,
     },
+  );
+}
+
+function createBodyErrorResponse(status: 400 | 413): Response {
+  if (status === 413) {
+    return bodyTooLargeResponse(
+      {
+        jsonrpc: "2.0",
+        id: null,
+        error: { code: -32_600, message: "Request body too large" },
+      },
+      CORS_HEADERS,
+    );
+  }
+
+  return NextResponse.json(
+    {
+      jsonrpc: "2.0",
+      id: null,
+      error: { code: -32_700, message: "Parse error: Invalid JSON" },
+    },
+    { status, headers: CORS_HEADERS },
   );
 }
