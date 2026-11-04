@@ -13,7 +13,7 @@ export const GET = withError("health", async (request) => {
 
   // If no API key header provided, return simple OK for ALB/load balancer health checks
   if (!healthApiKey) {
-    return NextResponse.json({ status: "ok" });
+    return NextResponse.json({ status: "ok", version: env.GIT_SHA });
   }
 
   // If API key header provided but doesn't match, reject

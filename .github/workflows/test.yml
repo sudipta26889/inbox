@@ -4,12 +4,7 @@ permissions:
   contents: read
 
 on:
-  push:
-    branches: [main]
-    paths-ignore:
-      - "docs/**"
-      - "**/*.md"
-      - "**/*.mdx"
+  workflow_call:
   pull_request:
     branches: [main]
     paths-ignore:

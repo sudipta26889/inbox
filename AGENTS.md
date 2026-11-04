@@ -15,6 +15,12 @@
 - Before writing or updating tests, review `.claude/skills/testing/SKILL.md`.
 - When adding a new workspace package, add its `package.json` COPY line to `docker/Dockerfile.prod` and `docker/Dockerfile.local`.
 
+## Dev and deploy
+- Develop on the Mac mini (`/Volumes/Storage/Workspace/inbox`), never on the NUC: `docker compose up -d` serves http://dharabot.lan:5500 with local Postgres and Redis, using `apps/web/.env.local`. `.env` and `apps/web/.env` hold production values, so dev must never read them. Crons only run with `--profile cron`.
+- Deploy = push to `main`: `.github/workflows/deploy.yml` tests, builds `ghcr.io/sudipta26889/inbox-web`, and calls the Portainer webhook for stack `inbox-prod` (NAS Portainer, endpoint 11, on the NUC, `deploy/stack.yml`).
+- New env key: also add it to `deploy/stack.yml` as `${KEY:-}` and to the stack Env. New `NEXT_PUBLIC_*`: add it as a build arg in `deploy.yml` and an `ARG`/`ENV` in `docker/Dockerfile.prod`.
+- No symlinks in the repo: Portainer refuses to clone them.
+
 ## MCP
 To add this system in claude code user need to use `claude mcp add --transport http EmailCalendar https://inbox.sudiptadhara.in/mcp-server --scope user`
 

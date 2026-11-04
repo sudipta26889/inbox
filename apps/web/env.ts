@@ -244,6 +244,7 @@ export const env = createEnv({
     INTERNAL_API_KEY: z.string(),
     WHITELIST_FROM: z.string().optional(),
     HEALTH_API_KEY: z.string().optional(),
+    GIT_SHA: z.string().optional(),
     OAUTH_PROXY_URL: z.string().url().optional(),
     // Set to true on the server that acts as the OAuth proxy (e.g., staging)
     IS_OAUTH_PROXY_SERVER: booleanString.optional().default(false),
