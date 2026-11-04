@@ -13,9 +13,11 @@ Conventions:
 - Check whether an upstream fix is already here: `git log --grep=<upstream-sha>`.
 - Local tags: `upstream-base` (fork divergence point), `upstream-audit/YYYY-MM-DD`
   (upstream/main SHA at each audit).
-- Branches: `main` is a **read-only mirror** of upstream at `upstream-base` — never
-  commit or open PRs against it. All fork work goes on `sudipta_main`, which is the
-  deployed branch. A PR merged to `main` does not reach production.
+- Branches: `main` follows upstream when the owner syncs the fork, so it is no longer
+  frozen at `upstream-base`, which stays a fixed tag at 59e4968495d5. A sync runs upstream's
+  push workflows on `main`, and some of them fail here for lack of secrets. Never commit
+  or open PRs against `main`. All fork work goes on `sudipta_main`, which is the deployed
+  branch. A PR merged to `main` does not reach production.
 - Repo config: `rerere.enabled` + `merge.conflictStyle=zdiff3` are set, so
   recurring conflicts resolve themselves on the second occurrence.
 

@@ -2,7 +2,7 @@ name: Local Bypass Smoke
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, sudipta_main]
     paths:
       - "apps/web/**"
       - "packages/**"
@@ -81,15 +81,15 @@ jobs:
             ${{ runner.os }}-playwright-
 
       - name: Apply database migrations
-        run: pnpm -F inbox-zero-ai exec prisma migrate deploy
+        run: pnpm --fail-if-no-match -F inbox-ai exec prisma migrate deploy
 
       - name: Install Playwright browser
-        run: pnpm -F inbox-zero-ai exec playwright install --with-deps chromium
+        run: pnpm --fail-if-no-match -F inbox-ai exec playwright install --with-deps chromium
 
       - name: Run local bypass smoke test
         id: smoke_test
         continue-on-error: ${{ github.event_name == 'pull_request' }}
-        run: pnpm -F inbox-zero-ai test:local-bypass-smoke
+        run: pnpm --fail-if-no-match -F inbox-ai test:local-bypass-smoke
 
       - name: Report PR smoke failure (non-blocking)
         if: ${{ github.event_name == 'pull_request' && steps.smoke_test.outcome == 'failure' }}

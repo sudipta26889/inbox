@@ -27,10 +27,19 @@ coverage
 .idea
 .vscode
 
-# Local env files (do not bake secrets)
-*.env
-*.env.*
-!.env.example
+# Local env files (do not bake secrets). ** because bare patterns only match the context root.
+**/*.env
+**/.env
+**/.env.*
+!**/.env.example
+
+# Database dumps and local credentials: COPY . . in Dockerfile.prod would pull them into the builder
+backups
+**/*.dump
+**/*.pgdump
+**/*.sql.gz
+.overmind
+.claude
 
 # Docker
 Dockerfile*

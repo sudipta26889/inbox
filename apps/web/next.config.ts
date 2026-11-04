@@ -25,6 +25,8 @@ const nextConfig: NextConfig = {
     tsconfigPath: "tsconfig.build.json",
     ignoreBuildErrors: process.env.SKIP_TYPE_CHECK === "true",
   },
+  // Dev is served at http://dharabot.lan:5500; without this Next blocks /_next/hmr from that host.
+  allowedDevOrigins: ["dharabot.lan"],
   serverExternalPackages: ["@sentry/nextjs", "@sentry/node"],
   turbopack: {
     rules: {

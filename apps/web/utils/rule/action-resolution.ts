@@ -1,6 +1,6 @@
 import type { Prisma } from "@/generated/prisma/client";
 import { ActionType } from "@/generated/prisma/enums";
-import { sanitizeActionFields } from "@/utils/action-item";
+import { sanitizeActionFields } from "@/utils/action-item-sanitize";
 import { createEmailProvider } from "@/utils/email/provider";
 import { isGoogleProvider } from "@/utils/email/provider-types";
 import { SafeError } from "@/utils/error";

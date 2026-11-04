@@ -1,35 +1,57 @@
 name: inbox
 services:
   web:
+    # Off unless asked for: see "Dev and deploy" in AGENTS.md before starting this.
+    profiles: ["next-dev"]
+    # next dev forks workers; without an init, a dead one stays a zombie and blocks docker stop.
+    init: true
     build:
       context: .
       dockerfile: docker/Dockerfile.dev
+    # Dev only. Never read .env here: on the dev machine it holds production values.
     env_file:
-      - ./apps/web/.env
+      - ./apps/web/.env.local
     ports:
       - "5500:5500"
     environment:
-      NEXT_PUBLIC_BASE_URL: "https://inbox.sudiptadhara.in"
-      NEXT_PUBLIC_BYPASS_PREMIUM_CHECKS: "true"
-      NEXT_PUBLIC_MCP_SERVER_ENABLED: "true"
-      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL in the shell or a compose env file}
-      DIRECT_URL: ${DIRECT_URL:?set DIRECT_URL in the shell or a compose env file}
-      REDIS_URL: ${REDIS_URL:?set REDIS_URL in the shell or a compose env file}
       INTERNAL_API_URL: "http://web:5500"
+      NODE_OPTIONS: "--max-old-space-size=3072"
+    depends_on:
+      - db
+      - redis
     volumes:
       # Mount source code for hot reload - code changes reflect immediately
       - ./apps/web:/app/apps/web:cached
+      # Next.js auto-loads apps/web/.env from the mount; hide the production values.
+      - /dev/null:/app/apps/web/.env:ro
       - ./packages:/app/packages:cached
       # Prevent node_modules from being overwritten by host mount
       - /app/node_modules
       - /app/apps/web/node_modules
       # Persist .next build cache across restarts
       - inbox-next-cache:/app/apps/web/.next
-    restart: always
     networks:
       - inbox-network
 
+  db:
+    profiles: ["next-dev"]
+    image: postgres:18-alpine
+    env_file:
+      - ./apps/web/.env.local
+    volumes:
+      - inbox-dev-db:/var/lib/postgresql
+    networks:
+      - inbox-network
+
+  redis:
+    profiles: ["next-dev"]
+    image: redis:7-alpine
+    networks:
+      - inbox-network
+
+  # Off by default: only runs with `--profile cron`.
   cron:
+    profiles: ["cron"]
     image: alpine:latest
     command: >
       sh -c "
@@ -79,15 +101,15 @@ services:
         wait
       "
     env_file:
-      - ./apps/web/.env
+      - ./apps/web/.env.local
     depends_on:
       - web
-    restart: always
     networks:
       - inbox-network
 
 volumes:
   inbox-next-cache:
+  inbox-dev-db:
 
 networks:
   inbox-network:

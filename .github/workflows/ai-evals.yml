@@ -95,7 +95,7 @@ jobs:
           EMAIL_ENCRYPT_SALT: "test-encrypt-salt"
           INTERNAL_API_KEY: "test"
           NEXT_PUBLIC_BASE_URL: "http://localhost:3000"
-        run: pnpm -F inbox-zero-ai test-ai "$TEST_FILTER"
+        run: pnpm --fail-if-no-match -F inbox-ai test-ai "$TEST_FILTER"
 
       - name: Upload eval report
         if: always() && hashFiles('eval-results/**') != ''

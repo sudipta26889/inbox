@@ -136,6 +136,7 @@
         "WHITELIST_FROM",
         "API_KEY_SALT",
         "HEALTH_API_KEY",
+        "GIT_SHA",
         "OAUTH_PROXY_URL",
         "IS_OAUTH_PROXY_SERVER",
         "ADDITIONAL_TRUSTED_ORIGINS",

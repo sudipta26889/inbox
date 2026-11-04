@@ -16,7 +16,7 @@ on:
       - "tsconfig.json"
       - ".github/workflows/build-check.yml"
   pull_request:
-    branches: [main]
+    branches: [main, sudipta_main]
     paths:
       - "apps/web/**"
       - "packages/**"

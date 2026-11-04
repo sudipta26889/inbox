@@ -106,3 +106,22 @@ eval-results/
 secret/*
 docs/superpowers/
 docs/superpowers/*
+# Database dumps hold real user data, and this repo is public
+backups/
+*.dump
+*.pgdump
+*.sql.gz
+
+# Local credentials and machine-only agent files
+.overmind/
+.claude/settings.json
+.claude/scratchpad/
+.claude/skills/overmind*/
+.claude/plans/auto-save-*.md
+.claude/plans/close-open-items.md
+.claude/HANDOVER-from-NUC.md
+.claude/stash-*.patch
+.claude/rr-cache-from-NUC.tgz
+
+# Local Codex link only: Portainer refuses repos containing symlinks
+.agents/

@@ -1,0 +1,108 @@
+name: Test, Build & Deploy
+
+# sudipta_main: tests, then the image to GHCR, then a Portainer redeploy of stack inbox-prod
+# (deploy/stack.yml). Each stage needs the previous one, so a failing test never ships.
+on:
+  push:
+    branches: [sudipta_main]
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+      - "**/*.mdx"
+      - ".claude/**"
+  workflow_dispatch:
+
+# One release at a time; a newer push waits for the current one.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/sudipta26889/inbox-web
+
+jobs:
+  test:
+    uses: ./.github/workflows/test.yml
+
+  build-and-push:
+    needs: test
+    # workflow_dispatch can run on any branch; only this one may publish :latest.
+    if: github.ref == 'refs/heads/sudipta_main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Short SHA
+        id: sha
+        run: echo "short=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+      # NEXT_PUBLIC_* are inlined into the client bundle at build time, and CI has no
+      # apps/web/.env to read them from, so they live here. They are public values.
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.prod
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:latest
+            ${{ env.IMAGE }}:${{ steps.sha.outputs.short }}
+          labels: org.opencontainers.image.revision=${{ github.sha }}
+          build-args: |
+            GIT_SHA=${{ steps.sha.outputs.short }}
+            NEXT_PUBLIC_BASE_URL=https://inbox.sudiptadhara.in
+            NEXT_PUBLIC_CLEANER_ENABLED=false
+            NEXT_PUBLIC_AUTO_DRAFT_DISABLED=false
+            NEXT_PUBLIC_MEETING_BRIEFS_ENABLED=false
+            NEXT_PUBLIC_INTEGRATIONS_ENABLED=false
+            NEXT_PUBLIC_BRAND_NAME=Inbox
+            NEXT_PUBLIC_BYPASS_PREMIUM_CHECKS=true
+            NEXT_PUBLIC_DELETE_EMAIL_ACTION_ENABLED=false
+            NEXT_PUBLIC_DHARAHIL_ENABLED=true
+            NEXT_PUBLIC_DIGEST_ENABLED=true
+            NEXT_PUBLIC_EMAIL_SEND_ENABLED=true
+            NEXT_PUBLIC_EXTERNAL_API_ENABLED=true
+            NEXT_PUBLIC_FOLLOW_UP_REMINDERS_ENABLED=true
+            NEXT_PUBLIC_MCP_SERVER_ENABLED=true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Portainer redeploy
+        env:
+          # A credential: anyone holding this URL can redeploy the stack.
+          PORTAINER_WEBHOOK_URL: ${{ secrets.PORTAINER_WEBHOOK_URL }}
+        run: |
+          if [ -z "$PORTAINER_WEBHOOK_URL" ]; then
+            echo "::warning::PORTAINER_WEBHOOK_URL is not set; image built but not deployed"
+            exit 0
+          fi
+          # A redeploy already running answers 409, so retry for up to 10 minutes.
+          for _ in $(seq 1 40); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$PORTAINER_WEBHOOK_URL")
+            [ "$code" = 409 ] || break
+            sleep 15
+          done
+          [ "$code" -ge 200 ] && [ "$code" -lt 300 ] || { echo "::error::webhook returned $code"; exit 1; }
+      - name: Wait for the new version
+        env:
+          PORTAINER_WEBHOOK_URL: ${{ secrets.PORTAINER_WEBHOOK_URL }}
+        run: |
+          [ -n "$PORTAINER_WEBHOOK_URL" ] || exit 0
+          want="${GITHUB_SHA::7}"
+          for _ in $(seq 1 80); do
+            got=$(curl -s --max-time 10 https://inbox.sudiptadhara.in/api/health | jq -r ".version // empty" || true)
+            [ "$got" = "$want" ] && { echo "live: $got"; exit 0; }
+            sleep 15
+          done
+          echo "::error::expected version $want, got ${got:-none}"
+          exit 1

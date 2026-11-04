@@ -190,10 +190,10 @@ export E2E_RUN_ID="local-$(date +%s)"
 
 if [ -n "$TEST_FILE" ]; then
     log "Running specific test: $TEST_FILE"
-    pnpm -F inbox-zero-ai test-e2e:flows "$TEST_FILE"
+    pnpm -F inbox-ai test-e2e:flows "$TEST_FILE"
 else
     log "Running all flow tests"
-    pnpm -F inbox-zero-ai test-e2e:flows
+    pnpm -F inbox-ai test-e2e:flows
 fi
 
 TEST_EXIT_CODE=$?
