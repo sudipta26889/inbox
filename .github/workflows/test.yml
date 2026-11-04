@@ -73,3 +73,6 @@ jobs:
           EMAIL_ENCRYPT_SALT: "salt"
           INTERNAL_API_KEY: "secret"
           NEXT_PUBLIC_BASE_URL: "http://localhost:3000"
+          # env.ts reads these at import, before the taskpilot tests' vi.stubEnv. Those tests mock fetch.
+          OPENAI_COMPATIBLE_BASE_URL: "https://llm.example"
+          QDRANT_URL: "https://qdrant.example"
