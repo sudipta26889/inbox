@@ -453,10 +453,10 @@ export function createRateLimitResponse(result: RateLimitResult) {
  * @returns Client IP address
  */
 export function getClientIp(request: Request): string {
-  // Try various headers in order of preference
+  // Prefer the single-value proxy header.
   const headers = [
-    "x-forwarded-for", // Standard proxy header
     "x-real-ip", // Nginx
+    "x-forwarded-for", // Standard proxy header
     "cf-connecting-ip", // Cloudflare
     "fastly-client-ip", // Fastly
     "x-client-ip", // Generic

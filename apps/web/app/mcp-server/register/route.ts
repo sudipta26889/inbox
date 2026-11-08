@@ -1,8 +1,18 @@
 import { NextResponse } from "next/server";
 import { withError, type RequestWithLogger } from "@/utils/middleware";
 import { SafeError } from "@/utils/error";
+import {
+  checkIpRateLimit,
+  createRateLimitResponse,
+  getClientIp,
+} from "@/utils/a2a/rate-limit";
 import { generateSecureToken } from "@/utils/mcp-server/pkce";
 import prisma from "@/utils/prisma";
+import {
+  bodyTooLargeResponse,
+  MCP_PUBLIC_FORM_LIMIT,
+  readJsonWithLimit,
+} from "@/utils/request-body-limit";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -24,7 +34,32 @@ export const POST = withError(
   "mcp-server/register",
   async (request: RequestWithLogger) => {
     const logger = request.logger;
-    const body = await request.json();
+
+    const rateLimit = await checkIpRateLimit(getClientIp(request));
+    if (!rateLimit.allowed) {
+      const { status, headers, body } = createRateLimitResponse(rateLimit);
+      return NextResponse.json(body, {
+        status,
+        headers: { ...CORS_HEADERS, ...headers },
+      });
+    }
+
+    const parsed = await readJsonWithLimit(request, MCP_PUBLIC_FORM_LIMIT);
+    if (!parsed.ok) {
+      if (parsed.status === 413) {
+        return bodyTooLargeResponse(
+          {
+            error: "invalid_client_metadata",
+            error_description: "Request body too large",
+          },
+          CORS_HEADERS,
+        );
+      }
+      return NextResponse.json(
+        { error: "invalid_client_metadata", error_description: "Invalid JSON" },
+        { status: parsed.status, headers: CORS_HEADERS },
+      );
+    }
 
     const {
       client_name,
@@ -36,7 +71,7 @@ export const POST = withError(
       logo_uri,
       tos_uri,
       policy_uri,
-    } = body;
+    } = parsed.value as any;
 
     // client_name is OPTIONAL per RFC 7591
     const resolvedClientName =

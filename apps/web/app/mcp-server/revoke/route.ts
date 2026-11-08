@@ -2,6 +2,12 @@ import { type NextRequest, NextResponse } from "next/server";
 import { revokeAccessToken } from "@/utils/mcp-server/tokens";
 import { env } from "@/env";
 import { createScopedLogger } from "@/utils/logger";
+import {
+  bodyTooLargeResponse,
+  MCP_PUBLIC_FORM_LIMIT,
+  readBodyWithLimit,
+  rebuildRequest,
+} from "@/utils/request-body-limit";
 
 const logger = createScopedLogger("mcp-server/revoke");
 
@@ -21,7 +27,18 @@ export async function OPTIONS() {
  */
 export async function POST(request: NextRequest) {
   try {
-    const formData = await request.formData();
+    const body = await readBodyWithLimit(request, MCP_PUBLIC_FORM_LIMIT);
+    if (!body.ok) {
+      return bodyTooLargeResponse(
+        {
+          error: "invalid_request",
+          error_description: "Request body too large",
+        },
+        CORS_HEADERS,
+      );
+    }
+
+    const formData = await rebuildRequest(request, body.bytes).formData();
     const token = formData.get("token")?.toString();
 
     if (!token) {

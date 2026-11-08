@@ -50,7 +50,7 @@
       "@types/react": "19.0.10",
       "@types/react-dom": "19.0.4",
       "linkify-it": "5.0.2",
-      "next": "16.3.8",
+      "next": "16.4.4",
       "proxy-addr": "2.0.8",
       "fast-xml-parser": "5.8.0",
       "undici@>=7.0.0 <8.0.0": "7.29.1",
