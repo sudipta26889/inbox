@@ -251,35 +251,31 @@ export async function refreshAccessToken(
     return null;
   }
 
-  // Check if refresh token exists and is not revoked
-  const tokenRecord = await prisma.mcpServerAccessToken.findFirst({
+  // Revoke before issuing, in one conditional write: of two concurrent
+  // refreshes with the same token only one can claim it, so a race cannot
+  // leave an extra live token pair behind.
+  const claimed = await prisma.mcpServerAccessToken.updateMany({
     where: {
       refreshToken: payload.jti,
       revoked: false,
     },
+    data: {
+      revoked: true,
+      revokedAt: new Date(),
+    },
   });
 
-  if (!tokenRecord) {
+  if (claimed.count === 0) {
     logger.warn("Refresh token not found or revoked", { jti: payload.jti });
     return null;
   }
 
-  // Generate new access token (and new refresh token)
   const newTokens = await generateAccessToken({
     userId: payload.sub,
     emailAccountId: payload.email_account_id,
     clientId: payload.client_id,
     scope: payload.scope,
     jwtSecret,
-  });
-
-  // Revoke old tokens
-  await prisma.mcpServerAccessToken.update({
-    where: { id: tokenRecord.id },
-    data: {
-      revoked: true,
-      revokedAt: new Date(),
-    },
   });
 
   logger.info("Refreshed MCP access token", {
