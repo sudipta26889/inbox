@@ -21,6 +21,7 @@ describe("analyzeWritingStyleAction", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(redis.get).mockResolvedValue(null);
+    vi.mocked(redis.set).mockResolvedValue("OK" as any);
     prisma.emailAccount.findUnique.mockResolvedValue({
       id: "ea_1",
       email: "owner@example.com",
