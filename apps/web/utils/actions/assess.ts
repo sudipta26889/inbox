@@ -62,7 +62,13 @@ export const analyzeWritingStyleAction = actionClient
 
     // AssessUser fires this on every page load; don't re-run a failing analysis
     const failedKey = `writing-style:failed:${emailAccountId}`;
-    if (await redis.get(failedKey)) return { success: true, skipped: true };
+    let recentlyFailed: string | null = null;
+    try {
+      recentlyFailed = await redis.get(failedKey);
+    } catch (error) {
+      logger.warn("Could not read writing style cooldown", { error });
+    }
+    if (recentlyFailed) return { success: true, skipped: true };
 
     let style: Awaited<ReturnType<typeof aiAnalyzeWritingStyle>>;
     try {
@@ -82,9 +88,15 @@ export const analyzeWritingStyleAction = actionClient
         emailAccount: { ...emailAccount, account: { provider } },
       });
     } catch (error) {
-      await redis.set(failedKey, "true", {
-        ex: WRITING_STYLE_RETRY_COOLDOWN_SECONDS,
-      });
+      try {
+        await redis.set(failedKey, "true", {
+          ex: WRITING_STYLE_RETRY_COOLDOWN_SECONDS,
+        });
+      } catch (redisError) {
+        logger.warn("Could not record writing style cooldown", {
+          error: redisError,
+        });
+      }
       throw error;
     }
 

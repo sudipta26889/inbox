@@ -3,6 +3,7 @@ import prisma from "@/utils/__mocks__/prisma";
 import { redis } from "@/utils/redis";
 import { createEmailProvider } from "@/utils/email/provider";
 import { aiAnalyzeWritingStyle } from "@/utils/ai/knowledge/writing-style";
+import { SafeError } from "@/utils/error";
 import { analyzeWritingStyleAction } from "@/utils/actions/assess";
 
 vi.mock("server-only", () => ({}));
@@ -65,5 +66,32 @@ describe("analyzeWritingStyleAction", () => {
 
     expect(prisma.emailAccount.update).toHaveBeenCalled();
     expect(redis.set).not.toHaveBeenCalled();
+  });
+
+  it("still analyses when Redis is unavailable", async () => {
+    vi.mocked(redis.get).mockRejectedValue(new Error("redis down"));
+    vi.mocked(aiAnalyzeWritingStyle).mockResolvedValue({
+      typicalLength: "short",
+      formality: "informal",
+      commonGreeting: "Hi",
+      notableTraits: [],
+      examples: [],
+    });
+
+    await analyzeWritingStyleAction("ea_1" as any);
+
+    expect(aiAnalyzeWritingStyle).toHaveBeenCalled();
+  });
+
+  it("rethrows the original error when recording the cooldown fails", async () => {
+    vi.mocked(aiAnalyzeWritingStyle).mockRejectedValue(
+      new SafeError("original failure"),
+    );
+    vi.mocked(redis.set).mockRejectedValue(new Error("redis down"));
+
+    const result = await analyzeWritingStyleAction("ea_1" as any);
+
+    expect(result?.serverError).toBe("original failure");
+    expect(redis.set).toHaveBeenCalled();
   });
 });
