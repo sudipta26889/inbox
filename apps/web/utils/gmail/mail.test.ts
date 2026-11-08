@@ -102,6 +102,27 @@ describe("createMail", () => {
     expect(message).toContain("Bcc: hidden@example.com");
   });
 
+  it("keeps To, Cc and Bcc together without turning a display name into a recipient", async () => {
+    const raw = await createMail({
+      from: "sender@example.com",
+      to: '"decoy@example.net" <recipient@example.com>',
+      cc: "copy@example.com",
+      bcc: "hidden@example.com",
+      subject: "Test",
+      text: "Message",
+    });
+
+    const message = Buffer.from(raw, "base64url").toString("utf8");
+    const header = (name: string) =>
+      message.split("\r\n").find((line) => line.startsWith(`${name}: `));
+
+    expect(header("Cc")).toBe("Cc: copy@example.com");
+    expect(header("Bcc")).toBe("Bcc: hidden@example.com");
+    const to = header("To") ?? "";
+    expect(to).toContain("<recipient@example.com>");
+    expect(to.replace(/"[^"]*"/, "")).not.toContain("decoy@example.net");
+  });
+
   describe.each([
     ["from", "From"],
     ["to", "To"],
