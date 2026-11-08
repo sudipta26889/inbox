@@ -11,6 +11,12 @@ import {
 } from "@/utils/mcp-server/tokens";
 import prisma from "@/utils/prisma";
 import { createScopedLogger } from "@/utils/logger";
+import {
+  bodyTooLargeResponse,
+  MCP_PUBLIC_FORM_LIMIT,
+  readBodyWithLimit,
+  rebuildRequest,
+} from "@/utils/request-body-limit";
 
 const logger = createScopedLogger("mcp-server/token");
 
@@ -50,7 +56,18 @@ function oauthError(error: string, errorDescription: string, status = 400) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const formData = await request.formData();
+    const body = await readBodyWithLimit(request, MCP_PUBLIC_FORM_LIMIT);
+    if (!body.ok) {
+      return bodyTooLargeResponse(
+        {
+          error: "invalid_request",
+          error_description: "Request body too large",
+        },
+        { ...CORS_HEADERS, "Cache-Control": "no-store", Pragma: "no-cache" },
+      );
+    }
+
+    const formData = await rebuildRequest(request, body.bytes).formData();
     const grantType = formData.get("grant_type")?.toString();
     const clientId = formData.get("client_id")?.toString();
 
