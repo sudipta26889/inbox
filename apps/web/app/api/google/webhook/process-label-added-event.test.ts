@@ -17,7 +17,7 @@ vi.mock("@/utils/prisma", () => ({
       findFirst: vi.fn(),
     },
     groupItem: {
-      findUnique: vi.fn().mockResolvedValue(null),
+      findFirst: vi.fn().mockResolvedValue(null),
     },
   },
 }));
@@ -212,7 +212,7 @@ describe("process-label-added-event", () => {
         id: "rule-123",
         groupId: "group-123",
       } as any);
-      vi.mocked(prisma.groupItem.findUnique).mockResolvedValue({
+      vi.mocked(prisma.groupItem.findFirst).mockResolvedValue({
         id: "existing-item",
       } as any);
 
@@ -230,7 +230,7 @@ describe("process-label-added-event", () => {
         id: "rule-123",
         groupId: "group-123",
       } as any);
-      vi.mocked(prisma.groupItem.findUnique).mockResolvedValue(null);
+      vi.mocked(prisma.groupItem.findFirst).mockResolvedValue(null);
 
       await handleLabelAddedEvent(
         createLabelAddedItem(),

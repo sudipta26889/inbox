@@ -58,8 +58,13 @@ export async function isColdEmail({
       where: {
         groupId,
         type: GroupItemType.FROM,
-        value: normalizedFrom,
+        // Learned patterns keep the casing they were saved with, which can differ
+        // from this From header.
+        value: { equals: normalizedFrom, mode: "insensitive" },
       },
+      // If casing left both a block and an exclusion, the user's
+      // "not a cold email" wins.
+      orderBy: { exclude: "desc" },
       select: { exclude: true },
     });
   }

@@ -69,8 +69,9 @@ describe("isColdEmail", () => {
       where: {
         groupId,
         type: GroupItemType.FROM,
-        value: normalizedEmail,
+        value: { equals: normalizedEmail, mode: "insensitive" },
       },
+      orderBy: { exclude: "desc" },
       select: { exclude: true },
     });
   });
@@ -109,10 +110,46 @@ describe("isColdEmail", () => {
       where: {
         groupId,
         type: GroupItemType.FROM,
-        value: normalizedEmail,
+        value: { equals: normalizedEmail, mode: "insensitive" },
       },
+      orderBy: { exclude: "desc" },
       select: { exclude: true },
     });
+  });
+
+  it("honours an exclusion for a sender whose address has capital letters", async () => {
+    const emailAccount = getEmailAccount({ id: "test-account-id" });
+    const groupId = "test-group-id";
+    vi.mocked(prisma.groupItem.findFirst).mockResolvedValue({
+      id: "group-item-id",
+      exclude: true,
+    } as any);
+
+    const result = await isColdEmail({
+      email: {
+        id: "msg-mixed-case",
+        from: '"Jane Doe" <Jane.Doe@Acme.io>',
+        to: emailAccount.email,
+        subject: "Following up",
+        content: "Checking in",
+        date: new Date(),
+      },
+      emailAccount,
+      provider: mockProvider as never,
+      coldEmailRule: { instructions: "test instructions", groupId },
+    });
+
+    expect(result).toMatchObject({ isColdEmail: false, reason: "excluded" });
+    expect(prisma.groupItem.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          value: { equals: "Jane.Doe@Acme.io", mode: "insensitive" },
+        }),
+      }),
+    );
+    expect(
+      mockProvider.hasPreviousCommunicationsWithSenderOrDomain,
+    ).not.toHaveBeenCalled();
   });
 
   it("should handle various email formats consistently", async () => {
@@ -165,8 +202,9 @@ describe("isColdEmail", () => {
         where: {
           groupId,
           type: GroupItemType.FROM,
-          value: expectedNormalized,
+          value: { equals: expectedNormalized, mode: "insensitive" },
         },
+        orderBy: { exclude: "desc" },
         select: { exclude: true },
       });
     }
