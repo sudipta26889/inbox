@@ -42,7 +42,7 @@ export const cleanInboxAction = actionClient
               calendar: skips.calendar ?? true,
               receipt: skips.receipt ?? false,
               attachment: skips.attachment ?? false,
-              conversation: skips.conversation ?? false,
+              conversation: skips.conversation ?? true,
             },
             confirm: true,
           },

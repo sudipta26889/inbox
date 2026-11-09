@@ -2,7 +2,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import prisma from "@/utils/__mocks__/prisma";
 import { CleanAction } from "@/generated/prisma/enums";
 import { createScopedLogger } from "@/utils/logger";
-import { createCleanupJob, listCleanupJobs } from "@/utils/clean/domain";
+import {
+  createCleanupJob,
+  createCleanupJobInput,
+  listCleanupJobs,
+} from "@/utils/clean/domain";
 import { verifyPreviewToken } from "@/utils/clean/preview-token";
 
 vi.mock("@/utils/prisma");
@@ -415,5 +419,15 @@ describe("createCleanupJob", () => {
         },
       ),
     ).rejects.toThrow(/premium/i);
+  });
+});
+
+describe("createCleanupJobInput defaults", () => {
+  it("skips threads with a reply unless the caller turns it off", () => {
+    const input = createCleanupJobInput.parse({
+      action: CleanAction.ARCHIVE,
+      skips: {},
+    });
+    expect(input.skips.conversation).toBe(true);
   });
 });
