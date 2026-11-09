@@ -173,18 +173,25 @@ export async function cleanThread({
       }
     }
 
-    // calendar invite
-    const calendarEventStatus = getCalendarEventStatus(message);
-    if (skips.calendar && calendarEventStatus.isEvent) {
-      if (calendarEventStatus.timing === "past") {
-        await publish({ markDone: true });
-        return;
-      }
+    // future calendar invite
+    if (skips.calendar && getCalendarEventStatus(message).timing === "future") {
+      await publish({ markDone: false });
+      return;
+    }
+  }
 
-      if (calendarEventStatus.timing === "future") {
-        await publish({ markDone: false });
-        return;
-      }
+  // Archive shortcuts run only after every message was checked for keep
+  // signals: a newsletter's unsubscribe link in the first message must not
+  // archive a thread the user later starred or replied to.
+  for (const message of messages) {
+    const calendarEventStatus = getCalendarEventStatus(message);
+    if (
+      skips.calendar &&
+      calendarEventStatus.isEvent &&
+      calendarEventStatus.timing === "past"
+    ) {
+      await publish({ markDone: true });
+      return;
     }
 
     // unsubscribe link

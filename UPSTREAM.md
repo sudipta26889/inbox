@@ -44,6 +44,16 @@ those named here; the rest were judged from file lists and subjects, so a miss c
 | 2 | c1fe110bb, b1495f9b4 | Reply actions drop configured CC and BCC; manual replies ignore Reply-To |
 | 3 | 46604b2f0, 77aaed168 | A learned sender also matches lookalike domains and skips the AI. Check rules for a literal pipe first, since 77aaed168 changes how they match |
 
+### Picked (batch 4 — clean and bulk safety, branch `backport/clean-bulk-safety`)
+
+| Upstream | PR | Subject | Notes |
+|---|---|---|---|
+| 4ff20cce3 | #4342 | Clean keeps starred and replied threads that start with a newsletter | BACKPORT. Upstream's `controller.ts` is `route.ts` here. Keep checks run over every message before the archive shortcuts (unsubscribe link, newsletter sender, past invite). Upstream's tests brought along |
+| 269b53693 | #4380 | Bulk archive from a sender reaches every page | BACKPORT. `archiveMessagesFromSenders` lists all pages first, then archives; the fork has no `continueOnError`, so errors are still logged and skipped as before. New `bulkArchiveFromSenders` test pages like Gmail does |
+| 900dbe217 | #4213 | Deep Clean pages through the inbox instead of refetching page one | BACKPORT. Fix is in `processCleanupJob` in `utils/clean/domain.ts` (the MCP/`admin_cleanup_create_job` path); `cleanInboxAction` has no paging loop here. Test goes through `createCleanupJob` |
+| a13426c55 | #4362 | A sender's filter no longer matches another sender's address | BACKPORT. Fork has no `utils/senders/filters.ts`; the match is `findAutoArchiveFilter` in `app/api/user/stats/newsletters/helpers.ts`. New `helpers.test.ts` |
+| d14e87777 | #4474 | Match semicolon-separated senders in Gmail filter criteria | BACKPORT. Same file; splits on `;` and quotes too. Upstream also dropped display-name matching in filters, which this fork's version never had |
+
 ### Picked (batch 3 — rules acting on the wrong mail, branch `backport/rules-wrong-mail`)
 
 | Upstream | PR | Subject | Notes |

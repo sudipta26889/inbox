@@ -6,7 +6,13 @@ import { GmailProvider } from "./google";
 
 vi.mock("server-only", () => ({}));
 
-const { envMock, gmailMailMock, gmailDraftMock, gmailAttachmentMock } =
+const {
+  envMock,
+  gmailMailMock,
+  gmailDraftMock,
+  gmailAttachmentMock,
+  bulkActionTrackingMock,
+} =
   vi.hoisted(() => ({
     envMock: {
       NEXT_PUBLIC_AUTO_DRAFT_DISABLED: false,
@@ -31,6 +37,10 @@ const { envMock, gmailMailMock, gmailDraftMock, gmailAttachmentMock } =
       downloadGmailAttachment: vi.fn(),
       getGmailAttachment: vi.fn(),
     },
+    bulkActionTrackingMock: {
+      publishBulkActionToTinybird: vi.fn().mockResolvedValue(undefined),
+      updateEmailMessagesForSender: vi.fn().mockResolvedValue(undefined),
+    },
   }));
 
 vi.mock("@/env", () => ({
@@ -40,6 +50,7 @@ vi.mock("@/env", () => ({
 vi.mock("@/utils/gmail/mail", () => gmailMailMock);
 vi.mock("@/utils/gmail/draft", () => gmailDraftMock);
 vi.mock("@/utils/gmail/attachment", () => gmailAttachmentMock);
+vi.mock("@/utils/email/bulk-action-tracking", () => bulkActionTrackingMock);
 
 describe("GmailProvider.updateDraft", () => {
   it("carries existing attachments across the rebuilt message", async () => {
@@ -196,6 +207,59 @@ describe("GmailProvider.getLatestMessageInThread", () => {
 
     expect(result).toEqual({ draftId: "" });
     expect(gmailMailMock.draftEmail).not.toHaveBeenCalled();
+  });
+});
+
+describe("GmailProvider.bulkArchiveFromSenders", () => {
+  it("archives every inbox message from a sender across pages", async () => {
+    const inbox = Array.from({ length: 4 }, (_, index) => ({
+      id: `message-${index + 1}`,
+      threadId: `thread-${index + 1}`,
+    }));
+    const pageSize = 2;
+    // Like Gmail, the next page token is an offset into the live result set,
+    // so archiving the first page shifts what the second page returns.
+    const list = vi.fn(async ({ pageToken }: { pageToken?: string }) => {
+      const offset = pageToken ? Number(pageToken) : 0;
+      const next = offset + pageSize;
+      return {
+        data: {
+          messages: inbox.slice(offset, next),
+          nextPageToken: next < inbox.length ? String(next) : undefined,
+        },
+      };
+    });
+    const batchModify = vi.fn(
+      async ({ requestBody }: { requestBody: { ids: string[] } }) => {
+        for (const id of requestBody.ids) {
+          inbox.splice(
+            inbox.findIndex((message) => message.id === id),
+            1,
+          );
+        }
+        return { data: {} };
+      },
+    );
+    const provider = new GmailProvider({
+      users: { messages: { list, batchModify } },
+    } as never);
+
+    await provider.bulkArchiveFromSenders(
+      ["sender@example.com"],
+      "owner@example.com",
+      "account-1",
+    );
+
+    const archivedIds = batchModify.mock.calls.flatMap(
+      ([request]) => request.requestBody.ids,
+    );
+    expect(archivedIds.sort()).toEqual([
+      "message-1",
+      "message-2",
+      "message-3",
+      "message-4",
+    ]);
+    expect(inbox).toEqual([]);
   });
 });
 

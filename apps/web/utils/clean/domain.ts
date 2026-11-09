@@ -266,7 +266,12 @@ async function processCleanupJob(args: {
               : [GmailLabel.INBOX, GmailLabel.UNREAD],
           excludeLabelNames: [inboxZeroLabels.processed.name],
         },
-        maxResults: Math.min(args.maxEmails || 100, 100),
+        // Ask only for what is left, so the last page cannot overshoot maxEmails.
+        maxResults: Math.min(
+          args.maxEmails ? args.maxEmails - total : 100,
+          100,
+        ),
+        pageToken: nextPageToken ?? undefined,
       });
     nextPageToken = pageToken;
     if (threads.length === 0) break;
