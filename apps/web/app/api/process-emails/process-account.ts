@@ -11,6 +11,8 @@ import prisma from "@/utils/prisma";
 import type { Logger } from "@/utils/logger";
 import { logErrorWithDedupe } from "@/utils/log-error-with-dedupe";
 import { GmailLabel } from "@/utils/gmail/label";
+import { getEmailProviderRateLimitState } from "@/utils/email/rate-limit";
+import { withMessageProcessingLock } from "@/utils/redis/message-processing";
 import { processRecentSentMessages } from "./process-sent";
 
 const BATCH_SIZE = 50; // Process up to 50 emails per run
@@ -139,6 +141,17 @@ export async function processEmailsForAccount({
         return { success: false };
       }
 
+      const activeRateLimit = await getEmailProviderRateLimitState({
+        emailAccountId: validatedEmailAccount.id,
+        logger,
+      });
+      if (activeRateLimit?.provider === "google") {
+        logger.warn("Skipping Gmail polling due to active Gmail rate limit", {
+          retryAt: activeRateLimit.retryAt.toISOString(),
+        });
+        return { success: false };
+      }
+
       const gmail = await getGmailClientWithRefresh({
         accessToken: validatedEmailAccount.account.access_token,
         refreshToken: validatedEmailAccount.account.refresh_token,
@@ -182,12 +195,9 @@ export async function processEmailsForAccount({
       logger.info("Found unread emails in inbox", { count: messages.length });
 
       if (messages.length === 0) {
-        // Update historyId for future incremental syncs
-        const currentHistoryId = await getCurrentHistoryId(gmail);
-        await prisma.emailAccount.update({
-          where: { id: validatedEmailAccount.id },
-          data: { lastSyncedHistoryId: currentHistoryId },
-        });
+        if (!emailAccount.lastSyncedHistoryId) {
+          await healNullHistoryPointer(validatedEmailAccount.id, gmail);
+        }
 
         logger.info("No unread emails to process");
         return { success: true, processed: 0, skipped: 0 };
@@ -224,21 +234,31 @@ export async function processEmailsForAccount({
         try {
           const messageLogger = logger.with({ messageId: message.id });
 
-          await processHistoryItem(
-            {
-              messageId: message.id!,
-              threadId: message.threadId ?? undefined,
-            },
-            {
-              provider,
-              rules: validatedEmailAccount.rules,
-              hasAutomationRules,
-              hasAiAccess: userHasAiAccess,
-              emailAccount: validatedEmailAccount,
-              logger: messageLogger,
-            },
+          // Same lock as the webhook, so an overlapping run processes it once.
+          const result = await withMessageProcessingLock(
+            { userEmail: validatedEmailAccount.email, messageId: message.id! },
+            () =>
+              processHistoryItem(
+                {
+                  messageId: message.id!,
+                  threadId: message.threadId ?? undefined,
+                },
+                {
+                  provider,
+                  rules: validatedEmailAccount.rules,
+                  hasAutomationRules,
+                  hasAiAccess: userHasAiAccess,
+                  emailAccount: validatedEmailAccount,
+                  logger: messageLogger,
+                },
+              ),
           );
 
+          if (result.skipped) {
+            skipped += 1;
+            messageLogger.info("Skipping. Message already being processed.");
+            continue;
+          }
           processed += 1;
           messageLogger.info("Processed message successfully");
         } catch (error) {
@@ -251,12 +271,9 @@ export async function processEmailsForAccount({
         }
       }
 
-      // Update historyId after processing
-      const currentHistoryId = await getCurrentHistoryId(gmail);
-      await prisma.emailAccount.update({
-        where: { id: validatedEmailAccount.id },
-        data: { lastSyncedHistoryId: currentHistoryId },
-      });
+      if (!emailAccount.lastSyncedHistoryId) {
+        await healNullHistoryPointer(validatedEmailAccount.id, gmail);
+      }
 
       logger.info("Gmail inbox processing completed", {
         processed,
@@ -316,4 +333,18 @@ export async function processEmailsForAccount({
       }
     }
   }
+}
+
+// The webhook owns the history pointer and stops it before mail it could not
+// process. Writing Gmail's current ID here would skip that mail, so polling
+// only seeds a missing pointer.
+async function healNullHistoryPointer(
+  emailAccountId: string,
+  gmail: Awaited<ReturnType<typeof getGmailClientWithRefresh>>,
+) {
+  const currentHistoryId = await getCurrentHistoryId(gmail);
+  await prisma.emailAccount.updateMany({
+    where: { id: emailAccountId, lastSyncedHistoryId: null },
+    data: { lastSyncedHistoryId: currentHistoryId },
+  });
 }
