@@ -123,6 +123,32 @@ describe("emailToContent", () => {
       expect(result).toBe("My comments");
     });
 
+    it.each([
+      [
+        "Outlook separator line",
+        "Sounds good.\n\n-----Original Message-----\nFrom: sender@example.com\nSent: Monday",
+        "Sounds good.",
+      ],
+      [
+        "Outlook separator with non-breaking spaces",
+        "Sounds good.\r\n\r\n\u00a0-----\u00a0Original Message\u00a0-----\r\nFrom: sender@example.com",
+        "Sounds good.",
+      ],
+      [
+        "an inline mention of the original message",
+        "Thanks Dana.\nAs noted in my original message, the deadline is Friday. Please confirm.",
+        "Thanks Dana.\nAs noted in my original message, the deadline is Friday. Please confirm.",
+      ],
+      [
+        "an inline mention of the iOS forward marker",
+        "Please use Begin forwarded message: as the label.\nThe client confirmed Friday.\n\n---------- Forwarded message ----------\nFrom: other@test.com",
+        "Please use Begin forwarded message: as the label.\nThe client confirmed Friday.",
+      ],
+    ])("handles %s", (_name, textPlain, expected) => {
+      const email = { textPlain, textHtml: undefined, snippet: "" };
+      expect(emailToContent(email, { removeForwarded: true })).toBe(expected);
+    });
+
     it("preserves content when no forward marker found", () => {
       const email = {
         textPlain: "Regular email content without forwards",
