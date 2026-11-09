@@ -714,11 +714,9 @@ async function handleError(
         ErrorType.INVALID_AI_MODEL,
         "The AI model you specified does not exist or is unavailable. Please check your settings.",
       );
-      const safeError = new SafeError(
+      throw new SafeError(
         "The AI model you specified does not exist or is unavailable. Please update your AI settings.",
       );
-      if (hasUserApiKey) markAsHandledUserKeyError(safeError);
-      throw safeError;
     }
 
     if (isOpenAIAPIKeyDeactivatedError(error)) {
