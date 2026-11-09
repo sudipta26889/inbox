@@ -45,6 +45,20 @@ those named here; the rest were judged from file lists and subjects, so a miss c
 | 2 | c1fe110bb, b1495f9b4 | Reply actions drop configured CC and BCC; manual replies ignore Reply-To |
 | 3 | 46604b2f0, 77aaed168 | A learned sender also matches lookalike domains and skips the AI. Check rules for a literal pipe first, since 77aaed168 changes how they match |
 
+### Picked (batch 3 — rules acting on the wrong mail, branch `backport/rules-wrong-mail`)
+
+| Upstream | PR | Subject | Notes |
+|---|---|---|---|
+| 77aaed168 | #4208 | `\|` in subject/body static conditions is literal | UPSTREAM. Production rules use `\|` only in From conditions, which are split before matching, so none change |
+| 46604b2f0 | #4288 | Learned sender patterns match the whole address | BACKPORT. Adds `utils/rule/email-from-pattern.ts` (helpers moved out of `match-rules.ts`). A learned display name still matches anywhere in From |
+| c83ca6612 | #4151 | Resolve rule names with leaked JSON characters | BACKPORT. Fork's `aiChooseRule` has no result logging or classification feedback; new `ai-choose-rule.test.ts` |
+| 38bf57535 | #4237 | Resolve rule names followed by extra words | BACKPORT (logging-only conflict) |
+| 4128ed234 | #4255 | Throw when the AI claims a match but names no offered rule | BACKPORT. Shows up as an `llm-error` shadow record for choose-rule |
+| 5a6fd0c8a | #4290 | Static body conditions match HTML-only emails | BACKPORT. Only the new options added to the fork's older `convertEmailHtmlToText` |
+| 2f4ff6ac1 | #4343 | Actions with an unsupported delay run now instead of being dropped | BACKPORT. Guard in the fork's `mapActionFields` |
+| 435482eff | #4266 | Delayed actions keep `labelId` | BACKPORT. Move-to-folder half dropped (Outlook only) |
+| b4a25c631 | #4361 | "Not a cold email" honoured regardless of sender address case | BACKPORT. Gmail label handlers are under `app/api/google/webhook/` here |
+
 ### Evaluated and skipped
 
 - 1035b044b better-auth 1.7: needs an `Account` migration. Stay on 1.6.x. GHSA-4wq4-2ppv-q3hg, which it cites, returned 404, so its effect on 1.6 is unknown.
