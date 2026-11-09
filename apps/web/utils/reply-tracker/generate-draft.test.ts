@@ -200,6 +200,9 @@ describe("fetchMessagesAndGenerateDraft - AI content escaping", () => {
     // User signature HTML should NOT be escaped
     expect(result).toContain('<p style="color:blue">');
     expect(result).toContain("Best regards,<br>John</p>");
+    expect(result).toContain(
+      `<div class="gmail_signature" data-smartmail="gmail_signature">${userSignature}</div>`,
+    );
   });
 
   it("escapes zero-size font attacks in AI content", async () => {

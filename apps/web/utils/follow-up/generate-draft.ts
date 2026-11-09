@@ -11,6 +11,7 @@ import prisma from "@/utils/prisma";
 import { withPrismaRetry } from "@/utils/prisma-retry";
 import { captureException } from "@/utils/error";
 import { env } from "@/env";
+import { wrapSignature } from "@/utils/email/reply-body-html";
 import { getOrCreateReferralCode } from "@/utils/referral/referral-code";
 import { generateReferralLink } from "@/utils/referral/referral-link";
 import { shouldSkipAutoDraft } from "@/utils/auto-draft";
@@ -122,7 +123,7 @@ export async function generateFollowUpDraft({
     }
 
     if (emailAccountWithSignatures?.signature) {
-      draftContent = `${draftContent}\n\n${emailAccountWithSignatures.signature}`;
+      draftContent = `${draftContent}\n\n${wrapSignature(emailAccountWithSignatures.signature)}`;
     }
 
     const { draftId } = await provider.draftEmail(

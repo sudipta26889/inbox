@@ -18,6 +18,7 @@ import { getOrCreateReferralCode } from "@/utils/referral/referral-code";
 import { generateReferralLink } from "@/utils/referral/referral-link";
 import { aiGetCalendarAvailability } from "@/utils/ai/calendar/availability";
 import { env } from "@/env";
+import { wrapSignature } from "@/utils/email/reply-body-html";
 import { mcpAgent } from "@/utils/ai/mcp/mcp-agent";
 import {
   getMeetingContext,
@@ -126,7 +127,7 @@ export async function fetchMessagesAndGenerateDraftWithConfidenceThreshold(
   }
 
   if (emailAccountWithSignatures?.signature) {
-    finalResult = `${finalResult}\n\n${emailAccountWithSignatures.signature}`;
+    finalResult = `${finalResult}\n\n${wrapSignature(emailAccountWithSignatures.signature)}`;
   }
 
   return {
