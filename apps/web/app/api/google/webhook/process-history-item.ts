@@ -5,7 +5,10 @@ import { createEmailProvider } from "@/utils/email/provider";
 import { handleLabelRemovedEvent } from "@/app/api/google/webhook/process-label-removed-event";
 import { handleLabelAddedEvent } from "@/app/api/google/webhook/process-label-added-event";
 import { processHistoryItem as processHistoryItemShared } from "@/utils/webhook/process-history-item";
-import { withMessageProcessingLock } from "@/utils/redis/message-processing";
+import {
+  MessageInFlightError,
+  withMessageProcessingLock,
+} from "@/utils/redis/message-processing";
 import type { Logger } from "@/utils/logger";
 
 export async function processHistoryItem(
@@ -77,5 +80,6 @@ export async function processHistoryItem(
         },
       ),
   );
-  if (result.skipped) logger.info("Skipping. Message already being processed.");
+  if (result.inFlight) throw new MessageInFlightError();
+  if (result.skipped) logger.info("Skipping. Message already processed.");
 }

@@ -38,7 +38,7 @@ vi.mock("@/utils/redis/message-processing", () => ({
   markMessageAsProcessing: vi.fn().mockResolvedValue(true),
   withMessageProcessingLock: vi.fn(async (_key, fn) => {
     await fn();
-    return { skipped: false };
+    return { skipped: false, inFlight: false };
   }),
 }));
 

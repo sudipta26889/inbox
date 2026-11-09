@@ -22,6 +22,7 @@ import {
   withRateLimitRecording,
 } from "@/utils/email/rate-limit";
 import prisma from "@/utils/prisma";
+import { MessageInFlightError } from "@/utils/redis/message-processing";
 import {
   clearGmailHistoryCatchUp,
   isGmailHistoryCatchUpPending,
@@ -291,6 +292,12 @@ async function processHistory(
       try {
         await processHistoryItem(event, options, log);
       } catch (error) {
+        // Another run holds this message (or was killed holding it). Stop here
+        // so the pointer stays before it; a later webhook retries the entry.
+        if (error instanceof MessageInFlightError) {
+          logger.info("Stopping history processing: message in flight");
+          return false;
+        }
         // Stop before the pointer passes mail Gmail refused to serve, so the
         // catch-up after the rate limit picks it up again.
         if (isEmailProviderRateLimitError({ error, provider: "google" })) {

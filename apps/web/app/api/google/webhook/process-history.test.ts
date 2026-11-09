@@ -421,7 +421,9 @@ function mockProvider(
 ) {
   const getMessage = vi.fn(async (id: string) => {
     const failure = getMessageFailures[id]?.shift();
-    if (failure) throw failure;
+    // A function stands for a call still in flight: it settles when the test says.
+    if (typeof failure === "function") await failure();
+    else if (failure) throw failure;
     return {
       id,
       threadId: `thread-${id}`,
@@ -638,5 +640,69 @@ describe("processHistoryForUser - pointer never passes unprocessed mail", () => 
     expect(state.pointer).toBe("1002");
     expect(rulesRunFor("m2")).toBe(1);
     expect(state.rateLimitErrors).toEqual([]);
+  });
+
+  it("does not pass a message another webhook is still processing, and processes it once after that run fails", async () => {
+    mockGmailHistory([
+      { id: "1001", messageIds: ["m1"] },
+      { id: "1002", messageIds: ["m2"] },
+      { id: "1003", messageIds: ["m3"] },
+      { id: "1004", messageIds: ["m4"] },
+    ]);
+    let reachedM2!: () => void;
+    const aReachedM2 = new Promise<void>((resolve) => {
+      reachedM2 = resolve;
+    });
+    let failM2!: (error: unknown) => void;
+    mockProvider({
+      m2: [
+        () => {
+          reachedM2();
+          return new Promise((_resolve, reject) => {
+            failM2 = reject;
+          });
+        },
+      ],
+    });
+
+    const webhookA = runWebhook(1003);
+    await aReachedM2;
+
+    // B arrives while A holds m2's lock with getMessage in flight.
+    await runWebhook(1004);
+    expect(Number(state.pointer)).toBeLessThanOrEqual(1001);
+    expect(rulesRunFor("m3")).toBe(0);
+
+    failM2(gmailRateLimitError());
+    await webhookA;
+    expect(state.pointer).toBe("1001");
+
+    await runWebhook(1004);
+
+    expect(state.pointer).toBe("1004");
+    expect(rulesRunFor("m2")).toBe(1);
+    expect(fanOutsFor("m2")).toBe(1);
+    for (const id of ["m1", "m3", "m4"]) {
+      expect(rulesRunFor(id)).toBe(1);
+      expect(fanOutsFor(id)).toBe(1);
+    }
+  });
+
+  it("holds the pointer behind a stale in-flight lock from a killed run, then processes the message after the TTL", async () => {
+    mockGmailHistory([{ id: "1001", messageIds: ["m1"] }]);
+    mockProvider();
+    state.redis.set(`processing-message:${EMAIL}:m1`, "true");
+
+    await runWebhook(1001);
+    expect(state.pointer).toBe("1000");
+    expect(rulesRunFor("m1")).toBe(0);
+
+    // The 5-minute TTL expires.
+    state.redis.delete(`processing-message:${EMAIL}:m1`);
+    await runWebhook(1001);
+
+    expect(state.pointer).toBe("1001");
+    expect(rulesRunFor("m1")).toBe(1);
+    expect(fanOutsFor("m1")).toBe(1);
   });
 });

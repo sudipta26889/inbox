@@ -23,7 +23,7 @@ vi.mock("@/utils/prisma");
 vi.mock("@/utils/redis/message-processing", () => ({
   withMessageProcessingLock: vi.fn(async (_key, fn) => {
     await fn();
-    return { skipped: false };
+    return { skipped: false, inFlight: false };
   }),
 }));
 
@@ -162,6 +162,7 @@ describe("processHistoryItem", () => {
   it("should skip if message is already being processed", async () => {
     vi.mocked(withMessageProcessingLock).mockResolvedValueOnce({
       skipped: true,
+      inFlight: false,
     });
 
     const options = {
