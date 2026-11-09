@@ -47,6 +47,7 @@ import { env } from "@/env";
 import { prefixPath } from "@/utils/path";
 import { ONE_WEEK_MINUTES } from "@/utils/date";
 import { createEmailProvider } from "@/utils/email/provider";
+import type { EmailProvider } from "@/utils/email/types";
 import { resolveLabelNameAndId } from "@/utils/label/resolve-label";
 import type { Logger } from "@/utils/logger";
 import { bulkProcessInboxEmails } from "@/utils/ai/choose-rule/bulk-process-emails";
@@ -303,6 +304,12 @@ export const createRulesOnboardingAction = actionClient
       });
       if (!emailAccount) throw new SafeError("User not found");
 
+      const emailProvider = await createEmailProvider({
+        emailAccountId,
+        provider,
+        logger,
+      });
+
       const promises: Promise<unknown>[] = [];
 
       const isSet = (
@@ -325,13 +332,12 @@ export const createRulesOnboardingAction = actionClient
 
         const promise = (async () => {
           const actions = await getActionsFromCategoryAction({
-            emailAccountId,
             ruleName: name,
             categoryAction,
             label,
             hasDigest: false,
             draftReply: !!ruleConfiguration.draftReply,
-            provider,
+            emailProvider,
             logger,
             systemType,
           });
@@ -406,13 +412,12 @@ export const createRulesOnboardingAction = actionClient
       for (const customCategory of customCategories) {
         if (customCategory.action && isSet(customCategory.action)) {
           const actions = await getActionsFromCategoryAction({
-            emailAccountId,
             ruleName: customCategory.name,
             categoryAction: customCategory.action,
             label: customCategory.name,
             hasDigest: false,
             draftReply: false,
-            provider,
+            emailProvider,
             logger,
             systemType: undefined,
           });
@@ -778,32 +783,24 @@ function handleRuleError(error: unknown, logger: Logger) {
 }
 
 async function getActionsFromCategoryAction({
-  emailAccountId,
   ruleName,
   categoryAction,
   label,
   draftReply,
   hasDigest,
-  provider,
+  emailProvider,
   logger,
   systemType,
 }: {
-  emailAccountId: string;
   ruleName: string;
   categoryAction: CategoryAction;
   label: string;
   hasDigest: boolean;
   draftReply: boolean;
-  provider: string;
+  emailProvider: EmailProvider;
   logger: Logger;
   systemType?: SystemType;
 }): Promise<Prisma.ActionCreateManyRuleInput[]> {
-  const emailProvider = await createEmailProvider({
-    emailAccountId,
-    provider,
-    logger,
-  });
-
   function normalizeCategory(action: CategoryAction) {
     switch (action) {
       case "label_archive_delayed":

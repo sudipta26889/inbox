@@ -417,6 +417,21 @@ describe("isKnownOutlookError", () => {
     expect(isKnownOutlookError({ code: "ErrorItemNotFound" })).toBe(true);
   });
 
+  it("detects unusable mailbox errors", () => {
+    expect(
+      isKnownOutlookError({
+        message:
+          "Exception: [Status Code: NotFound; Reason: The mailbox is either inactive, soft-deleted, or is hosted on-premise.]",
+      }),
+    ).toBe(true);
+    expect(
+      isKnownOutlookError({
+        message:
+          "Exception: [Status Code: Forbidden; Reason: The operation failed with a permanent mailbox error.]",
+      }),
+    ).toBe(true);
+  });
+
   it("returns false for unknown errors", () => {
     expect(isKnownOutlookError({ message: "Something unexpected" })).toBe(
       false,
@@ -425,6 +440,21 @@ describe("isKnownOutlookError", () => {
 });
 
 describe("isKnownApiError", () => {
+  it("detects Gmail insufficient-scope errors with the reason on the cause", () => {
+    const error = Object.assign(
+      new Error("Request had insufficient authentication scopes."),
+      {
+        code: 403,
+        cause: {
+          code: 403,
+          message: "Request had insufficient authentication scopes.",
+          errors: [{ reason: "insufficientPermissions" }],
+        },
+      },
+    );
+    expect(isKnownApiError(error)).toBe(true);
+  });
+
   it("does not treat 402 as a known API error", () => {
     const error = createAPICallError({
       message: "Insufficient credits",
