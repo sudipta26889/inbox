@@ -43,6 +43,20 @@ those named here; the rest were judged from file lists and subjects, so a miss c
 | 1 | 1797f8438, ffd9f3015, f2d956756 | Next.js 16.4.x: Server Actions DoS GHSA-p3m5-59mp-jv5r; also brings `sharp` 0.35.5. nodemailer 10.3.1 and dompurify 3.4.x in the same pass |
 | 2 | c1fe110bb, b1495f9b4 | Reply actions drop configured CC and BCC; manual replies ignore Reply-To |
 | 3 | 46604b2f0, 77aaed168 | A learned sender also matches lookalike domains and skips the AI. Check rules for a literal pipe first, since 77aaed168 changes how they match |
+| 6 | d06bd235a, 2e78381d1, 7a80641cf, dc4aef03f, 7e7d313c5, 198ba7fe8, 080bdada6, 5f36395cf | Weekly digests on the chosen weekday, one digest after a stale schedule, scheduled runs skip disconnected accounts, rule-history retry, small error and log-level fixes |
+
+### Picked (batch 6 — schedules, reconnects, small fixes, branch `backport/schedules-reconnects`)
+
+| Upstream | PR | Subject | Notes |
+|---|---|---|---|
+| d06bd235a | #4224 | Weekly digests on the chosen weekday | UPSTREAM (clean cherry-pick) |
+| 2e78381d1 | #4363 | One digest after a stale schedule, not one per cron run | BACKPORT. Fork's `digest/schedule.ts` has no `DIGEST_DISPATCH_INTERVAL_MINUTES`, so only the catch-up loop and its cap came over |
+| 7a80641cf | #4433 | Scheduled runs skip disconnected email accounts | BACKPORT. Only `execute.ts` changed; the fork-local check-in files (`message.ts`, `messaging.ts`, `generate-check-in-message.ts`) are untouched. The fork had no `execute.test.ts`, so a one-case test is new (the upstream route cases need `MessagingRoute*`, which the fork lacks) |
+| dc4aef03f | #4209 | Commas kept inside List-Unsubscribe URLs not listed first | UPSTREAM (clean cherry-pick) |
+| 7e7d313c5 | #4324 | Retry rule history insert on version conflict | BACKPORT. Test fitted to the fork's older snapshot shape (no messaging-channel fields) |
+| 198ba7fe8 | #4229 | Fewer production errors | BACKPORT, hand-ported. Taken: nested Gmail insufficient-scope detection, unusable Outlook mailbox as a known error, signed-out redirect in `checkUserOwnsEmailAccount`, invalid-model error marked handled for user keys, one email provider per onboarding rule creation. **Migration, `schema.prisma`, the better-auth patch and lockfile dropped** (no `ExecutedRule` index). Dropped: `assistant-state` cursor (file absent), `(app)/layout.tsx` last-login (fork already updates by id), auth startup seed (fork's auth predates it) |
+| 080bdada6 | #4312 | Log expected account states as warnings | BACKPORT, log levels only. Adds `level` to `logErrorWithDedupe`; known API and user-key errors log as warnings in `process-history-item.ts` and the Gmail `process-history.ts`; reply-tracker SafeErrors, 4xx queue forwards and invalid referral codes no longer log as errors or reach Sentry. Dropped: skip-disconnected snooze (no snooze module), draft-cleanup (fork lacks `cleanupConfiguredAIDraftsForAccount`), account-delete timeout (fork deletes without a transaction), client Sentry filters, `swr-fetcher` |
+| 5f36395cf | #3409 | Hide the upgrade prompt when premium checks are bypassed | BACKPORT. `PremiumCard` returns nothing when `NEXT_PUBLIC_BYPASS_PREMIUM_CHECKS` is on (it is built `true` in `deploy.yml`). No pricing or "Inbox Zero" text added |
 
 ### Picked (batch 4 — clean and bulk safety, branch `backport/clean-bulk-safety`)
 
@@ -96,6 +110,7 @@ those named here; the rest were judged from file lists and subjects, so a miss c
 
 ### Evaluated and skipped
 
+- b9d34880a calendar reconnect tokens: the fork already updates tokens on re-authorisation (7a338ca9c) with its own message `calendar_reconnected` and flow; upstream's test does not fit that flow. No change.
 - 1035b044b better-auth 1.7: needs an `Account` migration. Stay on 1.6.x. GHSA-4wq4-2ppv-q3hg, which it cites, returned 404, so its effect on 1.6 is unknown.
 - d181112bc zod 4 migration: a major migration; the override above covers the reachable path.
 - 8516acfb8 prisma: deepmerge-ts and mysql2 are not reachable here.
