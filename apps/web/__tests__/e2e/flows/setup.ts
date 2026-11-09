@@ -27,6 +27,10 @@ vi.mock("server-only", () => ({}));
 // Mock message processing lock to always succeed
 vi.mock("@/utils/redis/message-processing", () => ({
   markMessageAsProcessing: vi.fn().mockResolvedValue(true),
+  withMessageProcessingLock: vi.fn(async (_key, fn) => {
+    await fn();
+    return { skipped: false };
+  }),
 }));
 
 // Mock Next.js after() to run immediately in tests

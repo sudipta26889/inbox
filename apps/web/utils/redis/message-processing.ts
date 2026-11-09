@@ -29,3 +29,23 @@ export async function markMessageAsProcessing({
   // Redis returns "OK" if the key was set, and null if it was already set
   return result === "OK";
 }
+
+// Keeps the lock after success to dedupe repeat webhooks, but releases it on
+// failure so a retry inside the TTL (rate-limit catch-up) is not skipped.
+export async function withMessageProcessingLock(
+  { userEmail, messageId }: { userEmail: string; messageId: string },
+  fn: () => Promise<unknown>,
+): Promise<{ skipped: boolean }> {
+  const isFree = await markMessageAsProcessing({ userEmail, messageId });
+  if (!isFree) return { skipped: true };
+
+  try {
+    await fn();
+    return { skipped: false };
+  } catch (error) {
+    // ponytail: plain del, not an owned-lock compare-and-delete; a run that
+    // outlives the 5-minute TTL could clear a later holder's lock.
+    await redis.del(getProcessingKey({ userEmail, messageId })).catch(() => {});
+    throw error;
+  }
+}

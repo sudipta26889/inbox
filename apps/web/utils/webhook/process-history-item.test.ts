@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { processHistoryItem } from "@/utils/webhook/process-history-item";
 import {
   createMockEmailProvider,
@@ -66,6 +66,59 @@ describe("Provider Edge Cases", () => {
     emailAccount: getDefaultEmailAccount(),
     logger,
   };
+
+  describe("24-hour guard", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2024-01-01T01:00:00Z"));
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it.each([
+      ["older than 24 hours", -24 * 60 * 60 * 1000 - 1, false],
+      ["exactly 24 hours", -24 * 60 * 60 * 1000, true],
+      ["recent", -60_000, true],
+      ["unknown", undefined, true],
+      ["invalid", "invalid", true],
+    ])("handles %s inbound mail", async (_description, age, shouldProcess) => {
+      const message = getMockParsedMessage({
+        internalDate: typeof age === "number" ? String(Date.now() + age) : age,
+      });
+
+      await processHistoryItem(
+        { messageId: message.id, message },
+        {
+          ...baseOptions,
+          provider: createMockEmailProvider(),
+          hasAutomationRules: true,
+          hasAiAccess: true,
+        },
+      );
+
+      expect(runRules).toHaveBeenCalledTimes(shouldProcess ? 1 : 0);
+    });
+
+    it("still tracks old sent messages", async () => {
+      const message = getMockParsedMessage({
+        internalDate: String(Date.now() - 48 * 60 * 60 * 1000),
+      });
+
+      await processHistoryItem(
+        { messageId: message.id, message },
+        {
+          ...baseOptions,
+          provider: createMockEmailProvider({
+            isSentMessage: vi.fn().mockReturnValue(true),
+          }),
+        },
+      );
+
+      expect(handleOutboundMessage).toHaveBeenCalled();
+    });
+  });
 
   describe("Gmail-specific errors", () => {
     it("handles Gmail 'not found' error gracefully (message was deleted)", async () => {

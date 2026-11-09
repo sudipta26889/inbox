@@ -26,6 +26,9 @@ import { runWithBackgroundLoggerFlush } from "@/utils/logger-flush";
 import { captureException } from "@/utils/error";
 import { logErrorWithDedupe } from "@/utils/log-error-with-dedupe";
 import { analyzeSenderPattern } from "@/app/api/ai/analyze-sender-pattern/call-analyze-pattern-api";
+import { internalDateToDate } from "@/utils/date";
+
+const MAX_WEBHOOK_MESSAGE_AGE_MS = 24 * 60 * 60 * 1000;
 
 export type SharedProcessHistoryOptions = {
   provider: EmailProvider;
@@ -145,6 +148,15 @@ export async function processHistoryItem(
         provider,
         logger,
       });
+      return;
+    }
+
+    // Preserve sent-message tracking and filebot replies when catching up old mail.
+    const receivedAt = internalDateToDate(parsedMessage.internalDate, {
+      fallbackToNow: false,
+    });
+    if (Date.now() - receivedAt.getTime() > MAX_WEBHOOK_MESSAGE_AGE_MS) {
+      logger.info("Skipping. Message too old.");
       return;
     }
 

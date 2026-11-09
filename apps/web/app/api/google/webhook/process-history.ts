@@ -4,6 +4,8 @@ import * as Sentry from "@sentry/nextjs";
 import { getGmailClientWithRefresh } from "@/utils/gmail/client";
 import { GmailLabel } from "@/utils/gmail/label";
 import { captureException } from "@/utils/error";
+import { isEmailProviderRateLimitError } from "@/utils/email/is-provider-rate-limit-error";
+import { classifyEmailAccountProviderIssue } from "@/utils/email/provider-health";
 import {
   HistoryEventType,
   type ProcessHistoryOptions,
@@ -20,8 +22,18 @@ import {
   withRateLimitRecording,
 } from "@/utils/email/rate-limit";
 import prisma from "@/utils/prisma";
+import {
+  clearGmailHistoryCatchUp,
+  isGmailHistoryCatchUpPending,
+  markGmailHistoryCatchUp,
+} from "@/utils/redis/gmail-history-catch-up";
 import type { Logger } from "@/utils/logger";
 import type { gmail_v1 } from "@googleapis/gmail";
+
+const MAX_GMAIL_HISTORY_ID_GAP = 500;
+// History skipped while Gmail rate limited the account is mail the user is
+// still waiting on, so it gets a wider window than a long-disconnected account.
+const MAX_GMAIL_CATCH_UP_HISTORY_ID_GAP = 30_000;
 
 export async function processHistoryForUser(
   decodedData: {
@@ -88,6 +100,7 @@ export async function processHistoryForUser(
     }
 
     if (activeRateLimit?.provider === "google") {
+      await markGmailHistoryCatchUp(validatedEmailAccount.id, logger);
       logger.warn(
         "Skipping webhook processing due to active Gmail rate limit",
         {
@@ -104,6 +117,14 @@ export async function processHistoryForUser(
         provider: "google",
         logger,
         source: "google/webhook",
+        onRateLimitRecorded: async (state, error) => {
+          if (
+            state ||
+            isEmailProviderRateLimitError({ error, provider: "google" })
+          ) {
+            await markGmailHistoryCatchUp(validatedEmailAccount.id, logger);
+          }
+        },
       },
       async () => {
         const gmail = await getGmailClientWithRefresh({
@@ -115,10 +136,18 @@ export async function processHistoryForUser(
           logger,
         });
 
+        const isCatchUp = await isGmailHistoryCatchUpPending(
+          validatedEmailAccount.id,
+          logger,
+        );
+
         const historyResult = await fetchGmailHistoryResilient({
           gmail,
           emailAccount: validatedEmailAccount,
           webhookHistoryId: historyId,
+          maxHistoryIdGap: isCatchUp
+            ? MAX_GMAIL_CATCH_UP_HISTORY_ID_GAP
+            : MAX_GMAIL_HISTORY_ID_GAP,
           options,
           logger,
         });
@@ -128,6 +157,9 @@ export async function processHistoryForUser(
             emailAccountId: validatedEmailAccount.id,
             lastSyncedHistoryId: historyId.toString(),
           });
+          if (isCatchUp) {
+            await clearGmailHistoryCatchUp(validatedEmailAccount.id, logger);
+          }
           return NextResponse.json({ ok: true });
         }
 
@@ -139,7 +171,7 @@ export async function processHistoryForUser(
             startHistoryId: historyResult.startHistoryId,
           });
 
-          await processHistory(
+          const completed = await processHistory(
             {
               history: historyEntries,
               gmail,
@@ -156,6 +188,8 @@ export async function processHistoryForUser(
             },
             logger,
           );
+          // Keep the wider catch-up window so the retry reaches the unprocessed mail.
+          if (!completed) return NextResponse.json({ ok: true });
         } else {
           // When we truncate a large gap (webhookHistoryId - 500), Gmail can return
           // an empty recent window. We still need to advance to the webhook historyId
@@ -169,6 +203,12 @@ export async function processHistoryForUser(
             emailAccountId: validatedEmailAccount.id,
             lastSyncedHistoryId: historyId.toString(),
           });
+        }
+
+        // Only the first page is fetched, so a catch-up with more pages keeps
+        // its wide window for the next webhook.
+        if (isCatchUp && !history.nextPageToken) {
+          await clearGmailHistoryCatchUp(validatedEmailAccount.id, logger);
         }
 
         return NextResponse.json({ ok: true });
@@ -196,11 +236,14 @@ export async function processHistoryForUser(
   }
 }
 
-async function processHistory(options: ProcessHistoryOptions, logger: Logger) {
+async function processHistory(
+  options: ProcessHistoryOptions,
+  logger: Logger,
+): Promise<boolean> {
   const { history, emailAccount } = options;
   const { email: userEmail, id: emailAccountId } = emailAccount;
 
-  if (!history?.length) return;
+  if (!history?.length) return true;
 
   for (const h of history) {
     const historyMessages = [
@@ -248,6 +291,25 @@ async function processHistory(options: ProcessHistoryOptions, logger: Logger) {
       try {
         await processHistoryItem(event, options, log);
       } catch (error) {
+        // Stop before the pointer passes mail Gmail refused to serve, so the
+        // catch-up after the rate limit picks it up again.
+        if (isEmailProviderRateLimitError({ error, provider: "google" })) {
+          throw error;
+        }
+        // Every remaining item would fail the same way once the account needs
+        // reconnecting or was deleted mid-run, so stop and keep the pointer.
+        const providerIssue = classifyEmailAccountProviderIssue({
+          error,
+          provider: "google",
+        });
+        if (providerIssue) {
+          logger.warn("Stopping history processing: account unavailable", {
+            reason: providerIssue.reason,
+          });
+          return false;
+        }
+        // Any other failure (e.g. an LLM error) is logged and the pointer
+        // still moves past it: that item's rule run is lost, as upstream.
         captureException(error, {
           userEmail,
           extra: { messageId: event.item.message?.id },
@@ -255,14 +317,21 @@ async function processHistory(options: ProcessHistoryOptions, logger: Logger) {
         logger.error("Error processing history item", { error });
       }
     }
+
+    // A catch-up can outlast the function timeout, so keep the progress made.
+    await updateLastSyncedHistoryId({
+      emailAccountId,
+      lastSyncedHistoryId: h.id,
+    });
   }
 
-  const lastSyncedHistoryId = history[history.length - 1].id;
-
+  // Entries with no message events are skipped above, so advance past them too.
   await updateLastSyncedHistoryId({
     emailAccountId,
-    lastSyncedHistoryId,
+    lastSyncedHistoryId: history[history.length - 1].id,
   });
+
+  return true;
 }
 
 /**
@@ -329,12 +398,14 @@ async function fetchGmailHistoryResilient({
   gmail,
   emailAccount,
   webhookHistoryId,
+  maxHistoryIdGap,
   options,
   logger,
 }: {
   gmail: gmail_v1.Gmail;
   emailAccount: ValidatedWebhookAccountData;
   webhookHistoryId: number;
+  maxHistoryIdGap: number;
   options: { startHistoryId?: string };
   logger: Logger;
 }): Promise<
@@ -349,11 +420,11 @@ async function fetchGmailHistoryResilient({
     emailAccount?.lastSyncedHistoryId || "0",
   );
 
-  // If the gap is too large (e.g. > 500 items), we start from currentHistoryId - 500.
+  // If the gap is too large, we start from webhookHistoryId - maxHistoryIdGap.
   // This prevents timeouts and runaway processing costs if the system falls way behind.
   const startHistoryIdNum = Math.max(
     lastSyncedHistoryId,
-    webhookHistoryId - 500,
+    webhookHistoryId - maxHistoryIdGap,
   );
   const startHistoryId =
     options?.startHistoryId || startHistoryIdNum.toString();
@@ -365,6 +436,7 @@ async function fetchGmailHistoryResilient({
       webhookHistoryId,
       effectiveStartHistoryId: startHistoryIdNum,
       skippedHistoryItems: startHistoryIdNum - lastSyncedHistoryId,
+      maxHistoryIdGap,
     });
   }
 
