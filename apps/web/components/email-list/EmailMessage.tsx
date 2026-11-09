@@ -324,8 +324,10 @@ const prepareReplyingToEmail = (
   const { html } = createReplyContent({ message });
 
   return {
-    // If following an email from yourself, use original recipients, otherwise reply to sender
-    to: sentFromUser ? message.headers.to : message.headers.from,
+    // If following an email from yourself, use original recipients, otherwise reply to the sender's Reply-To, else From
+    to: sentFromUser
+      ? message.headers.to
+      : message.headers["reply-to"] || message.headers.from,
     // If following an email from yourself, don't add "Re:" prefix
     subject: sentFromUser
       ? message.headers.subject

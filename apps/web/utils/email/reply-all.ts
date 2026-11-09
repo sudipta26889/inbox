@@ -22,7 +22,11 @@ export function buildReplyAllRecipients(
 ): ReplyAllRecipients {
   // Determine the primary recipient (TO field)
   const replyToRaw = overrideTo || headers["reply-to"] || headers.from;
-  const replyTo = extractEmailAddress(replyToRaw);
+  const replyTo = new Set(
+    splitRecipientList(replyToRaw)
+      .map((entry) => extractEmailAddress(entry).toLowerCase())
+      .filter(Boolean),
+  );
 
   // Extract current user's email
   const currentUser = extractEmailAddress(currentUserEmail);
@@ -99,7 +103,7 @@ function addHeaderRecipientsToCcSet({
   ccSet,
 }: {
   headerValue: string | undefined;
-  replyTo: string;
+  replyTo: Set<string>;
   currentUser: string;
   seenEmails: Set<string>;
   ccSet: Set<string>;
@@ -108,7 +112,10 @@ function addHeaderRecipientsToCcSet({
 
   const headerEmails = splitRecipientList(headerValue)
     .map((entry) => extractEmailAddress(entry))
-    .filter((email) => email && email !== replyTo && email !== currentUser);
+    .filter(
+      (email) =>
+        email && !replyTo.has(email.toLowerCase()) && email !== currentUser,
+    );
 
   for (const email of headerEmails) {
     const key = email.toLowerCase();

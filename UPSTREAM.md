@@ -67,6 +67,13 @@ those named here; the rest were judged from file lists and subjects, so a miss c
 | e090cba4a | #4424 | Stop Gmail history processing once the account loses credentials | BACKPORT. Only `classifyEmailAccountProviderIssue` is ported into `utils/email/provider-health.ts`, without the rest of that module or Outlook's AADSTS marker |
 | fork-local | — | The 30-minute poller never overwrites the pointer | `process-account.ts` wrote Gmail's current history ID after every run, which skipped whatever the webhook had held back. It now seeds only a null pointer, skips Gmail during an active rate limit, and takes the same message lock as the webhook |
 
+### Picked (batch 2 — reply recipients, branch `fix/reply-cc-bcc-replyto`)
+
+| Upstream | PR | Subject | Notes |
+|---|---|---|---|
+| c1fe110bb | #4210 | Send the CC and BCC configured on a Reply action | BACKPORT. `replyToEmail` takes `cc`/`bcc` on the provider interface, Gmail and Outlook; the reply action passes them. Tests re-fitted to the fork's files; the Outlook reply test is dropped (no reply scaffolding in the fork's Outlook test) |
+| b1495f9b4 | #4279 | Address replies to the sender's Reply-To address | BACKPORT. Manual Reply in `EmailMessage.tsx` prefers Reply-To; `reply-all.ts` leaves every Reply-To address out of CC (adapted to the fork's single-user signature). The fork had no `EmailMessage.test.tsx` and no offline Playwright spec, so a small component test is new and the spec change is dropped |
+
 ### Evaluated and skipped
 
 - 1035b044b better-auth 1.7: needs an `Account` migration. Stay on 1.6.x. GHSA-4wq4-2ppv-q3hg, which it cites, returned 404, so its effect on 1.6 is unknown.
