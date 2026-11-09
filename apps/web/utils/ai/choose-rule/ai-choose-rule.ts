@@ -308,9 +308,10 @@ const METADATA_GUIDELINE =
   "- Consider email metadata (e.g. List-Unsubscribe headers) alongside content.";
 
 // Some models leak JSON syntax into the string value (e.g. `Newsletter',` or
-// `Newsletter», noMatchFound: false}`), so also accept a rule name followed by
-// stray quote/brace/comma characters. The longest name wins so "To Reply Later',"
-// never resolves to "To Reply".
+// `Newsletter», noMatchFound: false}`) or append extra words after the name
+// (e.g. the rule's description), so also accept a rule name followed by
+// whitespace or stray quote/brace/comma characters. The longest name wins so
+// "To Reply Later'," never resolves to "To Reply".
 function findReturnedRule<T extends { name: string }>(
   rules: T[],
   returnedName: string,
@@ -325,10 +326,10 @@ function findReturnedRule<T extends { name: string }>(
       const name = rule.name.toLowerCase();
       return (
         normalized.startsWith(name) &&
-        LEAKED_JSON_SUFFIX.test(normalized.slice(name.length))
+        NAME_SUFFIX_BOUNDARY.test(normalized.slice(name.length))
       );
     })
     .sort((a, b) => b.name.length - a.name.length)[0];
 }
 
-const LEAKED_JSON_SUFFIX = /^\s*["'`\u00ab\u00bb\u201c\u201d\u2018\u2019}\],]/;
+const NAME_SUFFIX_BOUNDARY = /^[\s"'`\u00ab\u00bb\u201c\u201d\u2018\u2019}\],]/;
