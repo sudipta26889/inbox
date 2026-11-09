@@ -182,7 +182,12 @@ export async function replyToEmail(
   >,
   reply: string,
   from?: string,
-  options?: { replyTo?: string; attachments?: Attachment[] },
+  options?: {
+    replyTo?: string;
+    cc?: string;
+    bcc?: string;
+    attachments?: Attachment[];
+  },
 ) {
   ensureEmailSendingEnabled();
 
@@ -211,6 +216,8 @@ export async function replyToEmail(
   const raw = await createRawMailMessage({
     to: replyTarget,
     from,
+    cc: options?.cc,
+    bcc: options?.bcc,
     replyTo: options?.replyTo,
     subject: formatReplySubject(message.headers.subject),
     messageText,

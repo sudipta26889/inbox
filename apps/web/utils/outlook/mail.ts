@@ -129,7 +129,13 @@ export async function replyToEmail(
   message: EmailForAction,
   reply: string,
   logger: Logger,
-  options?: { replyTo?: string; from?: string; attachments?: Attachment[] },
+  options?: {
+    replyTo?: string;
+    from?: string;
+    cc?: string;
+    bcc?: string;
+    attachments?: Attachment[];
+  },
 ) {
   ensureEmailSendingEnabled();
 
@@ -173,6 +179,9 @@ export async function replyToEmail(
       }
     : {};
 
+  const ccRecipients = buildGraphRecipients(options?.cc);
+  const bccRecipients = buildGraphRecipients(options?.bcc);
+
   // Update the draft with our content
   await withOutlookRetry(
     () =>
@@ -185,6 +194,8 @@ export async function replyToEmail(
             content: html,
           },
           ...fromField,
+          ...(ccRecipients ? { ccRecipients } : {}),
+          ...(bccRecipients ? { bccRecipients } : {}),
           ...(options?.replyTo
             ? {
                 replyTo: [{ emailAddress: { address: options.replyTo } }],
