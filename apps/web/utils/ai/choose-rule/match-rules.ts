@@ -30,6 +30,12 @@ import {
 } from "@/utils/email";
 import { isCalendarInvite } from "@/utils/parse/calender-event";
 import { checkSenderReplyHistory } from "@/utils/reply-tracker/check-sender-reply-history";
+import {
+  createAnchoredAddressRegex,
+  globToRegexSource,
+  isAddressLikeEmailPattern,
+  splitEmailPatterns,
+} from "@/utils/rule/email-from-pattern";
 import type { EmailProvider } from "@/utils/email/types";
 import type { ModelType } from "@/utils/llms/model";
 import {
@@ -527,18 +533,6 @@ export function matchesStaticRule(
   return fromMatch && toMatch && subjectMatch && bodyMatch;
 }
 
-/**
- * Split email patterns by pipe, comma, or " OR " separator.
- * Used for from/to fields to support multiple email addresses.
- * Examples: "@a.com|@b.com", "@a.com, @b.com", "@a.com OR @b.com"
- */
-export function splitEmailPatterns(pattern: string): string[] {
-  return pattern
-    .split(/\s*\bor\b\s*|[|,]/i)
-    .map((p) => p.trim())
-    .filter(Boolean);
-}
-
 function matchesGroupRule(
   rule: RuleWithActions,
   groups: GroupsWithRules,
@@ -692,37 +686,9 @@ function matchesTextPattern(pattern: string, text: string, logger: Logger) {
   }
 }
 
-// Escape regex metacharacters, then turn the `*` glob into `.*`.
-function globToRegexSource(pattern: string) {
-  return pattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*");
-}
-
 // Unanchored: intended for subject/body keyword and display-name substring matching.
 function createRulePatternRegex(pattern: string) {
   return new RegExp(globToRegexSource(pattern));
-}
-
-// Anchored: for from/to address patterns, so a pattern matches a whole address
-// boundary and cannot be satisfied by a spoofed prefix/suffix (e.g. a rule for
-// `boss@company.com` must not match `boss@company.com.evil.com`).
-function createAnchoredAddressRegex(pattern: string) {
-  // `@domain` → any local part, exact domain (no subdomain), e.g. user@domain.
-  if (pattern.startsWith("@")) {
-    return new RegExp(`^.*${globToRegexSource(pattern)}$`);
-  }
-  // `local@domain` → exact address (local part may contain `*` wildcards).
-  if (pattern.includes("@")) {
-    return new RegExp(`^${globToRegexSource(pattern)}$`);
-  }
-  // Bare domain → addresses at that domain or a subdomain (`@domain`/`.domain`),
-  // but not a lookalike domain (e.g. `example.com` must not match myexample.com).
-  return new RegExp(`^.*[@.]${globToRegexSource(pattern)}$`);
-}
-
-/** True if the pattern is email- or domain-shaped (not display-name-only). */
-function isAddressLikeEmailPattern(pattern: string): boolean {
-  const normalized = pattern.trim().toLowerCase();
-  return normalized.includes("@") || /^[^\s@]+\.[^\s@]+$/.test(normalized);
 }
 
 function matchesEmailFieldPattern({
