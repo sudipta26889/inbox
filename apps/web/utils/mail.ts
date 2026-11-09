@@ -40,29 +40,32 @@ export function getEmailClient(messageId: string) {
   return emailClient;
 }
 
+const FORWARDED_CONTENT_PATTERNS = [
+  // Gmail style
+  /(?:\r?\n|\r)?(?:-{3,}|_{3,})\s*Forwarded message\s*(?:-{3,}|_{3,})/i,
+  // Simple forward markers
+  /(?:\r?\n|\r)?(?:-{3,}|_{3,})\s*Forward(?:ed)?(?:\s*message)?(?:-{3,}|_{3,})/i,
+  // Email headers
+  /(?:\r?\n|\r)?From:[\s\S]*?Subject:/m,
+  // iOS/Mac style, at the start of a line
+  /^[^\S\r\n\u2028\u2029]*Begin forwarded message:/im,
+  // Outlook style: a separator line, not the phrase inside a sentence
+  // ([^\S\r\n\u2028\u2029] also covers the non-breaking spaces HTML-to-text
+  // leaves; /m treats U+2028/U+2029 as line starts, so they are left out or a
+  // run of them would make the scan quadratic)
+  /^[^\S\r\n\u2028\u2029]*(?:[-_]+[^\S\r\n\u2028\u2029]*)?Original Message(?:[^\S\r\n\u2028\u2029]*[-_]+)?[^\S\r\n\u2028\u2029]*$/im,
+];
+
 function removeForwardedContent(text: string): string {
-  const forwardPatterns = [
-    // Gmail style
-    /(?:\r?\n|\r)?(?:-{3,}|_{3,})\s*Forwarded message\s*(?:-{3,}|_{3,})/i,
-    // Simple forward markers
-    /(?:\r?\n|\r)?(?:-{3,}|_{3,})\s*Forward(?:ed)?(?:\s*message)?(?:-{3,}|_{3,})/i,
-    // Email headers
-    /(?:\r?\n|\r)?From:[\s\S]*?Subject:/m,
-    // iOS/Mac style
-    /(?:\r?\n|\r)?Begin forwarded message:/im,
-    // Outlook style
-    /(?:\r?\n|\r)?Original Message/i,
-  ];
+  // Cut at whichever marker comes first: an Outlook separator is followed by
+  // a From/Sent/To/Subject block, and cutting at that block would leave the
+  // separator line behind.
+  const markerIndexes = FORWARDED_CONTENT_PATTERNS.map((pattern) =>
+    text.search(pattern),
+  ).filter((index) => index !== -1);
+  if (markerIndexes.length === 0) return text;
 
-  for (const pattern of forwardPatterns) {
-    const parts = text.split(pattern);
-    if (parts.length > 1) {
-      // Take content before the forward marker and clean it
-      return removeExcessiveWhitespace(parts[0]);
-    }
-  }
-
-  return text;
+  return removeExcessiveWhitespace(text.slice(0, Math.min(...markerIndexes)));
 }
 
 export type EmailToContentOptions = {

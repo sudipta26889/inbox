@@ -12,6 +12,7 @@ import {
 } from "@/utils/gmail/forward";
 import type { ParsedMessage } from "@/utils/types";
 import { createReplyContent, formatEmailDate } from "@/utils/gmail/reply";
+import { renderReplyBodyHtml } from "@/utils/email/reply-body-html";
 import type { EmailForAction } from "@/utils/ai/types";
 import { createScopedLogger } from "@/utils/logger";
 import { withGmailRetry } from "@/utils/gmail/retry";
@@ -23,7 +24,6 @@ import {
 import { formatReplySubject } from "@/utils/email/subject";
 import { buildThreadingHeaders } from "@/utils/email/threading";
 import { ensureEmailSendingEnabled } from "@/utils/mail";
-import { convertNewlinesToBr } from "@/utils/string";
 import {
   buildQuotedPlainText,
   quotePlainTextContent,
@@ -193,6 +193,7 @@ export async function replyToEmail(
 
   const { html } = createReplyContent({
     textContent: reply,
+    htmlContent: renderReplyBodyHtml(reply),
     message,
   });
   const messageText = buildReplyMessageText({
@@ -333,6 +334,7 @@ export async function draftEmail(
 ) {
   const { html } = createReplyContent({
     textContent: args.content,
+    htmlContent: renderReplyBodyHtml(args.content),
     message: originalEmail,
   });
   const messageText = buildReplyMessageText({
@@ -437,7 +439,7 @@ function renderReplyBodyAsPlainText(textContent?: string) {
   if (!textContent) return "";
 
   return convertEmailHtmlToText({
-    htmlText: convertNewlinesToBr(textContent),
+    htmlText: renderReplyBodyHtml(textContent),
   })
     .replace(/\r\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")

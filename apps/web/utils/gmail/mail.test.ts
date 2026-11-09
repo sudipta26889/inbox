@@ -9,6 +9,7 @@ import {
   buildReplyMessageText,
   convertTextToHtmlParagraphs,
   createMail,
+  draftEmail,
   replyToEmail,
 } from "@/utils/gmail/mail";
 
@@ -194,3 +195,58 @@ describe("replyToEmail", () => {
     expect(raw).toContain("Bcc: archive@example.com");
   });
 });
+
+describe("draftEmail", () => {
+  it("keeps a multiline HTML signature free of inserted line breaks", async () => {
+    const create = vi.fn().mockResolvedValue({ data: { id: "draft-1" } });
+    const gmail = {
+      users: { drafts: { create } },
+    } as unknown as gmail_v1.Gmail;
+    const signature = `<table cellpadding="0" cellspacing="0">
+  <tr>
+    <td>
+      <div>Gmail User</div>
+    </td>
+  </tr>
+</table>`;
+
+    await draftEmail(
+      gmail,
+      {
+        id: "message-1",
+        threadId: "thread-1",
+        headers: {
+          from: "sender@example.com",
+          to: "owner@example.com",
+          subject: "Question",
+          date: "2026-01-01",
+          "message-id": "<original@example>",
+        },
+        textPlain: "Original",
+        textHtml: "<p>Original</p>",
+      } as Parameters<typeof draftEmail>[1],
+      {
+        content: `Thanks for the update.\n\n<div class="gmail_signature">${signature}</div>`,
+      },
+      "owner@example.com",
+    );
+
+    const raw = Buffer.from(
+      create.mock.calls[0][0].requestBody.message.raw,
+      "base64url",
+    ).toString("utf8");
+    const htmlPart = decodeQuotedPrintable(raw);
+
+    expect(htmlPart).toContain("Thanks for the update.<br><br>");
+    expect(htmlPart).toContain("<div>Gmail User</div>");
+    expect(htmlPart).not.toMatch(/<(table|tbody|tr|td)[^>]*>\s*<br>/);
+  });
+});
+
+function decodeQuotedPrintable(mime: string) {
+  return mime
+    .replace(/=\r?\n/g, "")
+    .replace(/=([0-9A-F]{2})/g, (_m, hex) =>
+      String.fromCharCode(Number.parseInt(hex, 16)),
+    );
+}

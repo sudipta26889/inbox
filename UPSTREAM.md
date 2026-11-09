@@ -54,6 +54,16 @@ those named here; the rest were judged from file lists and subjects, so a miss c
 | a13426c55 | #4362 | A sender's filter no longer matches another sender's address | BACKPORT. Fork has no `utils/senders/filters.ts`; the match is `findAutoArchiveFilter` in `app/api/user/stats/newsletters/helpers.ts`. New `helpers.test.ts` |
 | d14e87777 | #4474 | Match semicolon-separated senders in Gmail filter criteria | BACKPORT. Same file; splits on `;` and quotes too. Upstream also dropped display-name matching in filters, which this fork's version never had |
 
+### Picked (batch 5 — drafts, branch `backport/drafts`)
+
+| Upstream | PR | Subject | Notes |
+|---|---|---|---|
+| 3b522a384 | #4383 | Stop cutting emails at an inline "original message" | BACKPORT. Only a separator line counts as an Outlook or iOS marker, and the earliest marker wins. The fork's `removeForwardedContent` is in `utils/mail.ts`. The linear-time test is not ported: `removeExcessiveWhitespace` itself is slow on a very long whitespace run (pre-existing) |
+| d6c4011ea | #4391 | HTML signatures keep their spacing in Gmail drafts | BACKPORT. `renderReplyBodyHtml` (new, shared with Outlook) puts line breaks on top-level text only; wired into Gmail `replyToEmail`, `draftEmail` and the plain-text alternative. Test shows text already escaped by 15d8737c5 / `renderEmailTextWithSafeLinks` is not escaped twice |
+| 1161cc340 | #4262 | Keep the signature a signature in AI draft replies | BACKPORT, adapted: the fork has no `reply-body.ts`, so `wrapSignature` is applied in the reply-tracker and follow-up `generate-draft.ts` |
+| 09b2eb3a2 | #4218 | Answer each of a sender's separate questions on its own | BACKPORT, prompt line only; `DRAFT_PIPELINE_VERSION` 2 to 3. The upstream eval is not ported (the fork's eval file lacks its helpers) |
+| 9869d25ae | #4313 | Concurrent draft send logs | BACKPORT, draft half only (summary email route durations skipped). Adapted to `wasDraftSent`; new `draft-tracking.test.ts` |
+
 ### Picked (batch 3 — rules acting on the wrong mail, branch `backport/rules-wrong-mail`)
 
 | Upstream | PR | Subject | Notes |

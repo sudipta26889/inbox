@@ -3,6 +3,7 @@ import {
   buildQuotedPlainText,
   quotePlainTextContent,
 } from "@/utils/email/quoted-plain-text";
+import { renderReplyBodyHtml } from "@/utils/email/reply-body-html";
 import { convertNewlinesToBr, escapeHtml } from "@/utils/string";
 
 export const createOutlookReplyContent = ({
@@ -40,7 +41,7 @@ export const createOutlookReplyContent = ({
       : "");
 
   const contentHtml =
-    htmlContent || (textContent ? convertNewlinesToBr(textContent) : "");
+    htmlContent || (textContent ? renderReplyBodyHtml(textContent) : "");
 
   // Outlook-specific font styling with Aptos as default
   const outlookFontStyle =
