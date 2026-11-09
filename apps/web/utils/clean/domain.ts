@@ -89,7 +89,7 @@ export const createCleanupJobInput = z.object({
     calendar: z.boolean().default(true),
     receipt: z.boolean().default(false),
     attachment: z.boolean().default(false),
-    conversation: z.boolean().default(false),
+    conversation: z.boolean().default(true),
   }),
   confirm: z.boolean().default(false),
   previewToken: z.string().optional(),

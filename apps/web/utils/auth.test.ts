@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { cookies } from "next/headers";
 import { createReferral } from "@/utils/referral/referral-code";
-import { captureException } from "@/utils/error";
+import { captureException, SafeError } from "@/utils/error";
 import { handleReferralOnSignUp, saveTokens } from "@/utils/auth";
 import prisma from "@/utils/__mocks__/prisma";
 import { clearSpecificErrorMessages } from "@/utils/error-messages";
@@ -35,7 +35,8 @@ vi.mock("@/utils/referral/referral-code", () => ({
   createReferral: vi.fn(),
 }));
 
-vi.mock("@/utils/error", () => ({
+vi.mock("@/utils/error", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/utils/error")>()),
   captureException: vi.fn(),
 }));
 
@@ -97,6 +98,19 @@ describe("handleReferralOnSignUp", () => {
     expect(mockCaptureException).toHaveBeenCalledWith(error, {
       extra: { userId, email, location: "handleReferralOnSignUp" },
     });
+  });
+
+  it("does not report an invalid referral code to Sentry", async () => {
+    mockCookies.mockResolvedValue({
+      get: vi.fn().mockReturnValue({ value: "BAD" }),
+    } as any);
+    mockCreateReferral.mockRejectedValue(
+      new SafeError("Invalid referral code"),
+    );
+
+    await handleReferralOnSignUp({ userId: "user123", email: "u@example.com" });
+
+    expect(mockCaptureException).not.toHaveBeenCalled();
   });
 
   it("should not create referral when referral code cookie has empty value", async () => {
