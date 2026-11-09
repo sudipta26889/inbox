@@ -29,13 +29,11 @@ export function findAutoArchiveFilter(
   fromEmail: string,
   emailProvider: EmailProvider,
 ) {
-  return autoArchiveFilters.find((filter) => {
-    const from = extractEmailAddress(fromEmail);
-    return (
-      filter.criteria?.from?.toLowerCase().includes(from.toLowerCase()) &&
-      isAutoArchiveFilter(filter, emailProvider)
-    );
-  });
+  return autoArchiveFilters.find(
+    (filter) =>
+      filterMatchesSender(filter, fromEmail) &&
+      isAutoArchiveFilter(filter, emailProvider),
+  );
 }
 
 export async function findNewsletterStatus({
@@ -77,6 +75,22 @@ export function filterNewsletters<
 
     return false;
   });
+}
+
+// A filter's from can list several senders ("a@x.com OR b@x.com",
+// "a@x.com|b@x.com", "a@x.com;b@x.com", "{a@x.com b@x.com}"). Compare whole
+// addresses: a substring check made a filter for newsletter@shop.com match
+// letter@shop.com, so acting on one sender removed another's filter.
+function filterMatchesSender(filter: EmailFilter, fromEmail: string) {
+  const from = extractEmailAddress(fromEmail).toLowerCase();
+  if (!from) return false;
+
+  const rawFilterFrom = filter.criteria?.from?.trim().toLowerCase();
+  if (!rawFilterFrom) return false;
+
+  return rawFilterFrom
+    .split(/[\s,;"{}()|]+/)
+    .some((token) => extractEmailAddress(token).toLowerCase() === from);
 }
 
 function isAutoArchiveFilter(filter: EmailFilter, provider: EmailProvider) {
