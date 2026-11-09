@@ -3,7 +3,11 @@ import { NextResponse } from "next/server";
 import * as Sentry from "@sentry/nextjs";
 import { getGmailClientWithRefresh } from "@/utils/gmail/client";
 import { GmailLabel } from "@/utils/gmail/label";
-import { captureException } from "@/utils/error";
+import {
+  captureException,
+  isHandledUserKeyError,
+  isKnownApiError,
+} from "@/utils/error";
 import { isEmailProviderRateLimitError } from "@/utils/email/is-provider-rate-limit-error";
 import { classifyEmailAccountProviderIssue } from "@/utils/email/provider-health";
 import {
@@ -321,7 +325,11 @@ async function processHistory(
           userEmail,
           extra: { messageId: event.item.message?.id },
         });
-        logger.error("Error processing history item", { error });
+        if (isKnownApiError(error) || isHandledUserKeyError(error)) {
+          logger.warn("Error processing history item", { error });
+        } else {
+          logger.error("Error processing history item", { error });
+        }
       }
     }
 

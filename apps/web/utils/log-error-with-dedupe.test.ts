@@ -36,6 +36,24 @@ describe("logErrorWithDedupe", () => {
     vi.clearAllMocks();
   });
 
+  it("logs at warn level when asked", async () => {
+    mockedEnv.NODE_ENV = "test";
+    const logger = createScopedLogger("test");
+    const errorSpy = vi.spyOn(logger, "error").mockImplementation(() => {});
+    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+    await logErrorWithDedupe({
+      logger,
+      message: "Expected account state",
+      error: new Error("revoked"),
+      level: "warn",
+      dedupeKeyParts: { scope: "test" },
+    });
+
+    expect(warnSpy).toHaveBeenCalledOnce();
+    expect(errorSpy).not.toHaveBeenCalled();
+  });
+
   it("logs immediately when dedupe is disabled", async () => {
     mockedEnv.NODE_ENV = "test";
     const logger = createScopedLogger("test");

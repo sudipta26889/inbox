@@ -20,7 +20,7 @@ import {
   isMicrosoftProvider,
 } from "@/utils/email/provider-types";
 import { encryptToken } from "@/utils/encryption";
-import { captureException } from "@/utils/error";
+import { captureException, SafeError } from "@/utils/error";
 import { getContactsClient as getGoogleContactsClient } from "@/utils/gmail/client";
 import { SCOPES as GMAIL_SCOPES } from "@/utils/gmail/scopes";
 import { createScopedLogger } from "@/utils/logger";
@@ -349,12 +349,16 @@ export async function handleReferralOnSignUp({
       referralCode,
     });
   } catch (error) {
+    // Don't throw error - referral failure shouldn't prevent sign up
+    if (error instanceof SafeError) {
+      logger.warn("Skipping referral on sign up", { error, userId, email });
+      return;
+    }
     logger.error("Error processing referral on sign up", {
       error,
       userId,
       email,
     });
-    // Don't throw error - referral failure shouldn't prevent sign up
     captureException(error, {
       extra: { userId, email, location: "handleReferralOnSignUp" },
     });
