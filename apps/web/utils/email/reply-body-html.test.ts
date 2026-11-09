@@ -39,6 +39,14 @@ describe("renderReplyBodyHtml", () => {
     expect(html).toContain("<p>Best,<br>John &amp; Co</p>");
   });
 
+  it("keeps the line breaks of a plain-text signature", () => {
+    const html = renderReplyBodyHtml(
+      `Thanks.\n\n${wrapSignature("Best,\nJohn\nCEO")}`,
+    );
+
+    expect(html).toContain("Best,<br>John<br>CEO</div>");
+  });
+
   it("escapes raw text that is not valid markup", () => {
     expect(renderReplyBodyHtml("1 < 2 & 3")).toBe("1 &lt; 2 &amp; 3");
   });
