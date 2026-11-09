@@ -52,9 +52,7 @@ export async function aiChooseRule<
   const rulesWithMetadata = aiResponse.matchedRules
     .map((match) => {
       if (!match.ruleName) return undefined;
-      const rule = orderedRules.find(
-        (r) => r.name.toLowerCase() === match.ruleName.toLowerCase(),
-      );
+      const rule = findReturnedRule(orderedRules, match.ruleName);
       return rule ? { rule, isPrimary: match.isPrimary } : undefined;
     })
     .filter(isDefined);
@@ -308,3 +306,29 @@ ${stringifyEmail(email, 500)}
 
 const METADATA_GUIDELINE =
   "- Consider email metadata (e.g. List-Unsubscribe headers) alongside content.";
+
+// Some models leak JSON syntax into the string value (e.g. `Newsletter',` or
+// `Newsletter», noMatchFound: false}`), so also accept a rule name followed by
+// stray quote/brace/comma characters. The longest name wins so "To Reply Later',"
+// never resolves to "To Reply".
+function findReturnedRule<T extends { name: string }>(
+  rules: T[],
+  returnedName: string,
+): T | undefined {
+  const normalized = returnedName.trim().toLowerCase();
+
+  const exact = rules.find((rule) => rule.name.toLowerCase() === normalized);
+  if (exact) return exact;
+
+  return rules
+    .filter((rule) => {
+      const name = rule.name.toLowerCase();
+      return (
+        normalized.startsWith(name) &&
+        LEAKED_JSON_SUFFIX.test(normalized.slice(name.length))
+      );
+    })
+    .sort((a, b) => b.name.length - a.name.length)[0];
+}
+
+const LEAKED_JSON_SUFFIX = /^\s*["'`\u00ab\u00bb\u201c\u201d\u2018\u2019}\],]/;
