@@ -253,6 +253,50 @@ describe("createCleanupJob", () => {
     expect(published).toEqual(["thread-1", "thread-2"]);
   });
 
+  it("commit: never queues more threads than maxEmails across pages", async () => {
+    prisma.cleanupJob.create.mockResolvedValue({ id: "new_job" } as never);
+    vi.mocked(bulkPublishToQstash).mockClear();
+    const provider = buildProvider(0);
+    // Like Gmail, return at most the requested maxResults per page.
+    provider.getThreadsWithQuery.mockImplementation((async ({
+      maxResults,
+      pageToken,
+    }: {
+      maxResults: number;
+      pageToken?: string;
+    }) => {
+      const start = pageToken ? Number(pageToken) : 0;
+      const end = Math.min(start + maxResults, 300);
+      return {
+        threads: Array.from({ length: end - start }, (_, i) => ({
+          id: `t${start + i}`,
+        })),
+        nextPageToken: end < 300 ? String(end) : null,
+      };
+    }) as never);
+    vi.mocked(createEmailProvider).mockResolvedValue(provider as never);
+
+    await createCleanupJob(
+      { userId, emailAccountId, provider: "google", logger: testLogger },
+      {
+        action: CleanAction.ARCHIVE,
+        daysOld: 0,
+        instructions: "",
+        skips: defaultSkips(),
+        maxEmails: 150,
+        confirm: true,
+      },
+    );
+
+    await vi.waitFor(() =>
+      expect(vi.mocked(bulkPublishToQstash)).toHaveBeenCalled(),
+    );
+    const published = vi
+      .mocked(bulkPublishToQstash)
+      .mock.calls.flatMap(([{ items }]) => items);
+    expect(published).toHaveLength(150);
+  });
+
   it("commit with previewToken: throws StaleStateError on >10% drift", async () => {
     // First dry-run with 3 threads.
     const dry = await createCleanupJob(
