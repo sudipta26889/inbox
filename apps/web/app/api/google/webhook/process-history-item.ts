@@ -5,7 +5,10 @@ import { createEmailProvider } from "@/utils/email/provider";
 import { handleLabelRemovedEvent } from "@/app/api/google/webhook/process-label-removed-event";
 import { handleLabelAddedEvent } from "@/app/api/google/webhook/process-label-added-event";
 import { processHistoryItem as processHistoryItemShared } from "@/utils/webhook/process-history-item";
-import { markMessageAsProcessing } from "@/utils/redis/message-processing";
+import {
+  MessageInFlightError,
+  withMessageProcessingLock,
+} from "@/utils/redis/message-processing";
 import type { Logger } from "@/utils/logger";
 
 export async function processHistoryItem(
@@ -62,26 +65,21 @@ export async function processHistoryItem(
   }
 
   // Lock before fetching to avoid extra API calls for duplicate webhooks
-  const isFree = await markMessageAsProcessing({
-    userEmail: emailAccount.email,
-    messageId,
-  });
-  if (!isFree) {
-    logger.info("Skipping. Message already being processed.");
-    return;
-  }
-
-  logger.info("Gmail lock acquired, calling shared processor");
-
-  return processHistoryItemShared(
-    { messageId, threadId },
-    {
-      provider,
-      emailAccount,
-      hasAutomationRules,
-      hasAiAccess,
-      rules,
-      logger,
-    },
+  const result = await withMessageProcessingLock(
+    { userEmail: emailAccount.email, messageId },
+    () =>
+      processHistoryItemShared(
+        { messageId, threadId },
+        {
+          provider,
+          emailAccount,
+          hasAutomationRules,
+          hasAiAccess,
+          rules,
+          logger,
+        },
+      ),
   );
+  if (result.inFlight) throw new MessageInFlightError();
+  if (result.skipped) logger.info("Skipping. Message already processed.");
 }

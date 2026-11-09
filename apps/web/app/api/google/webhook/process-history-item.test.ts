@@ -6,11 +6,12 @@ import {
   NewsletterStatus,
 } from "@/generated/prisma/enums";
 import type { gmail_v1 } from "@googleapis/gmail";
-import { markMessageAsProcessing } from "@/utils/redis/message-processing";
+import { withMessageProcessingLock } from "@/utils/redis/message-processing";
 import { GmailLabel } from "@/utils/gmail/label";
 import { getEmailAccount } from "@/__tests__/helpers";
 import { createEmailProvider } from "@/utils/email/provider";
 import { createScopedLogger } from "@/utils/logger";
+import { runRules } from "@/utils/ai/choose-rule/run-rules";
 
 const logger = createScopedLogger("test");
 
@@ -20,7 +21,10 @@ vi.mock("next/server", () => ({
 }));
 vi.mock("@/utils/prisma");
 vi.mock("@/utils/redis/message-processing", () => ({
-  markMessageAsProcessing: vi.fn().mockResolvedValue(true),
+  withMessageProcessingLock: vi.fn(async (_key, fn) => {
+    await fn();
+    return { skipped: false, inFlight: false };
+  }),
 }));
 
 vi.mock("@/utils/gmail/thread", () => ({
@@ -156,14 +160,21 @@ describe("processHistoryItem", () => {
   }
 
   it("should skip if message is already being processed", async () => {
-    vi.mocked(markMessageAsProcessing).mockResolvedValueOnce(false);
+    vi.mocked(withMessageProcessingLock).mockResolvedValueOnce({
+      skipped: true,
+      inFlight: false,
+    });
 
     const options = {
       ...defaultOptions,
+      hasAutomationRules: true,
+      hasAiAccess: true,
       emailAccount: getDefaultEmailAccount(),
     };
 
     await processHistoryItem(createHistoryItem(), options, logger);
+
+    expect(runRules).not.toHaveBeenCalled();
   });
 
   it("should skip if message is outbound", async () => {
@@ -220,7 +231,8 @@ describe("processHistoryItem", () => {
         labelIds: ["INBOX"],
         snippet: "Test email snippet",
         historyId: "12345",
-        internalDate: "1704067200000",
+        // Recent: mail over 24 hours old skips before the unsubscribe check.
+        internalDate: String(Date.now() - 60_000),
         sizeEstimate: 1024,
         headers: {
           from: "sender@example.com",
