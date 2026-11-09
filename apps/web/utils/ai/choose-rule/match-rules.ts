@@ -16,6 +16,7 @@ import { aiChooseRule } from "@/utils/ai/choose-rule/ai-choose-rule";
 import { decideRule } from "@/utils/decision-model/choose-rule";
 import { runDecisionModelOrFallback } from "@/utils/decision-model/decision-model";
 import { getEmailForLLM } from "@/utils/get-email-from-message";
+import { convertEmailHtmlToText } from "@/utils/mail";
 import type { EmailAccountWithAI } from "@/utils/llms/types";
 import type { Logger } from "@/utils/logger";
 import type {
@@ -527,7 +528,7 @@ export function matchesStaticRule(
     ? matchesTextPattern(subject, message.headers.subject, log)
     : true;
   const bodyMatch = body
-    ? matchesTextPattern(body, message.textPlain || "", log)
+    ? matchesTextPattern(body, getStaticMatchBodyText(message), log)
     : true;
 
   return fromMatch && toMatch && subjectMatch && bodyMatch;
@@ -809,4 +810,18 @@ function getPrimaryRuleId(result: {
   const primary =
     result.rules.find((match) => match.isPrimary) ?? result.rules[0];
   return primary?.rule.id ?? null;
+}
+
+// Many senders send no text/plain part, so match the HTML's visible text
+// rather than an empty string. Matching is case-sensitive and `*` doesn't cross line breaks, so
+// keep headings in the case the reader sees and don't wrap lines, either of
+// which would stop a phrase from matching.
+function getStaticMatchBodyText(message: ParsedMessage) {
+  if (message.textPlain) return message.textPlain;
+  if (!message.textHtml) return "";
+  return convertEmailHtmlToText({
+    htmlText: message.textHtml,
+    wordwrap: false,
+    uppercaseHeadings: false,
+  });
 }
