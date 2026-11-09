@@ -37,8 +37,10 @@ describe("findAutoArchiveFilter", () => {
   });
 
   it.each([
+    '"first@example.com"',
     "first@example.com OR second@example.com",
     "first@example.com|second@example.com",
+    "first@example.com;second@example.com",
     "{first@example.com second@example.com}",
   ])("matches each sender listed in %s", (criterion) => {
     const filters = [archiveFilter("list", criterion)];
