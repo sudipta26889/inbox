@@ -267,6 +267,7 @@ async function processCleanupJob(args: {
           excludeLabelNames: [inboxZeroLabels.processed.name],
         },
         maxResults: Math.min(args.maxEmails || 100, 100),
+        pageToken: nextPageToken ?? undefined,
       });
     nextPageToken = pageToken;
     if (threads.length === 0) break;
