@@ -1,11 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ActionType, ScheduledActionStatus } from "@/generated/prisma/enums";
-import { cancelScheduledActions } from "./scheduler";
+import { cancelScheduledActions, createScheduledAction } from "./scheduler";
 import { canActionBeDelayed } from "@/utils/delayed-actions";
 import prisma from "@/utils/__mocks__/prisma";
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/utils/prisma");
+vi.mock("@/env", () => ({
+  env: {
+    QSTASH_TOKEN: "",
+    NEXT_PUBLIC_BASE_URL: "http://localhost:3000",
+  },
+}));
 vi.mock("@/utils/upstash", () => ({
   qstash: {
     messages: {
@@ -34,6 +40,36 @@ describe("scheduler", () => {
       expect(canActionBeDelayed(ActionType.DRAFT_EMAIL)).toBe(false);
       expect(canActionBeDelayed(ActionType.MARK_SPAM)).toBe(false);
       expect(canActionBeDelayed(ActionType.DIGEST)).toBe(false);
+    });
+  });
+
+  describe("createScheduledAction", () => {
+    it("persists the label id for a delayed label action", async () => {
+      prisma.scheduledAction.create.mockResolvedValue({
+        id: "scheduled-action-123",
+      } as any);
+
+      await createScheduledAction({
+        executedRuleId: "rule-123",
+        messageId: "msg-123",
+        threadId: "thread-123",
+        emailAccountId: "account-123",
+        scheduledFor: new Date("2026-05-02T10:00:00.000Z"),
+        actionItem: {
+          id: "action-123",
+          type: ActionType.LABEL,
+          delayInMinutes: 60,
+          label: "Receipts",
+          labelId: "Label_42",
+        },
+      });
+
+      expect(prisma.scheduledAction.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          label: "Receipts",
+          labelId: "Label_42",
+        }),
+      });
     });
   });
 

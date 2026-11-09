@@ -160,6 +160,69 @@ describe("executor", () => {
       });
     });
 
+    it("runs a delayed label action with its saved label id", async () => {
+      const scheduledAction = {
+        ...mockScheduledAction,
+        actionType: ActionType.LABEL,
+        label: "Receipts",
+        labelId: "Label_42",
+      };
+      prisma.scheduledAction.update.mockResolvedValue({
+        ...scheduledAction,
+        status: ScheduledActionStatus.COMPLETED,
+      } as any);
+      // Echo what the executor stores, since that row is what the action runs on.
+      prisma.executedAction.create.mockImplementation(
+        ({ data }: { data: object }) =>
+          ({ id: "executed-action-123", ...data }) as any,
+      );
+      prisma.executedRule.findUnique.mockResolvedValue({
+        id: "rule-123",
+        messageId: "msg-123",
+        threadId: "thread-123",
+        emailAccountId: "account-123",
+        status: "PENDING",
+      } as any);
+      prisma.scheduledAction.count.mockResolvedValue(0);
+      prisma.executedRule.update.mockResolvedValue({} as any);
+
+      const { runActionFunction } = await import("@/utils/ai/actions");
+      const { getEmailAccountWithAiAndTokens } = await import(
+        "@/utils/user/get"
+      );
+      (runActionFunction as any).mockResolvedValue(undefined);
+      (getEmailAccountWithAiAndTokens as any).mockResolvedValue({
+        id: "account-123",
+        userId: "user-123",
+        email: "test@example.com",
+      });
+
+      const { createEmailProvider } = await import("@/utils/email/provider");
+      const mockEmailProvider = await createEmailProvider({
+        emailAccountId: "account-123",
+        provider: "google",
+        logger,
+      });
+
+      await executeScheduledAction(scheduledAction, mockEmailProvider, logger);
+
+      expect(prisma.executedAction.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          label: "Receipts",
+          labelId: "Label_42",
+        }),
+      });
+      expect(runActionFunction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: expect.objectContaining({
+            type: ActionType.LABEL,
+            label: "Receipts",
+            labelId: "Label_42",
+          }),
+        }),
+      );
+    });
+
     it("should handle execution errors and mark as failed", async () => {
       prisma.scheduledAction.update.mockResolvedValue({
         ...mockScheduledAction,
