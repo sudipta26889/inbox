@@ -268,7 +268,7 @@ describe("process-label-removed-event", () => {
         where: {
           groupId: "group-1",
           type: GroupItemType.FROM,
-          value: "sender@example.com",
+          value: { equals: "sender@example.com", mode: "insensitive" },
           source: GroupItemSource.LABEL_ADDED,
         },
       });
@@ -329,7 +329,7 @@ describe("process-label-removed-event", () => {
         where: {
           groupId: "group-cold",
           type: GroupItemType.FROM,
-          value: "sender@example.com",
+          value: { equals: "sender@example.com", mode: "insensitive" },
           source: GroupItemSource.LABEL_ADDED,
         },
       });

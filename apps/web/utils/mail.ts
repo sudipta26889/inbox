@@ -105,13 +105,18 @@ export function emailToContent(
 export function convertEmailHtmlToText({
   htmlText,
   includeLinks = true,
+  wordwrap = 130,
+  uppercaseHeadings = true,
 }: {
   htmlText: string;
   includeLinks?: boolean;
+  wordwrap?: number | false;
+  uppercaseHeadings?: boolean;
 }): string {
   const plainText = convert(htmlText, {
-    wordwrap: 130,
+    wordwrap,
     selectors: [
+      ...(uppercaseHeadings ? [] : KEEP_HEADING_CASE_SELECTORS),
       {
         selector: "a",
         options: includeLinks
@@ -148,3 +153,11 @@ export function ensureEmailSendingEnabled(): void {
     );
   }
 }
+
+const KEEP_HEADING_CASE_SELECTORS = [
+  ...["h1", "h2", "h3", "h4", "h5", "h6"].map((selector) => ({
+    selector,
+    options: { uppercase: false },
+  })),
+  { selector: "table", options: { uppercaseHeaderCells: false } },
+];

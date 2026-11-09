@@ -15,6 +15,7 @@ import { isDuplicateError } from "@/utils/prisma-helpers";
 import type { AttachmentSourceInput } from "@/utils/attachments/source-schema";
 import { validateWebhookUrlFormat } from "@/utils/webhook-validation";
 import { SafeError } from "@/utils/error";
+import { canActionBeDelayed } from "@/utils/delayed-actions";
 
 export function partialUpdateRule({
   ruleId,
@@ -402,7 +403,7 @@ async function mapActionFields(
           folderName: folderName ?? null,
           folderId,
         }),
-        delayInMinutes: a.delayInMinutes,
+        delayInMinutes: canActionBeDelayed(a.type) ? a.delayInMinutes : null,
         staticAttachments:
           (a as { staticAttachments?: AttachmentSourceInput[] | null })
             .staticAttachments ?? undefined,

@@ -52,6 +52,7 @@ export async function executeScheduledAction(
       id: scheduledAction.id, // Use scheduled action ID temporarily
       type: scheduledAction.actionType,
       label: scheduledAction.label,
+      labelId: scheduledAction.labelId,
       subject: scheduledAction.subject,
       content: scheduledAction.content,
       to: scheduledAction.to,
@@ -163,6 +164,7 @@ async function executeDelayedAction({
     data: {
       type: actionItem.type,
       label: actionItem.label,
+      labelId: actionItem.labelId,
       subject: actionItem.subject,
       content: actionItem.content,
       to: actionItem.to,
