@@ -29,7 +29,9 @@ vi.mock("@/utils/prisma-helpers", () => ({
   isDuplicateError: vi.fn(() => false),
 }));
 
-import { deleteRule } from "./rule";
+import { ActionType } from "@/generated/prisma/enums";
+import { createScopedLogger } from "@/utils/logger";
+import { deleteRule, updateRuleActions } from "./rule";
 
 describe("deleteRule", () => {
   beforeEach(() => {
@@ -82,5 +84,41 @@ describe("deleteRule", () => {
     expect(prisma.rule.delete).toHaveBeenCalledWith({
       where: { id: "rule-id", emailAccountId: "email-account-id" },
     });
+  });
+});
+
+describe("unsupported action delays", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("saves a delay on an action that can't be delayed as no delay", async () => {
+    prisma.rule.update.mockResolvedValue({ id: "rule-id" } as never);
+
+    await updateRuleActions({
+      ruleId: "rule-id",
+      actions: [
+        {
+          type: ActionType.CALL_WEBHOOK,
+          fields: { webhookUrl: "https://example.com/hook" },
+          delayInMinutes: 30,
+        },
+        { type: ActionType.ARCHIVE, delayInMinutes: 30 },
+      ] as never,
+      provider: "gmail",
+      emailAccountId: "email-account-id",
+      logger: createScopedLogger("test"),
+    });
+
+    const savedActions = (
+      prisma.rule.update.mock.calls[0][0].data.actions as any
+    ).createMany.data;
+    expect(savedActions).toEqual([
+      expect.objectContaining({
+        type: ActionType.CALL_WEBHOOK,
+        delayInMinutes: null,
+      }),
+      expect.objectContaining({ type: ActionType.ARCHIVE, delayInMinutes: 30 }),
+    ]);
   });
 });

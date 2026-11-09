@@ -19,6 +19,8 @@ import { getAction, getEmailAccount, getEmail } from "@/__tests__/helpers";
 import { createScopedLogger } from "@/utils/logger";
 import { findMatchingRules } from "@/utils/ai/choose-rule/match-rules";
 import { getActionItemsWithAiArgs } from "@/utils/ai/choose-rule/choose-args";
+import { executeAct } from "@/utils/ai/choose-rule/execute";
+import { scheduleDelayedActions } from "@/utils/scheduled-actions/scheduler";
 
 const logger = createScopedLogger("test");
 
@@ -719,6 +721,75 @@ describe("limitDraftEmailActions", () => {
     expect(result[0].rule.actions).toHaveLength(1);
     expect(result[0].rule.actions[0].id).toBe("draft-guest");
     expect(result[1].rule.actions).toEqual([]);
+  });
+});
+
+describe("runRules saved delays on actions that can't be delayed", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("runs the action now instead of dropping it", async () => {
+    const webhookAction = getAction({
+      id: "webhook-action-1",
+      type: ActionType.CALL_WEBHOOK,
+      url: "https://example.com/webhook",
+      delayInMinutes: 30,
+    });
+    const webhookRule = createRule("webhook-rule", null, [webhookAction]);
+
+    vi.mocked(findMatchingRules).mockResolvedValue({
+      matches: [{ rule: webhookRule, matchReasons: [] }],
+      reasoning: "Matched webhook rule",
+    } as any);
+    prisma.executedRule.findFirst.mockResolvedValue(null);
+    vi.mocked(getActionItemsWithAiArgs).mockResolvedValue([
+      webhookAction,
+    ] as any);
+    const createSpy = prisma.executedRule.create.mockResolvedValue({
+      id: "exec-1",
+      status: ExecutedRuleStatus.APPLYING,
+      ruleId: webhookRule.id,
+      threadId,
+      messageId: "message-1",
+      actionItems: [],
+    } as any);
+
+    await runRules({
+      provider: {} as any,
+      message: {
+        ...getEmail(),
+        id: "message-1",
+        threadId,
+        snippet: "",
+        historyId: "history-1",
+        inline: [],
+        attachments: [],
+        headers: {
+          from: "sender@example.com",
+          to: "user@example.com",
+          subject: "Subject",
+          date: "Mon, 1 Jan 2026 12:00:00 +0000",
+          "message-id": "<message-1>",
+        },
+      } as any,
+      rules: [webhookRule],
+      emailAccount: {
+        ...getEmailAccount(),
+        draftReplyConfidence: DraftReplyConfidence.ALL_EMAILS,
+      },
+      isTest: false,
+      modelType: "default" as any,
+      logger,
+    });
+
+    const createdActions =
+      createSpy.mock.calls[0]?.[0]?.data?.actionItems?.createMany?.data;
+    expect(createdActions).toEqual([
+      expect.objectContaining({ type: ActionType.CALL_WEBHOOK }),
+    ]);
+    expect(executeAct).toHaveBeenCalled();
+    expect(scheduleDelayedActions).not.toHaveBeenCalled();
   });
 });
 
