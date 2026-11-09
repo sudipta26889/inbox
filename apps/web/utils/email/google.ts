@@ -1,4 +1,5 @@
 import type { gmail_v1 } from "@googleapis/gmail";
+import chunk from "lodash/chunk";
 import type { Attachment as MailAttachment } from "nodemailer/lib/mailer";
 import type {
   DraftStatus,
@@ -92,6 +93,8 @@ import { createScopedLogger, type Logger } from "@/utils/logger";
 import { getGmailSignatures } from "@/utils/gmail/signature-settings";
 import { withRateLimitRecording } from "@/utils/email/rate-limit";
 import { shouldSkipAutoDraft } from "@/utils/auto-draft";
+
+const SENDER_ARCHIVE_PAGE_SIZE = 500;
 
 export class GmailProvider implements EmailProvider {
   readonly name = "google";
@@ -372,66 +375,66 @@ export class GmailProvider implements EmailProvider {
     for (const sender of senders) {
       if (!sender) continue;
 
-      const publishedThreadIds = new Set<string>();
+      // Archiving removes messages from the `in:inbox` result set, so
+      // archiving while paging shifts later pages and skips messages.
+      // Finish listing first, then archive.
+      const messages: { id: string; threadId: string }[] = [];
       let nextPageToken: string | undefined;
+      try {
+        do {
+          const page = await getMessages(this.client, {
+            query: `from:${sender} in:inbox`,
+            maxResults: SENDER_ARCHIVE_PAGE_SIZE,
+            pageToken: nextPageToken,
+          });
+          messages.push(...page.messages);
+          nextPageToken = page.nextPageToken;
+        } while (nextPageToken);
+      } catch (error) {
+        // archive whatever was listed before the failure
+        log.error("Failed to list messages from sender", { sender, error });
+      }
 
-      do {
+      const publishedThreadIds = new Set<string>();
+
+      for (const batch of chunk(messages, SENDER_ARCHIVE_PAGE_SIZE)) {
         try {
-          const { messages, nextPageToken: token } = await getMessages(
-            this.client,
-            {
-              query: `from:${sender} in:inbox`,
-              maxResults: 500,
-              pageToken: nextPageToken,
-            },
-          );
+          const batchMessageIds = batch.map((msg) => msg.id);
+          await this.archiveMessagesBulk(batchMessageIds);
 
-          const batchThreadIds = new Set(messages.map((msg) => msg.threadId));
-          const batchMessageIds = messages.map((msg) => msg.id);
+          const newThreadIds = Array.from(
+            new Set(batch.map((msg) => msg.threadId)),
+          ).filter((threadId) => !publishedThreadIds.has(threadId));
 
-          if (batchMessageIds.length > 0) {
-            await this.archiveMessagesBulk(batchMessageIds);
+          const promises = [
+            updateEmailMessagesForSender({
+              sender,
+              messageIds: batchMessageIds,
+              emailAccountId,
+              action: "archive",
+            }),
+          ];
 
-            const newThreadIds = Array.from(batchThreadIds).filter(
-              (threadId) => !publishedThreadIds.has(threadId),
-            );
-
-            const promises = [
-              updateEmailMessagesForSender({
-                sender,
-                messageIds: batchMessageIds,
-                emailAccountId,
+          if (newThreadIds.length > 0) {
+            promises.push(
+              publishBulkActionToTinybird({
+                threadIds: newThreadIds,
                 action: "archive",
+                ownerEmail,
               }),
-            ];
-
-            if (newThreadIds.length > 0) {
-              promises.push(
-                publishBulkActionToTinybird({
-                  threadIds: newThreadIds,
-                  action: "archive",
-                  ownerEmail,
-                }),
-              );
-            }
-
-            await Promise.all(promises);
-
-            newThreadIds.forEach((threadId) =>
-              publishedThreadIds.add(threadId),
             );
           }
 
-          nextPageToken = token;
+          await Promise.all(promises);
+
+          newThreadIds.forEach((threadId) => publishedThreadIds.add(threadId));
         } catch (error) {
           log.error("Failed to archive messages from sender", {
             sender,
             error,
           });
-          // continue processing remaining pages
-          nextPageToken = undefined;
         }
-      } while (nextPageToken);
+      }
     }
 
     log.info("Completed bulk archive from senders");
