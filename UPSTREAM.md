@@ -53,7 +53,7 @@ those named here; the rest were judged from file lists and subjects, so a miss c
 | 46604b2f0 | #4288 | Learned sender patterns match the whole address | BACKPORT. Adds `utils/rule/email-from-pattern.ts` (helpers moved out of `match-rules.ts`). A learned display name still matches anywhere in From |
 | c83ca6612 | #4151 | Resolve rule names with leaked JSON characters | BACKPORT. Fork's `aiChooseRule` has no result logging or classification feedback; new `ai-choose-rule.test.ts` |
 | 38bf57535 | #4237 | Resolve rule names followed by extra words | BACKPORT (logging-only conflict) |
-| 4128ed234 | #4255 | Throw when the AI claims a match but names no offered rule | BACKPORT. Shows up as an `llm-error` shadow record for choose-rule |
+| 4128ed234 | #4255 | Surface an AI match that names no offered rule | BACKPORT. Adapted to log an error and return no match instead of throwing, so skipped emails still get their skipped record and fan-out |
 | 5a6fd0c8a | #4290 | Static body conditions match HTML-only emails | BACKPORT. Only the new options added to the fork's older `convertEmailHtmlToText` |
 | 2f4ff6ac1 | #4343 | Actions with an unsupported delay run now instead of being dropped | BACKPORT. Guard in the fork's `mapActionFields` |
 | 435482eff | #4266 | Delayed actions keep `labelId` | BACKPORT. Move-to-folder half dropped (Outlook only) |

@@ -7,6 +7,9 @@ import { createGenerateObject } from "@/utils/llms";
 import { getUserInfoPrompt, getUserRulesPrompt } from "@/utils/ai/helpers";
 import { PROMPT_SECURITY_INSTRUCTIONS } from "@/utils/ai/security";
 import { sortRulesForAutomation } from "@/utils/rule/sort";
+import { createScopedLogger } from "@/utils/logger";
+
+const logger = createScopedLogger("ai-choose-rule");
 
 type GetAiResponseOptions = {
   email: EmailForLLM;
@@ -58,11 +61,17 @@ export async function aiChooseRule<
     .filter(isDefined);
 
   // The model claimed a match but named no rule we offered (an invented name,
-  // or no name at all). Fail loudly instead of recording the email as skipped.
+  // or no name at all). Log it so it is visible, but treat it as no match so
+  // the caller's skip path (skipped record, fan-out) still runs.
   if (!rulesWithMetadata.length) {
-    throw new Error(
-      `AI rule selection claimed a match but did not resolve to any offered rule (returned ${aiResponse.matchedRules.length} rule name(s) for ${orderedRules.length} candidate(s))`,
-    );
+    logger.error("AI rule selection did not resolve to any offered rule", {
+      returnedRuleNames: aiResponse.matchedRules.map((match) => match.ruleName),
+      candidateRuleCount: orderedRules.length,
+    });
+    return {
+      rules: [],
+      reason: aiResponse.reasoning || "AI determined no rules matched",
+    };
   }
 
   return {

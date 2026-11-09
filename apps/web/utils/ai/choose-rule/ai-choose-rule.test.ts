@@ -64,7 +64,7 @@ describe("aiChooseRule rule name resolution", () => {
       object: { reasoning: "r", ruleName: returnedName, noMatchFound: false },
     });
 
-    await expect(chooseRule(candidateRules)).rejects.toThrow(UNRESOLVED_ERROR);
+    expect(await chooseRule(candidateRules)).toEqual(NO_MATCH);
   });
 
   it("resolves polluted names in multi-rule responses", async () => {
@@ -98,15 +98,15 @@ describe("aiChooseRule invalid rule selections", () => {
     vi.clearAllMocks();
   });
 
-  it("rejects a single-rule response naming a rule that was not offered", async () => {
+  it("treats a single-rule response naming a rule that was not offered as no match", async () => {
     generateObjectSpy.mockResolvedValue({
       object: { reasoning: "r", ruleName: "Other", noMatchFound: false },
     });
 
-    await expect(chooseRule(candidateRules)).rejects.toThrow(UNRESOLVED_ERROR);
+    expect(await chooseRule(candidateRules)).toEqual(NO_MATCH);
   });
 
-  it("rejects a multi-rule response where no returned rule was offered", async () => {
+  it("treats a multi-rule response where no returned rule was offered as no match", async () => {
     generateObjectSpy.mockResolvedValue({
       object: {
         reasoning: "r",
@@ -115,27 +115,23 @@ describe("aiChooseRule invalid rule selections", () => {
       },
     });
 
-    await expect(chooseRule(candidateRules, true)).rejects.toThrow(
-      UNRESOLVED_ERROR,
-    );
+    expect(await chooseRule(candidateRules, true)).toEqual(NO_MATCH);
   });
 
-  it("rejects a claimed match with no rule name in a single-rule response", async () => {
+  it("treats a claimed match with no rule name in a single-rule response as no match", async () => {
     generateObjectSpy.mockResolvedValue({
       object: { reasoning: "r", ruleName: "", noMatchFound: false },
     });
 
-    await expect(chooseRule(candidateRules)).rejects.toThrow(UNRESOLVED_ERROR);
+    expect(await chooseRule(candidateRules)).toEqual(NO_MATCH);
   });
 
-  it("rejects a claimed match with an empty multi-rule list", async () => {
+  it("treats a claimed match with an empty multi-rule list as no match", async () => {
     generateObjectSpy.mockResolvedValue({
       object: { reasoning: "r", noMatchFound: false, matchedRules: [] },
     });
 
-    await expect(chooseRule(candidateRules, true)).rejects.toThrow(
-      UNRESOLVED_ERROR,
-    );
+    expect(await chooseRule(candidateRules, true)).toEqual(NO_MATCH);
   });
 
   it("keeps the offered rules when only some returned names resolve", async () => {
@@ -176,7 +172,8 @@ describe("aiChooseRule invalid rule selections", () => {
   });
 });
 
-const UNRESOLVED_ERROR = /did not resolve to any offered rule/i;
+// The model claimed a match, but nothing it named was offered.
+const NO_MATCH = { rules: [], reason: "r" };
 
 function chooseRule(
   candidateRules: { name: string; instructions: string }[],
