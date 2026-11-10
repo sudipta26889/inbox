@@ -455,7 +455,7 @@ describe("Models", () => {
       expect(createGateway).toHaveBeenCalledWith({
         apiKey: "test-ai-gateway-key",
         headers: {
-          "http-referer": "https://www.getinboxzero.com",
+          "http-referer": "https://inbox.sudiptadhara.in",
           "x-title": "Inbox",
         },
       });
