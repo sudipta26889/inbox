@@ -211,7 +211,7 @@ function selectModel(
       const gateway = createGateway({
         apiKey: aiGatewayApiKey,
         headers: {
-          "http-referer": "https://www.getinboxzero.com",
+          "http-referer": "https://inbox.sudiptadhara.in",
           "x-title": "Inbox",
         },
       });

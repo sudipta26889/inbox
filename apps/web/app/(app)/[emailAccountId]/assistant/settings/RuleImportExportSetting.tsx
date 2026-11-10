@@ -60,7 +60,7 @@ export function RuleImportExportSetting({
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `inbox-zero-rules-${formatUtcDate(new Date())}.json`;
+    a.download = `inbox-rules-${formatUtcDate(new Date())}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

@@ -1,8 +1,7 @@
-# docker-compose.local.yml - Run locally built inbox-zero image with dependencies
+# docker-compose.local.yml - Run locally built inbox image with dependencies
 #
 # Usage:
 #   pnpm docker:local:run                    # uses this file automatically
-#   docker compose -f docker/docker-compose.prod.yml up
 #
 # Prerequisites:
 #   1. Build the image first: pnpm docker:local:build
