@@ -59,7 +59,7 @@ import { getEmailUrlForMessage } from "@/utils/url";
 import { getEmailAccountWithAi } from "@/utils/user/get";
 
 const MAX_CHAT_CONTEXT_MESSAGES = 12;
-const CHAT_SDK_STATE_KEY_PREFIX = "inbox-zero:chat-sdk";
+const CHAT_SDK_STATE_KEY_PREFIX = "inbox:chat-sdk";
 const CONNECT_COMMAND_REGEX =
   /^\/?connect(?:@[A-Za-z0-9_]+)?\s+([A-Za-z0-9._-]+)\s*$/i;
 const PENDING_EMAIL_CONFIRM_ACTION_ID = "acpe";

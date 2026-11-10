@@ -1,9 +1,11 @@
 import IoRedis from "ioredis";
 import { env } from "@/env";
+import { REDIS_KEY_PREFIX } from "@/utils/redis/key-prefix";
 
 const ioRedisClient = new IoRedis(env.REDIS_URL ?? "redis://localhost:6379", {
   maxRetriesPerRequest: 3,
   lazyConnect: true,
+  keyPrefix: REDIS_KEY_PREFIX,
 });
 
 ioRedisClient.on("error", (err) => {
@@ -76,11 +78,12 @@ export const redis = {
   },
 
   async keys(pattern: string): Promise<string[]> {
-    return ioRedisClient.keys(pattern);
+    const keys = await ioRedisClient.keys(`${REDIS_KEY_PREFIX}${pattern}`);
+    return keys.map(stripKeyPrefix);
   },
 
   async publish(channel: string, message: string): Promise<number> {
-    return ioRedisClient.publish(channel, message);
+    return ioRedisClient.publish(`${REDIS_KEY_PREFIX}${channel}`, message);
   },
 
   // --- Hash operations ---
@@ -170,7 +173,7 @@ export const redis = {
   ): Promise<[string, string[]]> {
     const args: (string | number)[] = [];
     if (opts?.match) {
-      args.push("MATCH", opts.match);
+      args.push("MATCH", `${REDIS_KEY_PREFIX}${opts.match}`);
     }
     if (opts?.count) {
       args.push("COUNT", opts.count);
@@ -184,7 +187,7 @@ export const redis = {
       typeof cursor === "string" ? Number.parseInt(cursor, 10) : cursor,
       ...args,
     );
-    return [String(nextCursor), keys];
+    return [String(nextCursor), keys.map(stripKeyPrefix)];
   },
 
   // --- Eval (Upstash signature: eval<Keys, Return>(script, keys[], args[])) ---
@@ -203,6 +206,14 @@ export const redis = {
     return result as TReturn;
   },
 };
+
+// ioredis prefixes key arguments but not SCAN/KEYS replies; callers pass these
+// keys back into the client, which would prefix them a second time.
+function stripKeyPrefix(key: string) {
+  return key.startsWith(REDIS_KEY_PREFIX)
+    ? key.slice(REDIS_KEY_PREFIX.length)
+    : key;
+}
 
 export async function expire(key: string, seconds: number) {
   return redis.expire(key, seconds);
