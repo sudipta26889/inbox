@@ -16,10 +16,10 @@ const getAuthUrl = ({
   reconnectTarget,
 }: {
   userId: string;
-  reconnectTarget: { id: string; email: string } | null;
+  reconnectTarget: { id: string; email: string; userId: string } | null;
 }) => {
   const state = generateOAuthState({
-    userId,
+    userId: reconnectTarget?.userId ?? userId,
     ...(reconnectTarget && { reconnectEmailAccountId: reconnectTarget.id }),
   });
 

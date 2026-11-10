@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import prisma from "@/utils/__mocks__/prisma";
 import { auth } from "@/utils/auth";
+import { parseOAuthState } from "@/utils/oauth/state";
 import { GET } from "./route";
 
 vi.mock("server-only", () => ({}));
@@ -28,6 +29,7 @@ describe("GET /api/google/linking/auth-url", () => {
     prisma.emailAccount.findFirst.mockResolvedValue({
       id: "mailbox-1",
       email: "mailbox@example.com",
+      userId: "user-1",
     } as never);
 
     const response = await GET(
@@ -44,7 +46,31 @@ describe("GET /api/google/linking/auth-url", () => {
     );
   });
 
-  it("refuses a reconnect for a mailbox the user doesn't own", async () => {
+  it("links a shared mailbox as its owner so the callback refreshes tokens", async () => {
+    prisma.emailAccount.findFirst.mockResolvedValue({
+      id: "mailbox-1",
+      email: "mailbox@example.com",
+      userId: "owner-1",
+    } as never);
+
+    const response = await GET(
+      new NextRequest(
+        "http://localhost/api/google/linking/auth-url?emailAccountId=mailbox-1",
+      ),
+      context,
+    );
+
+    expect(response.status).toBe(200);
+    const { url } = await response.json();
+    const state = parseOAuthState<{
+      userId: string;
+      reconnectEmailAccountId: string;
+    }>(new URL(url).searchParams.get("state") as string);
+    expect(state.userId).toBe("owner-1");
+    expect(state.reconnectEmailAccountId).toBe("mailbox-1");
+  });
+
+  it("refuses a reconnect for a mailbox the user can't access", async () => {
     prisma.emailAccount.findFirst.mockResolvedValue(null);
 
     const response = await GET(

@@ -51,7 +51,7 @@ describe("findReconnectTarget", () => {
     prisma.emailAccount.findFirst.mockResolvedValue(null);
   });
 
-  it("scopes the lookup to the signed-in user and the provider", async () => {
+  it("scopes the lookup to mailboxes the user owns or was shared, and the provider", async () => {
     await findReconnectTarget({
       emailAccountId: "mailbox",
       userId: "user",
@@ -62,7 +62,7 @@ describe("findReconnectTarget", () => {
       expect.objectContaining({
         where: {
           id: "mailbox",
-          userId: "user",
+          OR: [{ userId: "user" }, { shares: { some: { userId: "user" } } }],
           account: { provider: "microsoft" },
         },
       }),
