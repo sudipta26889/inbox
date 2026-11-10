@@ -212,7 +212,7 @@ export function formatToolResponse(toolName: string, result: any): string {
     switch (toolName) {
       case "search_emails":
         if (result.results && Array.isArray(result.results)) {
-          return formatEmailListAsMarkdown(result.results);
+          return formatSearchResultsAsMarkdown(result);
         }
         break;
 
@@ -306,4 +306,23 @@ function getBody(email: { textPlain?: string; textHtml?: string }): string {
 
   // ponytail: fixed cap so a huge marketing email can't flood the MCP response
   return `${text.slice(0, MAX_BODY_CHARS)}\n\n_[truncated: ${text.length - MAX_BODY_CHARS} more characters]_`;
+}
+
+function formatSearchResultsAsMarkdown(result: {
+  results: Parameters<typeof formatEmailListAsMarkdown>[0];
+  byAccount?: Array<{ accountEmail: string; error?: string }>;
+}): string {
+  const failed = result.byAccount?.filter((account) => account.error) ?? [];
+  if (failed.length === 0) return formatEmailListAsMarkdown(result.results);
+
+  // An unreadable mailbox must not read as an empty one.
+  const warning = `**Search failed for:** ${failed
+    .map((account) => account.accountEmail)
+    .join(
+      ", ",
+    )}. These mailboxes were not searched; they may need reconnecting in Inbox.`;
+
+  return result.results.length === 0
+    ? warning
+    : `${warning}\n\n${formatEmailListAsMarkdown(result.results)}`;
 }

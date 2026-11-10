@@ -90,3 +90,45 @@ describe("formatToolResponse get_attachment", () => {
     );
   });
 });
+
+describe("formatToolResponse search_emails with a failed mailbox", () => {
+  const email = {
+    id: "1",
+    from: "a@example.com",
+    subject: "Hello",
+    date: "today",
+  };
+  const byAccount = [
+    { accountEmail: "ok@example.com" },
+    { accountEmail: "broken@example.com", error: "Failed to search" },
+  ];
+
+  it("does not report an unreadable mailbox as empty", () => {
+    const text = formatToolResponse("search_emails", {
+      results: [],
+      byAccount,
+    });
+
+    expect(text).toContain("Search failed for:** broken@example.com");
+    expect(text).not.toContain("No emails found");
+  });
+
+  it("keeps results from the mailboxes that worked", () => {
+    const text = formatToolResponse("search_emails", {
+      results: [email],
+      byAccount,
+    });
+
+    expect(text).toContain("broken@example.com");
+    expect(text).toContain("Hello");
+  });
+
+  it("still says no emails found when every mailbox was searched", () => {
+    expect(
+      formatToolResponse("search_emails", {
+        results: [],
+        byAccount: [{ accountEmail: "ok@example.com" }],
+      }),
+    ).toBe("No emails found.");
+  });
+});
