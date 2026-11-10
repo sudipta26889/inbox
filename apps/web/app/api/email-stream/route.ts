@@ -1,3 +1,4 @@
+import { REDIS_KEY_PREFIX } from "@/utils/redis/key-prefix";
 import { RedisSubscriber } from "@/utils/redis/subscriber";
 import { withAuth } from "@/utils/middleware";
 import { NextResponse } from "next/server";
@@ -34,7 +35,7 @@ export const GET = withAuth("email-stream", async (request) => {
     emailAccountId,
   });
 
-  const pattern = `thread:${emailAccountId}:*`;
+  const pattern = `${REDIS_KEY_PREFIX}thread:${emailAccountId}:*`;
   const redisSubscriber = RedisSubscriber.getInstance();
 
   redisSubscriber.psubscribe(pattern, (err) => {
