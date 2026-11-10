@@ -16,14 +16,14 @@ const getAuthUrl = ({
   reconnectTarget,
 }: {
   userId: string;
-  reconnectTarget: { id: string; email: string } | null;
+  reconnectTarget: { id: string; email: string; userId: string } | null;
 }) => {
   const googleAuth = getLinkingOAuth2Client();
 
   // The state lives in an httpOnly cookie the callback compares against, so
   // the reconnect target carried in it can't be swapped by the client.
   const state = generateOAuthState({
-    userId,
+    userId: reconnectTarget?.userId ?? userId,
     ...(reconnectTarget && { reconnectEmailAccountId: reconnectTarget.id }),
   });
 
