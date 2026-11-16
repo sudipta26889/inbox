@@ -31,6 +31,7 @@ import {
   buildCreateRuleSchemaFromChatToolInput,
   type ChatCreateRuleToolInvocation,
 } from "@/utils/ai/assistant/tools/rules/shared";
+import { sanitizeAgentHtml } from "@/utils/mail/sanitize-agent-html";
 import { createRule } from "@/utils/rule/rule";
 import { enqueueBulkInboxActionChunk } from "@/utils/bulk-inbox-action/enqueue";
 import {
@@ -946,9 +947,11 @@ async function confirmPendingSendEmailAction({
     output.pendingAction.from ||
     (await getFormattedSenderAddress({ emailAccountId }));
 
+  // Model-written HTML is cleaned before the approval gate, so the card shows
+  // everything the recipient will see.
   const messageHtml = contentOverride
     ? convertNewlinesToBr(escapeHtml(contentOverride))
-    : output.pendingAction.messageHtml;
+    : sanitizeAgentHtml(output.pendingAction.messageHtml);
   const sentAfter = new Date();
 
   const result = await emailProvider.sendEmailWithHtml({

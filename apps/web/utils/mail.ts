@@ -215,6 +215,10 @@ export function convertEmailHtmlToText({
           : { ignoreHref: true }, // Remove links entirely: "Text"
       },
       { selector: "img", format: "skip" },
+      // Never rendered, and not on the approval card either.
+      { selector: "title", format: "skip" },
+      { selector: "template", format: "skip" },
+      { selector: "head", format: "skip" },
     ],
   });
 
@@ -236,6 +240,10 @@ export function convertOutgoingEmailHtmlToText(html: string): string {
         options: { hideLinkHrefIfSameAsText: true, linkBrackets: ["<", ">"] },
       },
       { selector: "img", format: "skip" },
+      // Never rendered, and not on the approval card either.
+      { selector: "title", format: "skip" },
+      { selector: "template", format: "skip" },
+      { selector: "head", format: "skip" },
     ],
   })
     .replace(/[^\S\n]+$/gm, "")

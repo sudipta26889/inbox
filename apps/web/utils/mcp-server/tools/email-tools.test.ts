@@ -193,6 +193,29 @@ describe("createDraft", () => {
     });
   });
 
+  // The approval card and the sent email are built from the same cleaned HTML.
+  it("cleans agent HTML before it reaches the send gate", async () => {
+    prisma.emailAccount.findFirst.mockResolvedValue({
+      id: "account-shared",
+    } as never);
+    prisma.emailAccount.findUnique.mockResolvedValue(googleAccount as never);
+    providerSendEmailWithHtml.mockResolvedValue({
+      messageId: "msg-1",
+      threadId: "thread-1",
+    });
+
+    await sendEmail(context, {
+      to: ["a@example.com"],
+      subject: "Hi",
+      body: '<style>.x::after{content:"WIRE"}</style><p>Hi <b>Bob</b></p><!--[if mso]><p>WIRE 5000</p><![endif]--><span class="x"></span>',
+      from: "me@gmail.com",
+    });
+
+    expect(providerSendEmailWithHtml.mock.calls[0]![0].messageHtml).toBe(
+      "<p>Hi <b>Bob</b></p><span></span>",
+    );
+  });
+
   it("leaves the body alone when isHtml is set", async () => {
     await createDraft(context, {
       to: ["a@example.com"],

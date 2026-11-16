@@ -4,11 +4,7 @@ import { load } from "cheerio";
 import { renderReplyBodyHtml } from "@/utils/email/reply-body-html";
 import { createOutlookReplyContent } from "@/utils/outlook/reply";
 import { convertOutgoingEmailHtmlToText } from "@/utils/mail";
-import {
-  cardBodyFromHtml,
-  hasHiddenText,
-  rebuildHtmlWithEditedBody,
-} from "./card-body";
+import { cardBodyFromHtml, rebuildHtmlWithEditedBody } from "./card-body";
 
 const SIGNATURE =
   '<div class="gmail_signature" data-smartmail="gmail_signature"><b>Sudipta</b><br><a href="https://grihatek.com">grihatek.com</a></div>';
@@ -243,14 +239,14 @@ describe("balanced output", () => {
     expect(html.match(/<div/g)?.length).toBe(html.match(/<\/div>/g)?.length);
   });
 
-  it("keeps a head with styles when the body tag is implied", () => {
+  it("keeps the head when the body tag is implied", () => {
     const original =
-      "<html><head><style>p{margin:0}</style></head><p>Hello</p></html>";
+      '<html><head><meta charset="utf-8"></head><p>Hello</p></html>';
 
     const html = rebuildHtmlWithEditedBody(original, "Hi") ?? "";
 
     expect(html).toBe(
-      "<html><head><style>p{margin:0}</style></head><p>Hi</p></html>",
+      '<html><head><meta charset="utf-8"></head><p>Hi</p></html>',
     );
   });
 
@@ -371,37 +367,6 @@ describe("every word that is sent is on the card", () => {
 
     for (const word of convertOutgoingEmailHtmlToText(html).split(/\s+/))
       expect(shown).toContain(word);
-  });
-});
-
-describe("style sheets that add text", () => {
-  it.each([
-    [
-      "in the body",
-      '<style>.x::after{content:"WIRE 5000 TO 123"}</style><p>Hi Bob</p><span class="x"></span>',
-    ],
-    [
-      "in the head",
-      '<html><head><style>.x:before { content: "WIRE 5000 TO 123" }</style></head><body><p>Hi Bob</p><span class="x"></span></body></html>',
-    ],
-    [
-      "in the quote",
-      '<p>Hi Bob</p><div class="gmail_quote"><style>.x::after{content:"WIRE 5000 TO 123"}</style>old</div>',
-    ],
-  ])("shows the CSS marked as hidden and refuses a body edit (%s)", (_name, html) => {
-    const card = cardBodyFromHtml(html);
-
-    expect(card.body).toContain("[hidden in the email: style sheet adds text:");
-    expect(card.body).toContain("WIRE 5000 TO 123");
-    expect(hasHiddenText(html)).toBe(true);
-    expect(rebuildHtmlWithEditedBody(html, "Hi Rob")).toBeNull();
-  });
-
-  it("leaves a style sheet without content: alone", () => {
-    const html =
-      "<html><head><style>p{margin:0}</style></head><body><p>Hi</p></body></html>";
-
-    expect(cardBodyFromHtml(html).body).toBe("Hi");
   });
 });
 

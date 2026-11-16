@@ -20,15 +20,19 @@ export type CardBody = {
 
 export function cardBodyFromHtml(html: string): CardBody {
   const parts = splitOutgoingHtml(html);
-  const signature = htmlText(parts.signature);
-  const quotedHistory = htmlText(parts.quoted);
-  const addedText = parts.textAddingStyles.map(
-    (css) => `[hidden in the email: style sheet adds text: ${css}]`,
-  );
-  return {
-    body: [htmlToMarkdown(parts.inner), ...addedText]
+  const field = (text: string, where: Extra["field"]) =>
+    [
+      text,
+      ...parts.extras
+        .filter((extra) => extra.field === where)
+        .map((extra) => extra.marker),
+    ]
       .filter(Boolean)
-      .join("\n\n"),
+      .join("\n\n");
+  const signature = field(htmlText(cardHtml(parts.signature)), "signature");
+  const quotedHistory = field(htmlText(cardHtml(parts.quoted)), "quoted");
+  return {
+    body: field(htmlToMarkdown(cardHtml(parts.inner, false)), "body"),
     ...(signature && { signature }),
     ...(quotedHistory && { quotedHistory }),
   };
@@ -43,7 +47,7 @@ export function rebuildHtmlWithEditedBody(
   markdown: string,
 ): string | null {
   const parts = splitOutgoingHtml(html);
-  if (parts.textAddingStyles.length) return null;
+  if (parts.extras.length) return null;
   const $inner = load(parts.inner, null, false);
   const style = commonTypography($inner);
   if (style === null) return null;
@@ -68,11 +72,7 @@ export function rebuildHtmlWithEditedBody(
 
 /** True when the authored part holds text the reader can't see. */
 export function hasHiddenText(html: string) {
-  const parts = splitOutgoingHtml(html);
-  return (
-    parts.textAddingStyles.length > 0 ||
-    hasHidden(load(parts.inner, null, false))
-  );
+  return hasHidden(load(splitOutgoingHtml(html).inner, null, false));
 }
 
 // Same boundaries the reader uses (split-email-content.client.ts, which needs
@@ -92,7 +92,8 @@ const QUOTE_SELECTOR = [
 ].join(", ");
 
 // Markdown can't carry these, so an edit would lose them without a word.
-const UNEDITABLE_SELECTOR = "table, style";
+const UNEDITABLE_SELECTOR =
+  "table, style, link, input, button, textarea, select, form, iframe, object, embed, svg, [background]";
 // Inline styles an edit can keep by putting them on every edited block.
 const TYPOGRAPHY_PROPERTY =
   /^(font-family|font-size|color|line-height|(margin|padding)(-(top|right|bottom|left))?)$/;
@@ -125,6 +126,12 @@ const turndown = new TurndownService({
   });
 
 const SAFE_URL = /^(https?:|mailto:|tel:)/i;
+
+// Markers are card text, not email text, so Markdown must not escape them.
+turndown.addRule("cardMarker", {
+  filter: (node) => node.nodeName === "CARD-MARKER",
+  replacement: (_content, node) => node.textContent ?? "",
+});
 
 // Two or more <br> in a row are a blank line: a paragraph break, not one
 // line break. AI replies are built that way (renderReplyBodyHtml).
@@ -245,13 +252,41 @@ function splitOutgoingHtml(html: string) {
     innerEnd = authoredEnd;
   }
 
-  const textAddingStyles = $("style")
-    .toArray()
-    .map((element) => $(element).text().trim())
-    .filter((css) => /(^|[\s;{])content\s*:/i.test(css));
+  // Shown in the field they sit in; any of them refuses a body edit.
+  const fieldAt = (offset: number): Extra["field"] =>
+    quoteStart !== undefined && offset >= quotedFrom
+      ? "quoted"
+      : offset >= authoredEnd && offset < quotedFrom
+        ? "signature"
+        : "body";
+  const extras: Extra[] = [
+    // Outlook renders conditional comments; every other reader skips them.
+    ...[...html.matchAll(/<!--\[if[^\]]*\]>([\s\S]*?)<!\[endif\]\s*-->/gi)].map(
+      (match) => ({
+        offset: match.index,
+        marker: `[shown only in Outlook: ${htmlText(cardHtml(match[1]))}]`,
+      }),
+    ),
+    // A style sheet can add text (content:, @import, linked CSS), so the
+    // reviewer sees all of it rather than a guess at what it does.
+    ...$("style")
+      .toArray()
+      .map((element) => ({
+        offset: startOf(element) ?? 0,
+        marker: `[style sheet: ${$(element).text().trim()}]`,
+      })),
+    ...$("link[href]")
+      .toArray()
+      .map((element) => ({
+        offset: startOf(element) ?? 0,
+        marker: `[style sheet: ${$(element).attr("href")}]`,
+      })),
+  ]
+    .sort((a, b) => a.offset - b.offset)
+    .map(({ offset, marker }) => ({ field: fieldAt(offset), marker }));
 
   return {
-    textAddingStyles,
+    extras,
     head: html.slice(0, start),
     prefix: html.slice(start, innerStart),
     inner: html.slice(innerStart, innerEnd),
@@ -448,7 +483,79 @@ function isBreak(node: Node | null) {
 function hasVisibleContent(fragment: string) {
   if (!fragment.trim()) return false;
   const $ = load(fragment, null, false);
-  return !!$.root().text().trim() || $("img").length > 0;
+  return (
+    !!$.root().text().trim() ||
+    $("img, input[value], iframe, [background], [style*='url(']").length > 0
+  );
+}
+
+type Extra = { field: "body" | "signature" | "quoted"; marker: string };
+
+/**
+ * The HTML a card field is rendered from: things a reader sees that are not
+ * text become text markers, and what no reader sees is dropped. Images in
+ * the body stay, as Markdown shows them.
+ */
+function cardHtml(fragment: string, markImages = true) {
+  if (!fragment.trim()) return fragment;
+  const $ = load(fragment, null, false);
+  const marker = (text: string) => $("<card-marker>").text(` ${text} `);
+  $("script, template, title, meta, style, link").remove();
+  if (markImages)
+    $("img").each((_index, element) => {
+      const image = $(element);
+      const label = [image.attr("alt"), image.attr("src")]
+        .filter(Boolean)
+        .join(" ");
+      image.replaceWith(marker(`[image: ${label}]`));
+    });
+  $("input[value]").each((_index, element) => {
+    $(element).after(marker(`[form field: ${$(element).attr("value")}]`));
+  });
+  $("iframe").each((_index, element) => {
+    const frame = $(element);
+    const page = frame.attr("srcdoc");
+    frame.replaceWith(
+      marker(
+        `[embedded page: ${page === undefined ? (frame.attr("src") ?? "") : load(page).root().text().trim()}]`,
+      ),
+    );
+  });
+  $("[background], [style*='url(']").each((_index, element) => {
+    const urls = [
+      $(element).attr("background"),
+      ...[
+        ...($(element).attr("style") ?? "").matchAll(
+          /url\(\s*['"]?([^'")]+)/gi,
+        ),
+      ].map((match) => match[1]),
+    ].filter(Boolean);
+    for (const url of urls)
+      $(element).prepend(marker(`[background image: ${url}]`));
+  });
+  return $.root().html() ?? fragment;
+}
+
+/** The typography part of an inline style ("" when none is kept). */
+export function typographyOnly(style: string) {
+  return style
+    .split(";")
+    .map((declaration) => {
+      const colon = declaration.indexOf(":");
+      return [
+        declaration.slice(0, colon).trim().toLowerCase(),
+        declaration.slice(colon + 1).trim(),
+      ];
+    })
+    .filter(
+      ([property, value]) =>
+        TYPOGRAPHY_PROPERTY.test(property) &&
+        value &&
+        isSafeStyleValue(value) &&
+        !(property === "font-size" && isTinyFontSize(value)),
+    )
+    .map(([property, value]) => `${property}:${value}`)
+    .join(";");
 }
 
 function startOf(node: AnyNode | undefined) {

@@ -695,6 +695,35 @@ describe("runActionFunction", () => {
     );
   });
 
+  it("cleans rule reply HTML before it reaches the send gate", async () => {
+    const client = createMockEmailProvider();
+
+    await runActionFunction({
+      client,
+      email,
+      action: {
+        id: "action-1",
+        type: ActionType.REPLY,
+        content:
+          'Thanks\n<style>p::after{content:"WIRE"}</style><!--[if mso]>WIRE<![endif]--><p hidden>WIRE</p>',
+      },
+      emailAccount,
+      executedRule: {
+        id: "executed-rule-1",
+        threadId: "thread-1",
+        emailAccountId: "account-1",
+        ruleId: "rule-1",
+      } as any,
+      logger,
+    });
+
+    expect(client.replyToEmail).toHaveBeenCalledWith(
+      expect.anything(),
+      "Thanks\n<p>WIRE</p>",
+      expect.anything(),
+    );
+  });
+
   it("passes static attachments into sent emails", async () => {
     const client = createMockEmailProvider();
 

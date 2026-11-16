@@ -91,6 +91,56 @@ describe("confirmAssistantEmailAction", () => {
     expect(createEmailProvider).not.toHaveBeenCalled();
   });
 
+  // Model-written HTML is cleaned before the approval gate sees it.
+  it("cleans the prepared email's HTML before sending it", async () => {
+    (prisma.emailAccount.findUnique as any)
+      .mockResolvedValueOnce({
+        email: "owner@example.com",
+        account: { userId: "u1", provider: "google" },
+      })
+      .mockResolvedValueOnce({ name: "Owner", email: "owner@example.com" });
+    const part = buildPendingSendPart();
+    prisma.chatMessage.findFirst.mockResolvedValue({
+      id: "chat-message-1",
+      chatId: "chat-1",
+      updatedAt: new Date("2026-02-23T00:00:00.000Z"),
+      parts: [
+        {
+          ...part,
+          output: {
+            ...part.output,
+            pendingAction: {
+              ...part.output.pendingAction,
+              messageHtml:
+                '<style>p::after{content:"WIRE"}</style><p>Hi there</p><!--[if mso]>WIRE<![endif]-->',
+            },
+          },
+        },
+      ],
+    } as any);
+    prisma.chatMessage.updateMany.mockResolvedValue({ count: 1 } as any);
+    const sendEmailWithHtml = vi
+      .fn()
+      .mockResolvedValue({ messageId: "msg-1", threadId: "thr-1" });
+    vi.mocked(createEmailProvider).mockResolvedValue({
+      sendEmailWithHtml,
+    } as any);
+
+    await confirmAssistantEmailAction(
+      "ea_1" as any,
+      {
+        chatId: "chat-1",
+        chatMessageId: "chat-message-1",
+        toolCallId: "tool-1",
+        actionType: "send_email",
+      } as any,
+    );
+
+    expect(sendEmailWithHtml).toHaveBeenCalledWith(
+      expect.objectContaining({ messageHtml: "<p>Hi there</p>" }),
+    );
+  });
+
   it("sends a pending prepared email and persists confirmed output", async () => {
     (prisma.emailAccount.findUnique as any)
       .mockResolvedValueOnce({

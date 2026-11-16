@@ -1,4 +1,5 @@
 import prisma from "@/utils/prisma";
+import { sanitizeAgentHtml } from "@/utils/mail/sanitize-agent-html";
 import { accessibleEmailAccountWhere } from "@/utils/email-account-access";
 import { getCallerUserId } from "@/utils/mcp-server/tool-context";
 import { getGmailClientWithRefresh } from "@/utils/gmail/client";
@@ -867,8 +868,12 @@ function assertMessageParams(params: {
   }
 }
 
+// Agent-written HTML is cleaned before the approval gate, so the card shows
+// everything the recipient will see.
 function toMessageHtml(body: string, isHtml?: boolean) {
-  return isHtml || body.includes("<") ? body : body.replace(/\n/g, "<br>");
+  return sanitizeAgentHtml(
+    isHtml || body.includes("<") ? body : body.replace(/\n/g, "<br>"),
+  );
 }
 
 function assertDraftId(draftId: string) {
