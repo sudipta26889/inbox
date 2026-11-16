@@ -129,7 +129,7 @@ describe("dharahilClient.fetchDecision", () => {
     expect(decision?.reason).toBe("not now");
   });
 
-  it("treats a reject decision on a non-rejected status as denied", async () => {
+  it("blocks a reject decision on a status it does not know", async () => {
     gatewayReturns({ status: "RESOLVED", last_decision: "reject" });
 
     const decision = await dharahilClient.fetchDecision("req-1");
@@ -139,7 +139,7 @@ describe("dharahilClient.fetchDecision", () => {
 
   it("maps a revision request so callers can branch on it", async () => {
     gatewayReturns({
-      status: "RESOLVED",
+      status: "REVISE_REQUESTED",
       last_decision: "revise",
       last_decision_revise_input: "soften the tone",
     });
@@ -161,6 +161,11 @@ describe("dharahilClient.fetchDecision", () => {
       { status: "RESOLVED", last_decision: "reject" },
       { status: "RESOLVED", last_decision: "revise" },
       { status: "EXPIRED" },
+      { status: "AUTO_DENIED" },
+      { status: "EXECUTED" },
+      { status: "SOMETHING_NEW" },
+      {},
+      { status: "APPROVED", last_decision: "edit" },
     ]) {
       gatewayReturns(body);
       const decision = await dharahilClient.fetchDecision("req-1");
@@ -172,5 +177,105 @@ describe("dharahilClient.fetchDecision", () => {
         `no predicate matched ${JSON.stringify(body)} -> ${decision?.action}`,
       ).toBe(true);
     }
+  });
+});
+
+/**
+ * The gate proceeds only on an allowlist. Anything the client does not
+ * recognise must land on a value that blocks the send, never on itself.
+ */
+describe("dharahilClient decision mapping fails closed", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  // The reviewer edited the email on the card: the gateway marks it APPROVED
+  // and returns the edited args, which are what must be sent.
+  it("carries the edited args on an edit", async () => {
+    gatewayReturns({
+      status: "APPROVED",
+      last_decision: "edit",
+      approved_args: { to: "fixed@grihatek.com" },
+    });
+
+    const decision = await dharahilClient.fetchDecision("req-1");
+
+    expect(decision?.action).toBe("APPROVED");
+    expect(decision?.approvedArgs).toEqual({ to: "fixed@grihatek.com" });
+  });
+
+  it("fails an edit that came back without its edited args", async () => {
+    gatewayReturns({ status: "APPROVED", last_decision: "edit" });
+
+    const decision = await dharahilClient.fetchDecision("req-1");
+
+    expect(decision?.action).toBe("ERROR");
+    expect(dharahilClient.shouldProceed(decision!)).toBe(false);
+  });
+
+  it("maps AUTO_DENIED to a rejection", async () => {
+    gatewayReturns({ status: "AUTO_DENIED" });
+
+    const decision = await dharahilClient.fetchDecision("req-1");
+
+    expect(decision?.action).toBe("REJECTED");
+  });
+
+  it.each([
+    [{ status: "EXECUTED" }],
+    [{ status: "SOMETHING_NEW" }],
+    [{ status: "RESOLVED" }],
+    // Decided on status alone: an approve decision does not rescue it.
+    [{ status: "EXECUTED", last_decision: "approve" }],
+    [{ status: "RESOLVED", last_decision: "approve" }],
+    [{ status: "AUTO_ALLOWED" }],
+  ])("maps %j to ERROR, which does not proceed", async (body) => {
+    gatewayReturns(body);
+
+    const decision = await dharahilClient.fetchDecision("req-1");
+
+    expect(decision?.action).toBe("ERROR");
+    expect(dharahilClient.shouldProceed(decision!)).toBe(false);
+  });
+
+  it.each([
+    ["AUTO_DENIED", "REJECTED"],
+    ["DENY", "REJECTED"],
+    ["EXECUTED", "ERROR"],
+    ["SOMETHING_NEW", "ERROR"],
+    ["ALLOW", "ALLOW"],
+    ["AUTO_ALLOWED", "AUTO_ALLOWED"],
+  ])("maps an immediate %s to %s", async (action, expected) => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ action, request_id: null }),
+    });
+
+    const decision = await dharahilClient.runApprovalLoop({
+      toolName: "send_email",
+      toolArgs: {},
+      context: {
+        agentId: "a",
+        runId: "r",
+        contextSummary: "c",
+        riskLevel: "MEDIUM",
+      },
+    });
+
+    expect(decision.action).toBe(expected);
+  });
+
+  it("flags an edit so gates that cannot apply edits refuse it", async () => {
+    gatewayReturns({
+      status: "APPROVED",
+      last_decision: "edit",
+      approved_args: { title: "Moved" },
+    });
+
+    const decision = await dharahilClient.fetchDecision("req-1");
+
+    expect(dharahilClient.shouldProceed(decision!)).toBe(true);
+    expect(dharahilClient.shouldProceedUnedited(decision!)).toBe(false);
   });
 });

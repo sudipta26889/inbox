@@ -42,6 +42,10 @@ export interface DharaHILResponse {
 
 export interface DharaHILDecision {
   action: DharaHILAction;
+  /** The args the human approved; differ from the proposal after an edit. */
+  approvedArgs?: Record<string, unknown>;
+  /** The human edited the args on the card before approving. */
+  edited?: boolean;
   reason?: string;
   revise_input?: string;
 }
@@ -163,10 +167,9 @@ export class DharaHILClient {
         if (immediate) {
           logger.info("DharaHIL: gateway decided immediately", {
             action: immediate,
-            fullResponse: JSON.stringify(data),
           });
 
-          return data;
+          return { ...data, action: toImmediateAction(immediate) };
         }
 
         logger.error("DharaHIL: Invalid response from gateway", {
@@ -227,9 +230,10 @@ export class DharaHILClient {
       last_decision?: string;
       last_decision_note?: string;
       last_decision_revise_input?: string;
+      approved_args?: Record<string, unknown> | null;
     };
 
-    if (!data.status || data.status === "PENDING") return null;
+    if (data.status === "PENDING") return null;
 
     logger.info("DharaHIL: Decision received", {
       requestId,
@@ -239,6 +243,8 @@ export class DharaHILClient {
 
     return {
       action: toDharaHILAction(data),
+      approvedArgs: data.approved_args ?? undefined,
+      edited: data.last_decision === "edit",
       revise_input: data.last_decision_revise_input,
       reason: data.last_decision_note,
     };
@@ -330,6 +336,14 @@ export class DharaHILClient {
   /**
    * Check if action should proceed based on decision
    */
+  /**
+   * For gates that cannot apply edited args (calendar writes, A2A tasks): an
+   * edited approval is refused, never executed with the original args.
+   */
+  shouldProceedUnedited(decision: DharaHILDecision): boolean {
+    return this.shouldProceed(decision) && !decision.edited;
+  }
+
   shouldProceed(decision: DharaHILDecision): boolean {
     return (
       decision.action === "ALLOW" ||
@@ -369,26 +383,51 @@ export class DharaHILClient {
 export const dharahilClient = new DharaHILClient();
 
 /**
- * Map a gateway response onto DharaHILAction.
+ * Map a polled gateway response onto DharaHILAction, on `status` alone.
  *
- * A rejection MUST land on a value `wasDenied` recognises. This returned
- * "DENIED", which is not in the union at all, so `wasDenied` was false, and
- * both mail send paths fell through their guards and sent the email a human
- * had just rejected.
+ * Fails closed: only APPROVED proceeds, and anything this does not recognise
+ * becomes ERROR, so a status the gateway adds later (or one like EXECUTED,
+ * even with last_decision "approve") can never send mail. `last_decision`
+ * only qualifies an APPROVED status: "edit" means the human changed the args,
+ * which arrive as approved_args and must be what is executed; an edit without
+ * them cannot be honoured.
  */
 function toDharaHILAction(data: {
   status?: string;
   last_decision?: string;
+  approved_args?: Record<string, unknown> | null;
 }): DharaHILAction {
-  if (data.status === "APPROVED" || data.last_decision === "approve") {
-    return "APPROVED";
+  switch (data.status) {
+    case "APPROVED":
+      return data.last_decision === "edit" && !data.approved_args
+        ? "ERROR"
+        : "APPROVED";
+    case "REJECTED":
+    case "AUTO_DENIED":
+      return "REJECTED";
+    case "REVISE_REQUESTED":
+      return "REVISE_REQUESTED";
+    case "EXPIRED":
+      return "EXPIRED";
+    default:
+      return "ERROR";
   }
+}
 
-  if (data.status === "REJECTED" || data.last_decision === "reject") {
-    return "REJECTED";
+/** Same allowlist for a decision the gateway made on submission. */
+function toImmediateAction(action: string): DharaHILAction {
+  switch (action) {
+    case "ALLOW":
+    case "APPROVED":
+    case "AUTO_ALLOWED":
+      return action;
+    case "DENY":
+    case "REJECTED":
+    case "AUTO_DENIED":
+      return "REJECTED";
+    case "REVISE_REQUESTED":
+      return "REVISE_REQUESTED";
+    default:
+      return "ERROR";
   }
-
-  if (data.last_decision === "revise") return "REVISE_REQUESTED";
-
-  return data.status as DharaHILAction;
 }
