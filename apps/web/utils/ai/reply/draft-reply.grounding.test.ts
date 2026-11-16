@@ -105,14 +105,72 @@ describe("draft grounding", () => {
   });
 });
 
-function draft() {
+describe("draft commitments", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGenerateObject.mockResolvedValue({
+      object: { reply: "Hello", confidence: "STANDARD" },
+    });
+  });
+
+  it("forbids accepting or promising for the user, with the free-slot and past-email cases", async () => {
+    await draft();
+
+    const system: string = mockGenerateObject.mock.calls[0][0].system;
+    expect(system).toContain("Never accept, agree to, decide or promise");
+    expect(system).toContain("A free calendar slot is not agreement");
+    expect(system).toContain("A pattern in past emails is not a commitment");
+    expect(system).toContain(
+      "Facts found in the provided past emails or knowledge base may be stated; decisions and commitments may not.",
+    );
+  });
+
+  const slots = [{ start: "2026-11-20 16:00", end: "2026-11-20 17:00" }];
+
+  it("offers free slots only inside a confirm placeholder, without a booking link", async () => {
+    await draft({
+      calendarAvailability: { noAvailability: false, suggestedTimes: slots },
+    });
+
+    const prompt: string = mockGenerateObject.mock.calls[0][0].prompt;
+    expect(prompt).toContain("2026-11-20 16:00 to 2026-11-20 17:00");
+    expect(prompt).toContain("only inside a [confirm:");
+    expect(prompt).toContain("never as an acceptance");
+    expect(prompt).not.toContain("Use these time slots");
+    expect(prompt).not.toContain("optionally suggest");
+  });
+
+  it("says the same with a booking link, and still leads with the link", async () => {
+    await draft({
+      calendarAvailability: { noAvailability: false, suggestedTimes: slots },
+      calendarBookingLink: "https://cal.example.com/me",
+    });
+
+    const prompt: string = mockGenerateObject.mock.calls[0][0].prompt;
+    expect(prompt).toContain("Lead with the booking link");
+    expect(prompt).toContain("only inside a [confirm:");
+    expect(prompt).not.toContain("optionally suggest");
+  });
+});
+
+function draft(
+  overrides: {
+    calendarAvailability?: Parameters<
+      typeof aiDraftReplyWithConfidence
+    >[0]["calendarAvailability"];
+    calendarBookingLink?: string;
+  } = {},
+) {
   return aiDraftReplyWithConfidence({
     messages: [{ ...getEmail(), to: "me@example.com" }],
-    emailAccount: getEmailAccount(),
+    emailAccount: {
+      ...getEmailAccount(),
+      calendarBookingLink: overrides.calendarBookingLink ?? null,
+    },
     knowledgeBaseContent: null,
     emailHistorySummary: null,
     emailHistoryContext: null,
-    calendarAvailability: null,
+    calendarAvailability: overrides.calendarAvailability ?? null,
     writingStyle: null,
     mcpContext: null,
     meetingContext: null,
