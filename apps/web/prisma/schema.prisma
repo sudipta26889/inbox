@@ -3470,6 +3470,14 @@ model A2aMessage {
   contextId String // Same as task's contextId
   taskId    String? // Optional: associated task
 
+  // ============ Caller scope ============
+  // contextId is chosen by the peer, so it is not a boundary: context.get
+  // filters on these (taskScope). Rows from before they existed are NULL and
+  // visible to nobody.
+  clientId       String?
+  userId         String?
+  emailAccountId String?
+
   // ============ Message Data ============
   role        A2aMessageRole
   content     Json // Text, structured data, or DataParts
@@ -3486,6 +3494,7 @@ model A2aMessage {
   task A2aTask? @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
   @@index([contextId])
+  @@index([contextId, clientId, userId, emailAccountId])
   @@index([taskId])
   @@index([createdAt])
   @@map("a2a_messages")

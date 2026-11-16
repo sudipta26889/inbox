@@ -429,6 +429,13 @@ const ACTION_FAILURE_MESSAGES: Partial<
       SEND_FAILED: msg`The sender notification could not be sent.`,
     },
   },
+  [ActionType.A2A_NOTIFY]: {
+    fallback: msg`The A2A notification could not be sent.`,
+    codes: {
+      NO_AGENT_URL: msg`The A2A notification could not be sent because no remote agent is configured.`,
+      ALL_AGENTS_FAILED: msg`No remote agent accepted the A2A notification.`,
+    },
+  },
   // Only the action type and error code survive in the stored reason, so this
   // copy stays integration-neutral. The executor records a message naming the
   // integration alongside it.

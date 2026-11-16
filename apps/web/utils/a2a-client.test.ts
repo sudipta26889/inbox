@@ -1,0 +1,396 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import {
+  clearAgentEndpointCache,
+  fetchAgentCard,
+  resolveA2aEndpoint,
+  sendA2aMessage,
+  getRemoteAgentUrls,
+  buildA2aEmailPayload,
+} from "./a2a-client";
+
+vi.mock("server-only", () => ({}));
+
+vi.mock("@/env", () => ({
+  env: {
+    A2A_REMOTE_AGENTS: "http://agent1:8080,http://agent2:9090",
+    A2A_REMOTE_AGENT_TOKEN: "mitra-key",
+  },
+}));
+
+const mockFetch = vi.fn();
+vi.stubGlobal("fetch", mockFetch);
+
+describe("fetchAgentCard", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearAgentEndpointCache();
+  });
+
+  it("fetches agent card from well-known URL", async () => {
+    const card = { name: "test-agent", version: "1.0" };
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(card),
+    });
+
+    const result = await fetchAgentCard("http://agent.local:8080");
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      "http://agent.local:8080/.well-known/agent-card.json",
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    expect(result).toEqual(card);
+  });
+
+  it("strips trailing slash from base URL", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ name: "agent" }),
+    });
+
+    await fetchAgentCard("http://agent.local:8080/");
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      "http://agent.local:8080/.well-known/agent-card.json",
+      expect.anything(),
+    );
+  });
+
+  it("throws on non-OK response", async () => {
+    mockFetch.mockResolvedValue({ ok: false, status: 404 });
+
+    await expect(fetchAgentCard("http://agent.local")).rejects.toThrow(
+      "Failed to fetch agent card",
+    );
+  });
+});
+
+describe("resolveA2aEndpoint", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearAgentEndpointCache();
+  });
+
+  it("resolves endpoint from agent card json-rpc binding", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          name: "agent",
+          bindings: [{ url: "/rpc", transport: "json-rpc" }],
+        }),
+    });
+
+    const endpoint = await resolveA2aEndpoint("http://agent.local:8080");
+    expect(endpoint).toBe("http://agent.local:8080/rpc");
+  });
+
+  it("uses absolute URL from binding when provided", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          name: "agent",
+          bindings: [
+            { url: "http://other-host:9090/rpc", transport: "json-rpc" },
+          ],
+        }),
+    });
+
+    const endpoint = await resolveA2aEndpoint("http://agent.local:8080");
+    expect(endpoint).toBe("http://other-host:9090/rpc");
+  });
+
+  it("falls back to /a2a when agent card fetch fails", async () => {
+    mockFetch.mockRejectedValue(new Error("connection refused"));
+
+    const endpoint = await resolveA2aEndpoint("http://agent.local:8080");
+    expect(endpoint).toBe("http://agent.local:8080/a2a");
+  });
+
+  it("falls back to /a2a when no json-rpc binding exists", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          name: "agent",
+          bindings: [{ url: "/ws", transport: "websocket" }],
+        }),
+    });
+
+    const endpoint = await resolveA2aEndpoint("http://agent.local:8080");
+    expect(endpoint).toBe("http://agent.local:8080/a2a");
+  });
+});
+
+describe("resolveA2aEndpoint — card interface shapes", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearAgentEndpointCache();
+  });
+
+  function cardReturns(card: Record<string, unknown>) {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(card),
+    });
+  }
+
+  // Newer OpenClaw/A2A cards use supportedInterfaces + protocolBinding. Missing
+  // that shape fell through to the `${base}/a2a` guess, which 403s.
+  it("resolves supportedInterfaces with protocolBinding", async () => {
+    cardReturns({
+      name: "Mitra",
+      supportedInterfaces: [
+        {
+          url: "http://agent.local:12345/a2a/v1",
+          protocolBinding: "JSONRPC",
+          protocolVersion: "1.0",
+        },
+      ],
+    });
+
+    await expect(resolveA2aEndpoint("http://agent.local:12345")).resolves.toBe(
+      "http://agent.local:12345/a2a/v1",
+    );
+  });
+
+  it("still resolves the older bindings + transport shape", async () => {
+    cardReturns({
+      name: "Mitra",
+      bindings: [{ url: "http://agent.local/a2a", transport: "json-rpc" }],
+    });
+
+    await expect(resolveA2aEndpoint("http://agent.local")).resolves.toBe(
+      "http://agent.local/a2a",
+    );
+  });
+
+  it("falls back to /a2a when the card advertises no interface", async () => {
+    cardReturns({ name: "Bare" });
+
+    await expect(resolveA2aEndpoint("http://agent.local")).resolves.toBe(
+      "http://agent.local/a2a",
+    );
+  });
+});
+
+describe("sendA2aMessage", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearAgentEndpointCache();
+  });
+
+  it("sends a spec-shaped JSON-RPC message and returns the task result", async () => {
+    mockFetch.mockResolvedValue({
+      json: () =>
+        Promise.resolve({
+          result: { id: "task-123", status: { state: "completed" } },
+        }),
+    });
+
+    const result = await sendA2aMessage("http://agent.local/a2a", {
+      text: "hello",
+    });
+
+    expect(result).toEqual({ taskId: "task-123", state: "completed" });
+    expect(mockFetch).toHaveBeenCalledWith(
+      "http://agent.local/a2a",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          "Content-Type": "application/json",
+        }),
+      }),
+    );
+
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.jsonrpc).toBe("2.0");
+    expect(body.method).toBe("message/send");
+    expect(body.params.message.parts).toEqual([
+      { kind: "text", text: "hello" },
+    ]);
+  });
+
+  it("appends a data part only when data is given", async () => {
+    mockFetch.mockResolvedValue({
+      json: () => Promise.resolve({ result: {} }),
+    });
+
+    await sendA2aMessage("http://agent.local/a2a", {
+      text: "hello",
+      data: { kind: "inbox.daily_digest" },
+    });
+
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.params.message.parts).toEqual([
+      { kind: "text", text: "hello" },
+      { kind: "data", data: { kind: "inbox.daily_digest" } },
+    ]);
+  });
+
+  // Newer agents nest the task: { result: { task: { id, status } } }.
+  it("reads the task from a nested result", async () => {
+    mockFetch.mockResolvedValue({
+      json: () =>
+        Promise.resolve({
+          result: {
+            task: { id: "task-9", status: { state: "TASK_STATE_COMPLETED" } },
+          },
+        }),
+    });
+
+    const result = await sendA2aMessage("http://agent.local/a2a", {
+      text: "hello",
+    });
+
+    expect(result).toEqual({
+      taskId: "task-9",
+      state: "TASK_STATE_COMPLETED",
+    });
+  });
+
+  it("returns error when agent responds with JSON-RPC error", async () => {
+    mockFetch.mockResolvedValue({
+      json: () =>
+        Promise.resolve({
+          error: { code: -32_600, message: "Invalid request" },
+        }),
+    });
+
+    const result = await sendA2aMessage("http://agent.local/a2a", {
+      text: "bad",
+    });
+
+    expect(result.error).toEqual({
+      code: -32_600,
+      message: "Invalid request",
+    });
+  });
+
+  it("returns error on network failure", async () => {
+    mockFetch.mockRejectedValue(new Error("timeout"));
+
+    const result = await sendA2aMessage("http://agent.local/a2a", {
+      text: "hello",
+    });
+
+    expect(result.error).toEqual({ code: -1, message: "timeout" });
+  });
+
+  it("uses provided contextId", async () => {
+    mockFetch.mockResolvedValue({
+      json: () => Promise.resolve({ result: {} }),
+    });
+
+    await sendA2aMessage("http://agent.local/a2a", {
+      text: "hello",
+      contextId: "my-ctx",
+    });
+
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.params.message.contextId).toBe("my-ctx");
+  });
+});
+
+describe("A2A client token and card hardening", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearAgentEndpointCache();
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ result: { id: "t" } }),
+    });
+  });
+
+  it("sends the bearer token to a configured agent origin", async () => {
+    await sendA2aMessage("http://agent1:8080/a2a", { text: "hi" });
+
+    expect(mockFetch.mock.calls[0][1].headers.Authorization).toBe(
+      "Bearer mitra-key",
+    );
+  });
+
+  it("withholds the token from an origin a remote card pointed at", async () => {
+    await sendA2aMessage("http://attacker.example/rpc", { text: "hi" });
+
+    expect(mockFetch.mock.calls[0][1].headers).not.toHaveProperty(
+      "Authorization",
+    );
+  });
+
+  it("fetches a base's card once and reuses the endpoint", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          name: "agent",
+          bindings: [{ url: "/rpc", transport: "json-rpc" }],
+        }),
+    });
+
+    expect(await resolveA2aEndpoint("http://agent1:8080")).toBe(
+      "http://agent1:8080/rpc",
+    );
+    expect(await resolveA2aEndpoint("http://agent1:8080")).toBe(
+      "http://agent1:8080/rpc",
+    );
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("getRemoteAgentUrls", () => {
+  it("parses comma-separated agent URLs from env", () => {
+    const urls = getRemoteAgentUrls();
+    expect(urls).toEqual(["http://agent1:8080", "http://agent2:9090"]);
+  });
+});
+
+describe("buildA2aEmailPayload", () => {
+  it("builds payload with all fields", () => {
+    const now = new Date("2026-01-15T10:00:00Z");
+    const payload = buildA2aEmailPayload(
+      {
+        from: "alice@example.com",
+        subject: "Important",
+        snippet: "Please review",
+        threadId: "t-1",
+        messageId: "m-1",
+        labels: ["INBOX", "IMPORTANT"],
+        receivedAt: now,
+      },
+      { ruleName: "urgent", ruleId: "r-1" },
+    );
+
+    expect(payload.text).toBe(
+      "Urgent email from alice@example.com: Important\n\nPlease review",
+    );
+    expect(payload.data?.from).toBe("alice@example.com");
+    expect(payload.data?.subject).toBe("Important");
+    expect(payload.data?.snippet).toBe("Please review");
+    expect(payload.data?.thread_id).toBe("t-1");
+    expect(payload.data?.message_id).toBe("m-1");
+    expect(payload.data?.labels).toEqual(["INBOX", "IMPORTANT"]);
+    expect(payload.data?.received_at).toBe("2026-01-15T10:00:00.000Z");
+    expect(payload.data?.rule_name).toBe("urgent");
+    expect(payload.data?.rule_id).toBe("r-1");
+    expect(payload.data?.timestamp).toBeDefined();
+  });
+
+  it("handles missing optional fields", () => {
+    const payload = buildA2aEmailPayload(
+      {
+        from: "bob@example.com",
+        subject: "Hi",
+        threadId: "t-2",
+        messageId: "m-2",
+      },
+      { ruleId: "r-2" },
+    );
+
+    expect(payload.data?.snippet).toBeUndefined();
+    expect(payload.data?.labels).toBeUndefined();
+    expect(payload.data?.received_at).toBeUndefined();
+    expect(payload.data?.rule_name).toBeUndefined();
+  });
+});

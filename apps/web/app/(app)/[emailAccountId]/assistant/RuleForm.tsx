@@ -963,6 +963,14 @@ export function getRuleActionTypeOptions({
           },
         ]
       : []),
+    ...(extraActions.has(ActionType.A2A_NOTIFY)
+      ? [
+          {
+            label: ACTION_TYPE_LABELS[ActionType.A2A_NOTIFY],
+            value: ActionType.A2A_NOTIFY,
+          },
+        ]
+      : []),
     ...(extraActions.has(ActionType.INTEGRATION)
       ? [
           {

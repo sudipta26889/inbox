@@ -21,6 +21,11 @@ import prisma from "@/utils/prisma";
 import { callMcpTool } from "@/utils/mcp/call-tool";
 import { createTestLogger } from "@/__tests__/helpers";
 import { executeHomeAssistantAction } from "@/utils/home-assistant";
+import {
+  getRemoteAgentUrls,
+  resolveA2aEndpoint,
+  sendA2aMessage,
+} from "@/utils/a2a-client";
 
 const { mockEnv, mockIsIntegrationActionEnabledForUserId } = vi.hoisted(() => ({
   mockEnv: {
@@ -82,6 +87,13 @@ vi.mock("@/utils/cold-email/send-notification", () => ({
 vi.mock("@/utils/home-assistant", () => ({
   executeHomeAssistantAction: vi.fn(),
 }));
+vi.mock("@/utils/a2a-client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/utils/a2a-client")>()),
+  getRemoteAgentUrls: vi.fn(() => []),
+  resolveA2aEndpoint: vi.fn(async (url: string) => `${url}/a2a`),
+  sendA2aMessage: vi.fn().mockResolvedValue({ taskId: "task-1" }),
+}));
+
 vi.mock("@/utils/prisma", () => ({
   default: {
     executedAction: {
@@ -502,6 +514,53 @@ describe("runActionFunction", () => {
     });
 
     expect(client.starMessage).toHaveBeenCalledWith("message-1");
+  });
+
+  it("sends A2A_NOTIFY actions to every configured remote agent", async () => {
+    vi.mocked(getRemoteAgentUrls).mockReturnValue(["http://mitra.test"]);
+
+    const result = await runActionFunction({
+      client: createMockEmailProvider(),
+      email,
+      action: { id: "action-1", type: ActionType.A2A_NOTIFY },
+      emailAccount,
+      executedRule: {
+        id: "executed-rule-1",
+        threadId: "thread-1",
+        emailAccountId: "account-1",
+        ruleId: "rule-1",
+      } as any,
+      logger,
+    });
+
+    expect(result).toEqual({ success: true });
+    expect(resolveA2aEndpoint).toHaveBeenCalledWith("http://mitra.test");
+    expect(sendA2aMessage).toHaveBeenCalledWith(
+      "http://mitra.test/a2a",
+      expect.objectContaining({
+        data: expect.objectContaining({
+          message_id: "message-1",
+          thread_id: "thread-1",
+          rule_id: "rule-1",
+        }),
+      }),
+    );
+  });
+
+  it("fails A2A_NOTIFY actions when no remote agent is configured", async () => {
+    vi.mocked(getRemoteAgentUrls).mockReturnValue([]);
+
+    const result = await runActionFunction({
+      client: createMockEmailProvider(),
+      email,
+      action: { id: "action-1", type: ActionType.A2A_NOTIFY },
+      emailAccount,
+      executedRule: { id: "executed-rule-1", ruleId: "rule-1" } as any,
+      logger,
+    });
+
+    expect(result).toEqual({ success: false, errorCode: "NO_AGENT_URL" });
+    expect(sendA2aMessage).not.toHaveBeenCalled();
   });
 
   it("marks notify messaging actions failed when missing a channel id", async () => {

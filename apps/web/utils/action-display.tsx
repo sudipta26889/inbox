@@ -18,6 +18,7 @@ import {
   ListChecksIcon,
   MailIcon,
   NewspaperIcon,
+  RadioTowerIcon,
   SquareCheckBigIcon,
   StarIcon,
   Trash2Icon,
@@ -118,6 +119,8 @@ export function getActionDisplay(
       return "Home Assistant";
     case ActionType.CREATE_TASK:
       return "TaskPilot";
+    case ActionType.A2A_NOTIFY:
+      return "A2A Notify";
     case ActionType.INTEGRATION: {
       const label = getIntegrationActionLabel(action);
       const displayValue = getIntegrationActionDisplayValue(action);
@@ -149,6 +152,7 @@ export const ACTION_TYPE_LABELS = {
   [ActionType.NOTIFY_SENDER]: msg`Notify sender`,
   [ActionType.HOME_ASSISTANT]: msg`Home Assistant`,
   [ActionType.CREATE_TASK]: msg`TaskPilot`,
+  [ActionType.A2A_NOTIFY]: msg`A2A notify`,
   // ActionType alone cannot name a specific tool; getIntegrationActionLabel
   // gives the precise name when the action is known.
   [ActionType.INTEGRATION]: getIntegrationActionLabelMessage(),
@@ -205,6 +209,8 @@ export function getActionIcon(actionType: ActionType) {
       return HomeIcon;
     case ActionType.CREATE_TASK:
       return ListChecksIcon;
+    case ActionType.A2A_NOTIFY:
+      return RadioTowerIcon;
     case ActionType.INTEGRATION:
       return SquareCheckBigIcon;
     default: {

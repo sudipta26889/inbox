@@ -8,6 +8,7 @@ import {
 } from "@/utils/error-messages";
 import { createTestLogger } from "@/__tests__/helpers";
 import { DraftEmailStatus } from "@/generated/prisma/enums";
+import { notifyMailboxDisconnected } from "@/utils/auth/notify-disconnected";
 
 const logger = createTestLogger();
 
@@ -21,6 +22,9 @@ vi.mock("@/utils/error-messages", () => ({
   ErrorType: {
     ACCOUNT_DISCONNECTED: "Account disconnected",
   },
+}));
+vi.mock("@/utils/auth/notify-disconnected", () => ({
+  notifyMailboxDisconnected: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("@/utils/unsubscribe", () => ({
   createUnsubscribeToken: vi.fn().mockResolvedValue("mock-token"),
@@ -44,6 +48,69 @@ describe("cleanupInvalidTokens", () => {
     },
     watchEmailsExpirationDate: new Date(Date.now() + 1000 * 60 * 60), // Valid expiration
   };
+
+  it("alerts once when this call disconnects the account", async () => {
+    prisma.emailAccount.findUnique.mockResolvedValue(mockEmailAccount as any);
+    prisma.account.updateMany.mockResolvedValue({ count: 1 });
+
+    await cleanupInvalidTokens({
+      emailAccountId: "ea_1",
+      failedAccessToken: "access-token",
+      reason: "insufficient_permissions",
+      logger,
+    });
+
+    expect(notifyMailboxDisconnected).toHaveBeenCalledTimes(1);
+    expect(notifyMailboxDisconnected).toHaveBeenCalledWith({
+      email: "test@example.com",
+      emailAccountId: "ea_1",
+      reason: "insufficient_permissions",
+      logger,
+    });
+  });
+
+  it("does not alert when the account was already disconnected", async () => {
+    prisma.emailAccount.findUnique.mockResolvedValue({
+      ...mockEmailAccount,
+      account: { ...mockEmailAccount.account, disconnectedAt: new Date() },
+    } as any);
+
+    await cleanupInvalidTokens({
+      emailAccountId: "ea_1",
+      failedAccessToken: "access-token",
+      reason: "invalid_grant",
+      logger,
+    });
+
+    expect(notifyMailboxDisconnected).not.toHaveBeenCalled();
+  });
+
+  it("does not alert when the account changed before this call could disconnect it", async () => {
+    prisma.emailAccount.findUnique.mockResolvedValue(mockEmailAccount as any);
+    prisma.account.updateMany.mockResolvedValue({ count: 0 });
+
+    await cleanupInvalidTokens({
+      emailAccountId: "ea_1",
+      failedAccessToken: "access-token",
+      reason: "invalid_grant",
+      logger,
+    });
+
+    expect(notifyMailboxDisconnected).not.toHaveBeenCalled();
+  });
+
+  it("does not alert for superseded credentials", async () => {
+    prisma.emailAccount.findUnique.mockResolvedValue(mockEmailAccount as any);
+
+    await cleanupInvalidTokens({
+      emailAccountId: "ea_1",
+      failedAccessToken: "old-access",
+      reason: "invalid_grant",
+      logger,
+    });
+
+    expect(notifyMailboxDisconnected).not.toHaveBeenCalled();
+  });
 
   it("preserves reconnected credentials when an old request fails", async () => {
     prisma.emailAccount.findUnique.mockResolvedValue({

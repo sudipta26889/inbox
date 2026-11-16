@@ -9,6 +9,7 @@ import {
 } from "@/utils/error-messages";
 import { createUnsubscribeToken } from "@/utils/unsubscribe";
 import { skipDraftCleanupForDisconnectedAccount } from "@/utils/ai/draft-cleanup";
+import { notifyMailboxDisconnected } from "@/utils/auth/notify-disconnected";
 
 const clearedCredentials = {
   access_token: null,
@@ -125,6 +126,14 @@ export async function cleanupInvalidTokens({
     logger.info("Account changed before credential cleanup");
     return { status: "skipped" as const };
   }
+
+  // Only the call that did the disconnect alerts (fork PR 38).
+  await notifyMailboxDisconnected({
+    email: emailAccount.email,
+    emailAccountId: emailAccount.id,
+    reason,
+    logger,
+  });
 
   await skipDraftCleanupForDisconnectedAccount({
     emailAccountId: emailAccount.id,

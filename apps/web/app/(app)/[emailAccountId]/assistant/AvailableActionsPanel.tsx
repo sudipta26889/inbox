@@ -40,6 +40,7 @@ const actionNames: Record<
   [ActionType.NOTIFY_SENDER]: msg`Notify sender`,
   [ActionType.HOME_ASSISTANT]: msg`Home Assistant`,
   [ActionType.CREATE_TASK]: msg`TaskPilot`,
+  [ActionType.A2A_NOTIFY]: msg`A2A Notify`,
 };
 
 const actionTooltips: Partial<Record<ActionType, MessageDescriptor>> = {
@@ -47,6 +48,7 @@ const actionTooltips: Partial<Record<ActionType, MessageDescriptor>> = {
   [ActionType.DIGEST]: msg`Group emails together and receive them as a daily summary`,
   [ActionType.HOME_ASSISTANT]: msg`Trigger Home Assistant automations, publish to MQTT, or control smart home devices`,
   [ActionType.CREATE_TASK]: msg`Create a TaskPilot task from this email — or, if the same thread already has a task, add the new message as a comment instead. Requires TaskPilot credentials in settings.`,
+  [ActionType.A2A_NOTIFY]: msg`Send notification to remote A2A agent`,
 };
 
 export function AvailableActionsPanel() {

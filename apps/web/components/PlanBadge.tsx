@@ -205,6 +205,7 @@ export function getActionColor(actionType: ActionType): Color {
     case ActionType.INTEGRATION:
     case ActionType.HOME_ASSISTANT:
     case ActionType.CREATE_TASK:
+    case ActionType.A2A_NOTIFY:
       return "purple";
     default: {
       const exhaustiveCheck: never = actionType;

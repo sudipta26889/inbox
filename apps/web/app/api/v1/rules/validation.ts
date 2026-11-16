@@ -141,6 +141,7 @@ const ruleActionTypeResponseSchema = z.enum([
   ...ruleActionRequestTypeSchema.options,
   ActionType.INTEGRATION,
   ActionType.HOME_ASSISTANT,
+  ActionType.A2A_NOTIFY,
 ]);
 
 const ruleActionResponseSchema = z.object({

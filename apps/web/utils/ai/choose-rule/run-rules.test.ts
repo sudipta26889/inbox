@@ -34,6 +34,7 @@ import { executeAct } from "@/utils/ai/choose-rule/execute";
 import { determineConversationStatus } from "@/utils/reply-tracker/handle-conversation-status";
 import { isDraftReplyActionType } from "@/utils/actions/draft-reply";
 import { maybeRouteToTaskPilot } from "@/utils/taskpilot/route";
+import { fanOutEmailAnalysis } from "@/utils/email-fanout";
 
 const logger = createTestLogger();
 
@@ -64,6 +65,9 @@ vi.mock("@/utils/rule/ai-sender-pattern-learning", () => ({
 }));
 vi.mock("@/utils/taskpilot/route", () => ({
   maybeRouteToTaskPilot: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("@/utils/email-fanout", () => ({
+  fanOutEmailAnalysis: vi.fn(),
 }));
 vi.mock("@/utils/scheduled-actions/scheduler", () => ({
   scheduleDelayedActions: vi.fn(),
@@ -970,6 +974,109 @@ describe("runRules outbound guardrails", () => {
     expect(result[0]?.reason).toContain(
       "email- or domain-based From condition",
     );
+  });
+});
+
+describe("runRules email fan-out", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("fans out a processed email exactly once, with its rule analysis", async () => {
+    const notifyAction = getAction({
+      id: "a2a-action-1",
+      type: ActionType.A2A_NOTIFY,
+    });
+    const labelAction = getAction({ id: "label-action-1" });
+    const urgentRule = createRule("urgent-rule", null, [notifyAction]);
+    const secondRule = createRule("second-rule", null, [labelAction]);
+
+    mockMatchingRules([
+      { rule: urgentRule, matchReasons: [] },
+      { rule: secondRule, matchReasons: [] },
+    ]);
+    prisma.executedRule.findFirst.mockResolvedValue(null);
+    vi.mocked(getActionItemsWithAiArgs).mockResolvedValue([
+      notifyAction,
+    ] as any);
+    vi.mocked(executeAct).mockResolvedValue(ExecutedRuleStatus.APPLIED);
+    mockExecutedRuleCreate({ rule: urgentRule, actionItems: [notifyAction] });
+    prisma.executedAction.count.mockResolvedValue(1);
+
+    await runRulesWithDefaults({ rules: [urgentRule, secondRule] });
+
+    expect(fanOutEmailAnalysis).toHaveBeenCalledTimes(1);
+    expect(fanOutEmailAnalysis).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: expect.objectContaining({ id: "message-1" }),
+        rules: [
+          expect.objectContaining({ name: "Rule urgent-rule" }),
+          expect.objectContaining({ name: "Rule second-rule" }),
+        ],
+        // The rule's own A2A_NOTIFY already told Mitra.
+        mitraAlreadyNotified: true,
+      }),
+    );
+  });
+
+  it("still sends to Mitra when the rule's own A2A_NOTIFY failed", async () => {
+    const notifyAction = getAction({
+      id: "a2a-action-1",
+      type: ActionType.A2A_NOTIFY,
+    });
+    const urgentRule = createRule("urgent-rule", null, [notifyAction]);
+
+    mockMatchingRules([{ rule: urgentRule, matchReasons: [] }]);
+    prisma.executedRule.findFirst.mockResolvedValue(null);
+    vi.mocked(getActionItemsWithAiArgs).mockResolvedValue([
+      notifyAction,
+    ] as any);
+    vi.mocked(executeAct).mockResolvedValue(ExecutedRuleStatus.ERROR);
+    mockExecutedRuleCreate({ rule: urgentRule, actionItems: [notifyAction] });
+    // No SUCCEEDED A2A_NOTIFY ExecutedAction: the send failed.
+    prisma.executedAction.count.mockResolvedValue(0);
+
+    await runRulesWithDefaults({ rules: [urgentRule] });
+
+    expect(prisma.executedAction.count).toHaveBeenCalledWith({
+      where: {
+        executedRuleId: { in: ["exec-1"] },
+        type: ActionType.A2A_NOTIFY,
+        executionStatus: "SUCCEEDED",
+      },
+    });
+    expect(fanOutEmailAnalysis).toHaveBeenCalledWith(
+      expect.objectContaining({ mitraAlreadyNotified: false }),
+    );
+  });
+
+  it("fans out an email no rule matched exactly once, with the skip reason", async () => {
+    vi.mocked(findMatchingRules).mockResolvedValue({
+      matches: [],
+      reasoning: "Nothing fits",
+    } as any);
+
+    await runRulesWithDefaults({ rules: [regularRule] });
+
+    expect(fanOutEmailAnalysis).toHaveBeenCalledTimes(1);
+    expect(fanOutEmailAnalysis).toHaveBeenCalledWith(
+      expect.objectContaining({
+        rules: [],
+        skippedReason: "Nothing fits",
+        mitraAlreadyNotified: false,
+      }),
+    );
+  });
+
+  it("does not fan out a test run", async () => {
+    vi.mocked(findMatchingRules).mockResolvedValue({
+      matches: [],
+      reasoning: "Nothing fits",
+    } as any);
+
+    await runRulesWithDefaults({ rules: [regularRule], isTest: true });
+
+    expect(fanOutEmailAnalysis).not.toHaveBeenCalled();
   });
 });
 

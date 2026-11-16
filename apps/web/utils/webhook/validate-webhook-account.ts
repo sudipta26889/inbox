@@ -293,6 +293,7 @@ export async function validateWebhookAccount(
   };
 }
 
+// ponytail: billing is off for good; processing relies on the bypass flag, which __tests__/strip-guard.test.ts requires deploy.yml to bake in as true.
 function getWebhookAccountPremium(
   emailAccount: NonNullable<ValidatedWebhookAccountData>,
 ) {

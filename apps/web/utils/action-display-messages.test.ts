@@ -36,6 +36,7 @@ const actionCases: Record<ActionType, Omit<DisplayAction, "type">[]> = {
   [ActionType.NOTIFY_SENDER]: [{}],
   [ActionType.HOME_ASSISTANT]: [{}],
   [ActionType.CREATE_TASK]: [{}],
+  [ActionType.A2A_NOTIFY]: [{}],
   [ActionType.INTEGRATION]: [
     {},
     { integrationName: "unknown", integrationToolName: "unknown" },

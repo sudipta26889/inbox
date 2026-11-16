@@ -1,0 +1,412 @@
+# Inbox A2A Protocol API
+
+> A2A (Agent-to-Agent) Protocol v1.0 implementation enabling AI agents to securely interact with email, calendar, and automation services through a standardized JSON-RPC 2.0 interface with OAuth 2.0 authentication.
+
+## Quick Start
+
+This API allows AI agents to:
+- Search and manage emails across multiple accounts
+- Create and manage calendar events
+- Access email statistics and automation rules
+- All operations are authenticated via OAuth 2.0 with PKCE
+- Real-time updates available via Server-Sent Events (SSE)
+- Webhook notifications for task state changes
+
+## Outbound A2A Notifications
+
+Inbox can also act as an **A2A client**, sending outbound notifications to remote agents when automation rules trigger. This enables event-driven agent-to-agent workflows:
+
+- **A2A_NOTIFY action**: A zero-config rule action that sends a JSON-RPC 2.0 `message.send` to configured remote A2A agents when a rule matches an email
+- **Use case**: Urgent/important emails trigger notifications to OpenClaw Mitra or other A2A agents, which can then notify users via WhatsApp, Telegram, Slack, etc.
+- **Configuration**: Set `A2A_REMOTE_AGENTS` env var with comma-separated agent URLs (e.g., `http://dharabot.lan:12345`)
+- **Agent card discovery**: Inbox fetches the remote agent's `/.well-known/agent-card.json` to resolve the JSON-RPC endpoint
+- **Payload**: Includes email metadata (from, subject, snippet, thread_id, message_id, labels, received_at, rule info)
+- **Fan-out**: Sends to all configured agents in parallel; succeeds if at least one agent responds
+- **Non-blocking**: A2A notification failures don't block other rule actions
+
+## Authentication
+
+OAuth 2.0 Authorization Code flow with PKCE is required:
+1. Discover capabilities: GET https://inbox.sudiptadhara.in/.well-known/agent-card.json
+2. Register OAuth client in Settings → A2A Clients
+3. Initiate authorization: GET https://inbox.sudiptadhara.in/mcp-server/authorize
+4. Exchange code for token: POST https://inbox.sudiptadhara.in/mcp-server/token
+5. Use Bearer token for all API requests
+
+## Core Endpoints
+
+### AgentCard Discovery
+- [Agent Capabilities](https://inbox.sudiptadhara.in/.well-known/agent-card.json): Discover available skills, OAuth endpoints, and protocol bindings
+
+The card carries `supportedInterfaces[]` (v1.0), each entry naming a `url`,
+`protocolBinding` and `protocolVersion`. The bare top-level `url` is retained
+alongside it for clients still reading the v0.3 shape. Skills listed on the card
+are exactly those a peer can reach, and each carries `requiresHumanApproval`
+derived from the same registry that enforces it.
+
+### JSON-RPC API
+- [A2A Endpoint](https://inbox.sudiptadhara.in/a2a): POST requests with JSON-RPC 2.0 format
+  - method: message.send - Create a new task
+  - method: task.get - Get task status
+  - method: task.list - List tasks in a context
+  - method: task.cancel - Cancel a task
+  - method: context.get - Get context messages
+
+### Real-Time Updates
+- [SSE Stream](https://inbox.sudiptadhara.in/a2a/stream?taskId=TASK_ID): Subscribe to real-time task state changes
+
+## Available Skills
+
+Exactly these skills are reachable by a peer. The agent card is generated from
+the same registry, so it and this list cannot disagree.
+
+### Email Operations
+- **email.search**: Search emails with query syntax (scope: email:read)
+- **email.get**: Get full email details including attachments (scope: email:read)
+- **digest.get**: Retrieve the generated daily digest (scope: email:read)
+- **account.list**: List all connected email accounts (scope: email:read)
+
+`email.send` is registered but **NOT peer-reachable**. Sending mail as the
+account owner is a larger trust grant than this protocol surface should hand
+out, and its only gate is a backstop that applies to every caller rather than a
+peer-facing review. Requests for it are refused regardless of the scopes on your
+token.
+
+### Calendar Operations
+- **calendar.search**: Search calendar events by date range (scope: calendar:read)
+- **calendar.get_event**: Get event details (scope: calendar:read)
+- **calendar.availability**: Check availability for a date range (scope: calendar:read)
+- **calendar.create_event**: Create calendar event - REQUIRES HUMAN APPROVAL via Slack/Telegram (scope: calendar:write)
+
+### Statistics & Automation
+- **stats.email_analytics**: Get email statistics for a time period (scope: stats:read)
+- **automation.list_rules**: List automation rules (scope: rules:read)
+
+## Request Format
+
+POST https://inbox.sudiptadhara.in/a2a
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "message.send",
+  "params": {
+    "contextId": "unique-context-id",
+    "skill": "email.search",
+    "input": {
+      "query": "from:john@example.com subject:invoice",
+      "maxResults": 10
+    }
+  }
+}
+```
+
+Headers required:
+- Authorization: Bearer YOUR_ACCESS_TOKEN
+- Content-Type: application/json
+
+## Response Format
+
+Success:
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "contextId": "unique-context-id",
+    "taskId": "task_abc123",
+    "state": "TASK_STATE_SUBMITTED"
+  }
+}
+```
+
+Error:
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "error": {
+    "code": -32602,
+    "message": "Invalid params: contextId is required"
+  }
+}
+```
+
+## Task States
+
+States are emitted in the A2A v1.0 spelling:
+
+- **TASK_STATE_SUBMITTED**: Task queued for execution
+- **TASK_STATE_WORKING**: Task is executing
+- **TASK_STATE_AUTH_REQUIRED**: Human approval needed (notification sent)
+- **TASK_STATE_COMPLETED**: Task finished successfully
+- **TASK_STATE_FAILED**: Task failed (check error field)
+- **TASK_STATE_CANCELED**: Task was canceled
+- **TASK_STATE_REJECTED**: Human rejected the approval request
+- **TASK_STATE_UNSPECIFIED**: Unknown state (v1.0 replacement for v0.3 `unknown`)
+
+Terminal states are COMPLETED, FAILED, CANCELED and REJECTED; once reached a
+task cannot restart, and follow-on work needs a new task in the same contextId.
+AUTH_REQUIRED and INPUT_REQUIRED are interrupted rather than terminal.
+
+**Inbound, both spellings are accepted.** A `state` filter on `task.list` may be
+sent as either `TASK_STATE_COMPLETED` or the older `completed`. An unrecognised
+name is refused with an error rather than silently matching nothing.
+
+## Task Visibility
+
+A task is visible only to the peer that created it. Queries are bounded by
+user, email account **and client id**, so `task.get`, `task.list`,
+`task.cancel`, `context.get` and the SSE stream return only your own tasks —
+another peer's task id resolves to "task not found" rather than "forbidden",
+which avoids confirming that it exists.
+
+This changed: task queries were previously scoped by user alone, so two peers
+belonging to the same person could read and cancel each other's tasks. If you
+relied on that, you were relying on a bug.
+
+## MQTT Event Bus
+
+Inbox publishes its state to the LAN MQTT broker, so an agent can learn that
+something happened without polling this API. The bus is **listen-only**: it
+carries events, never commands.
+
+Act by calling A2A over HTTP with your own token. MQTT authenticates a
+connection rather than a request — one shared credential, no per-request
+identity, no scopes, no per-peer audit — so accepting commands there would mean
+rebuilding every control this API already has on a strictly weaker channel.
+MQTT is the discovery plane; A2A is the control plane.
+
+Topics (all retained, so a subscriber connecting late gets current state
+immediately rather than waiting for the next change):
+
+```
+inbox/availability                  "online" | "offline"
+inbox/dependencies/state            count of unhealthy dependencies
+inbox/dependencies/attributes       {"unhealthy": [...]}
+inbox/peers/state                   count of peer credentials checked
+inbox/peers/attributes              {"expiring": [...], "stale": [...]}
+inbox/agent_runs/state              last run outcome
+inbox/agent_runs/attributes         {"steps", "repeated_tool_calls", "answered", "hit_step_cap"}
+inbox/<slug>/unread/state           unread count
+inbox/<slug>/urgent/state           name of the last rule that matched
+inbox/<slug>/digest/state           "ready"
+inbox/<slug>/approvals/state        count of approvals waiting on a human
+```
+
+`inbox/availability` carries a Last Will: if the process dies the broker
+publishes `offline` on its behalf, so agent-down detection needs no polling and
+no watchdog.
+
+Per-account topics (`inbox/<slug>/…`) appear only for accounts that have opted
+in, under a slug chosen by the account holder — no email address appears in any
+topic or payload. Payloads carry counts and classifications; subjects and
+senders appear only if that account separately opted into detail. Service-level
+topics carry no mail content at all.
+
+Entities self-register via Home Assistant MQTT Discovery under
+`homeassistant/sensor/inbox/<entity>/config` and
+`homeassistant/sensor/inbox_<slug>/<entity>/config`.
+
+## Rate Limits
+
+- Client: 60 requests/minute, 1000/hour
+- User: 100 requests/minute, 2000/hour
+- Task Creation: 30 requests/minute, 500/hour
+- **Approval-requiring tasks: 5/minute, 20/hour** — far tighter than task
+  creation, because these spend a person's attention rather than CPU. Checked
+  before the task is created, so an exhausted budget means nothing was queued.
+- IP (unauthenticated): 20 requests/minute, 200/hour
+
+Rate limit headers included in all responses:
+- X-RateLimit-Limit
+- X-RateLimit-Remaining
+- X-RateLimit-Reset
+
+## Real-Time Updates (SSE)
+
+Instead of polling, subscribe to Server-Sent Events:
+```javascript
+GET https://inbox.sudiptadhara.in/a2a/stream?taskId=TASK_ID
+```
+
+Events:
+- event: ping - Keep-alive (every 15 seconds)
+- event: task.state_changed - State changed
+- event: task.completed - Task completed
+- event: task.failed - Task failed
+- event: final - Terminal state reached (stream closes)
+
+## Webhook Notifications
+
+Configure webhooks to receive push notifications for task state changes:
+- POST https://inbox.sudiptadhara.in/api/user/a2a-webhooks
+- Webhooks include HMAC-SHA256 signature for verification
+- Retry logic: 5 attempts with exponential backoff (1s, 5s, 15s, 1min, 5min)
+- Available events: task.created, task.state_changed, task.completed, task.failed, task.canceled, task.rejected, task.approval_required
+
+## Human-in-the-Loop Approvals
+
+Some skills require human approval (currently: calendar.create_event):
+1. Task enters **auth_required** state
+2. Human receives notification via Slack/Telegram (DharaHIL gateway)
+3. Human can: APPROVE (execute), REJECT (deny), or REVISE (request changes)
+4. Timeout: 3-30 minutes based on risk level
+5. If timeout: Task auto-rejected (fail-safe)
+
+## OAuth Scopes
+
+- email:read - Read emails and search inbox
+- email:write - Send emails and modify labels
+- calendar:read - Read calendar events and availability
+- calendar:write - Create and modify calendar events
+- stats:read - Access email statistics and analytics
+- rules:read - Read automation rules
+- rules:write - Create and modify automation rules
+- ai:analyze - Use AI analysis features
+
+## Error Codes
+
+JSON-RPC standard error codes:
+- -32700: Parse error (invalid JSON)
+- -32600: Invalid Request (missing jsonrpc/method)
+- -32601: Method not found (unknown skill)
+- -32602: Invalid params (validation failed)
+- -32603: Internal error (server error)
+- -32002: Authentication required (invalid token)
+- -32003: Rate limit exceeded
+
+## Documentation Resources
+
+- [OpenAPI Specification](https://inbox.sudiptadhara.in/docs/a2a-openapi.yaml): Complete API reference with schemas and examples
+- [Integration Guide](https://inbox.sudiptadhara.in/docs/a2a-integration-guide): Step-by-step implementation guide with Python and Node.js SDK examples
+- [Interactive API Explorer](https://inbox.sudiptadhara.in/docs/a2a-explorer): Browser-based testing environment
+
+## Example: Search Emails
+
+1. Obtain access token via OAuth
+2. Create search task:
+```json
+POST https://inbox.sudiptadhara.in/a2a
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "message.send",
+  "params": {
+    "contextId": "my-search-001",
+    "skill": "email.search",
+    "input": {
+      "query": "from:john@example.com subject:invoice",
+      "maxResults": 10
+    }
+  }
+}
+```
+
+3. Response contains taskId
+4. Poll task status or subscribe to SSE:
+```json
+POST https://inbox.sudiptadhara.in/a2a
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "method": "task.get",
+  "params": {
+    "taskId": "task_abc123"
+  }
+}
+```
+
+5. When state is TASK_STATE_COMPLETED, result contains emails
+
+## Example: Create Calendar Event (with Approval)
+
+1. Request event creation:
+```json
+POST https://inbox.sudiptadhara.in/a2a
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "message.send",
+  "params": {
+    "contextId": "my-calendar-001",
+    "skill": "calendar.create_event",
+    "input": {
+      "title": "Team Meeting",
+      "startTime": "2026-03-24T14:00:00Z",
+      "endTime": "2026-03-24T15:00:00Z",
+      "attendees": ["alice@example.com", "bob@example.com"],
+      "description": "Quarterly planning",
+      "location": "Zoom"
+    }
+  }
+}
+```
+
+2. Task enters TASK_STATE_AUTH_REQUIRED
+3. Human receives Slack/Telegram notification with event details
+4. Human approves or rejects
+5. Task transitions to TASK_STATE_COMPLETED (if approved) or TASK_STATE_REJECTED
+6. Poll or use SSE to get final result
+
+## Security Features
+
+- OAuth 2.0 with PKCE (Proof Key for Code Exchange)
+- HMAC-SHA256 webhook signatures
+- Comprehensive audit logging (all operations logged)
+- Multi-tier rate limiting (client, user, IP)
+- Fail-safe approval workflow (timeout = deny)
+- Scope-based access control
+- Idempotency keys for duplicate prevention
+
+## Support
+
+- Documentation: https://inbox.sudiptadhara.in/docs/a2a-integration-guide
+- API Explorer: https://inbox.sudiptadhara.in/docs/a2a-explorer
+- Issue Tracker: Contact support via settings page
+- MCP Server Configuration: claude mcp add --transport http EmailCalendar https://inbox.sudiptadhara.in/mcp-server --scope user
+
+## Technical Specifications
+
+- Protocol: A2A Protocol v1.0 (Linux Foundation / Agentic AI Foundation)
+- Transport: JSON-RPC 2.0 over HTTPS
+- Authentication: OAuth 2.0 Authorization Code with PKCE
+- Real-time: Server-Sent Events (SSE)
+- Webhooks: HMAC-SHA256 signatures
+- Retry Logic: Exponential backoff (tasks: 3 attempts, webhooks: 5 attempts)
+- Token Lifetime: 1 hour (use refresh token to renew)
+- Max SSE Connection: 5 minutes
+- Task Timeout: 5 minutes for stuck tasks
+
+## Production Endpoints
+
+- Base URL: https://inbox.sudiptadhara.in
+- AgentCard: https://inbox.sudiptadhara.in/.well-known/agent-card.json
+- OAuth Authorize: https://inbox.sudiptadhara.in/mcp-server/authorize
+- OAuth Token: https://inbox.sudiptadhara.in/mcp-server/token
+- JSON-RPC: https://inbox.sudiptadhara.in/a2a
+- SSE Stream: https://inbox.sudiptadhara.in/a2a/stream
+- OpenAPI: https://inbox.sudiptadhara.in/docs/a2a-openapi.yaml
+
+## Quick Integration Checklist
+
+1. ✅ Register OAuth client in Settings → A2A Clients
+2. ✅ Implement OAuth 2.0 PKCE flow
+3. ✅ Store access token and refresh token securely
+4. ✅ Make JSON-RPC requests with Bearer token
+5. ✅ Handle rate limits (check X-RateLimit-* headers)
+6. ✅ Implement retry logic for transient errors
+7. ✅ Use SSE or webhooks for real-time updates (optional)
+8. ✅ Handle approval workflow for sensitive operations
+9. ✅ Test with interactive API explorer
+10. ✅ Monitor audit logs for security
+
+## Compliance & Audit
+
+- All operations logged to audit trail
+- 90-day audit log retention
+- HMAC webhook signatures for authenticity
+- Fail-safe approval workflow (errors = deny)
+- Rate limiting to prevent abuse
+- OAuth token expiration (1 hour)
+- Comprehensive error messages for debugging
