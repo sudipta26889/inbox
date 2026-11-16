@@ -1,6 +1,9 @@
 import IoRedis from "ioredis";
 import { env } from "@/env";
+import { createScopedLogger } from "@/utils/logger";
 import { REDIS_KEY_PREFIX } from "@/utils/redis/key-prefix";
+
+const logger = createScopedLogger("redis");
 
 const ioRedisClient = new IoRedis(env.REDIS_URL ?? "redis://localhost:6379", {
   maxRetriesPerRequest: 3,
@@ -9,7 +12,7 @@ const ioRedisClient = new IoRedis(env.REDIS_URL ?? "redis://localhost:6379", {
 });
 
 ioRedisClient.on("error", (err) => {
-  console.error("[redis] connection error", err.message);
+  logger.error("Redis connection error", { error: err.message });
 });
 
 /**

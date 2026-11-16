@@ -143,8 +143,8 @@ export function Referrals({ source }: { source: ReferralSurface }) {
         </PageHeading>
         <PageSubHeading className="mt-2">
           <Trans>
-            Share Inbox with friends and get a free month for each friend
-            who completes their trial
+            Share Inbox with friends and get a free month for each friend who
+            completes their trial
           </Trans>
         </PageSubHeading>
       </div>

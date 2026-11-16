@@ -6,4 +6,5 @@ import { env } from "@/env";
  * `inbox-staging:`). ioredis `keyPrefix` covers key arguments only: SCAN/KEYS
  * patterns and pub/sub channels must add this by hand.
  */
-export const REDIS_KEY_PREFIX = env.REDIS_KEY_PREFIX;
+// ponytail: the ?? only serves tests that mock @/env without this key.
+export const REDIS_KEY_PREFIX = env.REDIS_KEY_PREFIX ?? "inbox:";

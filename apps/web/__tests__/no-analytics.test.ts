@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 // Owner rule: no analytics or tracking calls. Upstream ships PostHog and other
 // trackers that stay silent while their keys are unset, so this test keeps the
 // keys out of every file that configures a deployment.
-const REPO_ROOT = join(__dirname, "..", "..", "..");
+const REPO_ROOT = join(import.meta.dirname, "..", "..", "..");
 
 const ANALYTICS_KEYS = [
   /POSTHOG/,

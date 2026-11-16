@@ -95,7 +95,7 @@ describe("assistant chat runs", () => {
     // Another instance has its own connection to the same Redis.
     const otherInstance = new Redis();
 
-    await otherInstance.publish("assistant-chat:stop", "stream-1");
+    await otherInstance.publish("inbox:assistant-chat:stop", "stream-1");
 
     expect(run.abortSignal.aborted).toBe(true);
     expect(otherRun.abortSignal.aborted).toBe(false);
@@ -118,7 +118,7 @@ describe("assistant chat runs", () => {
 
     openSubscription();
     const run = await runPromise;
-    await new Redis().publish("assistant-chat:stop", "stream-1");
+    await new Redis().publish("inbox:assistant-chat:stop", "stream-1");
 
     expect(run.abortSignal.aborted).toBe(true);
   });

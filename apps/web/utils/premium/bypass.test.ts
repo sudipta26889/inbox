@@ -90,7 +90,10 @@ describe("premium bypass", () => {
       assertHasAiAccess({ userId: "user-1" }),
     ).resolves.toBeUndefined();
     await expect(
-      checkHasAccess({ userId: "user-1", minimumTier: "PROFESSIONAL_ANNUALLY" }),
+      checkHasAccess({
+        userId: "user-1",
+        minimumTier: "PROFESSIONAL_ANNUALLY",
+      }),
     ).resolves.toBe(true);
   });
 

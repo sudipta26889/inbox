@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 // server output or outgoing mail, and no billing, upgrade or trial UI. Upstream
 // code is kept (so upstream merges stay clean) and switched off by
 // NEXT_PUBLIC_BYPASS_PREMIUM_CHECKS; this test catches what a merge brings back.
-const WEB_ROOT = join(__dirname, "..");
+const WEB_ROOT = join(import.meta.dirname, "..");
 const REPO_ROOT = join(WEB_ROOT, "..", "..");
 
 // Code that renders pages, answers requests or sends mail.

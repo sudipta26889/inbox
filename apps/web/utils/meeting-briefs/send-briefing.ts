@@ -371,9 +371,7 @@ function formatMeetingBriefingText({
     );
   }
 
-  sections.push(
-    "AI-generated briefing from Inbox. May contain inaccuracies.",
-  );
+  sections.push("AI-generated briefing from Inbox. May contain inaccuracies.");
 
   return sections.join("\n\n");
 }

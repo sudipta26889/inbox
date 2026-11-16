@@ -112,9 +112,7 @@ export function DeleteSection() {
           <Trans>Delete account</Trans>
         </ItemTitle>
         <ItemDescription>
-          <Trans>
-            Removes your Inbox data. Your emails aren't affected.
-          </Trans>
+          <Trans>Removes your Inbox data. Your emails aren't affected.</Trans>
         </ItemDescription>
       </ItemContent>
       <ItemActions>

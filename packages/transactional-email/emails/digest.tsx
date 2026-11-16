@@ -254,9 +254,7 @@ export default function DigestEmail(props: DigestEmailProps) {
               </Link>
 
               <Text className="mx-0 mb-8 mt-4 p-0 text-center text-2xl font-normal">
-                <span className="font-semibold tracking-tighter">
-                  Inbox
-                </span>
+                <span className="font-semibold tracking-tighter">Inbox</span>
               </Text>
 
               <Heading className="my-4 text-4xl font-medium leading-tight">

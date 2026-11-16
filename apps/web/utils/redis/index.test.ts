@@ -27,7 +27,7 @@ vi.mock("@/env", () => ({
 
 import { redis } from "@/utils/redis";
 
-const WEB_ROOT = join(__dirname, "..", "..");
+const WEB_ROOT = join(import.meta.dirname, "..", "..");
 
 // Raw ioredis clients get no prefix from the shared wrapper. Each one listed
 // here was checked to prefix its keys, channels or keyPrefix by hand with

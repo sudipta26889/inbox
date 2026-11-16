@@ -259,7 +259,7 @@ function selectModel(
       const openrouter = createOpenRouter({
         apiKey: resolveApiKey(aiApiKey, env.OPENROUTER_API_KEY),
         headers: {
-          "HTTP-Referer": "https://www.getinboxzero.com",
+          "HTTP-Referer": "https://inbox.sudiptadhara.in",
           "X-Title": "Inbox",
         },
       });
@@ -282,7 +282,7 @@ function selectModel(
       const gateway = createGateway({
         apiKey: aiGatewayApiKey,
         headers: {
-          "http-referer": "https://www.getinboxzero.com",
+          "http-referer": "https://inbox.sudiptadhara.in",
           "x-title": "Inbox",
         },
       });

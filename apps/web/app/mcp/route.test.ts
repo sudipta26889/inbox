@@ -37,7 +37,7 @@ import { GET as protectedResource } from "@/app/.well-known/oauth-protected-reso
 import { GET as protectedResourceMcp } from "@/app/.well-known/oauth-protected-resource/mcp/route";
 import { mcpOAuthPlugins } from "@/utils/mcp/oauth-provider";
 
-const REPO_ROOT = join(__dirname, "..", "..", "..", "..");
+const REPO_ROOT = join(import.meta.dirname, "..", "..", "..", "..");
 
 describe("upstream MCP server is off", () => {
   const request = () =>
@@ -47,7 +47,6 @@ describe("upstream MCP server is off", () => {
     ["/mcp", mcpRoute],
     ["/api/mcp-server", apiMcpServerRoute],
   ])("%s answers 404", async (_path, route) => {
-    // biome-ignore lint/suspicious/noExplicitAny: route handlers take a wrapped request
     const handlers = route as Record<string, (req: any) => Promise<Response>>;
     for (const method of ["POST", "GET", "OPTIONS"]) {
       const response = await handlers[method](request());

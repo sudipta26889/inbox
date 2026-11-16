@@ -91,8 +91,7 @@ export default function BrandPage() {
             <PageHeading>Brand Kit</PageHeading>
           </div>
           <Paragraph className="mt-4" size="lg">
-            Guidelines and assets for presenting the Inbox brand
-            consistently.
+            Guidelines and assets for presenting the Inbox brand consistently.
           </Paragraph>
           <div className="mt-8">
             <Button size="lg" asChild>
@@ -105,8 +104,8 @@ export default function BrandPage() {
 
         <BrandSection title="Naming">
           <BrandText>
-            “Inbox” is the brand name. It is always two words, each
-            starting with a capital letter.
+            “Inbox” is the brand name. It is always two words, each starting
+            with a capital letter.
           </BrandText>
           <BrandText>
             It should not be written as “InboxZero”, “Inbox-Zero”, “inbox zero”,
