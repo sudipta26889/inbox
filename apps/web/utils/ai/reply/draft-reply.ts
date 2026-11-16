@@ -1,3 +1,4 @@
+import { jsonrepair } from "jsonrepair";
 import { z } from "zod";
 import { createScopedLogger } from "@/utils/logger";
 import { createGenerateObject } from "@/utils/llms/index";
@@ -17,7 +18,7 @@ import {
 
 const logger = createScopedLogger("DraftReply");
 const DRAFT_OUTPUT_INSTRUCTION =
-  "Return plain text only. Do not use HTML tags. If a clickable link is necessary, use markdown links in the format [Label](https://example.com/path) or [Label](mailto:name@example.com).";
+  "The reply field is plain text only. Do not use HTML tags. If a clickable link is necessary, use markdown links in the format [Label](https://example.com/path) or [Label](mailto:name@example.com).";
 
 const systemPrompt = `You write email replies as the user, in their voice, using knowledge base information. The user reviews and edits every draft before it is sent.
 
@@ -260,6 +261,9 @@ export async function aiDraftReplyWithConfidence({
       system: systemPrompt,
       prompt,
       schema: draftSchema,
+      // Overrides the generic repair, which would turn bare email text into a
+      // JSON array that can never match draftSchema.
+      experimental_repairText: async ({ text }) => repairDraftReplyText(text),
     });
 
   let result = await generate();
@@ -408,4 +412,59 @@ ${calendarBookingLink ? "Lead with the booking link, then optionally suggest a f
 ${parts.join("\n\n")}
 </scheduling>
 `;
+}
+
+export function repairDraftReplyText(text: string): string {
+  if (!text.trim()) return text;
+
+  const parsed = parseJsonObject(text);
+  if (parsed && typeof parsed.reply === "string") {
+    // A missing or invented confidence would fail the schema; the lowest one
+    // keeps the user reviewing the draft.
+    const confidence = isDraftReplyConfidence(parsed.confidence)
+      ? parsed.confidence
+      : DraftReplyConfidence.ALL_EMAILS;
+    return JSON.stringify({ ...parsed, confidence });
+  }
+
+  // Some models ignore the schema and answer with the bare email. The lowest
+  // confidence keeps the user reviewing it.
+  return JSON.stringify({
+    reply: text.trim(),
+    confidence: DraftReplyConfidence.ALL_EMAILS,
+  });
+}
+
+function parseJsonObject(text: string): Record<string, unknown> | null {
+  const unfenced = text
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/, "");
+
+  for (const candidate of [unfenced, tryJsonRepair(unfenced)]) {
+    if (candidate === null) continue;
+    try {
+      const value = JSON.parse(candidate);
+      if (value && typeof value === "object" && !Array.isArray(value)) {
+        return value as Record<string, unknown>;
+      }
+    } catch {
+      // try the next candidate
+    }
+  }
+  return null;
+}
+
+function tryJsonRepair(text: string): string | null {
+  try {
+    return jsonrepair(text);
+  } catch {
+    return null;
+  }
+}
+
+function isDraftReplyConfidence(value: unknown): value is DraftReplyConfidence {
+  return Object.values(DraftReplyConfidence).includes(
+    value as DraftReplyConfidence,
+  );
 }
