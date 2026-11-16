@@ -41,6 +41,10 @@ export function createJwtToken(
   payload: McpTokenPayload,
   secret: string,
 ): string {
+  // HMAC with an empty key is forgeable by anyone; fail closed when
+  // AUTH_SECRET/NEXTAUTH_SECRET are unset instead of signing with "".
+  if (!secret) throw new Error("MCP token secret is not configured");
+
   // JWT Header
   const header = {
     alg: "HS256",
@@ -69,6 +73,11 @@ export function verifyJwtToken(
   token: string,
   secret: string,
 ): McpTokenPayload | null {
+  if (!secret) {
+    logger.error("MCP token secret is not configured; refusing all tokens");
+    return null;
+  }
+
   try {
     const parts = token.split(".");
     if (parts.length !== 3) {

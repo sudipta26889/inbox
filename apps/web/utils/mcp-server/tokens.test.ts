@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createHmac } from "node:crypto";
 import prisma from "@/utils/__mocks__/prisma";
 import {
   createJwtToken,
@@ -272,5 +273,35 @@ describe("generateAccessToken", () => {
 
     expect(verifyJwtToken(accessToken, SECRET)?.aud).toBe(MCP_RESOURCE);
     expect(verifyJwtToken(refreshToken, SECRET)?.aud).toBe(MCP_RESOURCE);
+  });
+});
+
+describe("an unset token secret", () => {
+  const payload = {
+    sub: "user-1",
+    email: "a@b.c",
+    email_account_id: "acct-1",
+    scope: "email:read",
+    client_id: "client-1",
+    iat: 1,
+    exp: Math.floor(Date.now() / 1000) + 3600,
+    jti: "jti-1",
+    token_type: "access" as const,
+  };
+
+  it("refuses to sign", () => {
+    expect(() => createJwtToken(payload, "")).toThrow("not configured");
+  });
+
+  it("refuses to verify, even a token signed with the empty key", () => {
+    const header = Buffer.from('{"alg":"HS256","typ":"JWT"}').toString(
+      "base64url",
+    );
+    const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
+    const signature = createHmac("sha256", "")
+      .update(`${header}.${body}`)
+      .digest("base64url");
+
+    expect(verifyJwtToken(`${header}.${body}.${signature}`, "")).toBeNull();
   });
 });
