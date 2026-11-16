@@ -4,6 +4,7 @@ import { sendReconnectionEmail } from "@inbox/resend";
 import { env } from "@/env";
 import { addUserErrorMessage, ErrorType } from "@/utils/error-messages";
 import { createUnsubscribeToken } from "@/utils/unsubscribe";
+import { notifyMailboxDisconnected } from "@/utils/auth/notify-disconnected";
 
 /**
  * Cleans up invalid tokens when authentication fails permanently.
@@ -64,6 +65,13 @@ export async function cleanupInvalidTokens({
     );
     return;
   }
+
+  await notifyMailboxDisconnected({
+    email: emailAccount.email,
+    emailAccountId: emailAccount.id,
+    reason,
+    logger,
+  });
 
   if (reason === "invalid_grant") {
     const isWatched =
