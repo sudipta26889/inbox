@@ -85,7 +85,7 @@ model User {
   surveyRole         String? // single choice: user's role. Now using `EmailAccount.role` instead
   surveyGoal         String? // single choice: what user wants to achieve
   surveyCompanySize  Int? // numeric company size: 1 (solo), 5 (2-10), 50 (11-100), 500 (101-1000), 1000 (1000+)
-  surveySource       String? // single choice: how user heard about Inbox Zero
+  surveySource       String? // single choice: how user heard about Inbox
   surveyImprovements String? // open text: what user wants to improve
 
   // settings
@@ -99,6 +99,15 @@ model User {
   decisionModelEnabled Boolean? // null follows DEFAULT_DECISION_MODEL_ENABLED
   webhookSecret        String?
 
+  // Home Assistant integration settings
+  homeAssistantUrl   String? // e.g., "https://soul-ha.sudiptadhara.in"
+  homeAssistantToken String? // Long-lived access token
+
+  // TaskPilot integration settings
+  taskpilotApiKey        String?
+  taskpilotWorkspaceSlug String?
+  taskpilotProjectId     String? // when set, TaskPilot work is limited to this project
+
   // referral system
   referralCode String? @unique // User's own referral code
 
@@ -111,7 +120,8 @@ model User {
 
   apiKeys ApiKey[]
 
-  emailAccounts EmailAccount[]
+  emailAccounts       EmailAccount[]
+  sharedEmailAccounts EmailAccountShare[]
 
   // Referral relationships
   referralsMade    Referral[]        @relation("ReferrerUser")
@@ -130,6 +140,14 @@ model User {
   scimUsers              ScimUser[]
   scimProjectionGrants   ScimProjectionGrant[]
   scimIdentityLinks      ScimIdentityLink[]
+
+  // MCP Server OAuth
+  mcpServerAuthCodes    McpServerAuthorizationCode[]
+  mcpServerAccessTokens McpServerAccessToken[]
+
+  // A2A Protocol
+  mcpServerClients McpServerClient[] @relation("McpServerClientToUser")
+  a2aTasks         A2aTask[]         @relation("A2aTaskToUser")
 }
 
 enum SignupIntent {
@@ -188,6 +206,7 @@ model EmailAccount {
   coldEmailPrompt           String? // @deprecated
   rulesPrompt               String? // @deprecated
   autoCategorizeSenders     Boolean              @default(false)
+  autoLearnPatterns         Boolean              @default(false)
   multiRuleSelectionEnabled Boolean              @default(false)
   sensitiveDataPolicy       String?
   draftReplyConfidence      DraftReplyConfidence @default(ALL_EMAILS)
@@ -225,6 +244,18 @@ model EmailAccount {
   digestSendEmail     Boolean   @default(true)
   digestSchedule      Schedule?
   learnedWritingStyle String?
+
+  /// MQTT agent bus. Off by default: this instance is not single-tenant, and
+  /// anything holding the broker password can read every topic on it.
+  mqttEnabled Boolean @default(false)
+
+  /// Topic label, so no email address ever appears in a topic string. Unique
+  /// because two accounts choosing "work" would silently merge one person's
+  /// events into another's.
+  mqttTopicSlug String? @unique
+
+  /// Separate, explicit consent for subjects and senders in payloads.
+  mqttIncludeDetail Boolean @default(false)
 
   userId    String
   user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -279,6 +310,14 @@ model EmailAccount {
   classificationFeedback ClassificationFeedback[]
   mailSplits             MailSplit[]
 
+  shares                EmailAccountShare[]
+  mcpServerAuthCodes    McpServerAuthorizationCode[]
+  mcpServerAccessTokens McpServerAccessToken[]
+  a2aTasks              A2aTask[]                    @relation("A2aTaskToEmailAccount")
+  taskpilotLinks        EmailTaskLink[]
+  taskpilotDecisions    TaskpilotDecision[]
+  decisionModelRuns     DecisionModelRun[]
+
   @@index([userId])
   @@index([lastSummaryEmailAt])
   @@index([lastInboxHealthEmailAt])
@@ -324,6 +363,19 @@ model MailSplitFilter {
   @@unique([mailSplitId, order])
   @@index([mailSplitId])
   @@index([kind, value])
+}
+
+// Grants another user full access to an email account they don't own.
+model EmailAccountShare {
+  id             String       @id @default(cuid())
+  createdAt      DateTime     @default(now())
+  emailAccountId String
+  emailAccount   EmailAccount @relation(fields: [emailAccountId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([emailAccountId, userId])
+  @@index([userId])
 }
 
 model Organization {
@@ -717,6 +769,8 @@ model Rule {
   automate          Boolean            @default(true) // @deprecated - No longer used. All rules are now automated. Kept for historical data only.
   runOnThreads      Boolean            @default(false) // if disabled, only runs on individual emails
 
+  displayOrder Int @default(0) // user-controlled ordering (admin_rules_reorder)
+
   emailAccountId String
   emailAccount   EmailAccount @relation(fields: [emailAccountId], references: [id], onDelete: Cascade)
 
@@ -758,6 +812,8 @@ model Rule {
 
   history RuleHistory[]
 
+  taskpilotLinks EmailTaskLink[]
+
   @@unique([id, emailAccountId])
   @@unique([name, emailAccountId])
   @@unique([emailAccountId, systemType])
@@ -796,6 +852,15 @@ model Action {
   integrationName     String?
   integrationToolName String?
   integrationArgs     Json? // Tool args; string values may contain {{AI instructions}} templates
+
+  // Home Assistant integration fields
+  haIntegrationType String? // "webhook", "mqtt", "service_call", "persistent_notification"
+  haWebhookId       String? // Webhook ID for Home Assistant webhook automation
+  haMqttTopic       String? // MQTT topic to publish to
+  haServiceDomain   String? // Service domain (e.g., "notify", "light", "switch")
+  haServiceName     String? // Service name (e.g., "mobile_app_phone", "turn_on")
+  haServiceData     Json? // Additional service data as JSON
+  haEntityId        String? // Entity ID for service calls or notifications
 
   @@index([ruleId])
   @@index([emailAccountId])
@@ -899,6 +964,15 @@ model ExecutedAction {
   integrationToolName String?
   integrationArgs     Json? // Resolved tool args used for this execution
 
+  // Home Assistant integration fields
+  haIntegrationType String? // "webhook", "mqtt", "service_call", "persistent_notification"
+  haWebhookId       String? // Webhook ID for Home Assistant webhook automation
+  haMqttTopic       String? // MQTT topic to publish to
+  haServiceDomain   String? // Service domain (e.g., "notify", "light", "switch")
+  haServiceName     String? // Service name (e.g., "mobile_app_phone", "turn_on")
+  haServiceData     Json? // Additional service data as JSON
+  haEntityId        String? // Entity ID for service calls or notifications
+
   // additional fields as a result of the action
   draftId              String? // Gmail draft ID created by DRAFT_EMAIL action
   draftStatus          DraftEmailStatus? // Last observed/inferred draft lifecycle status; provider state may be stale or ambiguous.
@@ -945,6 +1019,15 @@ model ScheduledAction {
   scheduledId         String?
   staticAttachments   Json? // AttachmentSourceInput[] — explicit files to attach for email actions
   selectedAttachments Json? // SelectedAttachment[] — AI-selected files for this specific execution
+
+  // Home Assistant integration fields
+  haIntegrationType String? // "webhook", "mqtt", "service_call", "persistent_notification"
+  haWebhookId       String? // Webhook ID for Home Assistant webhook automation
+  haMqttTopic       String? // MQTT topic to publish to
+  haServiceDomain   String? // Service domain (e.g., "notify", "light", "switch")
+  haServiceName     String? // Service name (e.g., "mobile_app_phone", "turn_on")
+  haServiceData     Json? // Additional service data as JSON
+  haEntityId        String? // Entity ID for service calls or notifications
 
   executedAt       DateTime?
   executedActionId String?   @unique
@@ -1597,12 +1680,45 @@ model ChatActionTotal {
   @@unique([chatId, action])
 }
 
+/// Where a memory came from. An inference the assistant made is weaker
+/// evidence than something the user said outright, and must not silently
+/// overwrite it.
+enum MemorySource {
+  USER_STATED
+  AGENT_INFERRED
+}
+
 model ChatMemory {
   id        String   @id @default(cuid())
+  /// When we LEARNED it. Distinct from validFrom, which is when it became true.
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   content String
+
+  /// Slot key: "digest.schedule", "courier.domestic". Two memories sharing a
+  /// subject describe the same fact about the world, so a new one retires the
+  /// old — deterministically, with no LLM judge and no embedding threshold.
+  subject String?
+  source  MemorySource @default(AGENT_INFERRED)
+
+  /// When the fact became true in the world. Usually now, but a correction can
+  /// backdate one, and a memory that arrives describing an OLDER state than the
+  /// one already stored must not overwrite it.
+  validFrom DateTime @default(now())
+
+  /// Null means live. This is the recall filter: superseded memories are
+  /// EXCLUDED from context, not labelled and handed to the model to adjudicate
+  /// — measured work on stale agent memory shows readers do not reliably
+  /// prefer the newer fact even when both are retrieved.
+  supersededAt DateTime?
+
+  /// What replaced it. Null with supersededAt set means "no longer true, and
+  /// nothing took its place" — which is why supersession cannot be inferred
+  /// from the presence of a successor alone.
+  supersededById String?      @unique
+  supersededBy   ChatMemory?  @relation("Supersession", fields: [supersededById], references: [id], onDelete: SetNull)
+  supersedes     ChatMemory[] @relation("Supersession")
 
   chatId         String?
   chat           Chat?        @relation(fields: [chatId], references: [id], onDelete: SetNull)
@@ -1610,6 +1726,8 @@ model ChatMemory {
   emailAccount   EmailAccount @relation(fields: [emailAccountId], references: [id], onDelete: Cascade)
 
   @@index([emailAccountId])
+  @@index([emailAccountId, supersededAt])
+  @@index([emailAccountId, subject, supersededAt])
 }
 
 model CalendarConnection {
@@ -2270,6 +2388,123 @@ enum MobilePushTokenType {
   FCM  @map("fcm")
 }
 
+// MCP Server OAuth 2.1 Models
+// For when Inbox acts as an MCP Server (not client)
+
+model McpServerClient {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Dynamic Client Registration (RFC 7591)
+  clientId     String   @unique
+  clientSecret String? // Public clients don't need secrets with PKCE
+  clientName   String // e.g. "Claude Desktop", "VS Code"
+  redirectUris String[] // Array of allowed redirect URIs
+
+  // OAuth metadata
+  grantTypes              String[] @default(["authorization_code", "refresh_token"])
+  responseTypes           String[] @default(["code"])
+  tokenEndpointAuthMethod String   @default("none") // Public client with PKCE
+  scope                   String? // Space-separated scopes
+  logoUri                 String?
+  tosUri                  String?
+  policyUri               String?
+
+  // A2A Protocol support
+  type        ClientType @default(MCP) // MCP or A2A client
+  userId      String? // For user-created A2A clients
+  description String? // Description of the client
+  lastUsedAt  DateTime? // Track last usage
+
+  // Relations
+  authorizationCodes McpServerAuthorizationCode[]
+  accessTokens       McpServerAccessToken[]
+  user               User?                        @relation("McpServerClientToUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@index([userId])
+  @@index([type])
+}
+
+model McpServerAuthorizationCode {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  expiresAt DateTime // 10 minute TTL
+
+  code        String  @unique
+  redirectUri String
+  scope       String? // Space-separated scopes requested
+  state       String? // CSRF protection
+
+  // PKCE (RFC 7636) - Mandatory in OAuth 2.1
+  codeChallenge       String
+  codeChallengeMethod String @default("S256")
+
+  // User context
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emailAccountId String
+  emailAccount   EmailAccount @relation(fields: [emailAccountId], references: [id], onDelete: Cascade)
+
+  // Client context
+  clientId String
+  client   McpServerClient @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
+
+  // Links the tokens minted from this code, so a replayed code can revoke them
+  grantId String?
+
+  // Tracking
+  used   Boolean   @default(false) // One-time use only
+  usedAt DateTime?
+
+  @@index([code])
+  @@index([expiresAt])
+  @@index([userId])
+  @@index([emailAccountId])
+  @@index([clientId])
+}
+
+model McpServerAccessToken {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  expiresAt DateTime // 1 hour TTL for access tokens
+
+  accessToken  String  @unique
+  refreshToken String? @unique // Optional refresh token for long-lived access
+  tokenType    String  @default("Bearer")
+  scope        String? // Space-separated scopes granted
+
+  // User context
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emailAccountId String
+  emailAccount   EmailAccount @relation(fields: [emailAccountId], references: [id], onDelete: Cascade)
+
+  // Client context
+  clientId String
+  client   McpServerClient @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
+
+  // One authorization grant: shared by every token rotated from the same code
+  grantId String?
+
+  // Tracking
+  revoked       Boolean   @default(false)
+  revokedAt     DateTime?
+  revokedReason String? // rotated | user | reuse | admin
+  lastUsedAt    DateTime?
+
+  @@index([accessToken])
+  @@index([refreshToken])
+  @@index([grantId])
+  @@index([expiresAt])
+  @@index([userId])
+  @@index([emailAccountId])
+  @@index([clientId])
+}
+
 enum ActionType {
   ARCHIVE
   LABEL
@@ -2289,6 +2524,9 @@ enum ActionType {
   MOVE_FOLDER
   NOTIFY_SENDER // Sends notification from Inbox Zero (not user's email). Only for cold email rules.
   INTEGRATION
+  HOME_ASSISTANT // Integrates with Home Assistant (webhook, MQTT, service calls)
+  A2A_NOTIFY // Send A2A message to remote agent (e.g., OpenClaw Mitra)
+  CREATE_TASK
   // SUMMARIZE
   // SNOOZE
   // ADD_TO_DO
@@ -2301,6 +2539,75 @@ enum MessagingMessageStatus {
   DISMISSED
   EXPIRED
   FAILED
+}
+
+enum EmailTaskLinkSource {
+  MANUAL
+  CHAT
+  RULE
+}
+
+model EmailTaskLink {
+  id                  String              @id @default(cuid())
+  emailAccountId      String
+  emailAccount        EmailAccount        @relation(fields: [emailAccountId], references: [id], onDelete: Cascade)
+  gmailMessageId      String
+  threadId            String?
+  workspaceSlug       String
+  projectId           String
+  taskpilotIssueId    String
+  taskpilotIdentifier String
+  source              EmailTaskLinkSource
+  ruleId              String?
+  rule                Rule?               @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+  createdAt           DateTime            @default(now())
+
+  @@unique([emailAccountId, gmailMessageId, taskpilotIssueId])
+  @@index([emailAccountId, gmailMessageId])
+  @@index([emailAccountId, createdAt])
+  @@index([ruleId])
+}
+
+model TaskpilotDecision {
+  id             String       @id @default(cuid())
+  emailAccountId String
+  emailAccount   EmailAccount @relation(fields: [emailAccountId], references: [id], onDelete: Cascade)
+  gmailMessageId String
+  threadId       String?
+  ranAt          DateTime     @default(now())
+
+  preGateInvoked Boolean
+  preGateSignals Json
+
+  candidateIssueIds String[]
+
+  pass1Model        String?
+  pass1Effort       String?
+  pass1DurationMs   Int?
+  pass1InputTokens  Int?
+  pass1OutputTokens Int?
+  pass1Action       String?
+  pass1Decision     Json?
+  pass1Reason       String?
+
+  pass2Ran          Boolean @default(false)
+  pass2Model        String?
+  pass2DurationMs   Int?
+  pass2InputTokens  Int?
+  pass2OutputTokens Int?
+  pass2Updates      Json?
+
+  targetIssueIds      String[]
+  commentsPosted      Int      @default(0)
+  stateMovesApplied   Int      @default(0)
+  fieldUpdatesApplied Int      @default(0)
+
+  status   String
+  errorMsg String?
+
+  @@index([emailAccountId, ranAt(sort: Desc)])
+  @@index([emailAccountId, status])
+  @@index([gmailMessageId])
 }
 
 enum Frequency {
@@ -3020,4 +3327,446 @@ model LoopsEmailSource {
   @@unique([campaignId], map: "LoopsEmailSource_campaignId_unversioned_key", where: { emailMessageId: null, campaignId: { not: null } })
   @@index([loopId])
   @@index([campaignId])
+}
+
+enum ClientType {
+  MCP // MCP Protocol clients
+  A2A // A2A Protocol clients
+}
+
+// ====================================================================
+// A2A PROTOCOL MODELS
+// Based on A2A Protocol v0.3 specification
+// ====================================================================
+
+/// A2A Task - Discrete unit of work with strict state machine
+/// Follows A2A Protocol specification for task lifecycle
+/// Terminal states are IMMUTABLE per spec
+model A2aTask {
+  id String @id @default(cuid())
+
+  // ============ Identity & Ownership ============
+  userId         String
+  emailAccountId String?
+  clientId       String? // OAuth client that created the task
+
+  // ============ Task Context ============
+  contextId String // Groups related tasks (conversation session)
+  taskId    String @unique // Public task identifier (UUID)
+
+  // ============ Task Metadata ============
+  skill String // e.g., "email.search", "calendar.create_event"
+  input Json // Skill-specific input parameters
+
+  // ============ State Management ============
+  // States: submitted, working, input_required, auth_required,
+  //         completed, failed, canceled, rejected, unknown
+  state       A2aTaskState
+  stateReason String? // Why task is in current state
+
+  // ============ Results & Artifacts ============
+  result    Json? // Final result (for completed tasks)
+  artifacts Json? // Intermediate data (for streaming)
+  error     Json? // Error details (for failed tasks)
+
+  // ============ Retry Logic ============
+  retryCount  Int       @default(0) // Number of retry attempts
+  maxRetries  Int       @default(3) // Maximum retry attempts
+  lastRetryAt DateTime? // Last retry timestamp
+
+  // ============ Human-in-the-Loop ============
+  requiresApproval    Boolean            @default(false)
+  approvalStatus      A2aApprovalStatus?
+  approvalData        Json? // Data pending approval
+  approvalRequestedAt DateTime?
+
+  // ============ Push Notifications ============
+  pushNotificationUrl   String?
+  pushNotificationToken String?
+  pushNotificationAuth  Json? // Authentication for webhook
+
+  // ============ Reference Tasks ============
+  referenceTaskIds String[] // Tasks this one references
+
+  // ============ Timestamps ============
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  completedAt DateTime?
+
+  // ============ Relations ============
+  user         User             @relation("A2aTaskToUser", fields: [userId], references: [id], onDelete: Cascade)
+  emailAccount EmailAccount?    @relation("A2aTaskToEmailAccount", fields: [emailAccountId], references: [id], onDelete: Cascade)
+  history      A2aTaskHistory[]
+  messages     A2aMessage[]
+  approval     A2aApproval?
+
+  @@index([userId])
+  @@index([contextId])
+  @@index([state])
+  @@index([createdAt])
+  @@index([taskId])
+  @@index([clientId])
+  @@map("a2a_tasks")
+}
+
+/// Task State follows A2A Protocol specification
+/// Terminal states (completed, failed, canceled, rejected, unknown) are IMMUTABLE
+enum A2aTaskState {
+  // ============ Non-terminal States ============
+  submitted // Initial state when task is created
+  working // Task is being processed
+
+  // ============ Interrupted States ============
+  // These states pause processing, awaiting external action
+  input_required // Needs additional input from client
+  auth_required // Needs authorization/approval (HITL)
+
+  // ============ Terminal States (IMMUTABLE) ============
+  // Once reached, task CANNOT transition to any other state
+  completed // Successfully finished
+  failed // Error occurred during processing
+  canceled // Client requested cancellation
+  rejected // Server rejected the request
+  unknown // Unexpected/undefined state
+
+  @@map("a2a_task_state")
+}
+
+/// Task History for state transition tracking
+/// Provides full audit trail per A2A best practices
+/// Required for compliance, debugging, and analytics
+model A2aTaskHistory {
+  id     String @id @default(cuid())
+  taskId String
+
+  // State transition
+  fromState A2aTaskState
+  toState   A2aTaskState
+  reason    String? // Why the transition occurred
+
+  // Context
+  timestamp DateTime @default(now())
+  metadata  Json? // Additional context (error details, etc.)
+
+  // Performance tracking
+  durationMs Int? // Time in previous state (milliseconds)
+
+  // Relations
+  task A2aTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@index([timestamp])
+  @@index([toState])
+  @@map("a2a_task_history")
+}
+
+/// Messages within a conversation context
+/// Enables multi-turn interactions per A2A spec
+/// Groups messages by contextId for conversation continuity
+model A2aMessage {
+  id String @id @default(cuid())
+
+  // ============ Context ============
+  contextId String // Same as task's contextId
+  taskId    String? // Optional: associated task
+
+  // ============ Message Data ============
+  role        A2aMessageRole
+  content     Json // Text, structured data, or DataParts
+  contentType String         @default("text") // text, structured_data, data_parts
+
+  // ============ References ============
+  // References to previous tasks in the conversation
+  referenceTaskIds String[] @default([])
+
+  // ============ Timestamps ============
+  createdAt DateTime @default(now())
+
+  // ============ Relations ============
+  task A2aTask? @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([contextId])
+  @@index([taskId])
+  @@index([createdAt])
+  @@map("a2a_messages")
+}
+
+enum A2aMessageRole {
+  user // Message from external client
+  agent // Message from this agent (Inbox)
+  system // System-generated message
+
+  @@map("a2a_message_role")
+}
+
+/// Approval tracking for human-in-the-loop workflows
+/// Integrates with DharaHIL (Slack/Telegram) for approval requests
+model A2aApproval {
+  id     String  @id @default(cuid())
+  taskId String  @unique
+  task   A2aTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  // ============ Approval Request ============
+  skill         String // Which skill requires approval
+  requestData   Json // Data to be approved
+  requestReason String? // Why approval is needed
+
+  // ============ Status ============
+  status A2aApprovalStatus @default(pending)
+
+  // ============ Approver ============
+  approverId      String? // User who approved/rejected
+  approverEmail   String?
+  approverChannel String? // slack, telegram, etc.
+
+  // ============ Response ============
+  approved             Boolean?
+  rejectionReason      String?
+  responseData         Json? // Additional data from approver
+  revisionRequested    Boolean? @default(false) // True if human requested revisions
+  revisionInstructions String? // Instructions for revisions
+
+  // ============ DharaHIL Integration ============
+  dharahilRequestId String? // DharaHIL request tracking
+  dharahilChannel   String? // slack, telegram
+  dharahilMessageId String? // Message ID for updates
+
+  /// Canonical identity of the action this decision authorizes: a hash of the
+  /// caller, the operation and its normalized arguments. Two requests to do the
+  /// same thing produce the same key, which is what lets the executing tool
+  /// recognise an action a human already approved instead of asking again.
+  actionKey String?
+
+  /// When this decision was spent. A human approval authorizes ONE execution;
+  /// without single-use consumption an approved task that retries — or a peer
+  /// resubmitting the identical action — inherits the earlier approval.
+  consumedAt DateTime?
+
+  // ============ Timestamps ============
+  requestedAt DateTime  @default(now())
+  respondedAt DateTime?
+  expiresAt   DateTime? // Auto-reject after expiration
+
+  @@index([status])
+  @@index([requestedAt])
+  @@index([taskId])
+  @@index([actionKey, status, consumedAt])
+  @@map("a2a_approvals")
+}
+
+enum A2aApprovalStatus {
+  pending // Awaiting approval
+  approved // User approved
+  rejected // User rejected
+  expired // Timeout reached
+  withdrawn // Requester cancelled before a human decided
+
+  @@map("a2a_approval_status")
+}
+
+/// Agent Card signatures for security
+/// Follows RFC 7515 (JSON Web Signature) per A2A spec
+/// Enables verification of AgentCard authenticity
+model A2aAgentCardSignature {
+  id String @id @default(cuid())
+
+  // ============ Signature Data ============
+  signature String @db.Text // JWS compact serialization
+  keyId     String // Key identifier (kid)
+  algorithm String // Signing algorithm (e.g., "RS256")
+
+  // ============ Key Management ============
+  publicKey String? @db.Text // Optional: store public key
+
+  // ============ Metadata ============
+  createdAt DateTime  @default(now())
+  expiresAt DateTime? // Key expiration
+  revokedAt DateTime? // Key revocation
+
+  @@index([createdAt])
+  @@index([keyId])
+  @@map("a2a_agent_card_signatures")
+}
+
+/// Webhook configuration for OAuth clients
+/// Stores webhook URLs and secrets for push notifications
+model A2aWebhookConfig {
+  id String @id @default(cuid())
+
+  // ============ Client Reference ============
+  clientId String // OAuth client ID
+  /// A2A v1.0 §3.1.7 scopes push config to a task. NULL is this client's
+  /// default, which is what the pre-§3.1.7 UI at /api/user/a2a-webhooks
+  /// writes and what queueWebhook falls back to.
+  ///
+  /// "One default row per client" is enforced by
+  /// `a2a_webhook_configs_clientId_default_key`, a partial unique index
+  /// (`ON "a2a_webhook_configs" ("clientId") WHERE "taskId" IS NULL`)
+  /// hand-maintained in the migration SQL — `@@unique` cannot express a
+  /// WHERE clause, so Prisma has no model of this index and `prisma migrate
+  /// dev` will show it as drift and offer a `DROP INDEX`. Do NOT accept that
+  /// drop: it silently re-allows unlimited default rows per client.
+  taskId   String?
+
+  // ============ Webhook Settings ============
+  url     String // Webhook endpoint URL
+  secret  String // HMAC signing secret
+  /// A2A §3.1.7 `pushNotificationConfig.token`, echoed back on each delivery
+  /// (`X-A2A-Notification-Token`) so the peer can verify the call came from
+  /// us. Unlike `secret` this isn't ours to protect — the peer supplied it —
+  /// but it's still a shared credential, so `toResponse` must never return
+  /// it either.
+  token   String?
+  enabled Boolean @default(true)
+
+  // ============ Events ============
+  events String[] // Which events to send (e.g., ["task.completed", "task.failed"])
+
+  // ============ Timestamps ============
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([clientId, taskId])
+  @@index([clientId])
+  @@map("a2a_webhook_configs")
+}
+
+/// Webhook delivery tracking for push notifications
+/// Ensures reliable delivery with retry logic
+model A2aWebhookDelivery {
+  id String @id @default(cuid())
+
+  // ============ Task Reference ============
+  taskId String
+
+  // ============ Client Reference ============
+  clientId String // OAuth client ID
+
+  // ============ Webhook Config ============
+  url    String
+  method String @default("POST")
+  event  String // Event type (e.g., "task.completed")
+
+  // ============ Payload ============
+  payload Json // Task state update
+
+  // ============ Security ============
+  signature String? // HMAC-SHA256 signature
+
+  // ============ Delivery Status ============
+  status      A2aWebhookStatus
+  attempts    Int              @default(0)
+  maxAttempts Int              @default(5)
+
+  // ============ Response ============
+  responseStatus Int? // HTTP status code
+  responseBody   String? @db.Text
+  errorMessage   String? @db.Text
+
+  // ============ Timestamps ============
+  createdAt     DateTime  @default(now())
+  lastAttemptAt DateTime  @default(now())
+  nextAttemptAt DateTime?
+  deliveredAt   DateTime?
+
+  @@index([taskId])
+  @@index([clientId])
+  @@index([status])
+  @@index([nextAttemptAt])
+  @@map("a2a_webhook_deliveries")
+}
+
+enum A2aWebhookStatus {
+  pending // Awaiting delivery
+  delivered // Successfully delivered
+  failed // All retry attempts exhausted
+
+  @@map("a2a_webhook_status")
+}
+
+/// Rate limiting tracking for security
+/// Prevents abuse with per-client and per-user limits
+model A2aRateLimit {
+  id String @id @default(cuid())
+
+  // ============ Identity ============
+  clientId  String? // OAuth client
+  userId    String? // User
+  ipAddress String? // IP-based limiting
+
+  // ============ Limits ============
+  limitType    String // "client", "user", "ip"
+  windowStart  DateTime
+  windowEnd    DateTime
+  requestCount Int      @default(0)
+
+  // ============ Timestamps ============
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([limitType, clientId, userId, ipAddress, windowStart])
+  @@index([windowEnd])
+  @@map("a2a_rate_limits")
+}
+
+/// Audit log for all A2A operations
+/// Critical for security, compliance, and debugging
+model A2aAuditLog {
+  id String @id @default(cuid())
+
+  // ============ Request Context ============
+  userId    String?
+  clientId  String?
+  ipAddress String?
+  userAgent String?
+
+  // ============ Operation ============
+  operation String // e.g., "message.send", "task.cancel"
+  taskId    String?
+  contextId String?
+  skill     String?
+
+  // ============ Result ============
+  success      Boolean
+  errorCode    String?
+  errorMessage String?
+
+  // ============ Performance ============
+  durationMs Int // Request duration
+
+  // ============ Metadata ============
+  metadata Json? // Additional context
+
+  // ============ Timestamps ============
+  timestamp DateTime @default(now())
+
+  @@index([userId])
+  @@index([clientId])
+  @@index([timestamp])
+  @@index([operation])
+  @@map("a2a_audit_logs")
+}
+
+// One row per decision-model call (Jev). In shadow mode the LLM still decides
+// and both answers are kept so agreement can be measured before a site goes
+// live; in live mode it records what Jev decided or why it escalated.
+model DecisionModelRun {
+  id             String       @id @default(cuid())
+  createdAt      DateTime     @default(now())
+  emailAccountId String
+  emailAccount   EmailAccount @relation(fields: [emailAccountId], references: [id], onDelete: Cascade)
+
+  feature    String // "cold-email" | "thread-status" | "categorize-sender" | ...
+  mode       String // "shadow" | "live"
+  outcome    String // shadow: agree | disagree | uncertain | error | llm-error; live: decided-agree | decided-disagree | decided (audit off/failed) | escalated | fallback
+  model      String?
+  subjectKey String? // join key for later labels: sender address or thread id
+  jevResult  Json?
+  llmResult  Json?
+  answers    Json? // raw probabilities, for threshold calibration
+  latencyMs  Int?
+  error      String?
+
+  @@index([emailAccountId, feature, createdAt])
+  @@index([feature, outcome, createdAt])
 }
