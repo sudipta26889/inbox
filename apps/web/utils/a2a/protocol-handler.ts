@@ -114,6 +114,7 @@ export async function handleMessageSend(
       data: {
         id: messageId,
         contextId,
+        ...taskScope(authContext),
         role: "user",
         content: (content ?? {}) as Prisma.InputJsonValue,
         contentType: typeof content === "string" ? "text" : "structured_data",
@@ -167,6 +168,7 @@ export async function handleMessageSend(
         data: {
           id: replyId,
           contextId,
+          ...taskScope(authContext),
           role: "agent",
           content: answer as Prisma.InputJsonValue,
           contentType: "text",
@@ -197,6 +199,7 @@ export async function handleMessageSend(
             data: {
               id: replyId,
               contextId,
+              ...taskScope(authContext),
               role: "agent",
               content: answer as Prisma.InputJsonValue,
               contentType: "text",
@@ -589,24 +592,24 @@ export async function handleContextGet(
     throw new Error("contextId is required");
   }
 
-  // Verify user has access to this context by checking if they have any tasks in it
-  const userTask = await prisma.a2aTask.findFirst({
-    where: {
-      contextId,
-      ...taskScope(authContext),
-    },
-    select: { id: true },
-  });
+  // contextId is peer-chosen, so both lookups are scoped to the caller: a
+  // peer sees only the messages it (and our replies to it) wrote, even in a
+  // context another peer also uses.
+  const [userTask, messages] = await Promise.all([
+    prisma.a2aTask.findFirst({
+      where: { contextId, ...taskScope(authContext) },
+      select: { id: true },
+    }),
+    prisma.a2aMessage.findMany({
+      where: { contextId, ...taskScope(authContext) },
+      orderBy: { createdAt: "asc" },
+      take: Math.min(limit, 1000), // Max 1000 messages
+    }),
+  ]);
 
-  if (!userTask) {
+  if (!userTask && messages.length === 0) {
     throw new Error(`Context not found or access denied: ${contextId}`);
   }
-
-  const messages = await prisma.a2aMessage.findMany({
-    where: { contextId },
-    orderBy: { createdAt: "asc" },
-    take: Math.min(limit, 1000), // Max 1000 messages
-  });
 
   return {
     contextId,

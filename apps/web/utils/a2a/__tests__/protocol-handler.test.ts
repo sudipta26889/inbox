@@ -120,6 +120,10 @@ describe("A2A Protocol Handlers", () => {
           contextId: "ctx-abc",
           role: "user",
           content: "Hello",
+          // Written under the caller's scope, so no other peer reads it back.
+          clientId: "client-789",
+          userId: "user-123",
+          emailAccountId: "email-account-456",
         }),
       });
     });
@@ -515,6 +519,7 @@ describe("A2A Protocol Handlers", () => {
 
     it("should verify user access to context", async () => {
       (prisma.a2aTask.findFirst as any).mockResolvedValue(null);
+      (prisma.a2aMessage.findMany as any).mockResolvedValue([]);
 
       await expect(
         handleContextGet(mockAuthContext, { contextId: "ctx-other-user" }),
@@ -533,6 +538,26 @@ describe("A2A Protocol Handlers", () => {
       expect(prisma.a2aMessage.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           take: 1000,
+        }),
+      );
+    });
+
+    it("reads only the caller's own messages, even with a task in a shared context", async () => {
+      // Peer A holds a task in peer B's contextId (contextId is peer-chosen).
+      // The messages query must still be scoped to A, not to the context.
+      (prisma.a2aTask.findFirst as any).mockResolvedValue({ id: "task-123" });
+      (prisma.a2aMessage.findMany as any).mockResolvedValue([]);
+
+      await handleContextGet(mockAuthContext, { contextId: "ctx-of-peer-b" });
+
+      expect(prisma.a2aMessage.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            contextId: "ctx-of-peer-b",
+            userId: "user-123",
+            emailAccountId: "email-account-456",
+            clientId: "client-789",
+          },
         }),
       );
     });
