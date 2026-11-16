@@ -14828,7 +14828,7 @@ msgstr "Ücretsiz plan sınırına ulaştınız 🥺"
 
 #: app/(app)/[emailAccountId]/mail/InboxZeroCelebration.tsx
 msgid "You've reached inbox zero"
-msgstr "Inbox Zero'ya ulaştınız"
+msgstr "inbox zero'ya ulaştınız"
 
 #: app/(app)/premium/Pricing.tsx
 msgid "Your access comes from a plan someone else set up. To manage billing yourself, contact {supportEmail}."

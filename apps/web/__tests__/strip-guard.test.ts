@@ -132,6 +132,30 @@ describe("strip guard", () => {
     expect(hits).toEqual([]);
   });
 
+  // A catalog entry renders only while its msgid matches a source string, and
+  // no source says "Inbox Zero" any more. So a translation may name it only
+  // in a stale entry whose msgid still does.
+  it('translates no message into "Inbox Zero"', () => {
+    const localesDir = join(WEB_ROOT, "locales");
+    const hits = readdirSync(localesDir).flatMap((locale) =>
+      readdirSync(join(localesDir, locale))
+        .filter((name) => name.endsWith(".po"))
+        .flatMap((name) =>
+          readFileSync(join(localesDir, locale, name), "utf8")
+            .split("\n\n")
+            .filter((entry) => {
+              const [msgid, msgstr = ""] = entry.split(/^msgstr /m);
+              return (
+                msgstr.includes("Inbox Zero") && !msgid.includes("Inbox Zero")
+              );
+            })
+            .map((entry) => `${locale}/${name}: ${entry.split("\n").at(-1)}`),
+        ),
+    );
+
+    expect(hits).toEqual([]);
+  });
+
   it("sends no mail that links to the upstream product site", () => {
     const hits = files
       .filter((file) => relative(REPO_ROOT, file).startsWith("packages/"))

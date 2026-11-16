@@ -17,7 +17,7 @@ msgstr "Kendi sunucusunda barındıran ekipler için {BRAND_NAME}"
 
 #: app/(landing)/home/HomePage.tsx
 msgid "{BRAND_NAME} organizes your inbox and calendar, drafts replies in your voice, and helps you reach inbox zero fast. Never miss an important email again."
-msgstr "{BRAND_NAME} gelen kutunuzu ve takviminizi düzenler, yanıtları sizin üslubunuzla hazırlar ve hızla Inbox Zero'ya ulaşmanıza yardımcı olur. Bir daha önemli bir e-postayı kaçırmayın."
+msgstr "{BRAND_NAME} gelen kutunuzu ve takviminizi düzenler, yanıtları sizin üslubunuzla hazırlar ve hızla inbox zero'ya ulaşmanıza yardımcı olur. Bir daha önemli bir e-postayı kaçırmayın."
 
 #: app/(landing)/home/Footer.tsx
 msgid "{BRAND_NAME} Tabs (Chrome Extension)"
@@ -1180,7 +1180,7 @@ msgstr "İstediğiniz zaman iptal edebilirsiniz. Aboneliğiniz faturalandırma d
 
 #: app/(landing)/home/home-metadata.ts
 msgid "Your AI executive assistant to reach inbox zero fast. Automate emails, bulk unsubscribe, block cold emails, and analytics. Open-source"
-msgstr "Hızla Inbox Zero'ya ulaşmanız için yapay zeka yönetici asistanınız. E-postaları otomatikleştirin, toplu abonelik iptali yapın, soğuk e-postaları engelleyin ve analizlere göz atın. Açık kaynak"
+msgstr "Hızla inbox zero'ya ulaşmanız için yapay zeka yönetici asistanınız. E-postaları otomatikleştirin, toplu abonelik iptali yapın, soğuk e-postaları engelleyin ve analizlere göz atın. Açık kaynak"
 
 #: components/new-landing/sections/Awards.tsx
 msgid "Your data stays private — no AI training, no funny business. We’re fully certified for top-tier security, and you can even self-host Inbox Zero if you want total control."
