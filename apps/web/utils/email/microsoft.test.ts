@@ -25,6 +25,42 @@ vi.mock("@/env", () => ({
 
 vi.mock("@/utils/outlook/mail", () => outlookMailMock);
 
+describe("OutlookProvider send paths", () => {
+  it("hand the mailbox id to every send function", async () => {
+    outlookMailMock.sendEmailWithHtml.mockResolvedValue({
+      id: "sent-1",
+      conversationId: "conversation-1",
+    });
+    const provider = new OutlookProvider(
+      createMockOutlookClient([]),
+      undefined,
+      "acct-1",
+    );
+    const body = {
+      to: "to@example.com",
+      subject: "Hi",
+      messageHtml: "<p>Hi</p>",
+    };
+
+    await provider.sendEmailWithHtml(body);
+    await provider.sendEmail({
+      to: "to@example.com",
+      subject: "Hi",
+      messageText: "Hi",
+    });
+    await provider.replyToEmail({ id: "m-1" } as any, "Thanks");
+    await provider.forwardEmail({ id: "m-1" } as any, { to: "to@example.com" });
+
+    expect(outlookMailMock.sendEmailWithHtml.mock.calls[0][3]).toBe("acct-1");
+    expect(outlookMailMock.sendEmailWithPlainText.mock.calls[0][3]).toBe(
+      "acct-1",
+    );
+    expect(outlookMailMock.replyToEmail.mock.calls[0][5]).toBe("acct-1");
+    expect(outlookMailMock.forwardEmail.mock.calls[0][2]).toBeDefined();
+    expect(outlookMailMock.forwardEmail.mock.calls[0][3]).toBe("acct-1");
+  });
+});
+
 describe("OutlookProvider.getLatestMessageInThread", () => {
   afterEach(() => {
     vi.useRealTimers();

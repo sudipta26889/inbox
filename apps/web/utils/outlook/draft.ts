@@ -116,10 +116,12 @@ export async function sendDraft({
   client,
   draftId,
   logger,
+  emailAccountId,
 }: {
   client: OutlookClient;
   draftId: string;
   logger: Logger;
+  emailAccountId?: string;
 }): Promise<{ messageId: string; threadId: string }> {
   // Sending a draft is still sending. Without this the drafts API is a way
   // around the kill switch that guards every other send path.
@@ -134,7 +136,11 @@ export async function sendDraft({
   await requireSendApproval({
     operation: "send_draft",
     provider: "outlook",
+    emailAccountId,
     to: draft?.toRecipients?.[0]?.emailAddress?.address || "unknown",
+    from: draft?.from?.emailAddress?.address || undefined,
+    cc: joinRecipients(draft?.ccRecipients),
+    bcc: joinRecipients(draft?.bccRecipients),
     subject: draft?.subject,
     bodyText: draft?.bodyPreview,
     threadId: draft?.conversationId,
@@ -202,4 +208,16 @@ export async function deleteDraft({
     logger.error("Failed to delete draft", { draftId, error });
     throw error;
   }
+}
+
+function joinRecipients(
+  recipients:
+    | { emailAddress?: { address?: string | null } | null }[]
+    | null
+    | undefined,
+): string | undefined {
+  const addresses = (recipients ?? [])
+    .map((recipient) => recipient.emailAddress?.address)
+    .filter((address): address is string => !!address);
+  return addresses.length ? addresses.join(", ") : undefined;
 }

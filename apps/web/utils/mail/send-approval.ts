@@ -2,6 +2,8 @@ import "server-only";
 import { dharahilClient } from "@/utils/dharahil/client";
 import { createScopedLogger } from "@/utils/logger";
 import { isApprovalGateRequired } from "@/utils/dharahil/required";
+import { extractEmailAddress } from "@/utils/email";
+import prisma from "@/utils/prisma";
 
 const logger = createScopedLogger("send-approval");
 
@@ -22,7 +24,10 @@ export type SendApprovalRequest = {
   /** Operation name shown to the reviewer, e.g. "send_email", "reply_email". */
   operation: string;
   provider: "gmail" | "outlook";
+  /** Mailbox the send goes out of; the reviewer is shown its address. */
+  emailAccountId: string | undefined;
   to: string;
+  /** Explicit sender (an alias); defaults to the mailbox address. */
   from?: string;
   cc?: string;
   bcc?: string;
@@ -42,6 +47,14 @@ export async function requireSendApproval(
 
   const { operation, provider, to, subject } = request;
 
+  const mailboxEmail = await getMailboxEmail(request.emailAccountId);
+  const from = request.from ?? mailboxEmail ?? "unknown";
+  const sendsAsAlias =
+    !!request.from &&
+    !!mailboxEmail &&
+    extractEmailAddress(request.from).toLowerCase() !==
+      mailboxEmail.toLowerCase();
+
   logger.info("DharaHIL: requesting approval for outbound send", {
     operation,
     provider,
@@ -54,8 +67,9 @@ export async function requireSendApproval(
   const decision = await dharahilClient.runApprovalLoop({
     toolName: operation,
     toolArgs: {
+      from,
+      mailbox: sendsAsAlias ? mailboxEmail : undefined,
       to,
-      from: request.from,
       cc: request.cc,
       bcc: request.bcc,
       subject,
@@ -66,13 +80,14 @@ export async function requireSendApproval(
       agentId: `inbox-${provider}-provider`,
       runId: request.threadId || `${operation}_${Date.now()}`,
       stepId: operation,
-      contextSummary: `${operation} to ${to}${subject ? ` - Subject: ${subject}` : ""}`,
+      contextSummary: `${operation} from ${from} to ${to}${subject ? ` - Subject: ${subject}` : ""}`,
       riskLevel: external ? "HIGH" : "MEDIUM",
       tags: ["email", provider, operation, external ? "external" : "internal"],
       idempotencyKey: `${provider}_${operation}_${to}_${Date.now()}`,
       metadata: {
         provider,
         operation,
+        from,
         to,
         subject: subject ?? "",
         is_reply: request.isReply ? "true" : "false",
@@ -97,6 +112,27 @@ export async function requireSendApproval(
     to,
     action: decision.action,
   });
+}
+
+// A failed lookup must not skip the gate: the reviewer is still asked, just
+// without a sender they can verify.
+async function getMailboxEmail(
+  emailAccountId: string | undefined,
+): Promise<string | null> {
+  if (!emailAccountId) return null;
+  try {
+    const account = await prisma.emailAccount.findUnique({
+      where: { id: emailAccountId },
+      select: { email: true },
+    });
+    return account?.email ?? null;
+  } catch (error) {
+    logger.warn("Could not look up the sending mailbox for approval", {
+      emailAccountId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  }
 }
 
 /**

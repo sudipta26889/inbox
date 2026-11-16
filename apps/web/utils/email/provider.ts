@@ -45,7 +45,7 @@ export async function createEmailProvider({
   }
 
   const client = await getOutlookClientForEmail({ emailAccountId, logger });
-  return new OutlookProvider(client, logger);
+  return new OutlookProvider(client, logger, emailAccountId);
 }
 
 async function getLocalBypassProvider({
