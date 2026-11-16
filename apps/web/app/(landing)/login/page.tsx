@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { LoginForm } from "@/app/(landing)/login/LoginForm";
+import { isLocalAuthBypassEnabled } from "@/utils/auth/local-bypass-config";
 import {
   getEmailAlreadyLinkedDescription,
   getRequiresReconsentDescription,
@@ -58,6 +59,7 @@ export default async function AuthenticationPage(props: {
             <LoginForm
               enabledProviders={enabledProviders}
               useGoogleOauthEmulator={isGoogleOauthEmulationEnabled()}
+              showLocalBypass={isLocalAuthBypassEnabled()}
             />
           </Suspense>
         </div>

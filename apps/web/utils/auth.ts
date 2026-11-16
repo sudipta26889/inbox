@@ -1,6 +1,11 @@
 import { mcpOAuthPlugins } from "@/utils/mcp/oauth-provider";
 import { INITIAL_MAIL_SPLITS } from "@/utils/split-inbox/initial-splits";
 import { adminSso } from "@/utils/auth/sso";
+import { localBypassAuthPlugin } from "@/utils/auth/local-bypass-plugin";
+import {
+  isLocalAuthBypassEnabled,
+  isLocalBypassUserEmail,
+} from "@/utils/auth/local-bypass-config";
 import { scim } from "@better-auth/scim";
 import { genericOAuth } from "better-auth/plugins/generic-oauth";
 import type { GenericOAuthConfig } from "better-auth/plugins/generic-oauth";
@@ -291,6 +296,7 @@ export const betterAuthConfig = betterAuth({
         ]
       : []),
     ...mcpOAuthPlugins(),
+    ...(isLocalAuthBypassEnabled() ? [localBypassAuthPlugin()] : []),
     nextCookies(), // Must be last
   ],
   session: {
@@ -359,7 +365,9 @@ export const betterAuthConfig = betterAuth({
     user: {
       create: {
         before: async (user) => {
-          if (!isAllowedAuthSignupEmail(user.email)) {
+          const isLocalBypassUser =
+            isLocalAuthBypassEnabled() && isLocalBypassUserEmail(user.email);
+          if (!isLocalBypassUser && !isAllowedAuthSignupEmail(user.email)) {
             logger.warn("Blocked auth sign-up outside configured allowlist", {
               emailDomain: user.email.split("@")[1]?.toLowerCase(),
             });
@@ -370,6 +378,8 @@ export const betterAuthConfig = betterAuth({
         },
         after: async (user, context) => {
           markAuthContextAsNewUser(context?.context);
+          // The dev bypass user is not a real sign-up.
+          if (isLocalBypassUserEmail(user.email)) return;
           await postSignUp({
             id: user.id,
             email: user.email,

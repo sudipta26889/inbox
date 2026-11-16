@@ -359,6 +359,9 @@ const parsedEnv = createEnv({
     HEALTH_API_KEY: z.string().optional(),
     OAUTH_PROXY_URL: z.string().url().optional(),
     MCP_SERVER_ENABLED: booleanString.optional().default(false),
+    // Dev only: a "Bypass login" button on /login signs in a separate local
+    // test user with a mock mailbox. Ignored unless NODE_ENV=development.
+    LOCAL_AUTH_BYPASS_ENABLED: booleanString.optional().default(false),
     // Optional provider:model for structured decisions, e.g. openrouter:typesafe/jev-1.13
     DEFAULT_DECISION_MODEL: z
       .string()

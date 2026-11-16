@@ -10,6 +10,8 @@ import { toRateLimitProvider } from "@/utils/email/rate-limit-mode-error";
 import { recordEmailAccountProviderIssue } from "@/utils/email/provider-health";
 import type { Logger } from "@/utils/logger";
 import { flushLoggerSafely } from "@/utils/logger-flush";
+import { isLocalBypassEmailAccount } from "@/utils/auth/local-bypass-email-account";
+import { createLocalBypassEmailProvider } from "@/utils/email/local-bypass-provider";
 
 export async function createEmailProvider({
   emailAccountId,
@@ -20,6 +22,12 @@ export async function createEmailProvider({
   provider: string;
   logger: Logger;
 }): Promise<EmailProvider> {
+  // Dev only (NODE_ENV=development + LOCAL_AUTH_BYPASS_ENABLED): the bypass
+  // test user's mailbox is a local mock, never a real provider.
+  if (await isLocalBypassEmailAccount(emailAccountId)) {
+    return createLocalBypassEmailProvider(logger);
+  }
+
   const rateLimitProvider = toRateLimitProvider(provider);
   if (!rateLimitProvider) throw new Error(`Unsupported provider: ${provider}`);
 
