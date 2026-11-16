@@ -91,11 +91,15 @@ export const getGmailClientWithRefresh = async ({
   try {
     const tokens = await auth.refreshAccessToken();
     const newAccessToken = tokens.credentials.access_token;
+    // Google can rotate the refresh token; dropping the new one leads to
+    // invalid_grant once the old one is retired.
+    const newRefreshToken = tokens.credentials.refresh_token ?? undefined;
 
-    if (newAccessToken !== accessToken) {
+    if (newAccessToken !== accessToken || newRefreshToken) {
       await saveTokens({
         tokens: {
           access_token: newAccessToken ?? undefined,
+          refresh_token: newRefreshToken,
           expires_at: tokens.credentials.expiry_date
             ? Math.floor(tokens.credentials.expiry_date / 1000)
             : undefined,

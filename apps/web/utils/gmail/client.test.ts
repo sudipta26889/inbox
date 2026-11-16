@@ -182,6 +182,31 @@ describe("gmail oauth client configuration", () => {
     );
   });
 
+  it("saves a refresh token Google rotated even when the access token is unchanged", async () => {
+    refreshAccessToken.mockResolvedValue({
+      credentials: {
+        access_token: "access-token",
+        refresh_token: "rotated-refresh-token",
+      },
+    });
+
+    await getGmailClientWithRefresh({
+      accessToken: "access-token",
+      refreshToken: "refresh-token",
+      expiresAt: null,
+      emailAccountId: "email-account-id",
+      logger,
+    });
+
+    expect(saveTokens).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tokens: expect.objectContaining({
+          refresh_token: "rotated-refresh-token",
+        }),
+      }),
+    );
+  });
+
   it("reuses Gmail tokens that expire beyond the refresh buffer", async () => {
     await getGmailClientWithRefresh({
       accessToken: "access-token",
