@@ -112,7 +112,7 @@ export function findSelectableSendAs(
 
 // Mail sent through the API gets no signature from the provider, so the
 // default address falls back to the provider's signature when none is set in
-// Inbox Zero. An alias uses its own when the provider has one.
+// Inbox. An alias uses its own when the provider has one.
 export function getSendAsSignatureHtml(
   address: SendAsAddress | undefined,
   addresses: SendAsAddress[],

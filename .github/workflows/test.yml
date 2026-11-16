@@ -4,6 +4,8 @@ permissions:
   contents: read
 
 on:
+  # deploy.yml and deploy-staging.yml run these tests before they build.
+  workflow_call:
   push:
     branches: [main]
     paths-ignore:
@@ -11,7 +13,7 @@ on:
       - "**/*.md"
       - "**/*.mdx"
   pull_request:
-    branches: [main]
+    branches: [main, sudipta_main, refork/main]
     paths-ignore:
       - "docs/**"
       - "**/*.md"
@@ -28,7 +30,7 @@ jobs:
       fail-fast: false
       matrix:
         shard: [1, 2]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
 
     steps:
@@ -137,7 +139,7 @@ jobs:
 
   electron:
     name: Electron mail runtime
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
       MAIL_REQUIRE_ELECTRON: "1"

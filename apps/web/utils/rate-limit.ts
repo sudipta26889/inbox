@@ -3,6 +3,7 @@ import { createHmac } from "node:crypto";
 import { env } from "@/env";
 import { redis } from "@/utils/redis";
 import type { Logger } from "@/utils/logger";
+import { isRedisConfigured } from "@/utils/redis/configured";
 
 type RateLimitRule = {
   key: string;
@@ -103,10 +104,7 @@ function hashKeyPart(part: string) {
 }
 
 function isRedisRateLimitConfigured() {
-  return (
-    env.NODE_ENV === "test" ||
-    Boolean(env.REDIS_HTTP_URL && env.REDIS_HTTP_TOKEN)
-  );
+  return env.NODE_ENV === "test" || isRedisConfigured();
 }
 
 function getRateLimitHashSecret() {

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { withAuth } from "@/utils/middleware";
 import { getEmailAccount } from "@/utils/redis/account-validation";
 import { RedisSubscriber } from "@/utils/redis/subscriber";
+import { REDIS_KEY_PREFIX } from "@/utils/redis/key-prefix";
 import {
   localMailHintChannel,
   refreshLocalMailInterest,
@@ -25,7 +26,8 @@ export const GET = withAuth("mail-stream", async (request) => {
   }
 
   const subscriber = RedisSubscriber.createInstance();
-  const channel = localMailHintChannel(emailAccountId);
+  // Raw subscriber: ioredis does not prefix channels, the publisher (redis.publish) does.
+  const channel = `${REDIS_KEY_PREFIX}${localMailHintChannel(emailAccountId)}`;
   const encoder = new TextEncoder();
   let cleanup = () => {};
   const stream = new ReadableStream<Uint8Array>({

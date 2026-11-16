@@ -25,7 +25,7 @@ export function ProviderRateLimitBanner() {
       description={
         <p>
           <Trans>
-            Inbox Zero actions are temporarily paused until around{" "}
+            Inbox actions are temporarily paused until around{" "}
             <strong>{retryAtLabel}</strong>. This limit is enforced by{" "}
             {providerLabel}, and other apps connected to this mailbox can
             contribute to the same shared limit.

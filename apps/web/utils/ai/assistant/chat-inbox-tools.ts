@@ -1154,8 +1154,8 @@ const buildManageInboxTool = ({
         if (responseSurface === "messaging") {
           return {
             error: isTrash
-              ? "Nothing was trashed. Trashing needs a confirmation that is only available in the Inbox Zero web app."
-              : "No drafts were deleted. Deleting drafts needs a confirmation that is only available in the Inbox Zero web app.",
+              ? "Nothing was trashed. Trashing needs a confirmation that is only available in the Inbox web app."
+              : "No drafts were deleted. Deleting drafts needs a confirmation that is only available in the Inbox web app.",
           };
         }
         const threadIds = parsedInput.threadIds!;

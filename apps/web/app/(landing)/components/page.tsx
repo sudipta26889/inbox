@@ -1174,7 +1174,7 @@ function getActivityLogEntries(): ActivityLogEntry[] {
     },
     {
       id: "3",
-      from: "Elie Steinbock <elie@getinboxzero.com>",
+      from: "Inbox Support <contact@sudiptadhara.in>",
       subject: "talk tomorrow",
       status: "processing",
     },

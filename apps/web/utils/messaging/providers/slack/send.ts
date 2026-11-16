@@ -61,7 +61,7 @@ export async function sendChannelConfirmation({
   const client = createSlackClient(accessToken);
 
   await postMessageWithJoin(client, channelId, {
-    text: `✅ Inbox Zero connected! You can mention ${formatSlackAppMention(botUserId)} in this channel to chat about your emails. If you enable meeting briefs or attachment filing notifications, I can send those here too.`,
+    text: `✅ Inbox connected! You can mention ${formatSlackAppMention(botUserId)} in this channel to chat about your emails. If you enable meeting briefs or attachment filing notifications, I can send those here too.`,
   });
 }
 
@@ -79,7 +79,7 @@ export async function sendConnectionOnboardingDirectMessage({
   await client.chat.postMessage(
     disableSlackLinkUnfurls({
       channel: userId,
-      text: `✅ Inbox Zero connected. Next, open Channels in Inbox Zero to choose where messages go. To use a private channel, invite ${formatSlackAppMention(botUserId)} there. You can also DM me anytime to chat about your emails.`,
+      text: `✅ Inbox connected. Next, open Channels in Inbox to choose where messages go. To use a private channel, invite ${formatSlackAppMention(botUserId)} there. You can also DM me anytime to chat about your emails.`,
     }),
   );
 }
@@ -155,7 +155,7 @@ export async function sendDigestToSlack({
 
   await postMessageWithJoin(client, channelId, {
     blocks,
-    text: "📋 Your Inbox Zero digest",
+    text: "📋 Your Inbox digest",
   });
 }
 
@@ -238,7 +238,7 @@ export async function resolveSlackRouteDestination({
 }
 
 export function formatSlackAppMention(botUserId: string | null | undefined) {
-  return botUserId ? `<@${botUserId}>` : "@Inbox Zero";
+  return botUserId ? `<@${botUserId}>` : "@Inbox";
 }
 
 export function disableSlackLinkUnfurls<T extends object>(message: T) {

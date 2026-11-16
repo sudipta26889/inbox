@@ -18,6 +18,7 @@ const llmProviderEnum = z.enum([
   "aigateway",
   "ollama",
   "openai-compatible",
+  "litellm",
   "codex-cli",
   "claude-code",
 ]);
@@ -50,6 +51,8 @@ const defaultLlmsEnv = z.preprocess(
 );
 
 const parsedEnv = createEnv({
+  // Portainer stacks pass a key missing from the stack Env as "" (${KEY:-}).
+  emptyStringAsUndefined: true,
   server: {
     NODE_ENV: z.enum(["development", "production", "test"]),
     INBOX_ZERO_ENV_FILE: z.string().optional(),
@@ -185,6 +188,8 @@ const parsedEnv = createEnv({
     OLLAMA_MODEL: z.string().optional(),
     LOCAL_LLM_THINKING: z.enum(["off", "on", "auto"]).default("auto"),
     OPENAI_COMPATIBLE_BASE_URL: z.string().optional(),
+    LITELLM_BASE_URL: z.string().optional(),
+    GIT_SHA: z.string().optional(),
     OPENAI_COMPATIBLE_MODEL: z.string().optional(),
     OPENAI_COMPATIBLE_AUTH_HEADER: z
       .enum(["authorization", "api-key"])
@@ -217,6 +222,7 @@ const parsedEnv = createEnv({
       .string()
       .optional()
       .transform((value) => value || process.env.KV_URL), // used for subscriptions
+    REDIS_KEY_PREFIX: z.string().min(1).default("inbox:"),
 
     QSTASH_TOKEN: z.string().optional(),
     QSTASH_CURRENT_SIGNING_KEY: z.string().optional(),
@@ -323,7 +329,7 @@ const parsedEnv = createEnv({
     RESEND_FROM_EMAIL: z
       .string()
       .optional()
-      .default("Inbox Zero <updates@transactional.getinboxzero.com>"),
+      .default("Inbox <updates@transactional.inbox.sudiptadhara.in>"),
     CRON_SECRET: z.string().optional(),
     BLOG_SYNC_WEBHOOK_SECRET: z.string().min(1).optional(),
     BLOG_SYNC_SANITY_AUTHOR_ID: z.string().min(1).optional(),
@@ -357,8 +363,8 @@ const parsedEnv = createEnv({
     DEFAULT_DECISION_MODEL: z
       .string()
       .regex(
-        /^(typesafe|openrouter|aigateway|openai):\S+$/,
-        "Expected <typesafe|openrouter|aigateway|openai>:<model>",
+        /^(typesafe|openrouter|aigateway|openai|litellm):\S+$/,
+        "Expected <typesafe|openrouter|aigateway|openai|litellm>:<model>",
       )
       .optional(),
     // Whether users who haven't chosen get the decision model; otherwise opt-in
@@ -463,10 +469,13 @@ const parsedEnv = createEnv({
     NEXT_PUBLIC_IMAGE_PROXY_USE_APP_ROUTE: booleanString
       .optional()
       .default(false),
-    NEXT_PUBLIC_BRAND_NAME: z.string().trim().min(1).default("Inbox Zero"),
-    NEXT_PUBLIC_BRAND_LOGO_URL: z.string().optional(),
+    NEXT_PUBLIC_BRAND_NAME: z.string().trim().min(1).default("Inbox"),
+    NEXT_PUBLIC_BRAND_LOGO_URL: z
+      .string()
+      .optional()
+      .default("/images/logos/email-agent-logo.png"),
     NEXT_PUBLIC_BRAND_ICON_URL: z.string().optional().default("/icon.png"),
-    NEXT_PUBLIC_SLACK_BOT_NAME: z.string().trim().min(1).default("Inbox Zero"),
+    NEXT_PUBLIC_SLACK_BOT_NAME: z.string().trim().min(1).default("Inbox"),
     NEXT_PUBLIC_SELF_HOSTED_LOGIN_FOOTER_TEXT: z.string().optional(),
     NEXT_PUBLIC_CONTACTS_ENABLED: booleanString.optional().default(false),
     NEXT_PUBLIC_COOKIE_CONSENT_ENABLED: booleanString.optional().default(false),
@@ -482,7 +491,7 @@ const parsedEnv = createEnv({
     NEXT_PUBLIC_SUPPORT_EMAIL: z
       .string()
       .optional()
-      .default("support@getinboxzero.com"),
+      .default("contact@sudiptadhara.in"),
     NEXT_PUBLIC_GTM_ID: z.string().optional(),
     NEXT_PUBLIC_CONVERSION_ANALYTICS_SCRIPT_URL: z.string().optional(),
     NEXT_PUBLIC_CRISP_WEBSITE_ID: z.string().optional(),
@@ -498,7 +507,7 @@ const parsedEnv = createEnv({
     NEXT_PUBLIC_DUB_REFER_DOMAIN: z.string().optional(),
     NEXT_PUBLIC_DISABLE_REFERRAL_SIGNATURE: booleanString
       .optional()
-      .default(false),
+      .default(true),
     NEXT_PUBLIC_USE_AEONIK_FONT: booleanString.optional().default(false),
     NEXT_PUBLIC_BYPASS_PREMIUM_CHECKS: booleanString.optional(),
     NEXT_PUBLIC_DIGEST_ENABLED: booleanString.optional(),
@@ -660,6 +669,7 @@ if (
 }
 
 const decisionModelApiKeyNames: Record<string, string> = {
+  litellm: "LLM_API_KEY",
   typesafe: "TYPESAFE_API_KEY",
   openrouter: "OPENROUTER_API_KEY",
   aigateway: "AI_GATEWAY_API_KEY",

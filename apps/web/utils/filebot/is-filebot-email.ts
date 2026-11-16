@@ -9,7 +9,7 @@ import {
 // In prod: hello+ai@example.com
 // In dev: hello+ai-test@example.com
 const FILEBOT_SUFFIX = `ai${env.NODE_ENV === "development" ? "-test" : ""}`;
-const FILEBOT_DISPLAY_NAME = "Inbox Zero Assistant";
+const FILEBOT_DISPLAY_NAME = "Inbox Assistant";
 // Subjects written by utils/drive/filing-notifications.ts. Matched as a fallback
 // because some providers drop the Reply-To and From display name on replies.
 const FILEBOT_NOTIFICATION_SUBJECT =

@@ -5,6 +5,7 @@ import {
   toRateLimitProvider,
 } from "@/utils/email/rate-limit-mode-error";
 import { redis } from "@/utils/redis";
+import { isRedisConfigured } from "@/utils/redis/configured";
 
 const RATE_LIMIT_KEY_PREFIX = "email-provider-rate-limit";
 
@@ -92,10 +93,7 @@ export async function deleteEmailProviderRateLimitStateFromRedis({
 }
 
 export function isEmailProviderRateLimitRedisConfigured() {
-  return (
-    env.NODE_ENV === "test" ||
-    Boolean(env.REDIS_HTTP_URL && env.REDIS_HTTP_TOKEN)
-  );
+  return env.NODE_ENV === "test" || isRedisConfigured();
 }
 
 function parseStoredEmailProviderRateLimitState(

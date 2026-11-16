@@ -154,7 +154,7 @@ export function StepHowYouHeard({ onNext }: { onNext: () => void }) {
 
       <div className="text-center mt-4">
         <PageHeading>
-          <Trans>How did you hear about Inbox Zero?</Trans>
+          <Trans>How did you hear about Inbox?</Trans>
         </PageHeading>
         <TypographyP className="mt-2 max-w-lg mx-auto">
           <Trans>We'd love to know how you found us.</Trans>

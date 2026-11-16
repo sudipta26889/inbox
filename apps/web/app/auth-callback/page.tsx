@@ -12,14 +12,14 @@ export default async function AuthCallbackPage({
     <main className="flex min-h-screen flex-col items-center justify-center gap-4 px-6 text-center">
       {appUrl ? <AuthCallbackHandoff href={appUrl} /> : null}
       <p className="text-muted-foreground text-sm">
-        Return to Inbox Zero to finish signing in.
+        Return to Inbox to finish signing in.
       </p>
       {appUrl ? (
         <a
           href={appUrl}
           className="text-sm font-medium text-foreground underline underline-offset-4"
         >
-          Open Inbox Zero
+          Open Inbox
         </a>
       ) : null}
     </main>

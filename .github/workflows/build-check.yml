@@ -18,7 +18,7 @@ on:
       - "scripts/pnpm-install-without-desktop.sh"
       - ".github/workflows/build-check.yml"
   pull_request:
-    branches: [main]
+    branches: [main, sudipta_main, refork/main]
     paths:
       - "apps/web/**"
       - "packages/**"
@@ -37,7 +37,7 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
 
     env:

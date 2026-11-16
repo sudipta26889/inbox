@@ -55,7 +55,7 @@ export function MultiRuleSetting() {
           </span>
           <TooltipExplanation
             side="top"
-            text={t`Turning this off stops the AI from intentionally choosing multiple custom rules for one email. Inbox Zero can still apply more than one rule in a few special cases.`}
+            text={t`Turning this off stops the AI from intentionally choosing multiple custom rules for one email. Inbox can still apply more than one rule in a few special cases.`}
           />
         </div>
       }

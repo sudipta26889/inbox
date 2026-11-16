@@ -5,7 +5,7 @@ import { ErrorPage } from "@/components/ErrorPage";
 import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
-  title: "Update Inbox Zero Desktop",
+  title: "Update Inbox Desktop",
 };
 
 export default function DesktopUpdateRequiredPage() {
@@ -13,7 +13,7 @@ export default function DesktopUpdateRequiredPage() {
     <BasicLayout>
       <ErrorPage
         title="Update the desktop app to sign in"
-        description="This version of Inbox Zero Desktop can no longer complete sign-in. Download the latest version, reopen the app, and try signing in again."
+        description="This version of Inbox Desktop can no longer complete sign-in. Download the latest version, reopen the app, and try signing in again."
         button={
           <Button asChild>
             <Link href="/download">Download the latest desktop app</Link>
