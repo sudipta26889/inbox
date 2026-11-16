@@ -5,6 +5,8 @@ import { TaskpilotNotConfiguredError } from "@/utils/taskpilot/errors";
 
 export interface TaskpilotConfig {
   apiKey: string;
+  /** When set, Inbox reads and writes TaskPilot work only in this project. */
+  projectId: string | null;
   workspaceSlug: string;
 }
 
@@ -13,7 +15,11 @@ export async function getTaskpilotConfigForUser(
 ): Promise<TaskpilotConfig> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { taskpilotApiKey: true, taskpilotWorkspaceSlug: true },
+    select: {
+      taskpilotApiKey: true,
+      taskpilotWorkspaceSlug: true,
+      taskpilotProjectId: true,
+    },
   });
   if (!user?.taskpilotApiKey || !user.taskpilotWorkspaceSlug) {
     throw new TaskpilotNotConfiguredError();
@@ -24,7 +30,11 @@ export async function getTaskpilotConfigForUser(
       "Failed to decrypt TaskPilot API key",
     );
   }
-  return { apiKey, workspaceSlug: user.taskpilotWorkspaceSlug };
+  return {
+    apiKey,
+    workspaceSlug: user.taskpilotWorkspaceSlug,
+    projectId: user.taskpilotProjectId ?? null,
+  };
 }
 
 export async function getTaskpilotClientForUser(
@@ -34,15 +44,22 @@ export async function getTaskpilotClientForUser(
   return new TaskpilotClient(cfg);
 }
 
-export async function getTaskpilotConfigStatus(
-  userId: string,
-): Promise<{ configured: boolean; workspaceSlug: string | null }> {
+export async function getTaskpilotConfigStatus(userId: string): Promise<{
+  configured: boolean;
+  projectId: string | null;
+  workspaceSlug: string | null;
+}> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { taskpilotApiKey: true, taskpilotWorkspaceSlug: true },
+    select: {
+      taskpilotApiKey: true,
+      taskpilotWorkspaceSlug: true,
+      taskpilotProjectId: true,
+    },
   });
   return {
     configured: Boolean(user?.taskpilotApiKey && user.taskpilotWorkspaceSlug),
+    projectId: user?.taskpilotProjectId ?? null,
     workspaceSlug: user?.taskpilotWorkspaceSlug ?? null,
   };
 }

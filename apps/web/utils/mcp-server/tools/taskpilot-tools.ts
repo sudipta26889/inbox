@@ -13,6 +13,7 @@ import { taskpilotCache } from "@/utils/taskpilot/cache";
 import { TaskpilotClient } from "@/utils/taskpilot/client";
 import { getTaskpilotConfigForUser } from "@/utils/taskpilot/config";
 import { decidePass1 } from "@/utils/taskpilot/decide";
+import { filterToPin } from "@/utils/taskpilot/pin";
 import { commitTask } from "@/utils/taskpilot/service";
 import type { CreateTaskDraft } from "@/utils/taskpilot/types";
 import { getEmailUrlForMessage } from "@/utils/url";
@@ -91,9 +92,10 @@ export async function convertToTaskpilotTask(
     // Build Pass 1 context.
     const config = await getTaskpilotConfigForUser(context.userId);
     const client = new TaskpilotClient(config);
-    const projects = await taskpilotCache.getProjects(context.userId, () =>
+    const allProjects = await taskpilotCache.getProjects(context.userId, () =>
       client.listProjects(),
     );
+    const projects = filterToPin(allProjects, config.projectId, (p) => p.id);
     const labelsByProject: Record<
       string,
       Array<{ id: string; name: string }>

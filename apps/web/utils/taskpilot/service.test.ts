@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import prisma from "@/utils/__mocks__/prisma";
 import { TaskpilotClient } from "@/utils/taskpilot/client";
 import { TaskpilotServerError } from "@/utils/taskpilot/errors";
+import { getTaskpilotConfigForUser } from "@/utils/taskpilot/config";
 import { commitTask } from "@/utils/taskpilot/service";
 
 vi.mock("@/utils/prisma");
@@ -307,5 +308,69 @@ describe("commitTask", () => {
     expect(
       warnLog.mock.calls.map((call) => String(call[0])).join("\n"),
     ).not.toContain("addLink failed");
+  });
+});
+
+describe("commitTask with a pinned project", () => {
+  const input = (projectId: string) => ({
+    userId,
+    emailAccountId,
+    messageId: "msg-pin",
+    threadId: null,
+    deepLink: "https://x",
+    draft: {
+      projectId,
+      title: "Title",
+      description_html: "<p>x</p>",
+      priority: "medium" as const,
+      labelNames: [],
+    },
+    source: "MANUAL" as const,
+  });
+
+  it("refuses a draft for another project before writing anything", async () => {
+    prisma.emailTaskLink.findFirst.mockResolvedValue(null);
+    vi.mocked(getTaskpilotConfigForUser).mockResolvedValueOnce({
+      apiKey: "tk_test",
+      workspaceSlug: "acme",
+      projectId: "pin",
+    });
+    const createWorkItem = vi.spyOn(
+      TaskpilotClient.prototype,
+      "createWorkItem",
+    );
+
+    await expect(commitTask(input("other"))).rejects.toThrow(
+      /limited to project pin.*other/,
+    );
+    expect(createWorkItem).not.toHaveBeenCalled();
+    expect(prisma.emailTaskLink.upsert).not.toHaveBeenCalled();
+  });
+
+  it("allows a draft for the pinned project", async () => {
+    prisma.emailTaskLink.findFirst.mockResolvedValue(null);
+    prisma.emailTaskLink.upsert.mockResolvedValue({
+      id: "l",
+      taskpilotIdentifier: "WEB-1",
+      taskpilotIssueId: "issue-1",
+      workspaceSlug: "acme",
+    } as never);
+    vi.mocked(getTaskpilotConfigForUser).mockResolvedValueOnce({
+      apiKey: "tk_test",
+      workspaceSlug: "acme",
+      projectId: "pin",
+    });
+    vi.spyOn(TaskpilotClient.prototype, "createWorkItem").mockResolvedValue({
+      id: "issue-1",
+      identifier: "WEB-1",
+      sequence_id: 1,
+      alreadyExisted: false,
+    });
+    vi.spyOn(TaskpilotClient.prototype, "addLink").mockResolvedValue();
+    vi.spyOn(TaskpilotClient.prototype, "listLabels").mockResolvedValue([]);
+
+    const result = await commitTask(input("pin"));
+
+    expect(result.taskpilotIssueId).toBe("issue-1");
   });
 });

@@ -32,9 +32,13 @@ const formSchema = z.object({
     .max(100)
     .regex(/^[a-z0-9-]+$/i, "letters, digits, dashes only"),
   apiKey: z.string().min(1, "Required"),
+  projectId: projectIdField(),
 });
 
+const pinSchema = z.object({ projectId: projectIdField() });
+
 type FormValues = z.infer<typeof formSchema>;
+type PinValues = z.infer<typeof pinSchema>;
 
 const STATUS_KEY = "/api/user/me/taskpilot-status";
 
@@ -48,7 +52,12 @@ export function TaskpilotIntegrationSection() {
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
-    defaultValues: { workspaceSlug: "", apiKey: "" },
+    defaultValues: { workspaceSlug: "", apiKey: "", projectId: "" },
+  });
+
+  const pinForm = useForm<PinValues>({
+    resolver: zodResolver(pinSchema),
+    values: { projectId: status?.projectId ?? "" },
   });
 
   const update = useAction(updateTaskpilotIntegrationAction, {
@@ -56,7 +65,7 @@ export function TaskpilotIntegrationSection() {
       toastSuccess({ description: "TaskPilot integration updated" });
       mutate();
       setEditing(false);
-      form.reset({ workspaceSlug: "", apiKey: "" });
+      form.reset({ workspaceSlug: "", apiKey: "", projectId: "" });
     },
     onError: (error) => {
       toastError({
@@ -69,11 +78,20 @@ export function TaskpilotIntegrationSection() {
 
   const test = useAction(testTaskpilotConnectionAction, {
     onSuccess: (result) => {
-      if (result?.data?.ok) {
-        toastSuccess({
-          description: `OK — ${result.data.projectCount} project${result.data.projectCount === 1 ? "" : "s"} reachable`,
+      const data = result?.data;
+      if (!data?.ok) return;
+      if (data.pin && !data.pin.ok) {
+        toastError({
+          description:
+            "Connected, but the pinned project is not in this workspace. TaskPilot work is paused until the Project ID is fixed.",
         });
+        return;
       }
+      toastSuccess({
+        description: data.pin
+          ? "OK — token works and the pinned project is reachable"
+          : `OK — ${data.projectCount} project${data.projectCount === 1 ? "" : "s"} reachable`,
+      });
     },
     onError: (error) => {
       toastError({
@@ -88,11 +106,19 @@ export function TaskpilotIntegrationSection() {
     update.execute({
       apiKey: values.apiKey,
       workspaceSlug: values.workspaceSlug,
+      projectId: values.projectId ? values.projectId.toLowerCase() : null,
+    });
+  };
+
+  // The pin changes on its own: the API key is not needed or resent.
+  const onSavePin = (values: PinValues) => {
+    update.execute({
+      projectId: values.projectId ? values.projectId.toLowerCase() : null,
     });
   };
 
   const onClear = () => {
-    update.execute({ apiKey: null, workspaceSlug: null });
+    update.execute({ apiKey: null, workspaceSlug: null, projectId: null });
   };
 
   return (
@@ -116,43 +142,67 @@ export function TaskpilotIntegrationSection() {
 
       <LoadingContent loading={isLoading}>
         {status?.configured && !editing ? (
-          <div className="flex flex-wrap items-center gap-2 text-sm">
-            <span className="text-muted-foreground">Workspace:</span>
-            <span className="font-mono">{status.workspaceSlug}</span>
-            <span className="ml-auto flex gap-2">
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => test.execute()}
-                disabled={test.isExecuting}
-              >
-                {test.isExecuting ? "Testing…" : "Test connection"}
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <span className="text-muted-foreground">Workspace:</span>
+              <span className="font-mono">{status.workspaceSlug}</span>
+              <span className="ml-auto flex gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => test.execute()}
+                  disabled={test.isExecuting}
+                >
+                  {test.isExecuting ? "Testing…" : "Test connection"}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    form.reset({
+                      workspaceSlug: status.workspaceSlug ?? "",
+                      apiKey: "",
+                      projectId: status.projectId ?? "",
+                    });
+                    setEditing(true);
+                  }}
+                >
+                  Replace
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={onClear}
+                  disabled={update.isExecuting}
+                >
+                  Clear
+                </Button>
+              </span>
+            </div>
+            <form
+              onSubmit={pinForm.handleSubmit(onSavePin)}
+              className="space-y-2"
+            >
+              <Input
+                type="text"
+                name="projectId"
+                label="Project ID (optional)"
+                placeholder="Leave empty to use every project"
+                registerProps={pinForm.register("projectId")}
+                error={pinForm.formState.errors.projectId}
+              />
+              <p className="text-xs text-muted-foreground">
+                {status.projectId
+                  ? `Limited to project ${status.projectId}. Clear the field and save to use every project.`
+                  : "Paste a project's UUID to limit Inbox's TaskPilot work to that one project."}
+              </p>
+              <Button type="submit" size="sm" disabled={update.isExecuting}>
+                {update.isExecuting ? "Saving…" : "Save project"}
               </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  form.reset({
-                    workspaceSlug: status.workspaceSlug ?? "",
-                    apiKey: "",
-                  });
-                  setEditing(true);
-                }}
-              >
-                Replace
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                onClick={onClear}
-                disabled={update.isExecuting}
-              >
-                Clear
-              </Button>
-            </span>
+            </form>
           </div>
         ) : (
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-2">
@@ -176,6 +226,14 @@ export function TaskpilotIntegrationSection() {
               registerProps={form.register("apiKey")}
               error={form.formState.errors.apiKey}
             />
+            <Input
+              type="text"
+              name="projectId"
+              label="Project ID (optional)"
+              placeholder="Leave empty to use every project"
+              registerProps={form.register("projectId")}
+              error={form.formState.errors.projectId}
+            />
             <p className="text-xs text-muted-foreground">
               Generate a service token in TaskPilot → workspace settings → API
               tokens. Service tokens get 300 req/min.
@@ -191,7 +249,11 @@ export function TaskpilotIntegrationSection() {
                   variant="ghost"
                   onClick={() => {
                     setEditing(false);
-                    form.reset({ workspaceSlug: "", apiKey: "" });
+                    form.reset({
+                      workspaceSlug: "",
+                      apiKey: "",
+                      projectId: "",
+                    });
                   }}
                 >
                   Cancel
@@ -203,4 +265,14 @@ export function TaskpilotIntegrationSection() {
       </LoadingContent>
     </Item>
   );
+}
+
+function projectIdField() {
+  return z
+    .string()
+    .trim()
+    .refine(
+      (value) => value === "" || z.string().uuid().safeParse(value).success,
+      "Must be a project UUID, or empty",
+    );
 }

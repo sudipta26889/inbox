@@ -41,6 +41,7 @@ export async function getAccountProfile(ctx: {
         select: {
           taskpilotApiKey: true,
           taskpilotWorkspaceSlug: true,
+          taskpilotProjectId: true,
         },
       },
     },
@@ -59,6 +60,7 @@ export async function getAccountProfile(ctx: {
         user?.taskpilotApiKey && user?.taskpilotWorkspaceSlug,
       ),
       workspaceSlug: user?.taskpilotWorkspaceSlug ?? null,
+      projectId: user?.taskpilotProjectId ?? null,
     },
   };
 }
@@ -115,6 +117,13 @@ export const updateAccountProfileSchema = z
       .regex(/^[a-z0-9-]+$/i)
       .nullable()
       .optional(),
+    // Independent of the key and slug coupling below.
+    taskpilotProjectId: z
+      .string()
+      .uuid()
+      .transform((value) => value.toLowerCase())
+      .nullable()
+      .optional(),
   })
   .strict()
   .refine((obj) => Object.keys(obj).length > 0, {
@@ -152,8 +161,12 @@ export async function updateAccountProfile(
     throw new NotFoundError("Email account not found");
   }
 
-  const { taskpilotApiKey, taskpilotWorkspaceSlug, ...emailAccountData } =
-    input;
+  const {
+    taskpilotApiKey,
+    taskpilotWorkspaceSlug,
+    taskpilotProjectId,
+    ...emailAccountData
+  } = input;
   const taskpilotTouched =
     Object.hasOwn(input, "taskpilotApiKey") ||
     Object.hasOwn(input, "taskpilotWorkspaceSlug");
@@ -165,13 +178,16 @@ export async function updateAccountProfile(
     });
   }
 
-  if (taskpilotTouched) {
+  if (taskpilotTouched || taskpilotProjectId !== undefined) {
     await prisma.user.update({
       where: { id: ctx.userId },
       data: {
-        taskpilotApiKey:
-          taskpilotApiKey === null ? null : encryptToken(taskpilotApiKey),
-        taskpilotWorkspaceSlug: taskpilotWorkspaceSlug ?? null,
+        ...(taskpilotTouched && {
+          taskpilotApiKey:
+            taskpilotApiKey === null ? null : encryptToken(taskpilotApiKey),
+          taskpilotWorkspaceSlug: taskpilotWorkspaceSlug ?? null,
+        }),
+        ...(taskpilotProjectId !== undefined && { taskpilotProjectId }),
       },
     });
   }

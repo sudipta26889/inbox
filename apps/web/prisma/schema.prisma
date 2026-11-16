@@ -95,6 +95,7 @@ model User {
   // TaskPilot integration settings
   taskpilotApiKey        String?
   taskpilotWorkspaceSlug String?
+  taskpilotProjectId     String? // when set, TaskPilot work is limited to this project
 
   // referral system
   referralCode String? @unique // User's own referral code

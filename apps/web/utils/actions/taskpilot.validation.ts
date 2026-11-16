@@ -23,18 +23,42 @@ export const commitTaskpilotTaskBody = z.object({
 
 export const updateTaskpilotIntegrationBody = z
   .object({
-    apiKey: z.string().min(1).nullable(),
+    apiKey: z.string().min(1).nullable().optional(),
     workspaceSlug: z
       .string()
       .min(1)
       .max(100)
       .regex(/^[a-z0-9-]+$/i)
-      .nullable(),
+      .nullable()
+      .optional(),
+    // Independent of the key and slug: the pin can change without the key.
+    projectId: lowercaseUuid().nullable().optional(),
   })
   .superRefine((data, ctx) => {
-    const bothNull = data.apiKey === null && data.workspaceSlug === null;
-    const bothSet = data.apiKey !== null && data.workspaceSlug !== null;
-    if (!bothNull && !bothSet) {
+    const keyTouched = data.apiKey !== undefined;
+    const slugTouched = data.workspaceSlug !== undefined;
+
+    if (!keyTouched && !slugTouched && data.projectId === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Nothing to update",
+      });
+      return;
+    }
+
+    // Key and slug stay coupled: both set, both cleared, or both left alone.
+    if (keyTouched !== slugTouched) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          "Both apiKey and workspaceSlug must be set or cleared together",
+      });
+      return;
+    }
+    if (
+      keyTouched &&
+      (data.apiKey === null) !== (data.workspaceSlug === null)
+    ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message:
@@ -42,3 +66,11 @@ export const updateTaskpilotIntegrationBody = z
       });
     }
   });
+
+// TaskPilot ids are lowercase; a pasted upper-case UUID would never match.
+function lowercaseUuid() {
+  return z
+    .string()
+    .uuid()
+    .transform((value) => value.toLowerCase());
+}

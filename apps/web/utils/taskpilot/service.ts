@@ -55,6 +55,14 @@ export async function commitTask(input: CommitInput): Promise<CommitResult> {
   const client = new TaskpilotClient(config);
   const { workspaceSlug } = config;
 
+  // Defence in depth: the router already restricts the draft to the pinned
+  // project, but this is the last stop before anything is written.
+  if (config.projectId && input.draft.projectId !== config.projectId) {
+    throw new Error(
+      `TaskPilot is limited to project ${config.projectId}; refusing to create in ${input.draft.projectId}`,
+    );
+  }
+
   const descriptionHtml = input.draft.description_html
     .split(INBOX_LINK_PLACEHOLDER)
     .join(input.deepLink);

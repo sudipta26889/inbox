@@ -4,6 +4,7 @@ import { getTaskpilotConfigStatus } from "@/utils/taskpilot/config";
 
 export type TaskpilotStatusResponse = {
   configured: boolean;
+  projectId: string | null;
   workspaceSlug: string | null;
 };
 

@@ -234,6 +234,101 @@ describe("updateAccountProfile", () => {
     expect(call.data).not.toHaveProperty("writingStyle");
   });
 
+  describe("the TaskPilot project pin", () => {
+    const PIN = "683db6a7-472b-4aa6-b7f1-c527f18579ee";
+    const ctx = { userId: "user_1", emailAccountId: "ea_1" };
+
+    const mockReads = () =>
+      prisma.emailAccount.findFirst
+        .mockResolvedValueOnce({ id: "ea_1" } as never)
+        .mockResolvedValueOnce({
+          ...updatedRow,
+          user: {
+            taskpilotApiKey: null,
+            taskpilotWorkspaceSlug: null,
+            taskpilotProjectId: PIN,
+          },
+        } as never);
+
+    it("accepts a uuid or null, and rejects anything else", () => {
+      expect(
+        updateAccountProfileSchema.safeParse({ taskpilotProjectId: PIN })
+          .success,
+      ).toBe(true);
+      expect(
+        updateAccountProfileSchema.safeParse({ taskpilotProjectId: null })
+          .success,
+      ).toBe(true);
+      expect(
+        updateAccountProfileSchema.safeParse({ taskpilotProjectId: "junk" })
+          .success,
+      ).toBe(false);
+    });
+
+    it("lower-cases an upper-case project id", () => {
+      const parsed = updateAccountProfileSchema.parse({
+        taskpilotProjectId: PIN.toUpperCase(),
+      });
+
+      expect(parsed.taskpilotProjectId).toBe(PIN);
+    });
+
+    it("can be set without the key and slug, and leaves them alone", async () => {
+      mockReads();
+      prisma.user.update.mockResolvedValue({} as never);
+
+      const out = await updateAccountProfile(ctx, { taskpilotProjectId: PIN });
+
+      expect(prisma.user.update).toHaveBeenCalledTimes(1);
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: "user_1" },
+        data: { taskpilotProjectId: PIN },
+      });
+      expect(prisma.emailAccount.update).not.toHaveBeenCalled();
+      expect(out.taskpilot.projectId).toBe(PIN);
+    });
+
+    it("can be cleared with null", async () => {
+      mockReads();
+      prisma.user.update.mockResolvedValue({} as never);
+
+      await updateAccountProfile(ctx, { taskpilotProjectId: null });
+
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: "user_1" },
+        data: { taskpilotProjectId: null },
+      });
+    });
+
+    it("is saved together with the key and slug in one update", async () => {
+      mockReads();
+      prisma.user.update.mockResolvedValue({} as never);
+
+      await updateAccountProfile(ctx, {
+        taskpilotApiKey: "tk",
+        taskpilotWorkspaceSlug: "acme",
+        taskpilotProjectId: PIN,
+      });
+
+      expect(prisma.user.update).toHaveBeenCalledTimes(1);
+      const data = (prisma.user.update.mock.calls[0][0] as { data: object })
+        .data;
+      expect(data).toMatchObject({
+        taskpilotWorkspaceSlug: "acme",
+        taskpilotProjectId: PIN,
+      });
+    });
+
+    it("does not loosen the key and slug coupling", () => {
+      expect(
+        updateAccountProfileSchema.safeParse({
+          taskpilotApiKey: "tk",
+          taskpilotProjectId: PIN,
+        }).success,
+      ).toBe(false);
+    });
+  });
+
   it("throws NotFoundError when emailAccountId is wrong", async () => {
     prisma.emailAccount.findFirst.mockResolvedValue(null as never);
 

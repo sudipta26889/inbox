@@ -64,7 +64,7 @@ export async function backfillTaskpilotLinks({
   if (done.size >= maxTotal) return finish(result, logger);
 
   const items = groupByWorkItem(await findRows(), done);
-  const clients = new Map<string, TaskpilotClient>();
+  const clients = new Map<string, WorkspaceAccess>();
   const projectIdentifiers = new Map<string, Promise<Map<string, string>>>();
 
   for (const rows of items) {
@@ -77,7 +77,14 @@ export async function backfillTaskpilotLinks({
     const issueId = first.taskpilotIssueId;
 
     try {
-      const client = await getClient(clients, first);
+      const { client, pin } = await getClient(clients, first);
+
+      // Work in another project is outside the pin: left alone, and not
+      // marked done, so lifting or changing the pin later picks it up.
+      if (pin && first.projectId !== pin) {
+        result.skipped++;
+        continue;
+      }
 
       let task: TaskDetail;
       try {
@@ -232,22 +239,27 @@ async function hasLink(
   return links.some((link) => link.url === url);
 }
 
+type WorkspaceAccess = { client: TaskpilotClient; pin: string | null };
+
 // Same way the create path gets its client, but on the row's own workspace.
 async function getClient(
-  clients: Map<string, TaskpilotClient>,
+  clients: Map<string, WorkspaceAccess>,
   row: { emailAccount: { userId: string }; workspaceSlug: string },
-) {
+): Promise<WorkspaceAccess> {
   const key = `${row.emailAccount.userId}:${row.workspaceSlug}`;
   const cached = clients.get(key);
   if (cached) return cached;
 
   const config = await getTaskpilotConfigForUser(row.emailAccount.userId);
-  const client = new TaskpilotClient({
-    ...config,
-    workspaceSlug: row.workspaceSlug,
-  });
-  clients.set(key, client);
-  return client;
+  const access = {
+    client: new TaskpilotClient({
+      apiKey: config.apiKey,
+      workspaceSlug: row.workspaceSlug,
+    }),
+    pin: config.projectId,
+  };
+  clients.set(key, access);
+  return access;
 }
 
 async function markDone(done: Set<string>, rows: BackfillRow[]) {

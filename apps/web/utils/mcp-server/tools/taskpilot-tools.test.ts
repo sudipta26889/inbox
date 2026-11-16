@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { expectMcpData } from "@/__tests__/helpers";
 import prisma from "@/utils/__mocks__/prisma";
 import { TaskpilotClient } from "@/utils/taskpilot/client";
+import { getTaskpilotConfigForUser } from "@/utils/taskpilot/config";
+import { decidePass1 } from "@/utils/taskpilot/decide";
 import { convertToTaskpilotTask } from "./taskpilot-tools";
 
 vi.mock("@/utils/prisma");
@@ -147,5 +149,30 @@ describe("convertToTaskpilotTask", () => {
     if (!result.ok) {
       expect(result.error.code).toBe("VALIDATION_ERROR");
     }
+  });
+});
+
+describe("convertToTaskpilotTask with a pinned project", () => {
+  it("offers the decider only the pinned project", async () => {
+    prisma.emailTaskLink.findFirst.mockResolvedValue(null);
+    vi.mocked(getTaskpilotConfigForUser).mockResolvedValueOnce({
+      apiKey: "tk",
+      workspaceSlug: "acme",
+      projectId: "p2",
+    });
+    vi.spyOn(TaskpilotClient.prototype, "listProjects").mockResolvedValue([
+      { id: "p1", identifier: "WEB", name: "Web", description: null },
+      { id: "p2", identifier: "OPS", name: "Ops", description: null },
+    ]);
+    const listLabels = vi
+      .spyOn(TaskpilotClient.prototype, "listLabels")
+      .mockResolvedValue([]);
+
+    await convertToTaskpilotTask(ctx, { emailId: "msg-pin", preview: true });
+
+    const args = vi.mocked(decidePass1).mock.calls.at(-1)?.[0];
+    expect(args?.projects.map((p) => p.id)).toEqual(["p2"]);
+    expect(Object.keys(args?.labelsByProject ?? {})).toEqual(["p2"]);
+    expect(listLabels).toHaveBeenCalledTimes(1);
   });
 });
