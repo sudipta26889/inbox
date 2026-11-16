@@ -38,11 +38,13 @@ const actionNames: Record<
   [ActionType.DIGEST]: msg`Add to digest`,
   [ActionType.NOTIFY_MESSAGING_CHANNEL]: msg`Notify`,
   [ActionType.NOTIFY_SENDER]: msg`Notify sender`,
+  [ActionType.CREATE_TASK]: msg`TaskPilot`,
 };
 
 const actionTooltips: Partial<Record<ActionType, MessageDescriptor>> = {
   [ActionType.CALL_WEBHOOK]: msg`For developers: trigger external integrations by sending email data to a custom URL`,
   [ActionType.DIGEST]: msg`Group emails together and receive them as a daily summary`,
+  [ActionType.CREATE_TASK]: msg`Create a TaskPilot task from this email — or, if the same thread already has a task, add the new message as a comment instead. Requires TaskPilot credentials in settings.`,
 };
 
 export function AvailableActionsPanel() {

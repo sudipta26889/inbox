@@ -54,6 +54,7 @@ const zodActionType = z.enum([
   ActionType.MOVE_FOLDER,
   ActionType.NOTIFY_SENDER,
   ActionType.INTEGRATION,
+  ActionType.CREATE_TASK,
 ]);
 
 // Arg keys are owned and validated by the selected tool spec below.

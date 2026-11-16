@@ -947,6 +947,14 @@ export function getRuleActionTypeOptions({
           },
         ]
       : []),
+    ...(extraActions.has(ActionType.CREATE_TASK)
+      ? [
+          {
+            label: ACTION_TYPE_LABELS[ActionType.CREATE_TASK],
+            value: ActionType.CREATE_TASK,
+          },
+        ]
+      : []),
     ...(extraActions.has(ActionType.INTEGRATION)
       ? [
           {
