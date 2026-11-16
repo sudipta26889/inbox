@@ -21,7 +21,9 @@ vi.mock("@/utils/prisma", () => ({
     },
     a2aApproval: {
       update: vi.fn(),
+      updateMany: vi.fn(),
     },
+    $transaction: vi.fn((writes: Promise<unknown>[]) => Promise.all(writes)),
     emailAccount: {
       findFirst: vi.fn().mockResolvedValue({ userId: "user-123" }),
     },
@@ -74,6 +76,7 @@ describe("Task Executor", () => {
     vi.clearAllMocks();
     // State transitions are compare-and-swap; by default this caller wins.
     (prisma.a2aTask.updateMany as any).mockResolvedValue({ count: 1 });
+    (prisma.a2aApproval.updateMany as any).mockResolvedValue({ count: 1 });
   });
 
   describe("executeTask", () => {
@@ -362,9 +365,18 @@ describe("Task Executor", () => {
 
       await approveTask("task-internal-123", "user-123", { approved: true });
 
-      // Should update approval record
-      expect(prisma.a2aApproval.update).toHaveBeenCalledWith(
+      // The approval is recorded first, in the same batch as the swap.
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      const [batch] = (prisma.$transaction as any).mock.calls[0];
+      expect(batch).toHaveLength(2);
+      expect(
+        (prisma.a2aApproval.updateMany as any).mock.invocationCallOrder[0],
+      ).toBeLessThan(
+        (prisma.a2aTask.updateMany as any).mock.invocationCallOrder[0],
+      );
+      expect(prisma.a2aApproval.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
+          where: { taskId: "task-internal-123", status: "pending" },
           data: expect.objectContaining({
             status: "approved",
             approved: true,
@@ -409,8 +421,16 @@ describe("Task Executor", () => {
           where: { id: "task-internal-123", state: A2aTaskState.auth_required },
         }),
       );
+      // Its approval write matched only a still-pending row, which the winner
+      // already moved to approved.
+      expect(prisma.a2aApproval.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { taskId: "task-internal-123", status: "pending" },
+        }),
+      );
       expect(prisma.a2aApproval.update).not.toHaveBeenCalled();
       expect(prisma.a2aTaskHistory.create).not.toHaveBeenCalled();
+      expect(mockPublishPendingApprovalsUpdate).not.toHaveBeenCalled();
     });
 
     it("does not run the tool when another worker already claimed the task", async () => {

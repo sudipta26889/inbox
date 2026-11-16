@@ -1,7 +1,7 @@
 import { createScopedLogger } from "@/utils/logger";
 import prisma from "@/utils/prisma";
 import type { Prisma } from "@/generated/prisma/client";
-import { A2aTaskState } from "@/generated/prisma/enums";
+import { A2aApprovalStatus, A2aTaskState } from "@/generated/prisma/enums";
 import { getTool } from "@/utils/mcp-server/tools/registry";
 import { buildMcpToolContext } from "@/utils/mcp-server/tool-context";
 import {
@@ -218,6 +218,9 @@ async function transitionTaskState(
     artifacts?: Prisma.InputJsonValue;
     durationMs?: number;
   },
+  // Committed in one batch before the state swap, so nothing that sees the new
+  // state can see this write missing.
+  writeFirst?: Prisma.PrismaPromise<unknown>,
 ): Promise<boolean> {
   // Validate state transition
   if (TERMINAL_A2A_TASK_STATES.includes(fromState)) {
@@ -229,7 +232,7 @@ async function transitionTaskState(
   // Compare-and-swap on the state: a concurrent writer that already moved
   // the task (approve vs DharaHIL poll, cancel mid-run) wins, and this
   // transition is dropped rather than overwriting it.
-  const { count } = await prisma.a2aTask.updateMany({
+  const swap = prisma.a2aTask.updateMany({
     where: { id: taskId, state: fromState },
     data: {
       state: toState,
@@ -240,6 +243,9 @@ async function transitionTaskState(
       ...(isTerminalState && { completedAt: new Date() }),
     },
   });
+  const { count } = writeFirst
+    ? (await prisma.$transaction([writeFirst, swap]))[1]
+    : await swap;
   if (count === 0) {
     logger.info("Task state changed concurrently; transition skipped", {
       taskId,
@@ -360,27 +366,28 @@ export async function approveTask(
     throw new Error(`Task is not in auth_required state: ${task.state}`);
   }
 
-  // Claimed first, so a UI approve and a DharaHIL poll at the same time run
-  // the task once: the second caller loses the swap and stops.
+  // The approval is marked approved in the same batch as, and before, the swap
+  // to submitted: a worker that picks the task up must find the decision
+  // already recorded. A UI approve and a DharaHIL poll at the same time run
+  // the task once: the second caller's pending row is gone and it loses the swap.
   const claimed = await transitionTaskState(
     task.id,
     A2aTaskState.auth_required,
     A2aTaskState.submitted,
     "Approved by human",
+    undefined,
+    prisma.a2aApproval.updateMany({
+      where: { taskId, status: A2aApprovalStatus.pending },
+      data: {
+        status: A2aApprovalStatus.approved,
+        approved: true,
+        approverId,
+        responseData,
+        respondedAt: new Date(),
+      },
+    }),
   );
   if (!claimed) return;
-
-  // Update approval record
-  await prisma.a2aApproval.update({
-    where: { taskId },
-    data: {
-      status: "approved",
-      approved: true,
-      approverId,
-      responseData,
-      respondedAt: new Date(),
-    },
-  });
 
   // Approving is one of the ways an approval leaves the pending queue, so the
   // bus's count has to drop here too — not just on creation and withdrawal.
