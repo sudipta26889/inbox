@@ -15,3 +15,11 @@ export const updateHiddenAiDraftLinksBody = z.object({
 export const updateSentMessageOpenTrackingBody = z.object({
   enabled: z.boolean(),
 });
+
+export const shareEmailAccountBody = z.object({
+  email: z.string().trim().toLowerCase().email(),
+});
+
+export const unshareEmailAccountBody = z.object({
+  userId: z.string(),
+});

@@ -10,8 +10,12 @@ import {
 } from "@/utils/agent-markdown/content";
 import { env } from "@/env";
 import { BRAND_NAME, SUPPORT_EMAIL } from "@/utils/branding";
+import { discoveryResponse } from "@/utils/mcp-server/discovery";
 
 export function proxy(request: NextRequest) {
+  const discovery = discoveryResponse(request.nextUrl.pathname);
+  if (discovery) return discovery;
+
   if (isNextInternalRequest(request)) {
     return withVaryAccept(NextResponse.next());
   }
@@ -43,7 +47,13 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/", "/pricing"],
+  matcher: [
+    "/",
+    "/pricing",
+    // The fork's /mcp-server OAuth discovery (utils/mcp-server/discovery.ts).
+    "/.well-known/oauth-authorization-server",
+    "/.well-known/oauth-protected-resource/:path*",
+  ],
 };
 
 function isNextInternalRequest(request: NextRequest): boolean {

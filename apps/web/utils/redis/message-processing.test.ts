@@ -14,6 +14,7 @@ vi.mock("node:crypto", () => ({
 vi.mock("@/utils/redis", () => ({
   redis: {
     set: vi.fn(),
+    get: vi.fn(),
     eval: vi.fn(),
   },
 }));
@@ -63,28 +64,38 @@ describe("message-processing redis locks", () => {
     expect(currentToken).toBe("replacement-owner");
   });
 
-  it("keeps successful messages deduped", async () => {
+  it("marks a successful message done so a later run skips it as finished", async () => {
     vi.mocked(redis.set).mockResolvedValueOnce("OK").mockResolvedValue(null);
+    vi.mocked(redis.eval).mockResolvedValue(1);
+    vi.mocked(redis.get).mockResolvedValue("done");
     const process = vi.fn().mockResolvedValue(undefined);
     const key = { userEmail: "user@example.com", messageId: "message-1" };
     expect(await withMessageProcessingLock(key, process)).toEqual({
       skipped: false,
+      inFlight: false,
     });
+    expect(redis.eval).toHaveBeenCalledWith(
+      expect.stringContaining('redis.call("SET"'),
+      ["processing-message:user@example.com:message-1"],
+      ["lock-uuid", "done", "300"],
+    );
     expect(await withMessageProcessingLock(key, process)).toEqual({
       skipped: true,
+      inFlight: false,
     });
     expect(process).toHaveBeenCalledTimes(1);
-    expect(redis.eval).not.toHaveBeenCalled();
   });
 
-  it("skips a concurrent run while processing is still in progress", async () => {
+  it("reports a concurrent run as in flight while processing is still in progress", async () => {
     vi.mocked(redis.set).mockResolvedValueOnce("OK").mockResolvedValue(null);
+    vi.mocked(redis.get).mockResolvedValue("lock-uuid");
     const key = { userEmail: "user@example.com", messageId: "message-1" };
     const { promise, resolve } = Promise.withResolvers<void>();
     const first = withMessageProcessingLock(key, () => promise);
     const concurrent = vi.fn();
     expect(await withMessageProcessingLock(key, concurrent)).toEqual({
       skipped: true,
+      inFlight: true,
     });
     expect(concurrent).not.toHaveBeenCalled();
     resolve();

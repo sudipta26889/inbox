@@ -86,7 +86,11 @@ it("initializes a real MCP client and handles scoped tool calls over stateless H
       }),
     });
     expect(prisma.emailAccount.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { userId: "owner" } }),
+      expect.objectContaining({
+        where: {
+          OR: [{ userId: "owner" }, { shares: { some: { userId: "owner" } } }],
+        },
+      }),
     );
     const denied = await client.callTool({
       name: "delete_rule",

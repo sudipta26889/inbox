@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { withEmailAccount } from "@/utils/middleware";
+import { sharedUserRefusal } from "@/utils/email-account-access";
 import {
   getGoogleDriveOAuth2Url,
   type GoogleDriveAccessLevel,
@@ -15,6 +16,8 @@ export type GetDriveAuthUrlResponse = { url: string };
 export const GET = withEmailAccount(
   "google/drive/auth-url",
   async (request) => {
+    const refusal = sharedUserRefusal(request.auth);
+    if (refusal) return refusal;
     const { emailAccountId } = request.auth;
     const { searchParams } = new URL(request.url);
     const accessLevel = getAccessLevel(searchParams);

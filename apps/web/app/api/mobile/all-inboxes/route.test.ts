@@ -50,7 +50,10 @@ describe("GET /api/mobile/all-inboxes", () => {
     expect(prisma.emailAccount.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
-          userId: "user-1",
+          OR: [
+            { userId: "user-1" },
+            { shares: { some: { userId: "user-1" } } },
+          ],
           account: { disconnectedAt: null },
         },
       }),
@@ -100,7 +103,10 @@ describe("GET /api/mobile/all-inboxes", () => {
       expect.objectContaining({
         where: {
           id: "account-2",
-          userId: "user-1",
+          OR: [
+            { userId: "user-1" },
+            { shares: { some: { userId: "user-1" } } },
+          ],
           account: { disconnectedAt: null },
         },
       }),

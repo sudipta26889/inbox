@@ -1,6 +1,13 @@
 import type { Message } from "@microsoft/microsoft-graph-types";
 import type { OutlookClient } from "@/utils/outlook/client";
 import type { Logger } from "@/utils/logger";
+import type { DraftStatus } from "@/utils/types";
+import { ensureEmailSendingEnabled } from "@/utils/mail";
+import {
+  approveDraftSend,
+  htmlPreviewText,
+  type SendGate,
+} from "@/utils/mail/send-approval";
 import {
   isNotFoundError,
   isPreconditionFailedError,
@@ -71,26 +78,76 @@ export async function sendDraft({
   client,
   draftId,
   logger,
+  gate = {},
+  updateDraft,
 }: {
   client: OutlookClient;
   draftId: string;
   logger: Logger;
+  gate?: SendGate;
+  /** Writes card edits into the draft, keeping its files. */
+  updateDraft?: Parameters<typeof approveDraftSend>[0]["update"];
 }): Promise<{ messageId: string; threadId: string }> {
-  logger.info("Sending draft", { draftId });
+  // Sending a draft is still sending: kill switch and approval gate apply.
+  ensureEmailSendingEnabled();
 
   // Graph may return 404 while moving a sent draft to Sent Items. Capture the
   // conversation ID before sending so that metadata reads cannot fail a send.
-  const draft = await withMicrosoftGraphRetry(
-    () =>
-      client
-        .getClient()
-        .api(`/me/messages/${draftId}`)
-        .select("conversationId")
-        .get() as Promise<Message>,
-    logger,
-  );
+  // The gate reads the rest, so the reviewer sees what the draft sends.
+  const approved = await approveDraftSend({
+    provider: "outlook",
+    gate,
+    update: updateDraft,
+    read: async () => {
+      const draft = (await withMicrosoftGraphRetry(
+        () =>
+          client
+            .getClient()
+            .api(`/me/messages/${draftId}`)
+            .select(
+              "conversationId,toRecipients,ccRecipients,bccRecipients,from,subject,body",
+            )
+            .expand("attachments($select=name,size)")
+            .get() as Promise<Message>,
+        logger,
+      )) as Message;
+      const content = draft.body?.content ?? "";
+      return {
+        to: joinRecipients(draft.toRecipients) || "unknown",
+        from: draft.from?.emailAddress?.address || undefined,
+        cc: joinRecipients(draft.ccRecipients),
+        bcc: joinRecipients(draft.bccRecipients),
+        subject: draft.subject ?? undefined,
+        // An HTML body shows as text, or as raw HTML if that conversion fails.
+        bodyText:
+          draft.body?.contentType === "html"
+            ? htmlPreviewText(content)?.trim() || content
+            : content,
+        attachments: (draft.attachments ?? []).map((attachment) => ({
+          filename: attachment.name ?? "",
+          size: attachment.size ?? undefined,
+        })),
+        threadId: draft.conversationId ?? undefined,
+      };
+    },
+  });
 
-  const threadId = draft.conversationId;
+  const threadId =
+    approved?.threadId ??
+    (
+      (await withMicrosoftGraphRetry(
+        () =>
+          client
+            .getClient()
+            .api(`/me/messages/${draftId}`)
+            .select("conversationId")
+            .get() as Promise<Message>,
+        logger,
+      )) as Message
+    ).conversationId;
+
+  logger.info("Sending draft", { draftId });
+
   if (!threadId) {
     throw new Error("Failed to get threadId from draft");
   }
@@ -189,4 +246,71 @@ function draftVersionFromMessage(message: Message): string | undefined {
   return message.changeKey.startsWith("W/")
     ? message.changeKey
     : `W/"${message.changeKey}"`;
+}
+
+/**
+ * What became of a draft. On Graph the message keeps its id after sending and
+ * simply moves folder, so the folder is an exact answer — no thread lookup
+ * needed, unlike Gmail.
+ */
+export async function getDraftStatus({
+  client,
+  draftId,
+  logger,
+}: {
+  client: OutlookClient;
+  draftId: string;
+  logger: Logger;
+}): Promise<DraftStatus> {
+  try {
+    const [message, folderIds] = await Promise.all([
+      withMicrosoftGraphRetry(
+        () =>
+          client
+            .getClient()
+            .api(`/me/messages/${draftId}`)
+            .select("id,conversationId,parentFolderId,isDraft")
+            .get() as Promise<Message>,
+        logger,
+      ),
+      getFolderIds(client, logger),
+    ]);
+
+    const ids = {
+      messageId: message.id ?? undefined,
+      threadId: message.conversationId ?? undefined,
+    };
+
+    if (message.parentFolderId === folderIds.drafts) {
+      return { status: "draft", ...ids };
+    }
+    if (message.parentFolderId === folderIds.sentitems) {
+      return { status: "sent", ...ids };
+    }
+    if (message.parentFolderId === folderIds.deleteditems) {
+      return { status: "deleted", ...ids };
+    }
+
+    // Filed somewhere else entirely: it left Drafts, but we can't claim how.
+    logger.info("Draft is in an unexpected folder", {
+      draftId,
+      parentFolderId: message.parentFolderId,
+    });
+    return { status: "unknown", ...ids };
+  } catch (error) {
+    if (isNotFoundError(error)) return { status: "deleted" };
+    throw error;
+  }
+}
+
+function joinRecipients(
+  recipients:
+    | { emailAddress?: { address?: string | null } | null }[]
+    | null
+    | undefined,
+): string | undefined {
+  const addresses = (recipients ?? [])
+    .map((recipient) => recipient.emailAddress?.address)
+    .filter((address): address is string => !!address);
+  return addresses.length ? addresses.join(", ") : undefined;
 }

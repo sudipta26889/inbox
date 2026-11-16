@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { cookies } from "next/headers";
 import prisma from "@/utils/prisma";
+import { accessibleEmailAccountWhere } from "@/utils/email-account-access";
 import {
   LAST_EMAIL_ACCOUNT_COOKIE,
   type LastEmailAccountCookieValue,
@@ -19,7 +20,7 @@ export const setLastEmailAccountAction = actionClientUser
   .inputSchema(z.object({ emailAccountId: z.string() }))
   .action(async ({ ctx: { userId }, parsedInput: { emailAccountId } }) => {
     const emailAccount = await prisma.emailAccount.findFirst({
-      where: { id: emailAccountId, userId },
+      where: { id: emailAccountId, ...accessibleEmailAccountWhere(userId) },
       select: { id: true },
     });
     if (!emailAccount) return;

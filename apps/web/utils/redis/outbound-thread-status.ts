@@ -1,3 +1,4 @@
+import { redis } from "@/utils/redis";
 import {
   acquireOwnedLock,
   clearOwnedLock,
@@ -38,6 +39,17 @@ export async function markOutboundThreadStatusProcessed({
     processedStatus: PROCESSED_STATUS,
     processedTtlSeconds: PROCESSED_TTL_SECONDS,
   });
+}
+
+// Read-only check for the polling backup, which must not repeat outbound
+// handling the push webhook already finished.
+export async function isOutboundThreadStatusProcessed(
+  key: Omit<OutboundThreadStatusKey, "lockToken">,
+) {
+  return (
+    (await redis.get<string>(getOutboundThreadStatusKey(key))) ===
+    PROCESSED_STATUS
+  );
 }
 
 export async function clearOutboundThreadStatusLock({

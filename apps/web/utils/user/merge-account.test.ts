@@ -34,6 +34,44 @@ describe("mergeAccount", () => {
     vi.mocked(redis.del).mockImplementation(async (key) =>
       validationCache.delete(String(key)) ? 1 : 0,
     );
+    prisma.emailAccountShare.findMany.mockResolvedValue([]);
+  });
+
+  it("drops the previous owner's shares and every affected cache entry", async () => {
+    const accountId = "account-id";
+    prisma.emailAccount.findMany.mockResolvedValue([
+      { id: "email-1", email: "only@test.com", accountId },
+    ] as any);
+    prisma.user.findUnique.mockResolvedValue(
+      getMockUserSelect({ email: "only@test.com" }) as any,
+    );
+    prisma.emailAccountShare.findMany.mockResolvedValue([
+      { userId: "shared-user" },
+    ] as any);
+    prisma.emailAccountShare.deleteMany.mockReturnValue("delete-shares" as any);
+    prisma.$transaction.mockImplementation((ops) => Promise.resolve(ops));
+    vi.mocked(getPremiumTransferOperations).mockResolvedValue([]);
+    for (const userId of ["source-user-id", "target-user-id", "shared-user"]) {
+      validationCache.set(`account-access:${userId}:email-1`, {
+        email: "only@test.com",
+        ownerUserId: "source-user-id",
+      });
+    }
+
+    await mergeAccount({
+      sourceAccountId: accountId,
+      sourceUserId: "source-user-id",
+      targetUserId: "target-user-id",
+      email: "only@test.com",
+      name: null,
+      logger,
+    });
+
+    expect(prisma.emailAccountShare.deleteMany).toHaveBeenCalledWith({
+      where: { emailAccountId: "email-1" },
+    });
+    expect(prisma.$transaction.mock.calls[0]?.[0]).toContain("delete-shares");
+    expect(validationCache.size).toBe(0);
   });
 
   describe("source user has multiple email accounts", () => {
@@ -152,7 +190,10 @@ describe("mergeAccount", () => {
       const emailAccountId = "email-2";
 
       prisma.emailAccount.findUnique
-        .mockResolvedValueOnce({ email: "secondary@test.com" } as any)
+        .mockResolvedValueOnce({
+          email: "secondary@test.com",
+          userId: "source-user-id",
+        } as any)
         .mockResolvedValueOnce(null);
       prisma.emailAccount.findMany.mockResolvedValue([
         {
@@ -175,7 +216,10 @@ describe("mergeAccount", () => {
 
       await expect(
         getEmailAccount({ userId: sourceUserId, emailAccountId }),
-      ).resolves.toBe("secondary@test.com");
+      ).resolves.toEqual({
+        email: "secondary@test.com",
+        ownerUserId: "source-user-id",
+      });
 
       await mergeAccount({
         sourceAccountId: accountId,
@@ -260,7 +304,10 @@ describe("mergeAccount", () => {
       const emailAccountId = "email-1";
 
       prisma.emailAccount.findUnique
-        .mockResolvedValueOnce({ email: "only@test.com" } as any)
+        .mockResolvedValueOnce({
+          email: "only@test.com",
+          userId: "source-user-id",
+        } as any)
         .mockResolvedValueOnce(null);
       prisma.emailAccount.findMany.mockResolvedValue([
         {
@@ -281,7 +328,10 @@ describe("mergeAccount", () => {
 
       await expect(
         getEmailAccount({ userId: sourceUserId, emailAccountId }),
-      ).resolves.toBe("only@test.com");
+      ).resolves.toEqual({
+        email: "only@test.com",
+        ownerUserId: "source-user-id",
+      });
 
       await mergeAccount({
         sourceAccountId: accountId,

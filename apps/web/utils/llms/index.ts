@@ -813,6 +813,7 @@ export async function chatCompletionStream(
         messages: protectedMessages as ModelMessage[],
         tools: bridgedChat.tools,
         stopWhen: maxSteps ? isStepCount(maxSteps) : undefined,
+        prepareStep: maxSteps ? finalStepMustAnswer(maxSteps) : undefined,
         ...commonOptions,
         telemetry: buildLlmTelemetry({
           userEmail,
@@ -977,7 +978,9 @@ export async function toolCallAgentStream(options: ToolCallAgentStreamOptions) {
       activeTools: bridgedAgent.bridged
         ? undefined
         : (activeTools as Array<keyof typeof candidateTools> | undefined),
-      prepareStep,
+      prepareStep: maxSteps
+        ? finalStepMustAnswer(maxSteps, prepareStep)
+        : prepareStep,
       stopWhen: stopWhen ?? (maxSteps ? isStepCount(maxSteps) : undefined),
       temperature,
       ...commonOptions,
@@ -2209,5 +2212,34 @@ function toPosthogTokenUsage(event: unknown) {
         "cacheReadTokens",
       ),
     ),
+  };
+}
+
+/**
+ * On the last permitted step, take the tools away.
+ *
+ * A tool-calling agent can spend its whole budget on tools and stop without
+ * ever writing a reply — observed as seven consecutive search_inbox calls
+ * answering an A2A peer with nothing at all. `stopWhen` bounds the loop but
+ * does not require it to produce anything, so the bound alone turns a runaway
+ * into a SILENT runaway.
+ *
+ * Removing the tools from the final request leaves the model nothing to emit
+ * but prose. `activeTools: []` rather than `toolChoice: "none"`, which has a
+ * known bug on Bedrock, a provider we ship.
+ */
+export function finalStepMustAnswer(
+  maxSteps: number,
+  prepareStep?: PrepareStepFunction<Record<string, Tool>>,
+): PrepareStepFunction<Record<string, Tool>> {
+  const isFinalStep = (stepNumber: number) => stepNumber >= maxSteps - 1;
+  if (!prepareStep)
+    return ({ stepNumber }) =>
+      isFinalStep(stepNumber) ? { activeTools: [] } : {};
+  return async (options) => {
+    const prepared = await prepareStep(options);
+    return isFinalStep(options.stepNumber)
+      ? { ...prepared, activeTools: [] }
+      : prepared;
   };
 }

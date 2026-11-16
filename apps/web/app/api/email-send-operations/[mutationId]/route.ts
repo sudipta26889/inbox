@@ -21,14 +21,21 @@ export const GET = withAuth(
         result: true,
         status: true,
         emailAccount: {
-          select: { account: { select: { userId: true } } },
+          select: {
+            account: { select: { userId: true } },
+            shares: {
+              where: { userId: request.auth.userId },
+              select: { id: true },
+            },
+          },
         },
       },
     });
 
     if (
       !operation ||
-      operation.emailAccount.account.userId !== request.auth.userId
+      (operation.emailAccount.account.userId !== request.auth.userId &&
+        !operation.emailAccount.shares.length)
     )
       return missingOperationResponse();
     if (operation.status === EmailSendOperationStatus.SENT) {

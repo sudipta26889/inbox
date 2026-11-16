@@ -3,12 +3,21 @@ import { Frequency } from "@/generated/prisma/enums";
 import { DEFAULT_PROVIDER, Provider } from "@/utils/llms/config";
 import { SENSITIVE_DATA_POLICIES } from "@/utils/dlp/sensitive-content";
 
-export const saveDigestScheduleBody = z.object({
-  intervalDays: z.number().nullable(),
-  daysOfWeek: z.number().nullable(),
-  timeOfDay: z.coerce.date().nullable(),
-  occurrences: z.number().nullable(),
-});
+export const saveDigestScheduleBody = z
+  .object({
+    intervalDays: z.number().int().positive().nullable(),
+    daysOfWeek: z.number().int().min(0).max(127).nullable(),
+    timeOfDay: z.coerce.date().nullable(),
+    occurrences: z.number().int().positive().nullable(),
+  })
+  .refine(
+    (v) =>
+      v.intervalDays !== null ||
+      v.daysOfWeek !== null ||
+      v.timeOfDay !== null ||
+      v.occurrences !== null,
+    { message: "At least one schedule field must be provided" },
+  );
 export type SaveDigestScheduleBody = z.infer<typeof saveDigestScheduleBody>;
 
 export const saveEmailUpdateSettingsBody = z.object({
@@ -74,3 +83,9 @@ export const toggleDigestBody = z.object({
   timeOfDay: z.coerce.date().optional(),
 });
 export type ToggleDigestBody = z.infer<typeof toggleDigestBody>;
+
+export const getDigestConfigBody = z.object({}).strict();
+export type GetDigestConfigBody = z.infer<typeof getDigestConfigBody>;
+
+export const setDigestEnabledBody = z.object({ enabled: z.boolean() }).strict();
+export type SetDigestEnabledBody = z.infer<typeof setDigestEnabledBody>;

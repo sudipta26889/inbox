@@ -48,11 +48,14 @@ export async function createEmailProvider({
     }
 
     const client = await getOutlookClientForEmail({ emailAccountId, logger });
-    return withProviderFailureLogging(new OutlookProvider(client, logger), {
-      emailAccountId,
-      provider: rateLimitProvider,
-      logger,
-    });
+    return withProviderFailureLogging(
+      new OutlookProvider(client, logger, emailAccountId),
+      {
+        emailAccountId,
+        provider: rateLimitProvider,
+        logger,
+      },
+    );
   } catch (error) {
     logger.warn("Failed to create email provider", {
       error,

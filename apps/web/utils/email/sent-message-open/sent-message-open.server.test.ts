@@ -266,11 +266,14 @@ describe("sendHtmlEmailWithOpenTracking", () => {
     });
 
     expect(result).toEqual({ messageId: "msg-1", threadId: "thread-1" });
-    expect(sendEmailWithHtml).toHaveBeenCalledWith({
-      to: "a@example.com",
-      subject: "Hi",
-      messageHtml: expect.stringContaining("https://app.example.com/t/"),
-    });
+    expect(sendEmailWithHtml).toHaveBeenCalledWith(
+      {
+        to: "a@example.com",
+        subject: "Hi",
+        messageHtml: expect.stringContaining("https://app.example.com/t/"),
+      },
+      { approval: undefined },
+    );
     expect(prisma.sentMessageOpen.update).toHaveBeenCalledWith({
       where: { token: expect.stringMatching(/^[A-Za-z0-9_-]{32}$/) },
       data: { messageId: "msg-1", threadId: "thread-1" },
@@ -304,7 +307,9 @@ describe("sendHtmlEmailWithOpenTracking", () => {
         messageHtml: expect.stringContaining("https://app.example.com/t/"),
       }),
     );
-    expect(sendDraft).toHaveBeenCalledWith("draft-1");
+    expect(sendDraft).toHaveBeenCalledWith("draft-1", {
+      approval: undefined,
+    });
     expect(sendEmailWithHtml).not.toHaveBeenCalled();
     expect(prisma.sentMessageOpen.update).toHaveBeenCalledWith(
       expect.objectContaining({
