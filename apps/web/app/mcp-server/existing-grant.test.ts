@@ -13,6 +13,12 @@ const SECRET = "test-auth-secret";
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/utils/prisma");
+const { sendEmailWithHtml } = vi.hoisted(() => ({
+  sendEmailWithHtml: vi.fn(),
+}));
+vi.mock("@/utils/email/provider", () => ({
+  createEmailProvider: vi.fn(async () => ({ sendEmailWithHtml })),
+}));
 vi.mock("@/env", () => ({
   env: {
     AUTH_SECRET: "test-auth-secret",
@@ -36,7 +42,9 @@ type TokenRow = {
 
 // A grant as production stores it today: an access/refresh JWT pair signed
 // with AUTH_SECRET, the row keyed by their jti values, with a grantId.
-describe("a token pair issued before the re-fork", () => {
+// The first call cold-loads the tool modules (dynamic imports in the registry),
+// which can take over 5s on a busy shared machine.
+describe("a token pair issued before the re-fork", { timeout: 30_000 }, () => {
   let rows: TokenRow[];
 
   beforeEach(() => {
@@ -116,6 +124,31 @@ describe("a token pair issued before the re-fork", () => {
     expect((await callTool(token("access", "jti-access-1"))).status).toBe(401);
   });
 
+  it("returns an approval refusal on send_email to the client as a tool error", async () => {
+    prisma.emailAccount.findUnique.mockResolvedValue({
+      id: "acct-1",
+      email: "me@example.com",
+      account: { provider: "google" },
+    } as never);
+    sendEmailWithHtml.mockRejectedValue(
+      new Error("The send was not approved."),
+    );
+
+    const response = await callTool(
+      token("access", "jti-access-1", "email:read email:write"),
+      "send_email",
+      { to: ["a@example.com"], subject: "Hi", body: "x" },
+    );
+
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expect(payload.result.isError).toBe(true);
+    expect(payload.result.content[0].text).toContain(
+      "The send was not approved.",
+    );
+    expect(sendEmailWithHtml).toHaveBeenCalledTimes(1);
+  });
+
   function wireTokenTable(table: () => TokenRow[]) {
     prisma.mcpServerAccessToken.findFirst.mockImplementation(
       (async ({ where }: { where: Partial<TokenRow> }) =>
@@ -159,14 +192,18 @@ describe("a token pair issued before the re-fork", () => {
   }
 });
 
-function token(type: "access" | "refresh", jti: string) {
+function token(
+  type: "access" | "refresh",
+  jti: string,
+  scope = "email:read email:draft",
+) {
   const now = Math.floor(Date.now() / 1000);
   const payload: McpTokenPayload = {
     aud: MCP_RESOURCE,
     sub: "user-1",
     email: "me@example.com",
     email_account_id: "acct-1",
-    scope: "email:read email:draft",
+    scope,
     client_id: "client-1",
     iat: now - 60,
     exp: now + 3600,
@@ -176,7 +213,11 @@ function token(type: "access" | "refresh", jti: string) {
   return createJwtToken(payload, SECRET);
 }
 
-function callTool(accessToken: string) {
+function callTool(
+  accessToken: string,
+  name = "list_email_accounts",
+  args: Record<string, unknown> = {},
+) {
   return mcpPost(
     new NextRequest("https://inbox.sudiptadhara.in/mcp-server", {
       method: "POST",
@@ -188,7 +229,7 @@ function callTool(accessToken: string) {
         jsonrpc: "2.0",
         id: 1,
         method: "tools/call",
-        params: { name: "list_email_accounts", arguments: {} },
+        params: { name, arguments: args },
       }),
     }),
     { params: Promise.resolve({}) },

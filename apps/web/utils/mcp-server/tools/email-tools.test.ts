@@ -6,8 +6,11 @@ import {
   getAttachment,
   getDraftDetail,
   listDrafts,
+  sendEmail,
   updateDraft,
 } from "./email-tools";
+import { createEmailProvider } from "@/utils/email/provider";
+import { SafeError } from "@/utils/error";
 import type { McpToolContext } from "./registry";
 
 vi.mock("server-only", () => ({}));
@@ -34,6 +37,7 @@ const providerGetDraft = vi.fn();
 const providerGetDrafts = vi.fn();
 const providerDeleteDraft = vi.fn();
 const providerGetDraftStatus = vi.fn();
+const providerSendEmailWithHtml = vi.fn();
 vi.mock("@/utils/email/provider", () => ({
   createEmailProvider: vi.fn(async () => ({
     createDraft: providerCreateDraft,
@@ -42,6 +46,7 @@ vi.mock("@/utils/email/provider", () => ({
     getDrafts: providerGetDrafts,
     deleteDraft: providerDeleteDraft,
     getDraftStatus: providerGetDraftStatus,
+    sendEmailWithHtml: providerSendEmailWithHtml,
   })),
 }));
 
@@ -57,6 +62,96 @@ const googleAccount = {
   email: "me@gmail.com",
   account: { provider: "google" },
 };
+
+describe("sendEmail", () => {
+  const sharedAccount = {
+    id: "account-shared",
+    email: "team@example.com",
+    account: { provider: "microsoft" },
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    providerSendEmailWithHtml.mockResolvedValue({
+      messageId: "msg-1",
+      threadId: "thread-1",
+    });
+  });
+
+  it("sends once, through the provider of the account named in 'from', including a shared one", async () => {
+    prisma.emailAccount.findFirst.mockResolvedValue({
+      id: "account-shared",
+    } as never);
+    prisma.emailAccount.findUnique.mockResolvedValue(sharedAccount as never);
+
+    const result = await sendEmail(context, {
+      to: ["a@example.com", "b@example.com"],
+      subject: "Hi",
+      body: "Hello\nthere",
+      from: "team@example.com",
+    });
+
+    expect(prisma.emailAccount.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          OR: [
+            { userId: "user-1" },
+            { shares: { some: { userId: "user-1" } } },
+          ],
+          email: "team@example.com",
+        },
+      }),
+    );
+    expect(createEmailProvider).toHaveBeenCalledWith(
+      expect.objectContaining({
+        emailAccountId: "account-shared",
+        provider: "microsoft",
+      }),
+    );
+    expect(providerSendEmailWithHtml).toHaveBeenCalledTimes(1);
+    expect(providerSendEmailWithHtml).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: "a@example.com, b@example.com",
+        subject: "Hi",
+        messageHtml: "Hello<br>there",
+      }),
+    );
+    expect(result).toEqual({
+      success: true,
+      messageId: "msg-1",
+      threadId: "thread-1",
+    });
+  });
+
+  it("refuses a 'from' account the caller cannot access, sending nothing", async () => {
+    prisma.emailAccount.findFirst.mockResolvedValue(null);
+    prisma.emailAccount.findMany.mockResolvedValue([] as never);
+
+    await expect(
+      sendEmail(context, {
+        to: ["a@example.com"],
+        subject: "Hi",
+        body: "Hello",
+        from: "someone@else.com",
+      }),
+    ).rejects.toThrow("someone@else.com");
+
+    expect(createEmailProvider).not.toHaveBeenCalled();
+    expect(providerSendEmailWithHtml).not.toHaveBeenCalled();
+  });
+
+  it("passes an approval refusal from the send path through to the caller", async () => {
+    prisma.emailAccount.findUnique.mockResolvedValue(googleAccount as never);
+    providerSendEmailWithHtml.mockRejectedValue(
+      new SafeError("The send was not approved."),
+    );
+
+    await expect(
+      sendEmail(context, { to: ["a@example.com"], subject: "Hi", body: "x" }),
+    ).rejects.toThrow("The send was not approved.");
+    expect(providerSendEmailWithHtml).toHaveBeenCalledTimes(1);
+  });
+});
 
 describe("createDraft", () => {
   beforeEach(() => {
