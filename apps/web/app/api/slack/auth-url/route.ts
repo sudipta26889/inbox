@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { env } from "@/env";
 import { withEmailAccount } from "@/utils/middleware";
 import prisma from "@/utils/prisma";
+import { OWNER_ONLY_MESSAGE } from "@/utils/email-account-access";
 import { MessagingProvider } from "@/generated/prisma/enums";
 import {
   SLACK_STATE_COOKIE_NAME,
@@ -19,7 +20,15 @@ export type GetSlackAuthUrlResponse = {
 };
 
 export const GET = withEmailAccount("slack/auth-url", async (request) => {
-  const { emailAccountId } = request.auth;
+  const { emailAccountId, userId, actorUserId } = request.auth;
+
+  // A Slack link outlives a share, so only the owner may create one.
+  if (userId !== actorUserId) {
+    return NextResponse.json(
+      { error: OWNER_ONLY_MESSAGE, isKnownError: true },
+      { status: 403 },
+    );
+  }
 
   if (!env.SLACK_CLIENT_ID || !env.SLACK_CLIENT_SECRET) {
     return NextResponse.json(

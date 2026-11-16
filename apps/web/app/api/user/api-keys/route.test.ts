@@ -4,13 +4,19 @@ import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import prisma from "@/utils/__mocks__/prisma";
 
-const { getMcpServerAccessMock } = vi.hoisted(() => ({
-  getMcpServerAccessMock: vi.fn(),
-}));
+const { getMcpServerAccessMock, listMcpConnectionsMock, authState } =
+  vi.hoisted(() => ({
+    getMcpServerAccessMock: vi.fn(),
+    listMcpConnectionsMock: vi.fn(),
+    authState: { actorUserId: "user_1" },
+  }));
 
 vi.mock("@/utils/prisma");
 vi.mock("@/utils/mcp/access", () => ({
   getMcpServerAccess: getMcpServerAccessMock,
+}));
+vi.mock("@/utils/mcp/connections", () => ({
+  listMcpConnections: listMcpConnectionsMock,
 }));
 vi.mock("@/utils/middleware", () => ({
   withEmailAccount:
@@ -22,6 +28,7 @@ vi.mock("@/utils/middleware", () => ({
       const requestWithAuth = Object.assign(request, {
         auth: {
           userId: "user_1",
+          actorUserId: authState.actorUserId,
           emailAccountId: "account_1",
           email: "user@example.com",
         },
@@ -51,6 +58,8 @@ describe("user/api-keys route", () => {
       enabled: false,
     });
     prisma.oauthConsent.findMany.mockResolvedValue([]);
+    listMcpConnectionsMock.mockResolvedValue([]);
+    authState.actorUserId = "user_1";
   });
 
   it("returns API keys together with MCP access flags", async () => {
@@ -74,5 +83,27 @@ describe("user/api-keys route", () => {
       mcpServerEnabled: false,
       mcpConnections: [],
     });
+  });
+
+  it("shows a shared user none of the owner's keys and only their own MCP connections", async () => {
+    authState.actorUserId = "shared_user";
+    getMcpServerAccessMock.mockResolvedValue({
+      available: true,
+      enabled: true,
+    });
+    listMcpConnectionsMock.mockResolvedValue([{ clientId: "theirs" }]);
+
+    const response = await GET(
+      new NextRequest("http://localhost:3000/api/user/api-keys"),
+      {} as never,
+    );
+
+    await expect(response.json()).resolves.toMatchObject({
+      apiKeys: [],
+      mcpConnections: [{ clientId: "theirs" }],
+    });
+    expect(prisma.apiKey.findMany).not.toHaveBeenCalled();
+    expect(getMcpServerAccessMock).toHaveBeenCalledWith("shared_user");
+    expect(listMcpConnectionsMock).toHaveBeenCalledWith("shared_user");
   });
 });

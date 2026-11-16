@@ -509,6 +509,7 @@ describe("Middleware", () => {
         expect.objectContaining({
           auth: {
             userId: "owner-789",
+            actorUserId: mockUserId,
             emailAccountId: mockAccountId,
             email: mockEmail,
           },
@@ -541,6 +542,7 @@ describe("Middleware", () => {
         expect.objectContaining({
           auth: {
             userId: mockUserId,
+            actorUserId: mockUserId,
             emailAccountId: mockAccountId,
             email: mockEmail,
           },

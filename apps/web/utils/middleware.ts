@@ -64,7 +64,10 @@ export interface RequestWithAuth extends RequestWithLogger {
 
 export interface RequestWithEmailAccount extends RequestWithLogger {
   auth: {
+    // The mailbox owner on a shared account, so { id, userId } checks hold.
     userId: string;
+    // Who is signed in. Differs from userId only on shared accounts.
+    actorUserId: string;
     emailAccountId: string;
     email: string;
   };
@@ -476,6 +479,7 @@ async function emailAccountMiddleware(
         const emailAccountReq = authReq as RequestWithEmailAccount;
         emailAccountReq.auth = {
           userId,
+          actorUserId: userId,
           emailAccountId,
           email: targetEmailAccount.email,
         };
@@ -506,7 +510,12 @@ async function emailAccountMiddleware(
     const emailAccountReq = authReq as RequestWithEmailAccount;
     // Shared accounts act as the owner so downstream { id, userId } checks hold.
     const ownerUserId = access?.ownerUserId ?? userId;
-    emailAccountReq.auth = { userId: ownerUserId, emailAccountId, email };
+    emailAccountReq.auth = {
+      userId: ownerUserId,
+      actorUserId: userId,
+      emailAccountId,
+      email,
+    };
     emailAccountReq.logger =
       ownerUserId === userId
         ? emailAccountLogger

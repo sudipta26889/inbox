@@ -8,28 +8,35 @@ export type ApiKeyResponse = Awaited<ReturnType<typeof getApiKeys>>;
 
 async function getApiKeys({
   userId,
+  actorUserId,
   emailAccountId,
 }: {
   userId: string;
+  actorUserId: string;
   emailAccountId: string;
 }) {
+  // API keys belong to the mailbox owner; a shared user sees none of them.
+  // MCP access and connections are per login, so they are always the actor's own.
+  const isOwner = userId === actorUserId;
   const [apiKeys, mcpServerAccess] = await Promise.all([
-    prisma.apiKey.findMany({
-      where: { userId, emailAccountId, isActive: true },
-      select: {
-        id: true,
-        name: true,
-        createdAt: true,
-        expiresAt: true,
-        lastUsedAt: true,
-        scopes: true,
-      },
-      orderBy: { createdAt: "desc" },
-    }),
-    getMcpServerAccess(userId),
+    isOwner
+      ? prisma.apiKey.findMany({
+          where: { userId, emailAccountId, isActive: true },
+          select: {
+            id: true,
+            name: true,
+            createdAt: true,
+            expiresAt: true,
+            lastUsedAt: true,
+            scopes: true,
+          },
+          orderBy: { createdAt: "desc" },
+        })
+      : [],
+    getMcpServerAccess(actorUserId),
   ]);
   const mcpConnections = mcpServerAccess.enabled
-    ? await listMcpConnections(userId)
+    ? await listMcpConnections(actorUserId)
     : [];
 
   return {
@@ -41,10 +48,9 @@ async function getApiKeys({
 }
 
 export const GET = withEmailAccount("user/api-keys", async (request) => {
-  const userId = request.auth.userId;
-  const emailAccountId = request.auth.emailAccountId;
+  const { userId, actorUserId, emailAccountId } = request.auth;
 
-  const apiKeys = await getApiKeys({ userId, emailAccountId });
+  const apiKeys = await getApiKeys({ userId, actorUserId, emailAccountId });
 
   return NextResponse.json(apiKeys);
 });
