@@ -39,6 +39,19 @@ describe("hasDraftPlaceholder", () => {
     expect(hasDraftPlaceholder(reply)).toBe(expected);
   });
 
+  it.each(["[EXTERNAL]", "[external]", "[SPAM]", "[Suspicious]"])(
+    "ignores the mail tag %s",
+    (tag) => {
+      expect(hasDraftPlaceholder(`Re: ${tag} Invoice. Thanks, received.`)).toBe(
+        false,
+      );
+    },
+  );
+
+  it("still finds a placeholder next to a mail tag", () => {
+    expect(hasDraftPlaceholder("[EXTERNAL] noted. [confirm: ok?]")).toBe(true);
+  });
+
   it("still finds a placeholder next to a markdown link", () => {
     expect(hasDraftPlaceholder("[docs](https://x.y) and [confirm: ok?]")).toBe(
       true,
@@ -115,6 +128,15 @@ describe("draft commitments", () => {
     });
   });
 
+  it("does not let the model grade assumption-based drafts above the lowest confidence", async () => {
+    await draft();
+
+    const schema = mockGenerateObject.mock.calls[0][0].schema;
+    const description: string = schema.shape.confidence.description;
+    expect(description).not.toContain("reasonable assumptions");
+    expect(description).toContain("Use LOW whenever");
+  });
+
   it("forbids derived numbers and talk about missing context, using placeholders instead", async () => {
     await draft();
 
@@ -150,6 +172,17 @@ describe("draft commitments", () => {
     expect(prompt).toContain("only inside a [confirm:");
     expect(prompt).toContain("never as an acceptance");
     expect(prompt).not.toContain("respond concretely");
+    expect(prompt).not.toContain("after converting");
+  });
+
+  it("never declines or reschedules for the user when the calendar is full", async () => {
+    await draft({
+      calendarAvailability: { noAvailability: true, suggestedTimes: [] },
+    });
+
+    const prompt: string = mockGenerateObject.mock.calls[0][0].prompt;
+    expect(prompt).not.toContain("fully booked tomorrow");
+    expect(prompt).toContain("[confirm:");
   });
 
   it("says the same with a booking link, and still prefers the link", async () => {

@@ -354,7 +354,7 @@ const draftSchema = z.object({
       "The complete email reply draft incorporating knowledge base information",
     ),
   confidence: llmDraftConfidenceSchema.describe(
-    "Use HIGH only when the draft is complete, grounded, and does not depend on missing facts, pending checks or follow-ups, unavailable calendar/business state, assumptions, or user-fillable details. Use MEDIUM for useful drafts that rely on reasonable assumptions, missing facts, or user-fillable details. Use LOW when the draft is highly uncertain, likely needs broader thread/context review, or mainly asks/checks/follows up.",
+    "Use HIGH only when the draft is complete, grounded, and does not depend on missing facts, pending checks or follow-ups, unavailable calendar/business state, assumptions, or user-fillable details. Use MEDIUM only for complete, grounded drafts with minor wording uncertainty. Use LOW whenever anything rests on an assumption, a missing fact or a [placeholder], and when the draft is highly uncertain, likely needs broader thread/context review, or mainly asks/checks/follows up.",
   ),
 });
 
@@ -554,7 +554,7 @@ When scheduling with the user is clearly needed, prefer sharing this booking lin
     const timezoneLabel = getTimezoneLabel(timezone);
 
     parts.push(`The user has no available time slots in the requested timeframe in ${timezoneLabel}.
-Do not suggest specific times. Acknowledge the request and suggest alternatives (e.g., "I'm fully booked tomorrow, but let's find another day that works"${calendarBookingLink ? " or share the booking link" : ""}).`);
+Do not suggest specific times, and do not decline or reschedule for the user. Leave the decision in a placeholder (e.g., "[confirm: your calendar is full tomorrow; decline or offer another day?]"${calendarBookingLink ? " or share the booking link" : ""}).`);
   } else if (calendarAvailability?.suggestedTimes.length) {
     const times = calendarAvailability.suggestedTimes
       .map((slot) =>
@@ -571,7 +571,7 @@ Do not suggest specific times. Acknowledge the request and suggest alternatives 
     );
 
     parts.push(`Available time slots are in ${timezoneLabels}.
-If the sender requested or uses another timezone, express proposed times in that timezone after converting from the user's available slots.
+Quote slot times exactly as listed, with their timezone label; never convert them to another timezone.
 If you list specific times, include the user-facing timezone label shown for each slot, not a raw timezone identifier.
 
 Available time slots:
@@ -744,8 +744,14 @@ export function repairDraftReplyText(text: string): string {
 
 export function hasDraftPlaceholder(reply: string): boolean {
   // The lookahead skips markdown links, `[label](url)`.
-  return /\[[^[\]]{2,200}\](?!\()/.test(reply);
+  for (const match of reply.matchAll(/\[([^[\]]{2,200})\](?!\()/g)) {
+    if (!MAIL_TAGS.has(match[1].trim().toLowerCase())) return true;
+  }
+  return false;
 }
+
+// Subject tags mail systems add; echoing one is not a decision left open.
+const MAIL_TAGS = new Set(["external", "spam", "suspicious"]);
 
 function parseJsonObject(text: string): Record<string, unknown> | null {
   const unfenced = text
