@@ -14,6 +14,7 @@ vi.mock("@/utils/prisma", () => ({
       findFirst: vi.fn(),
       findMany: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
     },
     a2aTaskHistory: {
       create: vi.fn(),
@@ -71,6 +72,8 @@ const prisma = await import("@/utils/prisma").then((m) => m.default);
 describe("Task Executor", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // State transitions are compare-and-swap; by default this caller wins.
+    (prisma.a2aTask.updateMany as any).mockResolvedValue({ count: 1 });
   });
 
   describe("executeTask", () => {
@@ -95,7 +98,7 @@ describe("Task Executor", () => {
       await executeTask("task-internal-123");
 
       // Should transition to working
-      expect(prisma.a2aTask.update).toHaveBeenCalledWith(
+      expect(prisma.a2aTask.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
             state: A2aTaskState.working,
@@ -114,7 +117,7 @@ describe("Task Executor", () => {
       );
 
       // Should transition to completed
-      expect(prisma.a2aTask.update).toHaveBeenCalledWith(
+      expect(prisma.a2aTask.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
             state: A2aTaskState.completed,
@@ -184,7 +187,7 @@ describe("Task Executor", () => {
       await executeTask("task-internal-123");
 
       // Should mark as failed (not retry)
-      expect(prisma.a2aTask.update).toHaveBeenCalledWith(
+      expect(prisma.a2aTask.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
             state: A2aTaskState.failed,
@@ -208,7 +211,7 @@ describe("Task Executor", () => {
       await executeTask("task-internal-123");
 
       // Should not transition state
-      expect(prisma.a2aTask.update).not.toHaveBeenCalled();
+      expect(prisma.a2aTask.updateMany).not.toHaveBeenCalled();
     });
 
     it("should not execute auth_required tasks", async () => {
@@ -226,7 +229,7 @@ describe("Task Executor", () => {
       await executeTask("task-internal-123");
 
       // Should not transition state
-      expect(prisma.a2aTask.update).not.toHaveBeenCalled();
+      expect(prisma.a2aTask.updateMany).not.toHaveBeenCalled();
     });
   });
 
@@ -370,7 +373,7 @@ describe("Task Executor", () => {
       );
 
       // Should transition to submitted
-      expect(prisma.a2aTask.update).toHaveBeenCalledWith(
+      expect(prisma.a2aTask.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
             state: A2aTaskState.submitted,
@@ -387,6 +390,47 @@ describe("Task Executor", () => {
      * the regression test for that; the summarize-then-publish logic itself
      * is tested where it lives, in protocol-handler.test.ts.
      */
+    it("runs a task once when two approvers race: the loser of the swap stops", async () => {
+      // A UI approve and a DharaHIL poll both read auth_required; only one
+      // updateMany matches state = auth_required.
+      (prisma.a2aTask.findUnique as any).mockResolvedValue({
+        id: "task-internal-123",
+        taskId: "task-public-123",
+        state: A2aTaskState.auth_required,
+        emailAccountId: "email-account-456",
+      });
+      (prisma.a2aTask.updateMany as any).mockResolvedValue({ count: 0 });
+
+      await approveTask("task-internal-123", "user-123", { approved: true });
+
+      expect(prisma.a2aTask.updateMany).toHaveBeenCalledTimes(1);
+      expect(prisma.a2aTask.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "task-internal-123", state: A2aTaskState.auth_required },
+        }),
+      );
+      expect(prisma.a2aApproval.update).not.toHaveBeenCalled();
+      expect(prisma.a2aTaskHistory.create).not.toHaveBeenCalled();
+    });
+
+    it("does not run the tool when another worker already claimed the task", async () => {
+      (prisma.a2aTask.findUnique as any).mockResolvedValue({
+        id: "task-internal-123",
+        taskId: "task-public-123",
+        skill: "email.search",
+        state: A2aTaskState.submitted,
+        retryCount: 0,
+        maxRetries: 3,
+      });
+      (prisma.a2aTask.updateMany as any).mockResolvedValue({ count: 0 });
+      const { getTool } = await import("@/utils/mcp-server/tools/registry");
+
+      await executeTask("task-internal-123");
+
+      expect(getTool).not.toHaveBeenCalled();
+      expect(prisma.a2aTaskHistory.create).not.toHaveBeenCalled();
+    });
+
     it("publishes the dropped pending count to the bus on approval", async () => {
       const mockTask = {
         id: "task-internal-123",
@@ -460,7 +504,7 @@ describe("Task Executor", () => {
       );
 
       // Should transition to rejected terminal state
-      expect(prisma.a2aTask.update).toHaveBeenCalledWith(
+      expect(prisma.a2aTask.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
             state: A2aTaskState.rejected,
@@ -522,7 +566,7 @@ describe("Task Executor", () => {
         await executeTask("task-internal-123");
 
         // Should not attempt to update terminal state tasks
-        expect(prisma.a2aTask.update).not.toHaveBeenCalled();
+        expect(prisma.a2aTask.updateMany).not.toHaveBeenCalled();
 
         vi.clearAllMocks();
       }

@@ -61,17 +61,19 @@ export async function executeTask(taskId: string): Promise<void> {
     return;
   }
 
+  // Claim the task: only one of the cron pick-up and approveTask's inline run
+  // wins the submitted -> working swap; the loser stops here.
+  const claimed = await transitionTaskState(
+    task.id,
+    task.state,
+    A2aTaskState.working,
+    "Executing task",
+  );
+  if (!claimed) return;
+
   const startTime = Date.now();
 
   try {
-    // Transition to working state
-    await transitionTaskState(
-      task.id,
-      task.state,
-      A2aTaskState.working,
-      "Executing task",
-    );
-
     // Get skill definition
     const skillDef = getSkillDefinition(task.skill);
     if (!skillDef) {
@@ -216,7 +218,7 @@ async function transitionTaskState(
     artifacts?: Prisma.InputJsonValue;
     durationMs?: number;
   },
-): Promise<void> {
+): Promise<boolean> {
   // Validate state transition
   if (TERMINAL_A2A_TASK_STATES.includes(fromState)) {
     throw new Error(`Cannot transition from terminal state: ${fromState}`);
@@ -224,9 +226,11 @@ async function transitionTaskState(
 
   const isTerminalState = TERMINAL_A2A_TASK_STATES.includes(toState);
 
-  // Update task
-  await prisma.a2aTask.update({
-    where: { id: taskId },
+  // Compare-and-swap on the state: a concurrent writer that already moved
+  // the task (approve vs DharaHIL poll, cancel mid-run) wins, and this
+  // transition is dropped rather than overwriting it.
+  const { count } = await prisma.a2aTask.updateMany({
+    where: { id: taskId, state: fromState },
     data: {
       state: toState,
       stateReason: reason,
@@ -236,6 +240,14 @@ async function transitionTaskState(
       ...(isTerminalState && { completedAt: new Date() }),
     },
   });
+  if (count === 0) {
+    logger.info("Task state changed concurrently; transition skipped", {
+      taskId,
+      fromState,
+      toState,
+    });
+    return false;
+  }
 
   // Record state transition in history
   await prisma.a2aTaskHistory.create({
@@ -276,6 +288,8 @@ async function transitionTaskState(
         error: error.message,
       });
     });
+
+  return true;
 }
 
 /**
@@ -346,6 +360,16 @@ export async function approveTask(
     throw new Error(`Task is not in auth_required state: ${task.state}`);
   }
 
+  // Claimed first, so a UI approve and a DharaHIL poll at the same time run
+  // the task once: the second caller loses the swap and stops.
+  const claimed = await transitionTaskState(
+    task.id,
+    A2aTaskState.auth_required,
+    A2aTaskState.submitted,
+    "Approved by human",
+  );
+  if (!claimed) return;
+
   // Update approval record
   await prisma.a2aApproval.update({
     where: { taskId },
@@ -361,14 +385,6 @@ export async function approveTask(
   // Approving is one of the ways an approval leaves the pending queue, so the
   // bus's count has to drop here too — not just on creation and withdrawal.
   await publishPendingApprovalsUpdate(task.emailAccountId);
-
-  // Transition task to submitted state for execution
-  await transitionTaskState(
-    task.id,
-    A2aTaskState.auth_required,
-    A2aTaskState.submitted,
-    "Approved by human",
-  );
 
   // Execute the task
   await executeTask(task.id);
@@ -402,6 +418,14 @@ export async function rejectTask(
     throw new Error(`Task is not in auth_required state: ${task.state}`);
   }
 
+  const claimed = await transitionTaskState(
+    task.id,
+    A2aTaskState.auth_required,
+    A2aTaskState.rejected,
+    `Rejected by human: ${rejectionReason}`,
+  );
+  if (!claimed) return;
+
   // Update approval record
   await prisma.a2aApproval.update({
     where: { taskId },
@@ -417,14 +441,6 @@ export async function rejectTask(
   // Rejecting also removes this approval from the pending queue. Same as
   // approveTask above.
   await publishPendingApprovalsUpdate(task.emailAccountId);
-
-  // Transition task to rejected terminal state
-  await transitionTaskState(
-    task.id,
-    A2aTaskState.auth_required,
-    A2aTaskState.rejected,
-    `Rejected by human: ${rejectionReason}`,
-  );
 
   logger.info("Task rejected", {
     taskId: task.taskId,
