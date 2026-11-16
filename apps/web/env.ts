@@ -252,6 +252,15 @@ const parsedEnv = createEnv({
     // Defaults to false. Only enable on a trusted, single-tenant self-hosted
     // deployment — never on a shared/multi-tenant instance.
     WEBHOOK_ALLOW_PRIVATE_IPS: booleanString.optional().default(false),
+    // DharaHIL human approval gateway. Every outbound send is gated once
+    // DHARAHIL_BASE_URL and DHARAHIL_API_KEY are both set.
+    DHARAHIL_BASE_URL: z.string().url().optional(),
+    DHARAHIL_API_KEY: z.string().optional(),
+    DHARAHIL_TENANT_ID: z.string().uuid().optional(),
+    DHARAHIL_APP_ID: z.string().uuid().optional(),
+    DHARAHIL_ENVIRONMENT: z
+      .enum(["production", "development", "staging"])
+      .optional(),
     DIGEST_MAX_SUMMARIES_PER_24H: z.coerce
       .number()
       .int()

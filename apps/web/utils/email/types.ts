@@ -14,6 +14,7 @@ import type { DraftAttachmentMetadata } from "@/utils/actions/draft-attachments.
 import type { DraftMessageUploadPart } from "@/utils/email/draft-attachment-upload";
 import type { EmailContact } from "@/utils/email/contact";
 import type { SendAsAddress } from "@/utils/email/send-as";
+import type { SendApproval } from "@/utils/mail/send-approval";
 import type {
   LabelVisibility,
   MessageVisibility,
@@ -55,6 +56,8 @@ export type DraftAttachmentUploadStart =
 export type SendEmailOptions = {
   /** Keep the provider's reply subject when changing it would break threading. */
   preserveThreadSubject?: boolean;
+  /** Set when the send was approved before its operation was committed. */
+  approval?: SendApproval;
 };
 
 export interface EmailThread {
@@ -265,6 +268,8 @@ export interface EmailProvider {
       bcc?: string;
       content?: string;
       from?: string;
+      /** Stable id, so a retried send joins its open approval card. */
+      operationId?: string;
     },
   ): Promise<{ messageId: string }>;
   getAccessToken(): string;
@@ -447,6 +452,8 @@ export interface EmailProvider {
       cc?: string;
       bcc?: string;
       attachments?: MailAttachment[];
+      /** Stable id, so a retried send joins its open approval card. */
+      operationId?: string;
     },
   ): Promise<{ messageId: string }>;
   searchContacts(query: string): Promise<EmailContact[]>;
@@ -482,7 +489,10 @@ export interface EmailProvider {
     threads: EmailThread[];
     nextPageToken?: string;
   }>;
-  sendDraft(draftId: string): Promise<{ messageId: string; threadId: string }>;
+  sendDraft(
+    draftId: string,
+    options?: Pick<SendEmailOptions, "approval">,
+  ): Promise<{ messageId: string; threadId: string }>;
   sendEmail(args: {
     to: string;
     cc?: string;
@@ -490,6 +500,8 @@ export interface EmailProvider {
     subject: string;
     messageText: string;
     attachments?: MailAttachment[];
+    /** Stable id, so a retried send joins its open approval card. */
+    operationId?: string;
   }): Promise<{ messageId: string }>;
   sendEmailWithHtml(
     body: SendEmailBody,

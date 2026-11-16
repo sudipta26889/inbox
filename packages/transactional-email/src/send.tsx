@@ -405,6 +405,11 @@ export const sendMeetingRecapEmail = async ({
  * This is different from other emails - it goes to an external sender, not our user,
  * so it doesn't have an unsubscribe token.
  */
+/** The notice's exact text, so an approval card can show what is sent. */
+export const renderColdEmailNotificationText = (
+  emailProps: ColdEmailNotificationProps,
+) => render(<ColdEmailNotification {...emailProps} />, { plainText: true });
+
 export const sendColdEmailNotification = async ({
   from,
   to,
