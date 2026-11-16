@@ -111,9 +111,7 @@ describe("deploy/stack.yml crons", () => {
     expect(response.status).toBeLessThan(300);
   });
 
-  it.each(
-    Object.keys(ROUTES),
-  )("%s rejects a wrong secret", async (path) => {
+  it.each(Object.keys(ROUTES))("%s rejects a wrong secret", async (path) => {
     const response = await ROUTES[path](
       new NextRequest(`http://web:5500${path}`, {
         headers: { authorization: "Bearer wrong" },
