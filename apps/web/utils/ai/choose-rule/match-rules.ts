@@ -218,20 +218,20 @@ export async function findMatchingRules({
     };
   }
 
-  const llmResult = await aiChooseRule({
-    email,
-    rules: potentialAiMatches,
-    emailAccount,
-    modelType,
-    logger,
-    classificationFeedback,
-  });
-
-  // ponytail: not awaited, so the shadow call never delays the rule choice.
-  if (shadowSelection && decisionModelConfig) {
+  // ponytail: the shadow record is not awaited, so it never delays the rule
+  // choice. It is written on LLM failure too: those are the cases where the
+  // comparison matters most.
+  const recordShadow = (
+    llm: { ok: true; result: RuleChoice } | { ok: false; error: unknown },
+  ) => {
+    if (!shadowSelection || !decisionModelConfig) return;
     shadowSelection.then((run) => {
       const decided =
         run.ok && run.selection.type === "rules" ? run.selection : null;
+      const errors = [
+        llm.ok ? null : `LLM: ${getErrorMessage(llm.error)}`,
+        run.ok ? null : `Jev: ${getErrorMessage(run.error)}`,
+      ].filter(Boolean);
       return recordDecisionModelRun({
         emailAccountId: emailAccount.id,
         feature: "choose-rule",
@@ -239,20 +239,38 @@ export async function findMatchingRules({
         mode: "shadow",
         model: decisionModelConfig.modelId,
         latencyMs: Date.now() - shadowStartedAt,
-        outcome: !run.ok
-          ? "error"
-          : !decided
-            ? "uncertain"
-            : getPrimaryRuleId(decided) === getPrimaryRuleId(llmResult)
-              ? "agree"
-              : "disagree",
+        outcome: !llm.ok
+          ? "llm-error"
+          : !run.ok
+            ? "error"
+            : !decided
+              ? "uncertain"
+              : getPrimaryRuleId(decided) === getPrimaryRuleId(llm.result)
+                ? "agree"
+                : "disagree",
         jevResult: run.ok ? summarizeRuleChoice(run.selection) : undefined,
-        llmResult: summarizeRuleChoice(llmResult),
-        error: run.ok ? undefined : getErrorMessage(run.error),
+        llmResult: llm.ok ? summarizeRuleChoice(llm.result) : undefined,
+        error: errors.length ? errors.join(" | ") : undefined,
         logger,
       });
     });
+  };
+
+  let llmResult: Awaited<ReturnType<typeof aiChooseRule>>;
+  try {
+    llmResult = await aiChooseRule({
+      email,
+      rules: potentialAiMatches,
+      emailAccount,
+      modelType,
+      logger,
+      classificationFeedback,
+    });
+  } catch (error) {
+    recordShadow({ ok: false, error });
+    throw error;
   }
+  recordShadow({ ok: true, result: llmResult });
 
   return mergeAiResultsIntoMatches({
     matches,
@@ -1113,6 +1131,11 @@ function getStaticMatchBodyText(message: ParsedMessage) {
     uppercaseHeadings: false,
   });
 }
+
+type RuleChoice = {
+  rules: { rule: { id: string }; isPrimary?: boolean }[];
+  reason: string;
+};
 
 function getPrimaryRuleId(result: {
   rules: { rule: { id: string }; isPrimary?: boolean }[];

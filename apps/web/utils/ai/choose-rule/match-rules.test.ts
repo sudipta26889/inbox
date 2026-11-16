@@ -3112,6 +3112,40 @@ describe("findMatchingRules - decisionModel rule selection", () => {
     vi.mocked(isDecisionFeatureLive).mockReturnValue(false);
   });
 
+  it("still records the shadow rule choice when the LLM call fails", async () => {
+    vi.mocked(isDecisionFeatureLive).mockReturnValue(false);
+    const aiRule = getAiRule();
+    vi.mocked(decisionModelChooseRule).mockResolvedValue({
+      type: "rules",
+      rules: [{ rule: aiRule, isPrimary: true }],
+      reason: "Decision model reason",
+    });
+    vi.mocked(aiChooseRule).mockRejectedValue(new Error("llm down"));
+
+    await expect(
+      findMatchingRules({
+        rules: [aiRule],
+        message: getMessage(),
+        emailAccount: getEmailAccount(),
+        provider,
+        modelType: "default",
+        logger,
+      }),
+    ).rejects.toThrow("llm down");
+
+    await vi.waitFor(() =>
+      expect(recordDecisionModelRun).toHaveBeenCalledWith(
+        expect.objectContaining({
+          feature: "choose-rule",
+          mode: "shadow",
+          outcome: "llm-error",
+          jevResult: expect.objectContaining({ primaryRuleId: aiRule.id }),
+          error: expect.stringContaining("LLM: llm down"),
+        }),
+      ),
+    );
+  });
+
   it("lets the LLM choose and only records the decision model unless choose-rule is live", async () => {
     vi.mocked(isDecisionFeatureLive).mockReturnValue(false);
     const aiRule = getAiRule();
