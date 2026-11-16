@@ -224,8 +224,8 @@ export function StepBulkUnsubscribe({ onNext }: { onNext: () => void }) {
         <p className="mt-3 flex items-center justify-center gap-1.5 text-center text-sm text-muted-foreground">
           <SparklesIcon className="size-3.5 text-amber-500" />
           {hasMore
-            ? t`Showing your top ${previewSenders.length}. We'll keep spotting more as you use Inbox Zero.`
-            : t`We'll keep spotting more as you use Inbox Zero.`}
+            ? t`Showing your top ${previewSenders.length}. We'll keep spotting more as you use Inbox.`
+            : t`We'll keep spotting more as you use Inbox.`}
         </p>
 
         <div className="mt-7 flex flex-col items-center gap-3">

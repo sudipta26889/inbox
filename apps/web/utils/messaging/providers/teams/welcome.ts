@@ -38,13 +38,13 @@ export async function sendTeamsInstallationWelcome(activity: unknown) {
     await adapter.postMessage(
       encodeThreadId({ conversationId: conversation.id, serviceUrl }),
       Card({
-        title: "Welcome to Inbox Zero",
+        title: "Welcome to Inbox",
         children: [
           CardText(
             "Manage email with your AI assistant in Microsoft Teams. Ask for summaries, help organizing your inbox, and draft replies for review.",
           ),
           CardText(
-            `An active Inbox Zero account is required. Sign in or sign up at ${baseUrl}.`,
+            `An active Inbox account is required. Sign in or sign up at ${baseUrl}.`,
           ),
           CardText(
             `Open ${baseUrl}/channels, select Connect for Microsoft Teams, then send the generated /connect <code> command in this chat.`,

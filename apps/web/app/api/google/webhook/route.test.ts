@@ -112,7 +112,9 @@ describe("Google webhook route", () => {
     expect(publishLocalMailHint).not.toHaveBeenCalled();
   });
 
-  it("allows requests without a token when verification is intentionally disabled", async () => {
+  // Stacks pass a missing key as "", so an empty token must not turn
+  // verification off for this public endpoint.
+  it("fails closed when the verification token is empty", async () => {
     envMock.GOOGLE_PUBSUB_VERIFICATION_TOKEN = "";
     const request = createRequest({
       emailAddress: "user@example.com",
@@ -120,15 +122,9 @@ describe("Google webhook route", () => {
     });
 
     const response = await POST(request as any, {} as never);
-    const body = await response.json();
 
-    expect(response.status).toBe(200);
-    expect(body).toEqual({ ok: true });
-    expect(processHistoryForUserMock).toHaveBeenCalledWith(
-      { emailAddress: "user@example.com", historyId: "123" },
-      { preloadedEmailAccount: null },
-      expect.anything(),
-    );
+    expect(response.status).toBe(503);
+    expect(processHistoryForUserMock).not.toHaveBeenCalled();
   });
 
   it.each([

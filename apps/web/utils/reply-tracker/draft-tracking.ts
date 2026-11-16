@@ -58,7 +58,7 @@ export async function trackSentDraftStatus({
       type: ActionType.DRAFT_EMAIL,
       draftId: { not: null },
       draftSendLog: null,
-      // A draft Inbox Zero deleted can't be what the user sent. Its missing
+      // A draft Inbox deleted can't be what the user sent. Its missing
       // draft would otherwise read as "likely sent", recording the user's own
       // reply as the AI draft and learning reply memory from it. Drafts saved
       // before statuses existed have no status, and legacy wasDraftSent=false

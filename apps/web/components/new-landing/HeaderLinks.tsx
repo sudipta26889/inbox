@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { LandingLink } from "@/components/new-landing/LandingLink";
 import { cn } from "@/utils";
+import { env } from "@/env";
 import {
   NavigationMenu,
   NavigationMenuContent,
@@ -25,7 +26,10 @@ import {
 const navigation = [
   { name: msg`Enterprise`, href: "/enterprise" },
   { name: msg`Case Studies`, href: "/case-studies" },
-  { name: msg`Pricing`, href: "/pricing" },
+  // No billing on this deployment, so no plans page to link to.
+  ...(env.NEXT_PUBLIC_BYPASS_PREMIUM_CHECKS
+    ? []
+    : [{ name: msg`Pricing`, href: "/pricing" }]),
 ];
 
 const useCases = [

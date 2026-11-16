@@ -8,10 +8,17 @@ import {
   getMarkdownForPath,
   markdownResponse,
 } from "@/utils/agent-markdown/content";
+import { env } from "@/env";
 import { BRAND_NAME, SUPPORT_EMAIL } from "@/utils/branding";
 
 export function proxy(request: NextRequest) {
   if (isNextInternalRequest(request)) {
+    return withVaryAccept(NextResponse.next());
+  }
+
+  // The agent Markdown for / and /pricing describes paid plans; with no
+  // billing on this deployment the HTML pages answer instead.
+  if (env.NEXT_PUBLIC_BYPASS_PREMIUM_CHECKS) {
     return withVaryAccept(NextResponse.next());
   }
 

@@ -4,17 +4,22 @@ set -e
 # This script runs at container startup.
 # It replaces the build-time placeholders with runtime environment variables.
 
-echo "🚀 Starting Inbox Zero..."
+echo "🚀 Starting Inbox..."
 
 . /app/docker/scripts/configure-rds-ca.sh
 
 /app/docker/scripts/replace-next-public-placeholders.sh
 
+/app/docker/scripts/staging-db-guard.sh
+
 if [ "${SKIP_DB_MIGRATIONS:-false}" = "true" ]; then
     echo "Skipping database migrations during web startup."
 else
+    # A schema the code does not match corrupts data quietly, so a failed or
+    # timed-out migration stops the container instead of starting the app.
     if ! /app/docker/scripts/migrate.sh; then
-        echo "⚠️  Continuing startup (database might be unavailable or migrations already applied)"
+        echo "❌ Database migrations failed; not starting the app"
+        exit 1
     fi
 fi
 

@@ -123,14 +123,14 @@ describe("email-stream route", () => {
 
       subscriberState.emit(
         "pmessage",
-        "thread:account-a:*",
-        "thread:account-a:thread-1",
+        "inbox:thread:account-a:*",
+        "inbox:thread:account-a:thread-1",
         JSON.stringify({ id: "message-a" }),
       );
       subscriberState.emit(
         "pmessage",
-        "thread:account-b:*",
-        "thread:account-b:thread-1",
+        "inbox:thread:account-b:*",
+        "inbox:thread:account-b:thread-1",
         JSON.stringify({ id: "message-b" }),
       );
 

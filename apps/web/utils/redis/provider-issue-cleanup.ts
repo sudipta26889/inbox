@@ -1,6 +1,7 @@
 import "server-only";
 import { env } from "@/env";
 import { redis } from "@/utils/redis";
+import { isRedisConfigured } from "@/utils/redis/configured";
 
 const PROVIDER_ISSUE_CLEANUP_KEY_PREFIX = "provider-issue-cleanup";
 const PROVIDER_ISSUE_CLEANUP_DEDUPE_TTL_SECONDS = 15 * 60;
@@ -39,10 +40,7 @@ export async function releaseProviderIssueCleanupClaimInRedis({
 }
 
 function isProviderIssueCleanupRedisConfigured() {
-  return (
-    env.NODE_ENV === "test" ||
-    Boolean(env.REDIS_HTTP_URL && env.REDIS_HTTP_TOKEN)
-  );
+  return env.NODE_ENV === "test" || isRedisConfigured();
 }
 
 function getProviderIssueCleanupKey({

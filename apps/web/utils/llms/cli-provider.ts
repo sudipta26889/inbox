@@ -31,7 +31,7 @@ type CliProviderAdapter = {
     module: CliProviderModule,
     modelName: string,
   ) => LanguageModelV4;
-  // Only for CLIs that can execute Inbox Zero's AI SDK tools themselves.
+  // Only for CLIs that can execute Inbox's AI SDK tools themselves.
   // Without it, tools passed to the CLI are left for the package to handle.
   createModelWithTools?: (
     module: CliProviderModule,
@@ -203,8 +203,8 @@ function getAdapter(provider: string) {
   return adapter;
 }
 
-// A CLI that runs Inbox Zero tools over MCP reports tool calls under its MCP
-// name (e.g. `mcp__inboxzero__<name>`). Inbox Zero callers (stop conditions,
+// A CLI that runs Inbox tools over MCP reports tool calls under its MCP
+// name (e.g. `mcp__inboxzero__<name>`). Inbox callers (stop conditions,
 // UI part renderers, validators) match on the original tool names, so the
 // prefix is stripped from every `toolName` field in both the non-streaming and
 // streaming response paths before it reaches the AI SDK consumer.

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
-import { env } from "@/env";
 import { createScopedLogger } from "@/utils/logger";
 import { redis } from "@/utils/redis";
+import { isRedisConfigured } from "@/utils/redis/configured";
 
 const logger = createScopedLogger("redis/research-cache");
 
@@ -10,10 +10,6 @@ const CACHE_TTL_SECONDS = 30 * 24 * 60 * 60; // 30 days
 const MAX_CONTENT_SIZE = 1024 * 1024; // 1MB
 
 export type ResearchSource = "perplexity" | "websearch";
-
-function isRedisConfigured(): boolean {
-  return Boolean(env.REDIS_HTTP_URL && env.REDIS_HTTP_TOKEN);
-}
 
 function getResearchCacheKey(
   userId: string,

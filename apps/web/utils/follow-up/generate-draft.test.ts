@@ -7,7 +7,7 @@ import { aiDraftFollowUp } from "@/utils/ai/reply/draft-follow-up";
 
 const { envMock } = vi.hoisted(() => ({
   envMock: {
-    NEXT_PUBLIC_BRAND_NAME: "Inbox Zero",
+    NEXT_PUBLIC_BRAND_NAME: "Inbox",
     NEXT_PUBLIC_AUTO_DRAFT_DISABLED: false,
     NEXT_PUBLIC_DISABLE_REFERRAL_SIGNATURE: true,
   },
@@ -315,7 +315,7 @@ describe("generateFollowUpDraft", () => {
       userMessage,
       expect.objectContaining({
         content:
-          'What do you think about it?\n\n<div class="gmail_signature" data-smartmail="gmail_signature">Cheers!<br>Barbara</div>\n\nDrafted by <a href="https://getinboxzero.com/?ref=TEST123">Inbox Zero</a>.',
+          'What do you think about it?\n\n<div class="gmail_signature" data-smartmail="gmail_signature">Cheers!<br>Barbara</div>\n\nDrafted by <a href="https://getinboxzero.com/?ref=TEST123">Inbox</a>.',
       }),
       "user@example.com",
       undefined,

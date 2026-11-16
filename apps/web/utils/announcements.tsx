@@ -44,7 +44,7 @@ export const ANNOUNCEMENTS: Announcement[] = [
       <AnnouncementVideo
         playbackId={EMAIL_CLIENT_LAUNCH_VIDEO_ID}
         thumbnailTime={1.5}
-        title="Meet the Inbox Zero email app"
+        title="Meet the Inbox email app"
       />
     ),
     link: "/mail",

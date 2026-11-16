@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
-import { env } from "@/env";
 import { createScopedLogger } from "@/utils/logger";
 import { redis } from "@/utils/redis";
+import { isRedisConfigured } from "@/utils/redis/configured";
 
 const logger = createScopedLogger("redis/docs-cache");
 
@@ -42,8 +42,4 @@ export async function setCachedDocs<T>(
 function getKey(kind: DocsCacheKind, keyParts: string[]) {
   const hash = createHash("sha256").update(keyParts.join("\n")).digest("hex");
   return `${CACHE_KEY_PREFIX}:${kind}:${hash}`;
-}
-
-function isRedisConfigured(): boolean {
-  return Boolean(env.REDIS_HTTP_URL && env.REDIS_HTTP_TOKEN);
 }

@@ -1,6 +1,7 @@
 import { createMemoryState } from "@chat-adapter/state-memory";
 import { cardToAdaptiveCard, decodeThreadId } from "@chat-adapter/teams";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { env } from "@/env";
 import { getMessagingChatSdkBot } from "@/utils/messaging/chat-sdk/bot";
 import { sendTeamsInstallationWelcome } from "./welcome";
 
@@ -45,7 +46,7 @@ describe("sendTeamsInstallationWelcome", () => {
     const rendered = JSON.stringify(cardToAdaptiveCard(card));
     expect(rendered).toContain("/connect <code>");
     expect(rendered).toContain("/docs/essentials/channels");
-    expect(rendered).toContain("support@");
+    expect(rendered).toContain(env.NEXT_PUBLIC_SUPPORT_EMAIL);
   });
 
   it.each([

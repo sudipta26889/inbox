@@ -145,7 +145,7 @@ export function SyncToExtensionSetting() {
       if (error instanceof Error && error.message === "not_chrome") {
         toast.error(t`Syncing to extension requires a Chromium browser`);
       } else {
-        toast.error(t`Inbox Zero Tabs extension not found. Install it first.`, {
+        toast.error(t`Inbox Tabs extension not found. Install it first.`, {
           action: {
             label: t`Install`,
             onClick: () => window.open(EXTENSION_URL, "_blank"),
@@ -162,7 +162,7 @@ export function SyncToExtensionSetting() {
   return (
     <SettingCard
       title={t`Sync to browser extension`}
-      description={t`Sync your rules to the Inbox Zero Tabs browser extension. Each label rule becomes a tab in Gmail.`}
+      description={t`Sync your rules to the Inbox Tabs browser extension. Each label rule becomes a tab in Gmail.`}
       right={
         <Dialog open={open} onOpenChange={handleOpenChange}>
           <DialogTrigger asChild>

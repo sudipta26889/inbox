@@ -104,7 +104,7 @@ export function buildMeetingBriefingBlocks({
     elements: [
       {
         type: "mrkdwn",
-        text: "_AI-generated briefing from Inbox Zero • May contain inaccuracies_",
+        text: "_AI-generated briefing from Inbox • May contain inaccuracies_",
       },
     ],
   });

@@ -42,7 +42,7 @@ type DecideResult = Experimental_DecisionResult<
 >;
 
 export type DecisionModelConfig = {
-  provider: "typesafe" | "openrouter" | "aigateway" | "openai";
+  provider: "typesafe" | "openrouter" | "aigateway" | "openai" | "litellm";
   modelId: string;
   model: Experimental_DecisionModelV4;
 };
@@ -229,6 +229,25 @@ export function createDecisionModelConfig(
         model: createSystemOneDecisionModel({
           provider,
           url: "https://api.typesafe.ai/v1/systemone",
+          apiKey,
+          modelId,
+        }),
+      };
+    }
+    case "litellm": {
+      // The gateway's /systemone route passes System One through to TypeSafe,
+      // so models stay behind LiteLLM and no TypeSafe key is needed here.
+      const apiKey = env.LLM_API_KEY?.trim();
+      if (!apiKey) return null;
+      const baseUrl = (env.LITELLM_BASE_URL || "http://localhost:4000/v1")
+        .trim()
+        .replace(/\/+$/, "");
+      return {
+        provider,
+        modelId,
+        model: createSystemOneDecisionModel({
+          provider,
+          url: `${baseUrl}/systemone`,
           apiKey,
           modelId,
         }),

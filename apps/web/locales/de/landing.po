@@ -17,7 +17,7 @@ msgstr "{BRAND_NAME} für selbst gehostete Teams"
 
 #: app/(landing)/home/HomePage.tsx
 msgid "{BRAND_NAME} organizes your inbox and calendar, drafts replies in your voice, and helps you reach inbox zero fast. Never miss an important email again."
-msgstr "{BRAND_NAME} organisiert deinen Posteingang und Kalender, schreibt Antwortentwürfe in deinem Stil und bringt dich schnell zu Inbox Zero. Verpasse nie wieder eine wichtige E-Mail."
+msgstr "{BRAND_NAME} organisiert deinen Posteingang und Kalender, schreibt Antwortentwürfe in deinem Stil und bringt dich schnell zu inbox zero. Verpasse nie wieder eine wichtige E-Mail."
 
 #: app/(landing)/home/Footer.tsx
 msgid "{BRAND_NAME} Tabs (Chrome Extension)"
@@ -1180,7 +1180,7 @@ msgstr "Du kannst jederzeit kündigen. Dein Abo bleibt bis zum Ende des Abrechnu
 
 #: app/(landing)/home/home-metadata.ts
 msgid "Your AI executive assistant to reach inbox zero fast. Automate emails, bulk unsubscribe, block cold emails, and analytics. Open-source"
-msgstr "Dein KI-Assistent, mit dem du schnell Inbox Zero erreichst. Automatisiere E-Mails, melde dich massenhaft ab, blockiere Kaltakquise und nutze Statistiken. Open Source"
+msgstr "Dein KI-Assistent, mit dem du schnell inbox zero erreichst. Automatisiere E-Mails, melde dich massenhaft ab, blockiere Kaltakquise und nutze Statistiken. Open Source"
 
 #: components/new-landing/sections/Awards.tsx
 msgid "Your data stays private — no AI training, no funny business. We’re fully certified for top-tier security, and you can even self-host Inbox Zero if you want total control."

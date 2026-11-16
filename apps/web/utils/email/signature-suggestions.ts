@@ -18,7 +18,7 @@ const sentSignatureScanSchema = z.object({
 });
 type SentSignatureScan = z.infer<typeof sentSignatureScanSchema>;
 
-// Signatures the user sends that Inbox Zero doesn't know yet. The sent mail is
+// Signatures the user sends that Inbox doesn't know yet. The sent mail is
 // scanned once and the result kept on the account, so this is cheap to call.
 export async function getSignatureSuggestions({
   emailAccountId,
