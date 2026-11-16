@@ -28,7 +28,7 @@ export default function InvoiceEmail({
           <Container className="mx-auto w-full max-w-[600px] p-0">
             <Section className="px-8 py-10">
               <Text className="m-0 text-2xl font-semibold text-gray-900">
-                Your Inbox Zero invoice is ready
+                Your Inbox invoice is ready
               </Text>
               <Text className="mb-6 mt-4 text-[15px] leading-6 text-gray-600">
                 Your Stripe payment was successful. You can download the paid
@@ -57,6 +57,6 @@ export default function InvoiceEmail({
 }
 
 InvoiceEmail.PreviewProps = {
-  baseUrl: "https://www.getinboxzero.com",
+  baseUrl: "https://inbox.sudiptadhara.in",
   invoiceUrl: "https://example.com/invoice.pdf",
 } satisfies InvoiceEmailProps;

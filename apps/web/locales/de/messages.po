@@ -14828,7 +14828,7 @@ msgstr "Du hast das Limit der kostenlosen Stufe erreicht 🥺"
 
 #: app/(app)/[emailAccountId]/mail/InboxZeroCelebration.tsx
 msgid "You've reached inbox zero"
-msgstr "Du hast Inbox Zero erreicht"
+msgstr "Du hast inbox zero erreicht"
 
 #: app/(app)/premium/Pricing.tsx
 msgid "Your access comes from a plan someone else set up. To manage billing yourself, contact {supportEmail}."

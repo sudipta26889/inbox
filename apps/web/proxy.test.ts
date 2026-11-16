@@ -31,7 +31,7 @@ describe("proxy content negotiation", () => {
       "text/markdown; charset=utf-8",
     );
     expect(response.headers.get("vary")).toBe("Accept");
-    await expect(response.text()).resolves.toContain("# Inbox Zero");
+    await expect(response.text()).resolves.toContain("# Inbox");
   });
 
   it("passes browser requests through and advertises negotiation", () => {

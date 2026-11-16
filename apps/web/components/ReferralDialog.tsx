@@ -110,8 +110,8 @@ export function Referrals({ source }: { source: ReferralSurface }) {
     if (navigator.share) {
       try {
         await navigator.share({
-          title: t`Join Inbox Zero with my referral link`,
-          text: t`Use my referral link to get started with Inbox Zero!`,
+          title: t`Join Inbox with my referral link`,
+          text: t`Use my referral link to get started with Inbox!`,
           url: link,
         });
       } catch (error) {
@@ -143,8 +143,8 @@ export function Referrals({ source }: { source: ReferralSurface }) {
         </PageHeading>
         <PageSubHeading className="mt-2">
           <Trans>
-            Share Inbox Zero with friends and get a free month for each friend
-            who completes their trial
+            Share Inbox with friends and get a free month for each friend who
+            completes their trial
           </Trans>
         </PageSubHeading>
       </div>

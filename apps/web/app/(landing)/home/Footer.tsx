@@ -239,12 +239,12 @@ export function Footer() {
             <Trans>
               Powered by{" "}
               <Link
-                href="https://getinboxzero.com"
+                href="https://github.com/elie222/inbox-zero"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="hover:text-gray-900"
               >
-                Inbox Zero
+                open source
               </Link>
             </Trans>
           </p>

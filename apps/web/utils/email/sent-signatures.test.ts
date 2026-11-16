@@ -45,10 +45,10 @@ describe("findSentSignatures", () => {
     expect(found).toEqual([{ html: english, count: 1 }]);
   });
 
-  it("keeps the Inbox Zero footer and blank spacer out of a signature", async () => {
+  it("keeps the Inbox footer and blank spacer out of a signature", async () => {
     const emailProvider = providerWithSent([
       getMockMessage({
-        textHtml: `<p>Hi</p><div data-smartmail="gmail_signature"><div><br></div><div>Ada</div><br><div>Sent with <a href="https://www.getinboxzero.com">Inbox Zero</a></div></div>`,
+        textHtml: `<p>Hi</p><div data-smartmail="gmail_signature"><div><br></div><div>Ada</div><br><div>Sent with <a href="https://www.getinboxzero.com">Inbox</a></div></div>`,
       }),
     ]);
 

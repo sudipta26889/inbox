@@ -3,6 +3,7 @@ import { env } from "@/env";
 import { getErrorMessage } from "@/utils/error";
 import type { Logger } from "@/utils/logger";
 import { redis } from "@/utils/redis";
+import { isRedisConfigured } from "@/utils/redis/configured";
 
 type DedupeValue = string | number | boolean | null | undefined;
 
@@ -175,7 +176,7 @@ function getErrorFingerprint(error: unknown) {
 function isRedisDedupeEnabled() {
   if (env.NODE_ENV === "test") return false;
 
-  return Boolean(env.REDIS_HTTP_URL && env.REDIS_HTTP_TOKEN);
+  return isRedisConfigured();
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {

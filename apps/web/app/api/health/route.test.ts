@@ -7,6 +7,7 @@ const FIXED_DATE = new Date("2026-05-03T10:01:18.695Z");
 const { healthEnv } = vi.hoisted(() => ({
   healthEnv: {
     HEALTH_API_KEY: "health-secret",
+    GIT_SHA: undefined as string | undefined,
   },
 }));
 
@@ -46,6 +47,20 @@ describe("health route", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ status: "ok" });
     expect(prisma.$queryRaw).not.toHaveBeenCalled();
+  });
+
+  it("reports the image's commit so deploys can wait for it", async () => {
+    healthEnv.GIT_SHA = "abc1234";
+
+    const response = await GET(
+      new NextRequest("http://localhost:3000/api/health"),
+    );
+
+    await expect(response.json()).resolves.toEqual({
+      status: "ok",
+      version: "abc1234",
+    });
+    healthEnv.GIT_SHA = undefined;
   });
 
   it("runs the deep database health check when the API key matches", async () => {

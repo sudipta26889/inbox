@@ -62,8 +62,8 @@ describe("Mail realtime stream", () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(await read(reader)).toContain("event: heartbeat");
     expect(await read(reader)).toContain("event: ready");
-    subscriber.emit("message", "local-mail:other-account", "secret");
-    subscriber.emit("message", "local-mail:account-a", "secret");
+    subscriber.emit("message", "inbox:local-mail:other-account", "secret");
+    subscriber.emit("message", "inbox:local-mail:account-a", "secret");
     expect(await read(reader)).toBe("event: mailbox-change\ndata: {}\n\n");
     await reader.cancel();
     expect(subscriber.disconnect).toHaveBeenCalledOnce();
@@ -92,7 +92,7 @@ describe("Mail realtime stream", () => {
   it("ends at its absolute lifetime even when hints keep arriving", async () => {
     await GET(request());
     await vi.advanceTimersByTimeAsync(269_000);
-    subscriber.emit("message", "local-mail:account-a", "{}");
+    subscriber.emit("message", "inbox:local-mail:account-a", "{}");
     expect(subscriber.disconnect).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(1000);
     expect(subscriber.disconnect).toHaveBeenCalledOnce();

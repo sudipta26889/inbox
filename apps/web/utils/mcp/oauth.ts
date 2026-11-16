@@ -533,7 +533,7 @@ async function getOAuthClient(
   const scope = integration.scopes.join(" ");
 
   const clientMetadata: OAuthClientMetadata = {
-    client_name: "Inbox Zero",
+    client_name: "Inbox",
     redirect_uris: [redirectUri],
     grant_types: ["authorization_code", "refresh_token"],
     response_types: ["code"],

@@ -67,7 +67,7 @@ export function Awards() {
         <Trans>
           Your data stays private — no AI training, no funny business. We’re
           fully certified for top-tier security, and you can even self-host
-          Inbox Zero if you want total control.
+          Inbox if you want total control.
         </Trans>
       </SectionSubtitle>
       <SectionContent

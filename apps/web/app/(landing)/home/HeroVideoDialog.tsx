@@ -27,7 +27,7 @@ export function HeroVideoDialog({
 }) {
   const posthog = usePostHog();
   const { t } = useLingui();
-  const title = titleProp ?? t`Inbox Zero product video`;
+  const title = titleProp ?? t`Inbox product video`;
 
   return (
     <Dialog

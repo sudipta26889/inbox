@@ -216,7 +216,7 @@ export class OutlookSubscriptionManager {
       await addUserErrorMessage(
         emailAccount.userId,
         mailboxFullErrorKey(this.emailAccountId),
-        `The mailbox for ${emailAccount.email} is full or can't accept changes, so Inbox Zero can't process new emails. Free up space or fix the mailbox in Microsoft 365. This message clears once it's working again.`,
+        `The mailbox for ${emailAccount.email} is full or can't accept changes, so Inbox can't process new emails. Free up space or fix the mailbox in Microsoft 365. This message clears once it's working again.`,
         this.logger,
       );
     } catch (error) {

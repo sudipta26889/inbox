@@ -2,6 +2,7 @@ import "server-only";
 import { EventEmitter } from "node:events";
 import Redis from "ioredis";
 import { env } from "@/env";
+import { REDIS_KEY_PREFIX } from "@/utils/redis/key-prefix";
 import type { Logger } from "@/utils/logger";
 
 declare global {
@@ -13,7 +14,8 @@ const localEvents = global.teamConversationEvents ?? new EventEmitter();
 global.teamConversationEvents = localEvents;
 
 export function conversationChangeChannel(conversationId: string) {
-  return `team-comments:${conversationId}`;
+  // Published and subscribed on raw ioredis clients, which do not prefix channels.
+  return `${REDIS_KEY_PREFIX}team-comments:${conversationId}`;
 }
 
 // With Redis configured, every stream listens on Redis, so the in-process

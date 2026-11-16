@@ -1,4 +1,5 @@
 import { RedisSubscriber } from "@/utils/redis/subscriber";
+import { REDIS_KEY_PREFIX } from "@/utils/redis/key-prefix";
 import { withAuth } from "@/utils/middleware";
 import { NextResponse } from "next/server";
 import { getEmailAccount } from "@/utils/redis/account-validation";
@@ -37,7 +38,8 @@ export const GET = withAuth("email-stream", async (request) => {
     emailAccountId,
   });
 
-  const pattern = `thread:${emailAccountId}:*`;
+  // Raw subscriber: ioredis does not prefix channels, the publisher (redis.publish) does.
+  const pattern = `${REDIS_KEY_PREFIX}thread:${emailAccountId}:*`;
   const redisSubscriber = RedisSubscriber.createInstance();
 
   redisSubscriber.psubscribe(pattern, (err) => {

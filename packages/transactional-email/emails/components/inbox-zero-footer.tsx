@@ -1,7 +1,7 @@
 import { Hr, Img, Link, Section } from "@react-email/components";
 
-const HOMEPAGE_URL = "https://www.getinboxzero.com";
-const ICON_URL = "https://www.getinboxzero.com/icon.png";
+const HOMEPAGE_URL = "https://inbox.sudiptadhara.in";
+const ICON_URL = "https://inbox.sudiptadhara.in/icon.png";
 
 export function InboxZeroFooter() {
   return (
@@ -27,7 +27,7 @@ export function InboxZeroFooter() {
                 />
               </td>
               <td className="align-middle text-[11px] font-semibold text-gray-700">
-                Inbox Zero
+                Inbox
               </td>
             </tr>
           </table>

@@ -21,14 +21,14 @@ export function buildShareText({
       msg`I just unsubscribed from ${plural(senderCount, {
         one: "# email list",
         other: "# email lists",
-      })} with Inbox Zero — that's ~${yearly} fewer emails a year. ${link}`,
+      })} with Inbox — that's ~${yearly} fewer emails a year. ${link}`,
     );
   }
   return i18n._(
     msg`I just unsubscribed from ${plural(senderCount, {
       one: "# email list",
       other: "# email lists",
-    })} with Inbox Zero. ${link}`,
+    })} with Inbox. ${link}`,
   );
 }
 

@@ -12,7 +12,7 @@ export const PROMPT_COMMANDS: Record<string, string> = {
 };
 
 const ACCOUNT_COMMAND_LINES = [
-  "/connect <code> - Link your Inbox Zero account",
+  "/connect <code> - Link your Inbox account",
   "/switch - List linked accounts",
   "/switch <number> - Switch active account",
 ];
@@ -73,7 +73,7 @@ export function getHelpText(
 
   return [
     PLATFORM_INTRO[platform],
-    "An active Inbox Zero account is required.",
+    "An active Inbox account is required.",
     `Get started: ${normalizedBaseUrl}/channels`,
     `Help: ${normalizedBaseUrl}/docs/essentials/channels`,
     `Contact support: ${supportEmail}`,

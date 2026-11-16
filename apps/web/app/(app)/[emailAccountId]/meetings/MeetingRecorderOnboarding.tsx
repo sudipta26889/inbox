@@ -76,7 +76,7 @@ export function MeetingRecorderOnboarding({
       imageSrc="/images/illustrations/calling-help.svg"
       imageAlt={t`Meeting notetaker`}
       title={t`Never write meeting notes again`}
-      description={t`Inbox Zero joins your calls, takes the notes, and drafts the follow-up email.`}
+      description={t`Inbox joins your calls, takes the notes, and drafts the follow-up email.`}
       features={features.map((feature) => ({
         ...feature,
         title: i18n._(feature.title),

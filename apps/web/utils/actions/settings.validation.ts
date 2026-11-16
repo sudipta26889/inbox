@@ -34,6 +34,7 @@ export const saveAiSettingsBody = z.object({
     Provider.GROQ,
     Provider.CEREBRAS,
     Provider.OPENROUTER,
+    Provider.LITELLM,
   ]),
   aiModel: z.string(),
   aiApiKey: z.string().optional(),
