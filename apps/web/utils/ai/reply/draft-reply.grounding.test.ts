@@ -61,7 +61,6 @@ describe("draft grounding", () => {
     const system: string = mockGenerateObject.mock.calls[0][0].system;
     expect(system).not.toContain("would most likely give");
     expect(system).not.toContain("Bad: \"I'll confirm");
-    expect(system).not.toContain("Never mention your own context");
     expect(system).not.toContain("relies on a guess about the user's answer");
     expect(system).toContain("Never invent them");
     expect(system).toContain("square brackets");
@@ -111,6 +110,16 @@ describe("draft commitments", () => {
     mockGenerateObject.mockResolvedValue({
       object: { reply: "Hello", confidence: "STANDARD" },
     });
+  });
+
+  it("forbids derived numbers and talk about missing context, using placeholders instead", async () => {
+    await draft();
+
+    const system: string = mockGenerateObject.mock.calls[0][0].system;
+    expect(system).toContain("Never calculate, estimate, round or derive");
+    expect(system).toContain("[your answer: the day rate?]");
+    expect(system).toContain("Never mention your own context");
+    expect(system).toContain("use a placeholder instead");
   });
 
   it("forbids accepting or promising for the user, with the free-slot and past-email cases", async () => {
