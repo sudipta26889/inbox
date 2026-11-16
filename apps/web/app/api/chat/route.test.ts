@@ -578,7 +578,7 @@ describe("chat route rule freshness persistence", () => {
 
     await POST(createRequest());
 
-    const sent = mockConvertToModelMessages.mock.calls[0][0] as Array<{
+    const sent = mockConvertToModelMessages.mock.calls[0]?.[0] as unknown as Array<{
       id: string;
       parts: Array<{ toolCallId?: string }>;
     }>;

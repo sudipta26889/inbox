@@ -413,7 +413,9 @@ describe("runDecisionModelOrFallback", () => {
   it("live: an uncertain answer escalates to DECISION_ESCALATION_MODEL", async () => {
     envMock.DECISION_MODEL_LIVE = "thread-status";
     envMock.DECISION_ESCALATION_MODEL = "litellm:deepseek-v4-flash";
-    const fallback = vi.fn(async () => "AWAITING_REPLY");
+    const fallback = vi.fn(
+      async (_account: ReturnType<typeof getEmailAccount>) => "AWAITING_REPLY",
+    );
 
     const result = await route(async () => {
       throw new DecisionUncertainError("unsure");
@@ -433,7 +435,9 @@ describe("runDecisionModelOrFallback", () => {
     envMock.DECISION_MODEL_LIVE = "thread-status";
     envMock.DECISION_ESCALATION_MODEL = "litellm:deepseek-v4-flash";
     const account = getEmailAccount();
-    const fallback = vi.fn(async () => "llm");
+    const fallback = vi.fn(
+      async (_account: ReturnType<typeof getEmailAccount>) => "llm",
+    );
 
     await route(async () => {
       throw new Error("provider down");

@@ -180,7 +180,7 @@ export async function isColdEmail({
 
   if (guardResult) return guardResult;
 
-  return runDecisionModelOrFallback({
+  return runDecisionModelOrFallback<ColdEmailResult>({
     emailAccount,
     logger,
     feature: "cold-email",
