@@ -4,6 +4,8 @@ import prisma from "@/utils/prisma";
 import { taskpilotCache } from "@/utils/taskpilot/cache";
 import { TaskpilotClient } from "@/utils/taskpilot/client";
 import { getTaskpilotConfigForUser } from "@/utils/taskpilot/config";
+import { errorStatus } from "@/utils/taskpilot/errors";
+import { buildInboxThreadLinkInput } from "@/utils/taskpilot/inbox-link";
 import { reindexTask } from "@/utils/taskpilot/reindex";
 import type { CreateTaskDraft } from "@/utils/taskpilot/types";
 
@@ -78,17 +80,24 @@ export async function commitTask(input: CommitInput): Promise<CommitResult> {
   });
 
   try {
-    await client.addLink(created.id, {
-      title: "Inbox thread",
-      url: input.deepLink,
-      metadata: {
+    await client.addLink(
+      input.draft.projectId,
+      created.id,
+      buildInboxThreadLinkInput({
+        deepLink: input.deepLink,
         threadId: input.threadId,
         emailAccountId: input.emailAccountId,
-        gmailMessageId: input.messageId,
-      },
-    });
+        messageId: input.messageId,
+      }),
+    );
   } catch (err) {
-    logger.warn("addLink failed; continuing", { err, issueId: created.id });
+    // The task exists but has no way back to the email: a defect, not noise.
+    logger.error("addLink failed; work item has no link to the email", {
+      err,
+      issueId: created.id,
+      projectId: input.draft.projectId,
+      status: errorStatus(err),
+    });
   }
 
   const link = await prisma.emailTaskLink.upsert({

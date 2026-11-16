@@ -211,3 +211,66 @@ describe("TaskpilotClient extensions", () => {
     expect(JSON.parse(call[1].body)).toEqual({ priority: "urgent" });
   });
 });
+
+describe("TaskpilotClient.addLink", () => {
+  // The block above unstubs fetch after each test.
+  beforeEach(() => {
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  it("posts to the project-scoped links route", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({}, { status: 201 }));
+
+    await client.addLink("p1", "issue-1", {
+      title: "Inbox thread",
+      url: "https://mail.example/t/1",
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://taskpilot.example/api/v1/workspaces/acme/projects/p1/work-items/issue-1/links/",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          title: "Inbox thread",
+          url: "https://mail.example/t/1",
+        }),
+      }),
+    );
+  });
+});
+
+describe("TaskpilotClient.listLinks", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  it("reads a plain array from the project-scoped links route", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse([{ id: "l1", url: "https://a.example", title: "A" }]),
+    );
+
+    const links = await client.listLinks("p1", "issue-1");
+
+    expect(links).toEqual([{ id: "l1", url: "https://a.example", title: "A" }]);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://taskpilot.example/api/v1/workspaces/acme/projects/p1/work-items/issue-1/links/",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("reads a paged { results } body", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ results: [{ id: "l2", url: "https://b.example" }] }),
+    );
+
+    const links = await client.listLinks("p1", "issue-1");
+
+    expect(links).toEqual([{ id: "l2", url: "https://b.example" }]);
+  });
+
+  it("returns an empty list for an unexpected body", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ detail: "nope" }));
+
+    await expect(client.listLinks("p1", "issue-1")).resolves.toEqual([]);
+  });
+});

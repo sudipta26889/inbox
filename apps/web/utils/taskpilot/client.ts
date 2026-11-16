@@ -87,12 +87,27 @@ export class TaskpilotClient {
     };
   }
 
-  async addLink(issueId: string, input: IssueLinkInput): Promise<void> {
+  async addLink(
+    projectId: string,
+    issueId: string,
+    input: IssueLinkInput,
+  ): Promise<void> {
     await this.request(
       "POST",
-      `/workspaces/${this.workspaceSlug}/work-items/${issueId}/links/`,
+      `/workspaces/${this.workspaceSlug}/projects/${projectId}/work-items/${issueId}/links/`,
       input,
     );
+  }
+
+  async listLinks(
+    projectId: string,
+    issueId: string,
+  ): Promise<{ id: string; url: string }[]> {
+    const res = await this.request(
+      "GET",
+      `/workspaces/${this.workspaceSlug}/projects/${projectId}/work-items/${issueId}/links/`,
+    );
+    return unwrapList<{ id: string; url: string }>(await res.json());
   }
 
   async addComment(
