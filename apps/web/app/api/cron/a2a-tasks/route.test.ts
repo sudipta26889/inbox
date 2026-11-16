@@ -37,7 +37,7 @@ vi.mock("@/utils/middleware", async () => {
   return createWithErrorTestMiddleware();
 });
 
-import { GET } from "./route";
+import { GET, POST } from "./route";
 
 const URL_ = "http://localhost:3000/api/cron/a2a-tasks";
 const ROUTE_CONTEXT = { params: Promise.resolve({}) };
@@ -68,5 +68,19 @@ describe("a2a-tasks cron route", () => {
       succeeded: 0,
       failed: 0,
     });
+  });
+
+  it.each([
+    ["rejects POST with a wrong secret in the body", "wrong", 401],
+    ["answers POST 2xx with the secret in the body", "cron-secret", 200],
+  ])("%s", async (_label, secret, status) => {
+    const response = await POST(
+      new NextRequest(URL_, {
+        method: "POST",
+        body: JSON.stringify({ CRON_SECRET: secret }),
+      }),
+      ROUTE_CONTEXT,
+    );
+    expect(response.status).toBe(status);
   });
 });

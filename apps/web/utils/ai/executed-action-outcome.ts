@@ -21,6 +21,7 @@ const ACTION_RESULT_FAILURE_TYPES = new Set<ActionType>([
   ActionType.NOTIFY_SENDER,
   ActionType.INTEGRATION,
   ActionType.HOME_ASSISTANT,
+  ActionType.A2A_NOTIFY,
 ]);
 
 export async function persistExecutedActionOutcome({

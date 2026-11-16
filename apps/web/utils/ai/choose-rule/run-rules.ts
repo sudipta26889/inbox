@@ -3,6 +3,7 @@ import { canActionBeDelayed } from "@/utils/delayed-actions";
 import type { ParsedMessage, RuleWithActions } from "@/utils/types";
 import {
   ActionType,
+  ExecutedActionStatus,
   ExecutedRuleStatus,
   GroupItemSource,
   SystemType,
@@ -241,6 +242,7 @@ export async function runRules({
   }
 
   const executedRules: RunRulesResult[] = [];
+  const executedRuleIds: string[] = [];
 
   for (const result of finalMatches) {
     const ruleToExecute = result.rule;
@@ -272,6 +274,10 @@ export async function runRules({
       skipArchive,
       skipDraftReplies,
     );
+
+    if (executedRule.executedRule?.id) {
+      executedRuleIds.push(executedRule.executedRule.id);
+    }
 
     executedRules.push({
       ...executedRule,
@@ -306,9 +312,10 @@ export async function runRules({
             ]
           : [],
       ),
-      mitraAlreadyNotified: executedRules.some((er) =>
-        er.actionItems?.some((ai) => ai.type === ActionType.A2A_NOTIFY),
-      ),
+      mitraAlreadyNotified:
+        executedRules.some((er) =>
+          er.actionItems?.some((ai) => ai.type === ActionType.A2A_NOTIFY),
+        ) && (await wasMitraNotified(executedRuleIds, logger)),
       logger,
     });
   }
@@ -1140,4 +1147,29 @@ function routeToTaskPilot({
     },
     canCreate,
   }).catch(() => undefined);
+}
+
+// Only an A2A_NOTIFY that actually succeeded counts: a failed one (Mitra
+// down) or a delayed one (not run yet, so not an ExecutedAction) must not
+// stop the fan-out from reaching Mitra.
+async function wasMitraNotified(
+  executedRuleIds: string[],
+  logger: Logger,
+): Promise<boolean> {
+  if (!executedRuleIds.length) return false;
+
+  try {
+    const succeeded = await prisma.executedAction.count({
+      where: {
+        executedRuleId: { in: executedRuleIds },
+        type: ActionType.A2A_NOTIFY,
+        executionStatus: ExecutedActionStatus.SUCCEEDED,
+      },
+    });
+    return succeeded > 0;
+  } catch (error) {
+    // Unknown: send it; Mitra seeing an email twice beats never.
+    logger.warn("Could not check A2A_NOTIFY outcome", { error });
+    return false;
+  }
 }

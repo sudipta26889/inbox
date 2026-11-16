@@ -1001,6 +1001,7 @@ describe("runRules email fan-out", () => {
     ] as any);
     vi.mocked(executeAct).mockResolvedValue(ExecutedRuleStatus.APPLIED);
     mockExecutedRuleCreate({ rule: urgentRule, actionItems: [notifyAction] });
+    prisma.executedAction.count.mockResolvedValue(1);
 
     await runRulesWithDefaults({ rules: [urgentRule, secondRule] });
 
@@ -1015,6 +1016,37 @@ describe("runRules email fan-out", () => {
         // The rule's own A2A_NOTIFY already told Mitra.
         mitraAlreadyNotified: true,
       }),
+    );
+  });
+
+  it("still sends to Mitra when the rule's own A2A_NOTIFY failed", async () => {
+    const notifyAction = getAction({
+      id: "a2a-action-1",
+      type: ActionType.A2A_NOTIFY,
+    });
+    const urgentRule = createRule("urgent-rule", null, [notifyAction]);
+
+    mockMatchingRules([{ rule: urgentRule, matchReasons: [] }]);
+    prisma.executedRule.findFirst.mockResolvedValue(null);
+    vi.mocked(getActionItemsWithAiArgs).mockResolvedValue([
+      notifyAction,
+    ] as any);
+    vi.mocked(executeAct).mockResolvedValue(ExecutedRuleStatus.ERROR);
+    mockExecutedRuleCreate({ rule: urgentRule, actionItems: [notifyAction] });
+    // No SUCCEEDED A2A_NOTIFY ExecutedAction: the send failed.
+    prisma.executedAction.count.mockResolvedValue(0);
+
+    await runRulesWithDefaults({ rules: [urgentRule] });
+
+    expect(prisma.executedAction.count).toHaveBeenCalledWith({
+      where: {
+        executedRuleId: { in: ["exec-1"] },
+        type: ActionType.A2A_NOTIFY,
+        executionStatus: "SUCCEEDED",
+      },
+    });
+    expect(fanOutEmailAnalysis).toHaveBeenCalledWith(
+      expect.objectContaining({ mitraAlreadyNotified: false }),
     );
   });
 
