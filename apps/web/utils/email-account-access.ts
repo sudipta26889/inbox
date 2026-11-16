@@ -1,3 +1,4 @@
+import { NextResponse } from "next/server";
 import { SafeError } from "@/utils/error";
 
 export const OWNER_ONLY_MESSAGE =
@@ -23,4 +24,19 @@ export function assertAccountOwner({
   if (!sessionUserId || ownerUserId !== sessionUserId) {
     throw new SafeError(OWNER_ONLY_MESSAGE);
   }
+}
+
+/**
+ * Route form of assertAccountOwner for withEmailAccount routes that start a
+ * connection (Slack, Drive, Calendar, MCP integrations), which outlives a share.
+ */
+export function sharedUserRefusal(auth: {
+  userId: string;
+  actorUserId: string;
+}) {
+  if (auth.userId === auth.actorUserId) return null;
+  return NextResponse.json(
+    { error: OWNER_ONLY_MESSAGE, isKnownError: true },
+    { status: 403 },
+  );
 }
