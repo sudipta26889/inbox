@@ -42,7 +42,7 @@ describe("Redis feature gates", () => {
       .sort();
 
     expect(users).toEqual(ALLOWED_REDIS_HTTP_USERS);
-  });
+  }, 30_000); // walks the whole source tree; slow when the machine is busy
 });
 
 function listSourceFiles(dir: string): string[] {
