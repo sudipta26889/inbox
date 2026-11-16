@@ -71,7 +71,7 @@ export function getModel(
   userAi: UserAIFields,
   modelType: ModelType = "default",
 ): SelectModel {
-  const selectedModel = userAi.aiApiKey
+  const selectedModel = usesSavedModel(userAi, modelType)
     ? {
         primaryModel: selectUserModel(userAi, modelType),
         fallbackModels: [],
@@ -90,6 +90,15 @@ export function getModel(
   });
 
   return { ...primaryModel, fallbackModels, hasUserApiKey: !!userAi.aiApiKey };
+}
+
+// Fork (sudipta_main) rule: a user's saved provider wins whether or not they
+// have a key (LiteLLM rows often have none); only a role list configured for
+// this model type overrides it for a keyless user.
+function usesSavedModel(userAi: UserAIFields, modelType: ModelType) {
+  if (userAi.aiApiKey) return true;
+  if (!userAi.aiProvider) return false;
+  return modelType === "default" || !getConfiguredModelListByType(modelType);
 }
 
 function selectModel(
@@ -433,8 +442,10 @@ function selectUserModel(
 ): ResolvedModel {
   const configuredDefault = getFirstSupportedModelListEntry("default");
   const aiProvider = userAi.aiProvider || configuredDefault?.provider;
+  // Fork (sudipta_main): a saved provider without a model uses the deployment
+  // default model rather than failing.
   const aiModel = userAi.aiProvider
-    ? userAi.aiModel || null
+    ? userAi.aiModel || env.DEFAULT_LLM_MODEL || null
     : configuredDefault?.modelName || null;
 
   if (!aiProvider) {

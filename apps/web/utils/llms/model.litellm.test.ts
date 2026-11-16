@@ -14,6 +14,8 @@ vi.mock("@ai-sdk/openai-compatible", () => ({
 vi.mock("@/env", () => ({
   env: {
     DEFAULT_LLMS: "litellm:nemotron-3-nano-cloud",
+    DEFAULT_LLM_MODEL: "nemotron-3-nano-cloud",
+    ECONOMY_LLMS: undefined as string | undefined,
     LITELLM_BASE_URL: "http://litellm.test/v1",
     LLM_API_KEY: "deployment-key",
   },
@@ -70,5 +72,47 @@ describe("LiteLLM provider", () => {
     ).toThrow();
 
     vi.mocked(env).LLM_API_KEY = "deployment-key";
+  });
+
+  // sudipta_main's selectDefaultModel: a saved choice wins whether or not the
+  // user has a key, and a saved provider without a model uses
+  // DEFAULT_LLM_MODEL.
+  describe("matches sudipta_main's model selection", () => {
+    it("keeps a saved LiteLLM model when the user has no key", () => {
+      const model = getModel(
+        { aiProvider: "litellm", aiModel: "deepseek-v4-flash", aiApiKey: null },
+        "economy",
+      );
+
+      expect(model.provider).toBe("litellm");
+      expect(model.modelName).toBe("deepseek-v4-flash");
+      expect(createOpenAICompatible).toHaveBeenCalledWith(
+        expect.objectContaining({ apiKey: "deployment-key" }),
+      );
+    });
+
+    it("falls back to DEFAULT_LLM_MODEL for a saved provider with no model", () => {
+      for (const aiApiKey of ["user-virtual-key", null]) {
+        const model = getModel({
+          aiProvider: "litellm",
+          aiModel: null,
+          aiApiKey,
+        });
+
+        expect(model.modelName).toBe("nemotron-3-nano-cloud");
+      }
+    });
+
+    it("uses an explicitly configured role model for a keyless user", () => {
+      vi.mocked(env).ECONOMY_LLMS = "litellm:qwen3-economy";
+
+      const model = getModel(
+        { aiProvider: "litellm", aiModel: "deepseek-v4-flash", aiApiKey: null },
+        "economy",
+      );
+
+      expect(model.modelName).toBe("qwen3-economy");
+      vi.mocked(env).ECONOMY_LLMS = undefined;
+    });
   });
 });
