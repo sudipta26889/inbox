@@ -60,6 +60,9 @@ describe("createPublicOpenApiDocument", () => {
       "replaceRule",
       "deleteRule",
       "unsubscribeSender",
+      "listAccounts",
+      "listEmails",
+      "getEmail",
     ]);
     expect(new Set(operationIds).size).toBe(operationIds.length);
 

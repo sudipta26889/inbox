@@ -14,6 +14,7 @@ import {
   isMicrosoftProvider,
 } from "@/utils/email/provider-types";
 import type { Logger } from "@/utils/logger";
+import { isLocalBypassEmailAccount } from "@/utils/auth/local-bypass-email-account";
 
 export const checkPermissionsAction = actionClient
   .metadata({ name: "checkPermissions" })
@@ -23,6 +24,10 @@ export const checkPermissionsAction = actionClient
     }
 
     if (!isGoogleProvider(provider)) {
+      return { hasAllPermissions: true, hasRefreshToken: true };
+    }
+
+    if (await isLocalBypassEmailAccount(emailAccountId)) {
       return { hasAllPermissions: true, hasRefreshToken: true };
     }
 

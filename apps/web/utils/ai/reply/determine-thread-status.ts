@@ -116,7 +116,8 @@ export async function aiDetermineThreadStatus({
   return runDecisionModelOrFallback({
     emailAccount,
     logger,
-    feature: "thread status",
+    feature: "thread-status",
+    subjectKey: threadMessages.at(-1)?.id,
     decide: (config) =>
       decideThreadStatus({
         config,
@@ -126,14 +127,15 @@ export async function aiDetermineThreadStatus({
         userSentLastEmail,
         logger,
       }),
-    fallback: () =>
+    fallback: (account) =>
       determineThreadStatusWithLlm({
-        emailAccount,
+        emailAccount: account,
         threadMessages,
         modelType,
         userSentLastEmail,
         definitions,
       }),
+    same: (decided, llm) => decided.status === llm.status,
   });
 }
 

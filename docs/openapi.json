@@ -2401,6 +2401,449 @@
           }
         }
       }
+    },
+    "/accounts": {
+      "get": {
+        "operationId": "listAccounts",
+        "description": "List every email account the API key's user owns or has been shared. The account the key was bound to is flagged with is_default=true.",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "accounts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "email": {
+                            "type": "string",
+                            "format": "email"
+                          },
+                          "provider": {
+                            "type": "string"
+                          },
+                          "is_default": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "email",
+                          "provider",
+                          "is_default"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "accounts"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, or expired API key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "API key lacks a required scope or is not account-scoped",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited by the API or email provider",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/emails": {
+      "get": {
+        "operationId": "listEmails",
+        "description": "List emails for any account the API key's user can access, filtered by a provider-native query (e.g. Gmail search syntax like 'label:ai-news'). The account parameter selects the account. Pagination via the opaque cursor.",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "account",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "query",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 25
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "cursor",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "emails": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "thread_id": {
+                            "type": "string"
+                          },
+                          "from": {
+                            "type": "string"
+                          },
+                          "subject": {
+                            "type": "string"
+                          },
+                          "snippet": {
+                            "type": "string"
+                          },
+                          "labels": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "received_at": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "thread_id",
+                          "from",
+                          "subject",
+                          "snippet",
+                          "labels",
+                          "received_at"
+                        ]
+                      }
+                    },
+                    "next_cursor": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "emails",
+                    "next_cursor"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query, path, or request body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, or expired API key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "API key lacks a required scope or is not account-scoped",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited by the API or email provider",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/emails/{messageId}": {
+      "get": {
+        "operationId": "getEmail",
+        "description": "Fetch a single email with body and attachment metadata. The account parameter selects which accessible account to read from.",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "messageId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "account",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "thread_id": {
+                      "type": "string"
+                    },
+                    "from": {
+                      "type": "string"
+                    },
+                    "to": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "subject": {
+                      "type": "string"
+                    },
+                    "snippet": {
+                      "type": "string"
+                    },
+                    "labels": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "received_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "body_html": {
+                      "type": "string"
+                    },
+                    "body_text": {
+                      "type": "string"
+                    },
+                    "attachments": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "filename": {
+                            "type": "string"
+                          },
+                          "mime_type": {
+                            "type": "string"
+                          },
+                          "size_bytes": {
+                            "type": "integer",
+                            "minimum": 0
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "filename",
+                          "mime_type",
+                          "size_bytes"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "thread_id",
+                    "from",
+                    "to",
+                    "subject",
+                    "snippet",
+                    "labels",
+                    "received_at",
+                    "body_html",
+                    "body_text",
+                    "attachments"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query, path, or request body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, or expired API key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "API key lacks a required scope or is not account-scoped",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource or route not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited by the API or email provider",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicApiError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "webhooks": {}

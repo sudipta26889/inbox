@@ -7,7 +7,10 @@ import { createGenerateObject } from "@/utils/llms";
 import { strictOptional } from "@/utils/llms/strict-optional";
 import { createScopedLogger } from "@/utils/logger";
 import { decideSenderCategory } from "@/utils/decision-model/categorize-sender";
-import { runDecisionModelOrFallback } from "@/utils/decision-model/decision-model";
+import {
+  DecisionUncertainError,
+  runDecisionModelOrFallback,
+} from "@/utils/decision-model/decision-model";
 
 const logger = createScopedLogger("categorize-sender");
 
@@ -25,7 +28,8 @@ export async function aiCategorizeSender({
   return runDecisionModelOrFallback({
     emailAccount,
     logger,
-    feature: "sender categorization",
+    feature: "categorize-sender",
+    subjectKey: sender,
     decide: async (config) => {
       const result = await decideSenderCategory({
         config,
@@ -36,17 +40,20 @@ export async function aiCategorizeSender({
         logger,
       });
       if (!result) {
-        throw new Error("Decision model was uncertain about sender category");
+        throw new DecisionUncertainError(
+          "Decision model was uncertain about sender category",
+        );
       }
       return result;
     },
-    fallback: () =>
+    fallback: (account) =>
       categorizeSenderWithLlm({
-        emailAccount,
+        emailAccount: account,
         sender,
         previousEmails,
         categories,
       }),
+    same: (decided, llm) => decided?.category === llm?.category,
   });
 }
 

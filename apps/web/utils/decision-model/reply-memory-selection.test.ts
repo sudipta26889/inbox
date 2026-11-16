@@ -6,7 +6,8 @@ import {
 } from "@/generated/prisma/enums";
 
 const runDecisionModelMock = vi.hoisted(() => vi.fn());
-vi.mock("./decision-model", () => ({
+vi.mock("./decision-model", async (importActual) => ({
+  ...(await importActual<typeof import("./decision-model")>()),
   runDecisionModel: runDecisionModelMock,
 }));
 

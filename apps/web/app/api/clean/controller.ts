@@ -37,7 +37,7 @@ export const cleanThreadBody = z.object({
     calendar: z.boolean().default(true).nullish(),
     receipt: z.boolean().default(false).nullish(),
     attachment: z.boolean().default(false).nullish(),
-    conversation: z.boolean().default(false).nullish(),
+    conversation: z.boolean().default(true).nullish(),
   }),
   // labels: z.array(z.object({ id: z.string(), name: z.string() })).optional(),
 });

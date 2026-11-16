@@ -47,9 +47,16 @@ vi.mock("@/utils/llms", () => ({
   createGenerateObject: vi.fn(() => vi.fn()),
 }));
 
+// Default: the router lets the LLM decide (no decision model, or shadow mode).
 vi.mock("@/utils/decision-model/decision-model", () => ({
   runDecisionModelOrFallback: vi.fn(
-    ({ decide }: { decide: (config: unknown) => unknown }) => decide({}),
+    ({
+      fallback,
+      emailAccount,
+    }: {
+      fallback: (account: unknown) => unknown;
+      emailAccount: unknown;
+    }) => fallback(emailAccount),
   ),
 }));
 
@@ -73,7 +80,6 @@ describe("isColdEmail", () => {
       false,
     );
     env.WHITELIST_FROM = "welcome@service.example OR service.example";
-    env.DECISION_MODEL_COLD_EMAIL_ENABLED = false;
   });
 
   it("should recognize a known cold email sender even when from field format differs", async () => {
@@ -593,7 +599,7 @@ describe("isColdEmail", () => {
     });
   });
 
-  it("leaves cold email to the LLM unless the decision model is enabled for it", async () => {
+  it("routes cold email through the decision-model router keyed by sender", async () => {
     vi.mocked(prisma.groupItem.findFirst).mockResolvedValue(null);
     vi.mocked(createGenerateObject).mockReturnValue(
       vi.fn().mockResolvedValue({
@@ -603,12 +609,19 @@ describe("isColdEmail", () => {
 
     await isColdEmail(getUndecidedInput());
 
-    expect(runDecisionModelOrFallback).not.toHaveBeenCalled();
+    expect(runDecisionModelOrFallback).toHaveBeenCalledWith(
+      expect.objectContaining({
+        feature: "cold-email",
+        subjectKey: "unknown@example.com",
+      }),
+    );
     expect(createGenerateObject).toHaveBeenCalledTimes(1);
   });
 
-  it("asks the decision model when it is enabled for cold email", async () => {
-    env.DECISION_MODEL_COLD_EMAIL_ENABLED = true;
+  it("uses the decision model's answer when the router lets it decide", async () => {
+    vi.mocked(runDecisionModelOrFallback).mockImplementationOnce(({ decide }) =>
+      decide({} as never),
+    );
     vi.mocked(prisma.groupItem.findFirst).mockResolvedValue(null);
     vi.mocked(decideColdEmail).mockResolvedValue({
       coldEmail: true,

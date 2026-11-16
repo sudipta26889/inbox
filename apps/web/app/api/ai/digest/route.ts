@@ -5,6 +5,7 @@ import { aiSummarizeEmailForDigest } from "@/utils/ai/digest/summarize-email-for
 import { getEmailAccountWithAi } from "@/utils/user/get";
 import { withError } from "@/utils/middleware";
 import { env } from "@/env";
+import { isOwnSendingAddress } from "@/utils/digest/is-from-us";
 import { withQstashOrInternal } from "@/utils/qstash";
 import {
   releaseDigestSummarySlot,
@@ -39,7 +40,7 @@ export const POST = withError(
       }
 
       // Don't summarize Digest emails (this will actually block all emails that we send, but that's okay)
-      if (message.from === env.RESEND_FROM_EMAIL) {
+      if (isOwnSendingAddress(message.from)) {
         logger.info("Skipping digest item because it is from us");
         return new NextResponse("OK", { status: 200 });
       }
@@ -76,7 +77,8 @@ export const POST = withError(
           },
         });
 
-        if (!summary?.content) {
+        const summaryContent = summary?.content;
+        if (!summaryContent) {
           logger.info(
             "Skipping digest item because it is not worth summarizing",
           );
@@ -88,7 +90,7 @@ export const POST = withError(
           threadId: message.threadId || "",
           emailAccountId,
           actionId,
-          content: summary,
+          content: { content: summaryContent },
           logger,
         });
 

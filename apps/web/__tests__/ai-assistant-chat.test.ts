@@ -36,6 +36,7 @@ const {
   mockUnsubscribeSenderAndMark: vi.fn(),
   mockPrisma: {
     $queryRaw: vi.fn(),
+    $transaction: vi.fn(async (ops: unknown[]) => ops),
     emailAccount: {
       findUnique: vi.fn(),
       update: vi.fn(),
@@ -52,7 +53,9 @@ const {
       create: vi.fn(),
     },
     chatMemory: {
-      create: vi.fn(),
+      create: vi.fn().mockReturnValue({ id: "memory-id" }),
+      updateMany: vi.fn().mockReturnValue({ count: 0 }),
+      update: vi.fn(),
       findFirst: vi.fn().mockResolvedValue(null),
       findMany: vi.fn().mockResolvedValue([]),
     },
@@ -2396,12 +2399,16 @@ describe("aiProcessAssistantChat", () => {
     expect(result.saved).toBe(true);
     expect(result.content).toBe("I prefer concise responses");
     expect(result.deduplicated).toBeUndefined();
-    expect(mockPrisma.chatMemory.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        content: "I prefer concise responses",
-        emailAccountId: "email-account-id",
+    expect(mockPrisma.chatMemory.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          content: "I prefer concise responses",
+          emailAccountId: "email-account-id",
+          source: "USER_STATED",
+          supersededAt: null,
+        }),
       }),
-    });
+    );
   });
 
   it("saveMemory deduplicates when identical memory exists", async () => {
@@ -2486,7 +2493,7 @@ describe("aiProcessAssistantChat", () => {
     const result = await tools.searchMemories.execute({ query: "" });
 
     expect(mockPrisma.chatMemory.findMany).toHaveBeenCalledWith({
-      where: { emailAccountId: "email-account-id" },
+      where: { emailAccountId: "email-account-id", supersededAt: null },
       orderBy: { createdAt: "desc" },
       take: 10,
       select: {

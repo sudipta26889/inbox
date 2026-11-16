@@ -368,6 +368,9 @@ const parsedEnv = createEnv({
     HEALTH_API_KEY: z.string().optional(),
     OAUTH_PROXY_URL: z.string().url().optional(),
     MCP_SERVER_ENABLED: booleanString.optional().default(false),
+    // Dev only: a "Bypass login" button on /login signs in a separate local
+    // test user with a mock mailbox. Ignored unless NODE_ENV=development.
+    LOCAL_AUTH_BYPASS_ENABLED: booleanString.optional().default(false),
     // Optional provider:model for structured decisions, e.g. openrouter:typesafe/jev-1.13
     DEFAULT_DECISION_MODEL: z
       .string()
@@ -378,9 +381,21 @@ const parsedEnv = createEnv({
       .optional(),
     // Whether users who haven't chosen get the decision model; otherwise opt-in
     DEFAULT_DECISION_MODEL_ENABLED: booleanString.optional().default(false),
-    // Also use the decision model for cold email detection; otherwise the LLM decides
-    DECISION_MODEL_COLD_EMAIL_ENABLED: booleanString.optional().default(false),
+    // Comma-separated features where the decision model decides, e.g.
+    // "thread-status,cold-email,categorize-sender". Every other feature runs in
+    // shadow mode: the LLM decides and the decision model is only recorded.
+    DECISION_MODEL_LIVE: z.string().optional(),
+    // "provider:model" used when the decision model is unsure, e.g. "litellm:deepseek-v4-flash".
+    DECISION_ESCALATION_MODEL: z.string().optional(),
+    // A live feature uses the decision model's answer only at or above this
+    // confidence; below it the escalation model decides. Default 0.95.
+    DECISION_MIN_CONFIDENCE: z.coerce.number().min(0.5).max(1).optional(),
+    // "false" stops the LLM from double-checking live decisions.
+    DECISION_LIVE_AUDIT: z.enum(["true", "false"]).optional(),
     TYPESAFE_API_KEY: z.string().optional(),
+    // Long-term agentic memory (MCP). Scoped per email account via project_id.
+    LONGMEMORY_BASE_URL: z.string().url().optional(),
+    LONGMEMORY_API_KEY: z.string().optional(),
     IMAGE_PROXY_SIGNING_SECRET: z.string().min(16).optional(),
     // Set to true on the server that acts as the OAuth proxy (e.g., staging)
     IS_OAUTH_PROXY_SERVER: booleanString.optional().default(false),
