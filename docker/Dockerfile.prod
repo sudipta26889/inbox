@@ -165,6 +165,10 @@ RUN npm install -g "prisma@$(node -p "require('/tmp/web-package.json').dependenc
 # Set NODE_PATH so prisma/config imports resolve correctly
 ENV NODE_PATH=/usr/local/lib/node_modules
 
+# /api/health reports this so deploy workflows can wait for the new image.
+ARG GIT_SHA=unknown
+ENV GIT_SHA=${GIT_SHA}
+
 EXPOSE 3000
 
 # Default command runs the Next.js server from the standalone bundle
