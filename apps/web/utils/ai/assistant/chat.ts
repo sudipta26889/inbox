@@ -340,15 +340,18 @@ export async function aiProcessAssistantChat({
 
   // Distinct live subjects, so saveMemory's exact-match supersession has a
   // chance to fire. Capped: this goes into every request's tool description.
-  const existingSubjects = (
-    await prisma.chatMemory.findMany({
-      where: { emailAccountId, subject: { not: null }, supersededAt: null },
-      select: { subject: true },
-      distinct: ["subject"],
-      orderBy: { createdAt: "desc" },
-      take: 50,
-    })
-  ).flatMap((row) => (row.subject ? [row.subject] : []));
+  // Skipped in readOnly runs: saveMemory isn't offered there.
+  const existingSubjects = readOnly
+    ? []
+    : (
+        await prisma.chatMemory.findMany({
+          where: { emailAccountId, subject: { not: null }, supersededAt: null },
+          select: { subject: true },
+          distinct: ["subject"],
+          orderBy: { createdAt: "desc" },
+          take: 50,
+        })
+      ).flatMap((row) => (row.subject ? [row.subject] : []));
 
   const allTools = {
     getAssistantCapabilities: getAssistantCapabilitiesTool(toolOptions),

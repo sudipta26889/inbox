@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getEmailAccount } from "@/__tests__/helpers";
+import prisma from "@/utils/__mocks__/prisma";
 import { createScopedLogger } from "@/utils/logger";
 
 const { mockToolCallAgentStream } = vi.hoisted(() => ({
@@ -34,6 +35,7 @@ const WRITE_TOOLS = [
 describe("aiProcessAssistantChat readOnly", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    prisma.chatMemory.findMany.mockResolvedValue([]);
   });
 
   it("offers a read-only run (an A2A peer) only the read tools", async () => {
@@ -51,6 +53,12 @@ describe("aiProcessAssistantChat readOnly", () => {
     const tools = await runChat(false);
 
     for (const tool of WRITE_TOOLS) expect(tools).toContain(tool);
+  });
+
+  it("does not load memory subjects for a read-only run", async () => {
+    await runChat(true);
+
+    expect(prisma.chatMemory.findMany).not.toHaveBeenCalled();
   });
 });
 

@@ -46,7 +46,7 @@ describe("notifyMailboxDisconnected", () => {
     expect(redis.set).toHaveBeenCalledWith(
       "mailbox-disconnect-alert:ea_1",
       "1",
-      { nx: true, ex: 43200 },
+      { nx: true, ex: 43_200 },
     );
     expect(sendA2aMessage).toHaveBeenCalledTimes(1);
     expect(sendA2aMessage).toHaveBeenCalledWith("https://mitra.test/a2a", {

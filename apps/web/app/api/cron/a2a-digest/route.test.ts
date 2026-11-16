@@ -1,3 +1,4 @@
+import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import prisma from "@/utils/__mocks__/prisma";
 
@@ -33,6 +34,7 @@ vi.mock("@/utils/middleware", async () => {
 import { GET } from "./route";
 
 const URL_ = "http://localhost:3000/api/cron/a2a-digest";
+const ROUTE_CONTEXT = { params: Promise.resolve({}) };
 
 describe("a2a-digest cron route", () => {
   beforeEach(() => {
@@ -40,14 +42,17 @@ describe("a2a-digest cron route", () => {
   });
 
   it("rejects a request without the cron secret", async () => {
-    const response = await GET(new Request(URL_));
+    const response = await GET(new NextRequest(URL_), ROUTE_CONTEXT);
     expect(response.status).toBe(401);
     expect(prisma.user.findMany).not.toHaveBeenCalled();
   });
 
   it("answers 2xx with the cron secret", async () => {
     const response = await GET(
-      new Request(URL_, { headers: { authorization: "Bearer cron-secret" } }),
+      new NextRequest(URL_, {
+        headers: { authorization: "Bearer cron-secret" },
+      }),
+      ROUTE_CONTEXT,
     );
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
