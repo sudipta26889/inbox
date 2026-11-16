@@ -124,10 +124,11 @@ export const runActionFunction = async (options: {
     case ActionType.INTEGRATION:
       return integration(opts);
     case ActionType.CREATE_TASK:
-      return executeCreateTaskAction({
+      await executeCreateTaskAction({
         messageId: opts.email.id,
         emailAccountId: emailAccount.id,
       });
+      return { success: true };
     default:
       throw new Error(`Unknown action: ${action}`);
   }
