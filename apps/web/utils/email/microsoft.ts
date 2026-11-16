@@ -12,7 +12,7 @@ import { matchesSenderFilter } from "@/utils/split-inbox/sender-filter";
 import { DraftNotFoundError, isOutlookItemNotFoundError } from "@/utils/error";
 import type { Message } from "@microsoft/microsoft-graph-types";
 import type { OutlookClient } from "@/utils/outlook/client";
-import type { ParsedMessage } from "@/utils/types";
+import type { DraftStatus, ParsedMessage } from "@/utils/types";
 import type { Attachment as MailAttachment } from "nodemailer/lib/mailer";
 import { toMailerAttachments } from "@/utils/types/mail";
 import {
@@ -45,6 +45,7 @@ import {
 import { getLatestNonDraftMessage } from "@/utils/email/latest-message";
 import { getMessageTimestamp } from "@/utils/email/message-timestamp";
 import {
+  addAttachmentsToDraft,
   draftEmail,
   forwardEmail,
   replyToEmail,
@@ -76,6 +77,7 @@ import {
 import {
   getDraft,
   getDraftReference,
+  getDraftStatus,
   deleteDraft,
   sendDraft,
 } from "@/utils/outlook/draft";
@@ -711,6 +713,14 @@ export class OutlookProvider implements EmailProvider {
     });
   }
 
+  async getDraftStatus(draftId: string): Promise<DraftStatus> {
+    return getDraftStatus({
+      client: this.client,
+      draftId,
+      logger: this.logger,
+    });
+  }
+
   async getDraftReferenceForMessage(messageId: string) {
     return getDraftReference({
       client: this.client,
@@ -754,7 +764,11 @@ export class OutlookProvider implements EmailProvider {
     messageHtml: string;
     replyToMessageId?: string;
     forwardedMessageId?: string;
-  }): Promise<{ id: string }> {
+    // ponytail: Graph has no "create a draft in conversation X" call, so a bare
+    // threadId can't thread on Outlook; only replyToMessageId can.
+    threadId?: string;
+    attachments?: MailAttachment[];
+  }): Promise<{ id: string; threadId?: string }> {
     this.logger.info("Creating draft", {
       replyToMessageId: params.replyToMessageId,
       forwardedMessageId: params.forwardedMessageId,
@@ -800,8 +814,10 @@ export class OutlookProvider implements EmailProvider {
         this.logger,
       );
 
+      await this.attachToDraft(draft.id, params.attachments);
+
       this.logger.info("Created threaded draft", { draftId: draft.id });
-      return { id: draft.id };
+      return { id: draft.id, threadId: draft.conversationId ?? undefined };
     }
 
     // Otherwise create standalone draft
@@ -818,8 +834,24 @@ export class OutlookProvider implements EmailProvider {
       this.logger,
     );
 
+    await this.attachToDraft(draft.id, params.attachments);
+
     this.logger.info("Created standalone draft", { draftId: draft.id });
-    return { id: draft.id };
+    return { id: draft.id, threadId: draft.conversationId ?? undefined };
+  }
+
+  private async attachToDraft(
+    draftId: string,
+    attachments?: MailAttachment[],
+  ): Promise<void> {
+    if (!attachments?.length) return;
+
+    await addAttachmentsToDraft({
+      client: this.client,
+      draftId,
+      attachments,
+      logger: this.logger,
+    });
   }
 
   async updateDraft(

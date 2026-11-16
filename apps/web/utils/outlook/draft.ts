@@ -1,6 +1,7 @@
 import type { Message } from "@microsoft/microsoft-graph-types";
 import type { OutlookClient } from "@/utils/outlook/client";
 import type { Logger } from "@/utils/logger";
+import type { DraftStatus } from "@/utils/types";
 import { ensureEmailSendingEnabled } from "@/utils/mail";
 import {
   approveDraftSend,
@@ -245,6 +246,61 @@ function draftVersionFromMessage(message: Message): string | undefined {
   return message.changeKey.startsWith("W/")
     ? message.changeKey
     : `W/"${message.changeKey}"`;
+}
+
+/**
+ * What became of a draft. On Graph the message keeps its id after sending and
+ * simply moves folder, so the folder is an exact answer — no thread lookup
+ * needed, unlike Gmail.
+ */
+export async function getDraftStatus({
+  client,
+  draftId,
+  logger,
+}: {
+  client: OutlookClient;
+  draftId: string;
+  logger: Logger;
+}): Promise<DraftStatus> {
+  try {
+    const [message, folderIds] = await Promise.all([
+      withMicrosoftGraphRetry(
+        () =>
+          client
+            .getClient()
+            .api(`/me/messages/${draftId}`)
+            .select("id,conversationId,parentFolderId,isDraft")
+            .get() as Promise<Message>,
+        logger,
+      ),
+      getFolderIds(client, logger),
+    ]);
+
+    const ids = {
+      messageId: message.id ?? undefined,
+      threadId: message.conversationId ?? undefined,
+    };
+
+    if (message.parentFolderId === folderIds.drafts) {
+      return { status: "draft", ...ids };
+    }
+    if (message.parentFolderId === folderIds.sentitems) {
+      return { status: "sent", ...ids };
+    }
+    if (message.parentFolderId === folderIds.deleteditems) {
+      return { status: "deleted", ...ids };
+    }
+
+    // Filed somewhere else entirely: it left Drafts, but we can't claim how.
+    logger.info("Draft is in an unexpected folder", {
+      draftId,
+      parentFolderId: message.parentFolderId,
+    });
+    return { status: "unknown", ...ids };
+  } catch (error) {
+    if (isNotFoundError(error)) return { status: "deleted" };
+    throw error;
+  }
 }
 
 function joinRecipients(

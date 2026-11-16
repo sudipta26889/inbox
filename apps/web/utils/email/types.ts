@@ -1,7 +1,7 @@
 import type { MailPredicate } from "@inboxzero/mail-core/queries";
 import type { LocalMailSyncRequest } from "@/utils/actions/local-mail-sync.validation";
 import type { LocalMailSyncResponse } from "@/utils/email/local-mail-sync-types";
-import type { ParsedMessage } from "@/utils/types";
+import type { DraftStatus, ParsedMessage } from "@/utils/types";
 import type { InboxZeroLabel, LabelColorName } from "@/utils/label";
 import type { ThreadsQuery } from "@/utils/threads/validation";
 import type {
@@ -235,7 +235,9 @@ export interface EmailProvider {
     replyToMessageId?: string; // For proper threading
     /** Starts the draft as a forward of this message, carrying its files. */
     forwardedMessageId?: string;
-  }): Promise<{ id: string }>;
+    threadId?: string;
+    attachments?: MailAttachment[];
+  }): Promise<{ id: string; threadId?: string }>;
   createFilter(options: {
     from: string;
     addLabelIds?: string[];
@@ -293,6 +295,7 @@ export interface EmailProvider {
   getDraftReferenceForMessage(
     messageId: string,
   ): Promise<DraftReference | null>;
+  getDraftStatus(draftId: string, threadId?: string): Promise<DraftStatus>;
   getDrafts(options?: { maxResults?: number }): Promise<ParsedMessage[]>;
   getFiltersList(): Promise<EmailFilter[]>;
   getFolderCounts(): Promise<EmailFolderCount[]>;

@@ -1,0 +1,252 @@
+import { describe, it, expect, vi } from "vitest";
+import prisma from "@/utils/__mocks__/prisma";
+import {
+  createKnowledge,
+  deleteKnowledge,
+  getKnowledge,
+  listKnowledge,
+  updateKnowledge,
+} from "./knowledge";
+import { ConflictError, NotFoundError } from "@/utils/mcp-server/errors";
+
+vi.mock("@/utils/prisma");
+vi.mock("@/utils/prisma-helpers", () => ({
+  isDuplicateError: vi.fn(),
+}));
+import { isDuplicateError } from "@/utils/prisma-helpers";
+
+const ctx = { userId: "user_1", emailAccountId: "ea_1" };
+
+describe("listKnowledge", () => {
+  it("returns items scoped to the calling email account, newest-updated first", async () => {
+    const items = [
+      {
+        id: "k2",
+        title: "Newer",
+        content: "b",
+        emailAccountId: ctx.emailAccountId,
+        createdAt: new Date("2026-01-02"),
+        updatedAt: new Date("2026-01-02"),
+      },
+      {
+        id: "k1",
+        title: "Older",
+        content: "a",
+        emailAccountId: ctx.emailAccountId,
+        createdAt: new Date("2026-01-01"),
+        updatedAt: new Date("2026-01-01"),
+      },
+    ];
+    prisma.knowledge.findMany.mockResolvedValue(items as never);
+
+    const result = await listKnowledge(ctx, {});
+
+    expect(result.items.map((i) => i.title)).toEqual(["Newer", "Older"]);
+    expect(prisma.knowledge.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { emailAccountId: ctx.emailAccountId },
+        orderBy: { updatedAt: "desc" },
+      }),
+    );
+  });
+
+  it("does not leak items from another emailAccountId", async () => {
+    prisma.knowledge.findMany.mockResolvedValue([] as never);
+
+    const result = await listKnowledge(ctx, {});
+
+    expect(result.items).toEqual([]);
+    expect(prisma.knowledge.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { emailAccountId: ctx.emailAccountId },
+      }),
+    );
+  });
+
+  it("honors `limit` when provided", async () => {
+    prisma.knowledge.findMany.mockResolvedValue([] as never);
+
+    await listKnowledge(ctx, { limit: 5 });
+
+    expect(prisma.knowledge.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ take: 5 }),
+    );
+  });
+});
+
+describe("getKnowledge", () => {
+  it("returns the item for the owning account", async () => {
+    const row = {
+      id: "k1",
+      title: "T",
+      content: "C",
+      emailAccountId: ctx.emailAccountId,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    prisma.knowledge.findFirst.mockResolvedValue(row as never);
+
+    const out = await getKnowledge(ctx, { id: "k1" });
+
+    expect(out.item.id).toBe("k1");
+    expect(prisma.knowledge.findFirst).toHaveBeenCalledWith({
+      where: { id: "k1", emailAccountId: ctx.emailAccountId },
+    });
+  });
+
+  it("throws NotFoundError for unknown id", async () => {
+    prisma.knowledge.findFirst.mockResolvedValue(null);
+
+    await expect(getKnowledge(ctx, { id: "nope" })).rejects.toBeInstanceOf(
+      NotFoundError,
+    );
+  });
+
+  it("throws NotFoundError when the item belongs to a different account (no existence leak)", async () => {
+    // The findFirst's where clause filters by emailAccountId, so a row
+    // owned by another account would not match → null returned.
+    prisma.knowledge.findFirst.mockResolvedValue(null);
+
+    await expect(getKnowledge(ctx, { id: "k_other" })).rejects.toBeInstanceOf(
+      NotFoundError,
+    );
+  });
+});
+
+describe("createKnowledge", () => {
+  it("inserts a row owned by ctx.emailAccountId", async () => {
+    const created = {
+      id: "k_new",
+      title: "Hello",
+      content: "World",
+      emailAccountId: ctx.emailAccountId,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    prisma.knowledge.create.mockResolvedValue(created as never);
+    vi.mocked(isDuplicateError).mockReturnValue(false);
+
+    const out = await createKnowledge(ctx, {
+      title: "Hello",
+      content: "World",
+    });
+
+    expect(out.item.emailAccountId).toBe(ctx.emailAccountId);
+    expect(out.item.title).toBe("Hello");
+    expect(prisma.knowledge.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: {
+          emailAccountId: ctx.emailAccountId,
+          title: "Hello",
+          content: "World",
+        },
+      }),
+    );
+  });
+
+  it("throws ConflictError on duplicate (emailAccountId,title)", async () => {
+    const dupErr = Object.assign(new Error("dup"), {
+      code: "P2002",
+      meta: { target: ["emailAccountId", "title"] },
+    });
+    prisma.knowledge.create.mockRejectedValue(dupErr);
+    vi.mocked(isDuplicateError).mockReturnValue(true);
+
+    await expect(
+      createKnowledge(ctx, { title: "Dup", content: "b" }),
+    ).rejects.toBeInstanceOf(ConflictError);
+  });
+});
+
+describe("updateKnowledge", () => {
+  it("changes title+content for the owning account", async () => {
+    prisma.knowledge.findFirst.mockResolvedValue({ id: "k_1" } as never);
+    prisma.knowledge.update.mockResolvedValue({
+      id: "k_1",
+      title: "B",
+      content: "2",
+      emailAccountId: ctx.emailAccountId,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as never);
+    vi.mocked(isDuplicateError).mockReturnValue(false);
+
+    const out = await updateKnowledge(ctx, {
+      id: "k_1",
+      title: "B",
+      content: "2",
+    });
+
+    expect(out.item.title).toBe("B");
+    expect(out.item.content).toBe("2");
+    expect(prisma.knowledge.update).toHaveBeenCalledWith({
+      where: { id: "k_1" },
+      data: { title: "B", content: "2" },
+    });
+  });
+
+  it("throws NotFoundError when id is missing", async () => {
+    prisma.knowledge.findFirst.mockResolvedValue(null);
+
+    await expect(
+      updateKnowledge(ctx, { id: "nope", title: "x", content: "y" }),
+    ).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it("throws NotFoundError on another account's row (re-verifies ownership)", async () => {
+    // findFirst filters by emailAccountId, so a foreign row → null
+    prisma.knowledge.findFirst.mockResolvedValue(null);
+
+    await expect(
+      updateKnowledge(ctx, { id: "k_other", title: "x", content: "y" }),
+    ).rejects.toBeInstanceOf(NotFoundError);
+    expect(prisma.knowledge.update).not.toHaveBeenCalled();
+  });
+
+  it("translates P2002 on update to ConflictError", async () => {
+    prisma.knowledge.findFirst.mockResolvedValue({ id: "k_1" } as never);
+    const dupErr = Object.assign(new Error("dup"), {
+      code: "P2002",
+      meta: { target: ["emailAccountId", "title"] },
+    });
+    prisma.knowledge.update.mockRejectedValue(dupErr);
+    vi.mocked(isDuplicateError).mockReturnValue(true);
+
+    await expect(
+      updateKnowledge(ctx, { id: "k_1", title: "Dup", content: "x" }),
+    ).rejects.toBeInstanceOf(ConflictError);
+  });
+});
+
+describe("deleteKnowledge", () => {
+  it("removes the row", async () => {
+    prisma.knowledge.findFirst.mockResolvedValue({ id: "k_1" } as never);
+    prisma.knowledge.delete.mockResolvedValue({ id: "k_1" } as never);
+
+    const result = await deleteKnowledge(ctx, { id: "k_1" });
+
+    expect(result.id).toBe("k_1");
+    expect(prisma.knowledge.delete).toHaveBeenCalledWith({
+      where: { id: "k_1" },
+    });
+  });
+
+  it("throws NotFoundError on missing id", async () => {
+    prisma.knowledge.findFirst.mockResolvedValue(null);
+
+    await expect(deleteKnowledge(ctx, { id: "nope" })).rejects.toBeInstanceOf(
+      NotFoundError,
+    );
+    expect(prisma.knowledge.delete).not.toHaveBeenCalled();
+  });
+
+  it("cannot delete another account's row (NotFoundError)", async () => {
+    // findFirst filters by emailAccountId → null for cross-account
+    prisma.knowledge.findFirst.mockResolvedValue(null);
+
+    await expect(
+      deleteKnowledge(ctx, { id: "k_other" }),
+    ).rejects.toBeInstanceOf(NotFoundError);
+    expect(prisma.knowledge.delete).not.toHaveBeenCalled();
+  });
+});

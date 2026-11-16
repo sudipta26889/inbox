@@ -2,7 +2,7 @@ import type { gmail_v1 } from "@googleapis/gmail";
 import { createScopedLogger } from "@/utils/logger";
 import { parseMessage } from "@/utils/gmail/message";
 import { GmailLabel } from "@/utils/gmail/label";
-import type { MessageWithPayload } from "@/utils/types";
+import type { DraftStatus, MessageWithPayload } from "@/utils/types";
 import { isGmailError } from "@/utils/error";
 import {
   withGmailRetry,
@@ -243,6 +243,75 @@ export async function deleteDraft(
       logger.error("Failed to delete draft", { draftId, error });
       throw error;
     }
+  }
+}
+
+/**
+ * What became of a draft: still unsent, sent by a human, or binned.
+ *
+ * Gmail usually keeps the draft record around after a send, which is what lets
+ * us tell "sent" from "deleted". When it has removed the record entirely the
+ * draft id alone can't distinguish the two, so pass `threadId` (returned by
+ * create_draft) and we resolve it from the thread instead.
+ */
+export async function getDraftStatus(
+  gmail: gmail_v1.Gmail,
+  draftId: string,
+  threadId?: string,
+): Promise<DraftStatus> {
+  try {
+    const response = await withGmailRetry(() =>
+      gmail.users.drafts.get({ userId: "me", id: draftId, format: "metadata" }),
+    );
+
+    const message = response.data.message;
+    const labelIds = message?.labelIds ?? [];
+    const isStillDraft =
+      labelIds.includes(GmailLabel.DRAFT) &&
+      !labelIds.includes(GmailLabel.SENT);
+
+    return {
+      status: isStillDraft ? "draft" : "sent",
+      messageId: message?.id ?? undefined,
+      threadId: message?.threadId ?? undefined,
+    };
+  } catch (error) {
+    if (!isNotFoundError(error)) throw error;
+
+    logger.info("Draft record gone", { draftId, hasThreadId: !!threadId });
+    return threadId
+      ? findSentMessageInThread(gmail, threadId)
+      : { status: "unknown" };
+  }
+}
+
+async function findSentMessageInThread(
+  gmail: gmail_v1.Gmail,
+  threadId: string,
+): Promise<DraftStatus> {
+  try {
+    const thread = await withGmailRetry(() =>
+      gmail.users.threads.get({
+        userId: "me",
+        id: threadId,
+        format: "metadata",
+      }),
+    );
+
+    const sent = (thread.data.messages ?? [])
+      .filter((m) => m.labelIds?.includes(GmailLabel.SENT))
+      .at(-1);
+
+    if (!sent) return { status: "deleted", threadId };
+
+    return {
+      status: "sent",
+      messageId: sent.id ?? undefined,
+      threadId: sent.threadId ?? threadId,
+    };
+  } catch (error) {
+    if (isNotFoundError(error)) return { status: "deleted", threadId };
+    throw error;
   }
 }
 
