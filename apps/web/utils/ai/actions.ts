@@ -1,5 +1,4 @@
 import { after } from "next/server";
-import { sanitizeAgentHtml } from "@/utils/mail/sanitize-agent-html";
 import { ActionType, MessagingMessageStatus } from "@/generated/prisma/enums";
 import type { Prisma } from "@/generated/prisma/client";
 import type { Logger } from "@/utils/logger";
@@ -366,9 +365,7 @@ const reply: ActionFunction<{
       textPlain: email.textPlain,
       textHtml: email.textHtml,
     },
-    // Rule and model text may carry HTML; it is cleaned before the gate so
-    // the approval card shows everything the recipient will see.
-    sanitizeAgentHtml(args.content),
+    args.content,
     {
       attachments,
       cc: args.cc ?? undefined,

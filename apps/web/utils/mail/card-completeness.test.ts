@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createReplyContent } from "@/utils/gmail/reply";
 import { convertOutgoingEmailHtmlToText } from "@/utils/mail";
 import {
+  type CardBody,
   cardBodyFromHtml,
   hasHiddenText,
   rebuildHtmlWithEditedBody,
@@ -12,77 +13,120 @@ import { sanitizeAgentHtml } from "./sanitize-agent-html";
 vi.mock("server-only", () => ({}));
 
 // Every probe from the reviews (live-hil-fix-review.md "Re-review 2",
-// refork-hil-format-review.md "Re-review 3") plus the earlier gap probes.
-const PROBES: Record<string, string> = {
+// refork-hil-format-review.md "Re-review 3" and "Re-review 4") plus the
+// earlier gap probes. @S@ becomes a sentinel unique to the probe.
+const RAW_PROBES: Record<string, string> = {
   middle:
-    '<p>Hi Bob</p><div class="gmail_signature">Me</div><p>WIRE 5000 TO ACCT 123</p><div class="gmail_quote">old</div>',
+    '<p>Hi Bob</p><div class="gmail_signature">Me</div><p>@S@ TO ACCT 123</p><div class="gmail_quote">old</div>',
   afterSignature:
-    '<div dir="ltr">Hi Bob<div class="gmail_signature">Me</div>AFTER SIG TEXT</div>',
+    '<div dir="ltr">Hi Bob<div class="gmail_signature">Me</div>@S@ AFTER SIG</div>',
   besideLoneWrapper:
-    '<div>Hi Bob</div><div>WIRE 5000 TO ACCT 123<div class="gmail_signature">Me</div></div>',
-  afterHtml: "<html><body><p>Hi Bob</p></body></html>WIRE 5000 TO ACCT 123",
+    '<div>Hi Bob</div><div>@S@ TO ACCT 123<div class="gmail_signature">Me</div></div>',
+  afterHtml: "<html><body><p>Hi Bob</p></body></html>@S@ TO ACCT 123",
   afterHtmlWithQuote:
-    '<html><body><p>Hi Bob</p><div class="gmail_quote">old</div></body></html>WIRE 5000',
+    '<html><body><p>Hi Bob</p><div class="gmail_quote">old</div></body></html>@S@',
   betweenWrappers:
-    '<div dir="ltr"><div>Hi Bob</div>WIRE 5000<div><div class="gmail_quote">old</div></div></div>',
+    '<div dir="ltr"><div>Hi Bob</div>@S@<div><div class="gmail_quote">old</div></div></div>',
   innerBodyInQuote:
-    '<p>Hi</p><div class="gmail_quote"><html><body><p>old</p></body></html>AFTER INNER BODY</div>',
+    '<p>Hi</p><div class="gmail_quote"><html><body><p>old</p></body></html>@S@</div>',
   headText:
-    "<html><head><title>t</title></head>HEAD TEXT<body><p>Hi</p></body></html>",
-  beforeHtml: "BEFORE HTML<html><body><p>Hi</p></body></html>",
-  displayNone:
-    '<div>Hi Bob</div><div style="display:none">Also wire 5000 to acct 123</div>',
+    "<html><head><title>t</title></head>@S@<body><p>Hi</p></body></html>",
+  beforeHtml: "@S@<html><body><p>Hi</p></body></html>",
+  displayNone: '<div>Hi Bob</div><div style="display:none">Also wire @S@</div>',
   hiddenInSignature:
-    '<p>Hi</p><div class="gmail_signature">Me<span style="display:none">WIRE 5000</span></div>',
+    '<p>Hi</p><div class="gmail_signature">Me<span style="display:none">@S@</span></div>',
   cssAfter:
-    '<style>.x::after{content:"WIRE 5000 TO 123"}</style><p>Hi Bob</p><span class="x"></span>',
+    '<style>.x::after{content:"@S@"}</style><p>Hi Bob</p><span class="x"></span>',
   cssInQuote:
-    '<p>Hi</p><div class="gmail_quote"><style>.x::after{content:"WIRE 5000"}</style>old</div>',
+    '<p>Hi</p><div class="gmail_quote"><style>.x::after{content:"@S@"}</style>old</div>',
   cssContentComment:
-    '<style>.x::after{/**/content:"WIRE 5000"}</style><p>Hi</p><span class="x"></span>',
+    '<style>.x::after{/**/content:"@S@"}</style><p>Hi</p><span class="x"></span>',
   cssContentEscape:
-    '<style>.x::after{\\63 ontent:"WIRE 5000"}</style><p>Hi</p><span class="x"></span>',
-  cssImport: "<style>@import url(https://evil.test/a.css);</style><p>Hi</p>",
-  cssLink: '<link rel="stylesheet" href="https://evil.test/a.css"><p>Hi</p>',
+    '<style>.x::after{\\63 ontent:"@S@"}</style><p>Hi</p><span class="x"></span>',
+  cssImport: "<style>@import url(https://evil.test/@S@.css);</style><p>Hi</p>",
+  cssLink: '<link rel="stylesheet" href="https://evil.test/@S@.css"><p>Hi</p>',
+  quoteStyleHidesP:
+    '<div dir="ltr">Hi Bob</div><div class="gmail_quote"><style>p{display:none}</style>old @S@</div>',
   altQuote:
-    '<p>Hi</p><div class="gmail_quote"><img src="https://x.test/pay.png" alt="pay to acct 123"></div>',
+    '<p>Hi</p><div class="gmail_quote"><img src="https://x.test/pay.png" alt="@S@ pay"></div>',
   altSignature:
-    '<p>Hi</p><div class="gmail_signature"><img src="cid:sig1" alt="WIRE 5000"></div>',
+    '<p>Hi</p><div class="gmail_signature"><img src="cid:sig1" alt="@S@"></div>',
   imageQuoteNoAlt:
-    '<p>Hi</p><div class="gmail_quote"><img src="https://x.test/acct.png"></div>',
-  altBody: '<p>Hi <img src="cid:chart" alt="WIRE 5000"></p>',
-  conditionalComment:
-    "<p>Hi</p><!--[if mso]><p>WIRE 5000 TO 123</p><![endif]-->",
+    '<p>Hi</p><div class="gmail_quote"><img src="https://x.test/@S@.png"></div>',
+  altBody: '<p>Hi <img src="cid:chart" alt="@S@"></p>',
+  conditionalComment: "<p>Hi</p><!--[if mso]><p>@S@ TO 123</p><![endif]-->",
+  conditionalSpaced: "<p>Hi</p><!-- [if mso]><p>@S@</p><![endif]-->",
+  conditionalEndVariant: "<p>Hi</p><!--[if mso]><p>@S@</p><![endif]>-->",
+  conditionalUpper: "<p>Hi</p><!--[IF MSO]><p>@S@</p><![ENDIF]-->",
   conditionalInQuote:
-    '<p>Hi</p><div class="gmail_quote"><!--[if gte mso 9]><p>WIRE 5000</p><![endif]-->old</div>',
-  titleInBody: "<p>Hi</p><title>WIRE 5000</title>",
-  template: "<p>Hi</p><template><p>WIRE 5000</p></template>",
+    '<p>Hi</p><div class="gmail_quote"><!--[if gte mso 9]><p>@S@</p><![endif]-->old</div>',
   backgroundImage:
-    '<p style="background-image:url(https://x.test/pay.png)">Hi</p>',
+    '<p style="background-image:url(https://x.test/@S@.png)">Hi</p>',
   backgroundAttribute:
-    '<table background="https://x.test/b.png"><tr><td>Hi</td></tr></table>',
-  input: '<p>Hi</p><input value="WIRE 5000 TO 123">',
-  iframeSrcdoc: '<p>Hi</p><iframe srcdoc="<p>WIRE 5000</p>"></iframe>',
-  noscript: "<p>Hi</p><noscript>WIRE 5000</noscript>",
-  textarea: "<p>Hi</p><textarea>WIRE 5000</textarea>",
-  select: "<p>Hi</p><select><option>WIRE 5000</option></select>",
-  objectFallback: '<p>Hi</p><object data="x.swf">WIRE 5000</object>',
-  svgText: '<p>Hi</p><svg><text x="0" y="10">WIRE 5000</text></svg>',
+    '<table background="https://x.test/@S@.png"><tr><td>Hi</td></tr></table>',
+  input: '<p>Hi</p><input value="@S@ TO 123">',
+  iframeSrcdoc: '<p>Hi</p><iframe srcdoc="<p>@S@</p>"></iframe>',
+  noscript: "<p>Hi</p><noscript>@S@</noscript>",
+  textarea: "<p>Hi</p><textarea>@S@</textarea>",
+  select: "<p>Hi</p><select><option>@S@</option></select>",
+  objectFallback: '<p>Hi</p><object data="x.swf">@S@</object>',
+  svgText: '<p>Hi</p><svg><text x="0" y="10">@S@</text></svg>',
+  bidi: "<p>Hi ‮@S@‬</p>",
   gmailWebSignature:
-    '<div dir="ltr"><div>Hello Bob</div><br clear="all"><div><br></div><span class="gmail_signature_prefix">-- </span><br><div dir="ltr" class="gmail_signature"><span style="color:rgb(102,102,102)">Me</span></div></div>',
+    '<div dir="ltr"><div>Hello Bob</div><br clear="all"><div><br></div><span class="gmail_signature_prefix">-- </span><br><div dir="ltr" class="gmail_signature"><span style="color:rgb(102,102,102)">Me @S@</span></div></div>',
   outlookDesktop:
-    '<div class=WordSection1><p class=MsoNormal>Reply</p><div><div style="border:none;border-top:solid #E1E1E1 1.0pt;padding:3.0pt 0in 0in 0in"><p class=MsoNormal><b>From:</b> Bob<br><b>Sent:</b> Monday<br><b>Subject:</b> Q</p></div><p class=MsoNormal>Old text</p></div></div>',
+    '<html><head><style>p.MsoNormal{margin:0in}</style><!--[if gte mso 9]><xml>@S@</xml><![endif]--></head><body><div class=WordSection1><p class=MsoNormal>Reply</p><div><div style="border:none;border-top:solid #E1E1E1 1.0pt;padding:3.0pt 0in 0in 0in"><p class=MsoNormal><b>From:</b> Bob<br><b>Sent:</b> Monday<br><b>Subject:</b> Q</p></div><p class=MsoNormal>Old text</p></div></div></body></html>',
+  // Not shown by any reader.
+  titleInBody: "<p>Hi</p><title>@S@</title>",
+  template: "<p>Hi</p><template><p>@S@</p></template>",
+  plainComment: "<p>Hi</p><!-- @S@ -->",
 };
+const INVISIBLE = new Set(["titleInBody", "template", "plainComment"]);
+const PROBES = Object.fromEntries(
+  Object.entries(RAW_PROBES).map(([name, html]) => [
+    name,
+    html.replaceAll("@S@", sentinel(name)),
+  ]),
+);
+const MARKERS =
+  /\[(style sheet|shown only in Outlook|hidden in the email|image|form field|embedded page|background image):/;
 
 describe("the card shows everything the recipient can see", () => {
-  it.each(Object.entries(PROBES))("user HTML: %s", (_name, html) => {
-    expectCardCovers(html);
+  it.each(Object.keys(PROBES))("user HTML: %s", (name) => {
+    const html = PROBES[name];
+    const card = cardBodyFromHtml(html);
+
+    if (!INVISIBLE.has(name))
+      expect(shown(card)).toContain(sentinel(name).toLowerCase());
+    expectCovers(card, html);
   });
 
-  it.each(
-    Object.entries(PROBES),
-  )("agent HTML, sanitised: %s", (_name, html) => {
-    expectCardCovers(sanitizeAgentHtml(html));
+  it.each(Object.keys(PROBES))("agent HTML, sanitised: %s", (name) => {
+    const html = sanitizeAgentHtml(PROBES[name]);
+    const card = cardBodyFromHtml(html);
+
+    if (html.includes(sentinel(name)))
+      expect(shown(card)).toContain(sentinel(name).toLowerCase());
+    expectCovers(card, html);
+  });
+});
+
+describe("an edit made on the card sends only what the card shows", () => {
+  const paths = Object.keys(PROBES).flatMap((name) => [
+    ["user", name, PROBES[name]],
+    ["agent", name, sanitizeAgentHtml(PROBES[name])],
+  ]);
+
+  it.each(paths)("%s HTML: %s", (_path, _name, html) => {
+    const card = cardBodyFromHtml(html);
+    const edited = card.body.replace(/[A-Za-z]{2,}/, "Yo");
+
+    const sent = rebuildHtmlWithEditedBody(html, edited);
+    if (sent === null) return; // refused: nothing is sent
+
+    expect(sent).not.toMatch(MARKERS);
+    expect(convertOutgoingEmailHtmlToText(sent)).not.toMatch(MARKERS);
+    expectCovers({ ...card, body: edited }, sent);
   });
 });
 
@@ -122,7 +166,18 @@ describe("sanitizeAgentHtml", () => {
     ['<p style="position:absolute;top:0">x</p>', /style/],
     ['<p style="background-image:url(https://x.test/a)">x</p>', /style/],
     ['<p style="font-size:2px">x</p>', /style/],
+    ['<p style="font-size:0.3em">x</p>', /style/],
+    ['<p style="font-size:1vw">x</p>', /style/],
+    ['<p style="font-size:calc(1px + 1px)">x</p>', /style/],
+    ['<p style="font-size:var(--s)">x</p>', /style/],
+    ['<p style="color:transparent">x</p>', /style/],
+    ['<p style="color:rgba(0,0,0,0)">x</p>', /style/],
+    ['<p style="color:hsla(0,0%,0%,0)">x</p>', /style/],
+    ['<p style="color:rgb(0 0 0 / 0)">x</p>', /style/],
+    ['<p style="line-height:0">x</p>', /style/],
     ['<p style="margin-left:-999px">x</p>', /style/],
+    ['<p style="margin-left:9999px">x</p>', /style/],
+    ['<p style="padding-top:300px">x</p>', /style/],
     ["<p hidden>x</p>", /hidden/],
     [
       '<table background="https://x.test/b.png"><tr><td>x</td></tr></table>',
@@ -139,51 +194,67 @@ describe("sanitizeAgentHtml", () => {
       ),
     ).toBe('<p style="color:red;font-size:14px">x</p>');
   });
+
+  it("strips bidi override characters", () => {
+    expect(sanitizeAgentHtml("<p>a‮b⁦c⁩d‬e</p>")).toBe("<p>abcde</p>");
+  });
 });
 
 describe("user HTML: what the card marks and refuses", () => {
   it("shows images in the signature and quote", () => {
-    const card = cardBodyFromHtml(PROBES.altQuote);
-    expect(card.quotedHistory).toContain(
-      "[image: pay to acct 123 https://x.test/pay.png]",
+    expect(cardBodyFromHtml(PROBES.altQuote).quotedHistory).toContain(
+      `[image: ${sentinel("altQuote")} pay https://x.test/pay.png]`,
     );
     expect(cardBodyFromHtml(PROBES.altSignature).signature).toContain(
-      "[image: WIRE 5000 cid:sig1]",
+      `[image: ${sentinel("altSignature")} cid:sig1]`,
     );
-  });
-
-  it("shows Outlook-only content and refuses a body edit", () => {
-    expect(cardBodyFromHtml(PROBES.conditionalComment).body).toContain(
-      "[shown only in Outlook: WIRE 5000 TO 123]",
-    );
-    expect(
-      rebuildHtmlWithEditedBody(PROBES.conditionalComment, "Hello"),
-    ).toBeNull();
   });
 
   it.each([
-    ["cssAfter", '.x::after{content:"WIRE 5000 TO 123"}'],
-    ["cssContentEscape", '.x::after{\\63 ontent:"WIRE 5000"}'],
-    ["cssImport", "@import url(https://evil.test/a.css);"],
-    ["cssLink", "https://evil.test/a.css"],
-  ])("shows the style sheet of %s and still allows a body edit", (name, css) => {
-    const html = PROBES[name];
-    const card = cardBodyFromHtml(html);
+    "conditionalComment",
+    "conditionalSpaced",
+    "conditionalEndVariant",
+    "conditionalUpper",
+  ])("shows Outlook-only content (%s) as a notice and refuses a body edit", (name) => {
+    const card = cardBodyFromHtml(PROBES[name]);
 
-    expect(
-      [card.body, card.quotedHistory, card.signature].join("\n"),
-    ).toContain(`[style sheet: ${css}]`);
-    expect(rebuildHtmlWithEditedBody(html, "Hello")).toContain("Hello");
-    expect(hasHiddenText(html)).toBe(false);
+    expect(card.notices).toContain(`[shown only in Outlook: ${sentinel(name)}`);
+    expect(card.body).not.toContain(sentinel(name));
+    expect(rebuildHtmlWithEditedBody(PROBES[name], "Hello")).toBeNull();
   });
 
-  it("keeps the authored part's style sheet after a body edit", () => {
-    const html = rebuildHtmlWithEditedBody(PROBES.cssAfter, "Hello") ?? "";
+  it.each([
+    ["cssAfter", `.x::after{content:"${sentinel("cssAfter")}"}`],
+    [
+      "cssContentEscape",
+      `.x::after{\\63 ontent:"${sentinel("cssContentEscape")}"}`,
+    ],
+    [
+      "cssImport",
+      `@import url(https://evil.test/${sentinel("cssImport")}.css);`,
+    ],
+    ["cssLink", `https://evil.test/${sentinel("cssLink")}.css`],
+  ])("shows the style sheet of %s as a notice, not in the body", (name, css) => {
+    const card = cardBodyFromHtml(PROBES[name]);
+
+    expect(card.notices).toContain(`[style sheet: ${css}]`);
+    expect(card.body).not.toMatch(MARKERS);
+    expect(hasHiddenText(PROBES[name])).toBe(false);
+  });
+
+  it("keeps the authored part's style sheet after a body edit, without the notice", () => {
+    const card = cardBodyFromHtml(PROBES.cssAfter);
+    const html =
+      rebuildHtmlWithEditedBody(
+        PROBES.cssAfter,
+        card.body.replace("Hi", "Yo"),
+      ) ?? "";
 
     expect(html).toContain(
-      '<style>.x::after{content:"WIRE 5000 TO 123"}</style>',
+      `<style>.x::after{content:"${sentinel("cssAfter")}"}</style>`,
     );
-    expect(html).toContain("Hello");
+    expect(html).toContain("Yo Bob");
+    expect(html).not.toMatch(MARKERS);
   });
 
   it("edits an Outlook-desktop draft with a head style sheet, showing the CSS", () => {
@@ -192,13 +263,17 @@ describe("user HTML: what the card marks and refuses", () => {
     const original = `${head}<body lang=EN-US><div class=WordSection1><p class=MsoNormal>Hello Bob</p></div></body></html>`;
 
     const card = cardBodyFromHtml(original);
-    const html = rebuildHtmlWithEditedBody(original, "Hello Rob") ?? "";
+    const html =
+      rebuildHtmlWithEditedBody(original, card.body.replace("Bob", "Rob")) ??
+      "";
 
-    expect(card.body).toContain(
+    expect(card.body).toBe("Hello Bob");
+    expect(card.notices).toContain(
       "[style sheet: p.MsoNormal{margin:0in;font-size:11pt}]",
     );
     expect(html.startsWith(head)).toBe(true);
     expect(html).toContain("Hello Rob");
+    expect(html).not.toMatch(MARKERS);
   });
 
   it("edits a reply that quotes a styled newsletter, quote unchanged", () => {
@@ -219,7 +294,11 @@ describe("user HTML: what the card marks and refuses", () => {
     const quote = original.slice(original.indexOf('<div class="gmail_quote'));
 
     const card = cardBodyFromHtml(original);
-    const html = rebuildHtmlWithEditedBody(original, "Thanks, *done*") ?? "";
+    const html =
+      rebuildHtmlWithEditedBody(
+        original,
+        card.body.replace("noted", "*done*"),
+      ) ?? "";
 
     expect(card.quotedHistory).toContain("[style sheet: .hero");
     expect(card.quotedHistory).toContain(
@@ -227,6 +306,28 @@ describe("user HTML: what the card marks and refuses", () => {
     );
     expect(html).toContain("<em>done</em>");
     expect(html.endsWith(quote)).toBe(true);
+  });
+
+  // An edit turns <div> into <p>; a style sheet rule for p would then hide or
+  // restyle text that it did not touch before.
+  it.each([
+    [
+      "a head rule",
+      "<html><head><style>p{display:none}</style></head><body><div>Hi Bob</div></body></html>",
+    ],
+    ["a quoted rule", PROBES.quoteStyleHidesP],
+    [
+      "a grouped rule",
+      "<style>td, strong , em{font-size:0}</style><div>Hi Bob</div>",
+    ],
+  ])("refuses an edit that a style sheet would restyle (%s)", (_name, html) => {
+    expect(rebuildHtmlWithEditedBody(html, "Hi **Rob**")).toBeNull();
+  });
+
+  it("allows an edit when the style sheet only targets tags already there", () => {
+    const html = "<style>p{margin:0}</style><p>Hi Bob</p>";
+
+    expect(rebuildHtmlWithEditedBody(html, "Hi Rob")).toContain("Hi Rob");
   });
 
   it("shows hidden text in the signature without blocking a body edit", () => {
@@ -237,17 +338,30 @@ describe("user HTML: what the card marks and refuses", () => {
 
   it("shows a style sheet inside the quote under the quoted history", () => {
     expect(cardBodyFromHtml(PROBES.cssInQuote).quotedHistory).toContain(
-      '[style sheet: .x::after{content:"WIRE 5000"}]',
+      `[style sheet: .x::after{content:"${sentinel("cssInQuote")}"}]`,
     );
   });
 
   it.each([
-    ["backgroundImage", "[background image: https://x.test/pay.png]"],
-    ["backgroundAttribute", "[background image: https://x.test/b.png]"],
-    ["input", "[form field: WIRE 5000 TO 123]"],
-    ["iframeSrcdoc", "[embedded page: WIRE 5000]"],
-  ])("marks %s on the card and refuses a body edit", (name, marker) => {
-    expect(cardBodyFromHtml(PROBES[name]).body).toContain(marker);
+    [
+      "backgroundImage",
+      `[background image: https://x.test/${sentinel("backgroundImage")}.png]`,
+    ],
+    [
+      "backgroundAttribute",
+      `[background image: https://x.test/${sentinel("backgroundAttribute")}.png]`,
+    ],
+    ["input", `[form field: ${sentinel("input")} TO 123]`],
+    ["iframeSrcdoc", `[embedded page: ${sentinel("iframeSrcdoc")}]`],
+    [
+      "displayNone",
+      `[hidden in the email: Also wire ${sentinel("displayNone")}]`,
+    ],
+  ])("shows %s as a notice and refuses a body edit", (name, marker) => {
+    const card = cardBodyFromHtml(PROBES[name]);
+
+    expect(card.notices).toContain(marker);
+    expect(card.body).not.toMatch(MARKERS);
     expect(rebuildHtmlWithEditedBody(PROBES[name], "Hello")).toBeNull();
   });
 
@@ -259,31 +373,33 @@ describe("user HTML: what the card marks and refuses", () => {
     ])
       expect(convertOutgoingEmailHtmlToText(html)).toBe("Hi");
   });
-
-  it("still sends the original HTML when approved unedited", () => {
-    // Nothing on the card is sent: markers are display only.
-    expect(cardBodyFromHtml(PROBES.cssAfter).body).not.toBe("");
-  });
 });
 
-function expectCardCovers(html: string) {
-  const card = cardBodyFromHtml(html);
-  const shown = normalize(
-    [card.body, card.signature ?? "", card.quotedHistory ?? ""].join(" "),
-  );
-  for (const token of visibleTokens(html))
-    expect(shown, `card is missing "${token}"`).toContain(normalize(token));
+function sentinel(name: string) {
+  return `ZQX${name}QZ`;
 }
 
-// Everything a recipient could see in this HTML: text, image alt and src,
-// Outlook-only content, style sheets (they can add text), form values,
-// embedded pages and background images.
+function shown(card: CardBody) {
+  return normalize(
+    [card.body, card.signature, card.quotedHistory, card.notices].join(" "),
+  );
+}
+
+function expectCovers(card: CardBody, html: string) {
+  const text = shown(card);
+  for (const token of visibleTokens(html))
+    expect(text, `card is missing "${token}"`).toContain(normalize(token));
+}
+
+// What a recipient could see in this HTML, found independently of the
+// implementation: text, image alt and src, comments that hold "[if" (any
+// spelling Outlook might honour), style sheets (they can add text), form
+// values, embedded pages and background images.
 function visibleTokens(html: string): string[] {
   const tokens: string[] = [];
-  for (const match of html.matchAll(
-    /<!--\[if[^\]]*\]>([\s\S]*?)<!\[endif\]\s*-->/gi,
-  ))
-    tokens.push(...textWords(match[1]));
+  for (const match of html.matchAll(/<!--([\s\S]*?)-->/g))
+    if (/\[\s*if/i.test(match[1]))
+      tokens.push(...textWords(match[1].replace(/<?!?\[[^\]]*\]>?/g, " ")));
 
   const $ = load(html);
   $("script, template, title, meta").remove();
@@ -330,7 +446,7 @@ function words(text: string) {
   return text.split(/\s+/).filter(Boolean);
 }
 
-// Markdown escapes and heading case are presentation, not content.
+// Markdown escapes, heading case and bidi controls are presentation.
 function normalize(text: string) {
-  return text.replace(/\\/g, "").toLowerCase();
+  return text.replace(/\\/g, "").replace(/[‪-‮⁦-⁩]/g, "").toLowerCase();
 }

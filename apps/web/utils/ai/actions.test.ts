@@ -695,18 +695,17 @@ describe("runActionFunction", () => {
     );
   });
 
-  it("cleans rule reply HTML before it reaches the send gate", async () => {
+  // Rule reply content comes from buildDraftReplyBody (model text already
+  // cleaned) or a user template; the user's signature HTML must survive.
+  it("passes rule reply content with its signature HTML unchanged", async () => {
     const client = createMockEmailProvider();
+    const content =
+      'Thanks\n\n<div class="gmail_signature"><table><tr><td style="background:#eee">Me</td></tr></table></div>';
 
     await runActionFunction({
       client,
       email,
-      action: {
-        id: "action-1",
-        type: ActionType.REPLY,
-        content:
-          'Thanks\n<style>p::after{content:"WIRE"}</style><!--[if mso]>WIRE<![endif]--><p hidden>WIRE</p>',
-      },
+      action: { id: "action-1", type: ActionType.REPLY, content },
       emailAccount,
       executedRule: {
         id: "executed-rule-1",
@@ -719,7 +718,7 @@ describe("runActionFunction", () => {
 
     expect(client.replyToEmail).toHaveBeenCalledWith(
       expect.anything(),
-      "Thanks\n<p>WIRE</p>",
+      content,
       expect.anything(),
     );
   });

@@ -16,10 +16,18 @@ export type CardBody = {
   body: string;
   signature?: string;
   quotedHistory?: string;
+  /**
+   * Read-only: what the authored part or the email around it holds that is
+   * not plain authored text (style sheets, Outlook-only or hidden text, form
+   * fields…). Kept out of the editable body so no marker is ever sent.
+   */
+  notices?: string;
 };
 
 export function cardBodyFromHtml(html: string): CardBody {
   const parts = splitOutgoingHtml(html);
+  const bodyNotices: string[] = [];
+  const body = htmlToMarkdown(cardHtml(parts.inner, false), bodyNotices);
   const field = (text: string, where: Extra["field"]) =>
     [
       text,
@@ -31,10 +39,12 @@ export function cardBodyFromHtml(html: string): CardBody {
       .join("\n\n");
   const signature = field(htmlText(cardHtml(parts.signature)), "signature");
   const quotedHistory = field(htmlText(cardHtml(parts.quoted)), "quoted");
+  const notices = field(bodyNotices.join("\n\n"), "body");
   return {
-    body: field(htmlToMarkdown(cardHtml(parts.inner, false)), "body"),
+    body,
     ...(signature && { signature }),
     ...(quotedHistory && { quotedHistory }),
+    ...(notices && { notices }),
   };
 }
 
@@ -59,6 +69,12 @@ export function rebuildHtmlWithEditedBody(
     imageSources.set(encodeURI(src), src);
   });
 
+  const edited = withBlockStyle(
+    markdownToSafeHtml(markdown, imageSources),
+    style,
+  );
+  if (restylesEditedText(html, $inner, edited)) return null;
+
   return [
     parts.head,
     parts.prefix,
@@ -66,12 +82,55 @@ export function rebuildHtmlWithEditedBody(
     ...$inner("style, link")
       .toArray()
       .map((element) => $inner.html(element)),
-    withBlockStyle(markdownToSafeHtml(markdown, imageSources), style),
+    edited,
     parts.suffix,
     parts.signature,
     parts.quoted,
     parts.tail,
   ].join("");
+}
+
+/**
+ * Style sheets apply to the whole email. An edit turns the authored part's
+ * markup into p/strong/li…; a rule for a tag the original authored part did
+ * not use would then restyle, or hide, text it never touched. A linked
+ * sheet or @import can't be read, so any new tag counts.
+ */
+function restylesEditedText(
+  html: string,
+  $inner: CheerioAPI,
+  editedHtml: string,
+) {
+  const before = new Set(
+    $inner("*")
+      .toArray()
+      .map((element) => element.name),
+  );
+  const $edited = load(editedHtml, null, false);
+  const added = [
+    ...new Set(
+      $edited("*")
+        .toArray()
+        .map((element) => element.name),
+    ),
+  ].filter((tag) => !before.has(tag));
+  if (!added.length) return false;
+
+  const $ = load(html);
+  if ($("link").length) return true;
+  const css = $("style")
+    .toArray()
+    .map((element) => $(element).text())
+    .join("\n");
+  if (/@import/i.test(css)) return true;
+  // Selectors only: drop the declaration blocks, comments and escapes.
+  const selectors = css
+    .replace(/\/\*[\s\S]*?\*\//g, " ")
+    .replace(/\{[^{}]*\}/g, " ")
+    .toLowerCase();
+  return added.some((tag) =>
+    new RegExp(`(^|[^\\w.#:\\[-])${tag}(?![\\w-])`).test(selectors),
+  );
 }
 
 /** True when the authored part holds text the reader can't see. */
@@ -121,11 +180,9 @@ const turndown = new TurndownService({
     filter: (node) =>
       node.hasAttribute?.("hidden") ||
       isHiddenStyle(node.getAttribute?.("style") ?? ""),
-    replacement: (content, node) => {
-      const marked = `[hidden in the email: ${content.trim()}]`;
-      return /^(DIV|P|LI|TD|TABLE|SECTION)$/.test(node.nodeName)
-        ? `\n\n${marked}\n\n`
-        : ` ${marked} `;
+    replacement: (content) => {
+      collectedNotices?.push(`[hidden in the email: ${content.trim()}]`);
+      return "";
     },
   });
 
@@ -134,7 +191,10 @@ const SAFE_URL = /^(https?:|mailto:|tel:)/i;
 // Markers are card text, not email text, so Markdown must not escape them.
 turndown.addRule("cardMarker", {
   filter: (node) => node.nodeName === "CARD-MARKER",
-  replacement: (_content, node) => node.textContent ?? "",
+  replacement: (_content, node) => {
+    collectedNotices?.push((node.textContent ?? "").trim());
+    return "";
+  },
 });
 
 // Two or more <br> in a row are a blank line: a paragraph break, not one
@@ -268,13 +328,20 @@ function splitOutgoingHtml(html: string) {
         : "body";
   const extras: Extra[] = [
     // Outlook renders conditional comments; every other reader skips them.
-    ...[...html.matchAll(/<!--\[if[^\]]*\]>([\s\S]*?)<!\[endif\]\s*-->/gi)].map(
-      (match) => ({
-        offset: match.index,
-        marker: `[shown only in Outlook: ${htmlText(cardHtml(match[1]))}]`,
-        blocksEdit: match.index >= start && match.index < authoredEnd,
+    // Any comment opening with "[if", however it is spaced or closed.
+    ...commentNodes($.root().get(0))
+      .filter((node) => /^\s*\[\s*if\b/i.test(node.data))
+      .map((node) => {
+        const offset = startOf(node) ?? 0;
+        const content = node.data
+          .replace(/^\s*\[[^\]]*\]\s*>?/, "")
+          .replace(/<!\[\s*endif\s*\][\s\S]*$/i, "");
+        return {
+          offset,
+          marker: `[shown only in Outlook: ${htmlText(cardHtml(content))}]`,
+          blocksEdit: offset >= start && offset < authoredEnd,
+        };
       }),
-    ),
     // A style sheet can add text (content:, @import, linked CSS), so the
     // reviewer sees all of it rather than a guess at what it does.
     ...$("style")
@@ -410,8 +477,7 @@ function styleOf(element: Element): [string, string][] | null {
     const property = declaration.slice(0, colon).trim().toLowerCase();
     const value = declaration.slice(colon + 1).trim();
     if (colon < 0 || !TYPOGRAPHY_PROPERTY.test(property)) return null;
-    if (!isSafeStyleValue(value)) return null;
-    if (property === "font-size" && isTinyFontSize(value)) return null;
+    if (!isAcceptableDeclaration(property, value)) return null;
     declarations.push([property, value]);
   }
   return declarations;
@@ -445,6 +511,31 @@ function isHiddenStyle(style: string) {
   );
 }
 
+// A typography value that can't be used to hide text or inject anything.
+function isAcceptableDeclaration(property: string, value: string) {
+  if (!isSafeStyleValue(value)) return false;
+  if (/calc\(|var\(|\d\s*(vw|vh|vmin|vmax)\b/i.test(value)) return false;
+  if (property === "font-size") return !isTinyFontSize(value);
+  if (property === "color")
+    return !/transparent|(rgba?|hsla?)\(\s*[^,)]+,\s*[^,)]+,\s*[^,)]+,\s*0*(\.0*)?%?\s*\)|\/\s*0*(\.0*)?%?\s*\)/i.test(
+      value,
+    );
+  if (property === "line-height") return !/^0*(\.0*)?[a-z%]*$/i.test(value);
+  if (/^(margin|padding)/.test(property))
+    return [...value.matchAll(/([\d.]+)\s*(px|pt|em|rem)?/gi)].every(
+      ([, size, unit]) => toPixels(Number.parseFloat(size), unit) <= 200,
+    );
+  return true;
+}
+
+function toPixels(size: number, unit = "px") {
+  const lower = unit.toLowerCase();
+  if (lower === "pt") return (size * 4) / 3;
+  if (lower === "em" || lower === "rem") return size * 16;
+  if (lower === "%") return (size / 100) * 16;
+  return size;
+}
+
 function isSafeStyleValue(value: string) {
   return !/url\(|expression|\/\*|\\|(^|[\s,(])-[\d.]/i.test(value);
 }
@@ -453,17 +544,7 @@ function isSafeStyleValue(value: string) {
 function isTinyFontSize(value: string) {
   const match = value.trim().match(/^([\d.]+)(px|pt|em|rem|%)?$/i);
   if (!match) return false;
-  const size = Number.parseFloat(match[1]);
-  const unit = (match[2] ?? "px").toLowerCase();
-  const px =
-    unit === "pt"
-      ? (size * 4) / 3
-      : unit === "em" || unit === "rem"
-        ? size * 16
-        : unit === "%"
-          ? (size / 100) * 16
-          : size;
-  return px < 8;
+  return toPixels(Number.parseFloat(match[1]), match[2]) < 8;
 }
 
 function textNodes(node: AnyNode | undefined): AnyNode[] {
@@ -569,11 +650,18 @@ export function typographyOnly(style: string) {
       ([property, value]) =>
         TYPOGRAPHY_PROPERTY.test(property) &&
         value &&
-        isSafeStyleValue(value) &&
-        !(property === "font-size" && isTinyFontSize(value)),
+        isAcceptableDeclaration(property, value),
     )
     .map(([property, value]) => `${property}:${value}`)
     .join(";");
+}
+
+function commentNodes(
+  node: AnyNode | undefined,
+): (AnyNode & { data: string })[] {
+  if (!node) return [];
+  if (node.type === "comment") return [node as AnyNode & { data: string }];
+  return "children" in node ? node.children.flatMap(commentNodes) : [];
 }
 
 function startOf(node: AnyNode | undefined) {
@@ -586,8 +674,16 @@ function isBlank(node: AnyNode) {
   return node.type === "tag" && (node as Element).name === "br";
 }
 
-function htmlToMarkdown(html: string) {
-  return turndown.turndown(html).trim();
+// ponytail: module state, safe because turndown runs synchronously.
+let collectedNotices: string[] | null = null;
+
+function htmlToMarkdown(html: string, notices: string[]) {
+  collectedNotices = notices;
+  try {
+    return turndown.turndown(html).trim();
+  } finally {
+    collectedNotices = null;
+  }
 }
 
 // Never passes HTML typed on the card through to the email; images render

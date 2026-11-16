@@ -38,12 +38,17 @@ export function sanitizeAgentHtml(html: string): string {
       }
       if (data.attrName === "style") data.attrValue = typographyOnly(value);
     });
-    return purifier.sanitize(html, {
-      ALLOWED_TAGS,
-      ALLOWED_ATTR: ["href", "src", "alt", "dir", "style"],
-      ALLOW_DATA_ATTR: false,
-      ALLOW_ARIA_ATTR: false,
-    });
+    return (
+      purifier
+        .sanitize(html, {
+          ALLOWED_TAGS,
+          ALLOWED_ATTR: ["href", "src", "alt", "dir", "style"],
+          ALLOW_DATA_ATTR: false,
+          ALLOW_ARIA_ATTR: false,
+        })
+        // Bidi overrides make the card and the mail client show different text.
+        .replace(/[\u202A-\u202E\u2066-\u2069]/g, "")
+    );
   } finally {
     window.close();
   }

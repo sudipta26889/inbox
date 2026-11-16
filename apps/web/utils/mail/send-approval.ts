@@ -9,6 +9,7 @@ import prisma from "@/utils/prisma";
 import { redis } from "@/utils/redis";
 import { textToHtmlParagraphs } from "@/utils/string";
 import {
+  type CardBody,
   cardBodyFromHtml,
   hasHiddenText,
   rebuildHtmlWithEditedBody,
@@ -447,7 +448,7 @@ async function askReviewer(request: SendApprovalRequest): Promise<SendEdits> {
   logger.trace("DharaHIL: send details", { to, subject });
 
   const external = isExternalDomain(to);
-  const card =
+  const card: CardBody =
     request.bodyHtml !== undefined
       ? cardBodyFromHtml(request.bodyHtml)
       : { body: request.bodyText ?? "" };
@@ -455,12 +456,12 @@ async function askReviewer(request: SendApprovalRequest): Promise<SendEdits> {
   // A cut field would let the reviewer approve text they never saw, so an
   // email too long for the card is not sent at all.
   if (
-    [body, card.signature ?? "", card.quotedHistory ?? ""].some(
-      (field) => field.length > CARD_BODY_MAX_CHARS,
+    [body, card.signature, card.quotedHistory, card.notices].some(
+      (field) => (field?.length ?? 0) > CARD_BODY_MAX_CHARS,
     )
   )
     throw new SendNotApprovedError(
-      "Email not sent: it is too long to show in full on the approval card (over 100,000 characters in the body, signature or quoted messages).",
+      "Email not sent: it is too long to show in full on the approval card (over 100,000 characters in the body, signature, quoted messages or notices).",
     );
 
   const toolArgs = {
@@ -480,6 +481,7 @@ async function askReviewer(request: SendApprovalRequest): Promise<SendEdits> {
     // files must never be the ones cut.
     ...(card.signature && { signature: card.signature }),
     ...(card.quotedHistory && { quoted_history: card.quotedHistory }),
+    ...(card.notices && { notices: card.notices }),
     isReply: !!request.isReply,
     ...(request.sendAt && { sendAt: request.sendAt }),
   };
@@ -559,6 +561,10 @@ function editsFrom(
   if (changed("from") || changed("mailbox"))
     throw new SendNotApprovedError(
       "Email not sent: the sender can't be changed on the approval card.",
+    );
+  if (changed("notices"))
+    throw new SendNotApprovedError(
+      "Email not sent: the notices on the card can't be edited.",
     );
   if (changed("signature") || changed("quoted_history"))
     throw new SendNotApprovedError(

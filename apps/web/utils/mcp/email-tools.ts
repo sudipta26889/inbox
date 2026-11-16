@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createEmailProvider } from "@/utils/email/provider";
 import { getEmailForLLM } from "@/utils/get-email-from-message";
 import { resolveMcpEmailAccount } from "@/utils/mcp/account-selection";
+import { sanitizeAgentHtml } from "@/utils/mail/sanitize-agent-html";
 import { textToHtmlParagraphs } from "@/utils/string";
 import type { Logger } from "@/utils/logger";
 import type { ParsedMessage } from "@/utils/types";
@@ -202,7 +203,9 @@ function toThreadMessage(message: ParsedMessage) {
   };
 }
 
+// Agent-written HTML is cleaned before it reaches the draft, and so the
+// approval gate when the draft is sent.
 function bodyToHtml(body: string) {
-  if (/<[a-z][\s\S]*>/i.test(body)) return body;
+  if (/<[a-z][\s\S]*>/i.test(body)) return sanitizeAgentHtml(body);
   return textToHtmlParagraphs(body);
 }

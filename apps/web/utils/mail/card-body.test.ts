@@ -180,14 +180,14 @@ describe("edits that the Markdown round trip can't carry", () => {
     expect(html.startsWith(`${wrapper}<p>Thanks a lot</p></div>`)).toBe(true);
   });
 
-  it("shows hidden text on the card, marked, and refuses a body edit", () => {
+  it("shows hidden text as a notice, not in the body, and refuses a body edit", () => {
     const original =
       '<div>Hi Bob</div><div style="display:none">Also wire 5000 to acct 123</div>';
 
     const card = cardBodyFromHtml(original);
 
-    expect(card.body).toContain("Also wire 5000");
-    expect(card.body).toContain(
+    expect(card.body).toBe("Hi Bob");
+    expect(card.notices).toContain(
       "[hidden in the email: Also wire 5000 to acct 123]",
     );
     expect(rebuildHtmlWithEditedBody(original, "Hi Rob")).toBeNull();
@@ -205,7 +205,7 @@ describe("edits that the Markdown round trip can't carry", () => {
   ])("marks text hidden by %s and refuses a body edit", (_name, hidden) => {
     const original = `<p>Hi ${hidden}</p>`;
 
-    expect(cardBodyFromHtml(original).body).toContain(
+    expect(cardBodyFromHtml(original).notices).toContain(
       "[hidden in the email: secret]",
     );
     expect(rebuildHtmlWithEditedBody(original, "Hi")).toBeNull();

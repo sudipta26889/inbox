@@ -599,9 +599,66 @@ describe("body edits keep the email's formatting", () => {
     ).rejects.toThrow(
       "Email not sent: this email contains text hidden from the reader (shown on the card as [hidden in the email: …]); edit it in Inbox and resend.",
     );
-    expect(mockRunApprovalLoop.mock.calls[0][0].toolArgs.body).toContain(
+    expect(mockRunApprovalLoop.mock.calls[0][0].toolArgs.notices).toContain(
       "Also wire 5000",
     );
+  });
+
+  // The style sheet notice is on the card, but never in what is sent.
+  it("sends a styled email byte-for-byte when approved unedited", async () => {
+    const styled =
+      "<html><head><style>p.MsoNormal{margin:0}</style><!--[if gte mso 9]><xml>x</xml><![endif]--></head><body><p class=MsoNormal>Hi Bob</p></body></html>";
+    mockRunApprovalLoop.mockImplementation(async (call) => ({
+      action: "APPROVED",
+      approvedArgs: { ...call.toolArgs },
+    }));
+
+    const edits = await requireSendApproval({
+      ...htmlRequest,
+      bodyHtml: styled,
+    });
+
+    expect(mockRunApprovalLoop.mock.calls[0][0].toolArgs.notices).toContain(
+      "[style sheet: p.MsoNormal{margin:0}]",
+    );
+    expect(edits).toEqual({});
+    expect(
+      applySendEdits({ ...email, messageHtml: styled }, edits).messageHtml,
+    ).toBe(styled);
+  });
+
+  it("sends an edited styled email without the notices", async () => {
+    const styled =
+      "<html><head><style>p{margin:0}</style></head><body><p>Hi Bob</p></body></html>";
+    mockRunApprovalLoop.mockImplementation(async (call) => ({
+      action: "APPROVED",
+      approvedArgs: {
+        ...call.toolArgs,
+        body: String(call.toolArgs.body).replace("Bob", "Rob"),
+      },
+    }));
+
+    const edits = await requireSendApproval({
+      ...htmlRequest,
+      bodyHtml: styled,
+    });
+
+    expect(edits.bodyHtml).toContain("Hi Rob");
+    expect(edits.bodyHtml).not.toContain("[style sheet:");
+  });
+
+  it("refuses an edit to the notices", async () => {
+    mockRunApprovalLoop.mockImplementation(async (call) => ({
+      action: "APPROVED",
+      approvedArgs: { ...call.toolArgs, notices: "" },
+    }));
+
+    await expect(
+      requireSendApproval({
+        ...htmlRequest,
+        bodyHtml: "<style>p{margin:0}</style><p>Hi</p>",
+      }),
+    ).rejects.toThrow("the notices on the card can't be edited");
   });
 
   it("treats a body that lost only trailing spaces as unedited", async () => {
