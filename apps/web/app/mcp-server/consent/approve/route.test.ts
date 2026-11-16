@@ -43,6 +43,16 @@ describe("POST /mcp-server/consent/approve", () => {
     expect(response.status).toBe(403);
   });
 
+  it("refuses an email code session, issuing no code", async () => {
+    const response = await POST(request({ emailOtp: true }), context);
+
+    expect(response.status).toBe(403);
+    expect((await response.json()).error_description).toContain(
+      "Email code sign-in can't authorize apps",
+    );
+    expect(prisma.mcpServerAuthorizationCode.create).not.toHaveBeenCalled();
+  });
+
   it("approves from the server's own origin and returns a redirect with a code and issuer", async () => {
     const response = await POST(request({}), context);
 
@@ -132,15 +142,17 @@ describe("POST /mcp-server/consent/approve", () => {
 function request({
   origin = BASE,
   body = {},
+  emailOtp,
 }: {
   origin?: string | null;
   body?: Record<string, unknown>;
+  emailOtp?: boolean;
 }) {
   const headers = new Headers();
   if (origin) headers.set("Origin", origin);
   return {
     headers,
-    auth: { userId: "user-1" },
+    auth: { userId: "user-1", ...(emailOtp ? { emailOtp } : {}) },
     logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
     json: async () => ({
       client_id: "client-1",

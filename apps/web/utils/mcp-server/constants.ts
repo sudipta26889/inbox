@@ -24,6 +24,10 @@ export const MAX_TOOL_TEXT_CHARS = 80_000;
 // not be mistaken for token theft.
 export const REFRESH_REPLAY_GRACE_SECONDS = 30;
 
+// Same wording as upstream's /mcp consent page.
+export const EMAIL_OTP_REFUSAL =
+  "Email code sign-in can't authorize apps. Sign in with Google or Microsoft.";
+
 // URL.hostname form, so IPv6 keeps its brackets.
 export const LOOPBACK_HOSTS = ["localhost", "127.0.0.1", "[::1]"];
 

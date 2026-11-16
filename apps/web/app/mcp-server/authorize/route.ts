@@ -23,6 +23,7 @@ import {
 import { validateScopes } from "@/utils/mcp-server/tokens";
 import prisma from "@/utils/prisma";
 import { auth } from "@/utils/auth";
+import { EMAIL_OTP_REFUSAL } from "@/utils/mcp-server/constants";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -201,6 +202,16 @@ export const GET = withError(
       return NextResponse.redirect(loginUrl);
     }
 
+    // Upstream's invariant: an email-code session cannot authorize apps.
+    // Checked before the skip-consent path, which would otherwise issue a
+    // code silently for a client approved earlier.
+    if (session.session?.emailOtp) {
+      logger.warn("Refused MCP authorization from an email code session", {
+        clientId,
+      });
+      return emailOtpRefusal();
+    }
+
     if (isMetadataClient) {
       const rateLimit = await checkIpRateLimit(getClientIp(request));
       if (!rateLimit.allowed) {
@@ -286,3 +297,13 @@ export const GET = withError(
     return NextResponse.redirect(consentUrl);
   },
 );
+
+function emailOtpRefusal() {
+  return NextResponse.json(
+    {
+      error: "access_denied",
+      error_description: EMAIL_OTP_REFUSAL,
+    },
+    { status: 403 },
+  );
+}

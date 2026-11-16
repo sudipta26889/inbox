@@ -155,6 +155,26 @@ describe("GET /mcp-server/authorize", () => {
     });
   });
 
+  it.each([
+    ["with a prior approval (skip-consent path)", { id: "existing" }],
+    ["without a prior approval", null],
+  ])("refuses an email code session %s, issuing no code", async (_label, approval) => {
+    vi.mocked(auth).mockResolvedValue({
+      user: { id: "user-1" },
+      session: { emailOtp: true },
+    } as never);
+    prisma.mcpServerAccessToken.findFirst.mockResolvedValue(approval as never);
+
+    const response = await GET(authorize({}), context);
+
+    expect(response.status).toBe(403);
+    expect((await response.json()).error_description).toContain(
+      "Email code sign-in can't authorize apps",
+    );
+    expect(response.headers.get("location")).toBeNull();
+    expect(prisma.mcpServerAuthorizationCode.create).not.toHaveBeenCalled();
+  });
+
   it("sends a user with no prior approval to the consent page, not back to the client", async () => {
     prisma.mcpServerAccessToken.findFirst.mockResolvedValue(null);
 

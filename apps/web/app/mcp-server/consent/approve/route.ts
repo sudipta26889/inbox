@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { withAuth, type RequestWithAuth } from "@/utils/middleware";
 import { SafeError } from "@/utils/error";
-import { BASE } from "@/utils/mcp-server/constants";
+import { BASE, EMAIL_OTP_REFUSAL } from "@/utils/mcp-server/constants";
 import {
   buildRedirectUrl,
   issueAuthorizationCode,
@@ -18,7 +18,8 @@ import { validateScopes } from "@/utils/mcp-server/tokens";
 import prisma from "@/utils/prisma";
 import { accessibleEmailAccountWhere } from "@/utils/email-account-access";
 
-// Same-origin only: no CORS headers, so no other site can preflight this.
+// next.config sends `Access-Control-Allow-Origin: *` on /mcp-server/*, this
+// route included. What protects it is the exact Origin check in POST, not CORS.
 export async function OPTIONS() {
   return new NextResponse(null, { status: 204 });
 }
@@ -42,6 +43,15 @@ export const POST = withAuth(
 
     const logger = request.logger;
     const userId = request.auth.userId;
+
+    // Upstream's invariant: an email-code session cannot authorize apps.
+    if (request.auth.emailOtp) {
+      logger.warn("Refused MCP consent from an email code session");
+      return NextResponse.json(
+        { error: "access_denied", error_description: EMAIL_OTP_REFUSAL },
+        { status: 403 },
+      );
+    }
 
     const body = await request.json();
     const {
