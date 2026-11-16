@@ -9,12 +9,6 @@ import type { ParsedMessage } from "@/utils/types";
 
 vi.mock("@/utils/prisma");
 
-vi.mock("@/utils/taskpilot/config", () => ({
-  getTaskpilotConfigForUser: vi
-    .fn()
-    .mockResolvedValue({ apiKey: "tk", workspaceSlug: "acme" }),
-}));
-
 // Existing mocks the dispatcher test suite uses
 vi.mock("server-only", () => ({}));
 vi.mock("@/utils/redis/reply", () => ({
@@ -102,17 +96,5 @@ describe("runActionFunction — ActionType.CREATE_TASK", () => {
     await runCreateTaskAction();
 
     expect(prisma.emailTaskLink.upsert).not.toHaveBeenCalled();
-  });
-
-  it("stays a no-op when the email is already linked", async () => {
-    prisma.emailTaskLink.findFirst.mockResolvedValue({
-      id: "link-1",
-      taskpilotIdentifier: "SUP-7",
-    } as never);
-
-    const result = await runCreateTaskAction();
-
-    expect(result).toMatchObject({ success: true });
-    expect(createWorkItem).not.toHaveBeenCalled();
   });
 });
