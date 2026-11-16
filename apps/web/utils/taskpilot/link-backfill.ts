@@ -9,9 +9,8 @@ import { errorStatus, TaskpilotNotFoundError } from "@/utils/taskpilot/errors";
 import { buildInboxThreadLinkInput } from "@/utils/taskpilot/inbox-link";
 import type { TaskDetail } from "@/utils/taskpilot/types";
 
-// 1 is deliberate: the first deploy adds exactly one link for a person to
-// spot-check in TaskPilot. A later change raises it.
-export const LINK_BACKFILL_MAX_TOTAL = 1;
+// Bounds the whole backfill; EmailTaskLink has 3 rows (2 items) in production.
+export const LINK_BACKFILL_MAX_TOTAL = 50;
 export const LINK_BACKFILL_MAX_PER_RUN = 20;
 export const LINK_BACKFILL_DELAY_MS = 1000;
 
