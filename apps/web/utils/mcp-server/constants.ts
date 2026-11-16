@@ -17,6 +17,9 @@ export const SUPPORTED_PROTOCOL_VERSIONS = [
   "2024-11-05",
 ];
 
+// About 20k tokens, under Claude Code's 25k tool-result limit.
+export const MAX_TOOL_TEXT_CHARS = 80_000;
+
 // URL.hostname form, so IPv6 keeps its brackets.
 export const LOOPBACK_HOSTS = ["localhost", "127.0.0.1", "[::1]"];
 

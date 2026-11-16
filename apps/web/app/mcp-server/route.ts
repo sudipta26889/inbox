@@ -10,6 +10,8 @@ import { env } from "@/env";
 import {
   BASE,
   LOOPBACK_HOSTS,
+  MAX_TOOL_TEXT_CHARS,
+  MCP_RESOURCE,
   MCP_SCOPES_SUPPORTED,
   PRM_URL,
   SUPPORTED_PROTOCOL_VERSIONS,
@@ -99,6 +101,16 @@ export const POST = withError(
         );
       }
 
+      if (!(await hasAcceptedAudience(tokenPayload))) {
+        reqLogger.warn("Access token has wrong or missing audience", {
+          clientId: tokenPayload.client_id,
+        });
+        return unauthorizedResponse(
+          "Invalid or expired access token",
+          "invalid_token",
+        );
+      }
+
       const userId = tokenPayload.sub;
       const emailAccountId = tokenPayload.email_account_id;
       const clientId = tokenPayload.client_id;
@@ -176,15 +188,17 @@ export const POST = withError(
             jsonrpc: "2.0",
             id: message.id,
             result: {
-              protocolVersion: "2024-11-05",
+              protocolVersion: negotiateProtocolVersion(
+                message.params?.protocolVersion,
+              ),
               capabilities: {
                 tools: { listChanged: false },
               },
               serverInfo: {
                 name: "Inbox MCP Server",
                 version: "1.0.0",
-                instructions,
               },
+              instructions,
             },
           },
           { headers: CORS_HEADERS },
@@ -245,10 +259,22 @@ export const POST = withError(
         }
 
         if (!hasRequiredScope(tool, scopes)) {
-          return createErrorResponse(
-            message.id,
-            -32_003,
-            `Insufficient permissions. Required scope: ${tool.requiredScope}`,
+          return NextResponse.json(
+            {
+              jsonrpc: "2.0",
+              id: message.id,
+              error: {
+                code: -32_003,
+                message: `Insufficient permissions. Required scope: ${tool.requiredScope}`,
+              },
+            },
+            {
+              status: 403,
+              headers: {
+                ...CORS_HEADERS,
+                "WWW-Authenticate": `Bearer error="insufficient_scope", scope="${tool.requiredScope}", resource_metadata="${PRM_URL}"`,
+              },
+            },
           );
         }
 
@@ -259,11 +285,15 @@ export const POST = withError(
           scopes,
         });
         if (!toolContext) {
-          return createErrorResponse(
-            message.id,
-            -32_003,
-            "Access to this email account has been revoked. Reconnect and pick another account.",
-          );
+          return toolResultResponse(message.id, {
+            content: [
+              {
+                type: "text",
+                text: "Access to this email account has been revoked. Reconnect and pick another account.",
+              },
+            ],
+            isError: true,
+          });
         }
 
         try {
@@ -272,29 +302,25 @@ export const POST = withError(
             message.params?.arguments || {},
           );
 
-          // Format response as Markdown for better readability
           const formattedText = formatToolResponse(toolName, result);
-
-          return NextResponse.json(
-            {
-              jsonrpc: "2.0",
-              id: message.id,
-              result: {
-                content: [{ type: "text", text: formattedText }],
-              },
-            },
-            { headers: CORS_HEADERS },
+          return toolResultResponse(
+            message.id,
+            buildToolResult(formattedText, result),
           );
         } catch (error: any) {
           reqLogger.error("MCP tool execution failed", {
             tool: toolName,
             error: error.message,
           });
-          return createErrorResponse(
-            message.id,
-            -32_603,
-            `Tool execution failed: ${error.message || "Unknown error"}`,
-          );
+          return toolResultResponse(message.id, {
+            content: [
+              {
+                type: "text",
+                text: `Tool execution failed: ${error.message || "Unknown error"}`,
+              },
+            ],
+            isError: true,
+          });
         }
       }
 
@@ -319,6 +345,54 @@ export const POST = withError(
     }
   },
 );
+
+// A token minted before `aud` existed is only trusted for A2A clients, whose
+// static tokens can't refresh into one.
+async function hasAcceptedAudience(tokenPayload: {
+  aud?: string;
+  client_id: string;
+}): Promise<boolean> {
+  if (tokenPayload.aud) return tokenPayload.aud === MCP_RESOURCE;
+  const client = await prisma.mcpServerClient.findUnique({
+    where: { clientId: tokenPayload.client_id },
+    select: { type: true },
+  });
+  return client?.type === "A2A";
+}
+
+function negotiateProtocolVersion(requested: unknown): string {
+  return typeof requested === "string" &&
+    SUPPORTED_PROTOCOL_VERSIONS.includes(requested)
+    ? requested
+    : SUPPORTED_PROTOCOL_VERSIONS[0];
+}
+
+function buildToolResult(text: string, result: unknown) {
+  if (text.length > MAX_TOOL_TEXT_CHARS) {
+    const omitted = text.length - MAX_TOOL_TEXT_CHARS;
+    return {
+      content: [
+        {
+          type: "text",
+          text: `${text.slice(0, MAX_TOOL_TEXT_CHARS)}\n[truncated: ${omitted} chars omitted]`,
+        },
+      ],
+    };
+  }
+  const isObject =
+    typeof result === "object" && result !== null && !Array.isArray(result);
+  return {
+    content: [{ type: "text", text }],
+    ...(isObject ? { structuredContent: result } : {}),
+  };
+}
+
+function toolResultResponse(id: unknown, result: unknown) {
+  return NextResponse.json(
+    { jsonrpc: "2.0", id, result },
+    { headers: CORS_HEADERS },
+  );
+}
 
 function unauthorizedResponse(detail: string, error?: "invalid_token") {
   const challenge = [

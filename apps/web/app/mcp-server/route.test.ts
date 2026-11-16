@@ -1,9 +1,13 @@
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import prisma from "@/utils/prisma";
+import { getTool, hasRequiredScope } from "@/utils/mcp-server/tools/registry";
 import { buildMcpToolContext } from "@/utils/mcp-server/tool-context";
 import { validateAccessToken } from "@/utils/mcp-server/tokens";
 import {
   BASE,
+  MAX_TOOL_TEXT_CHARS,
+  MCP_RESOURCE,
   MCP_SCOPES_SUPPORTED,
   PRM_URL,
 } from "@/utils/mcp-server/constants";
@@ -13,7 +17,10 @@ const { toolHandler } = vi.hoisted(() => ({ toolHandler: vi.fn() }));
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/utils/prisma", () => ({
-  default: { emailAccount: { findMany: vi.fn(() => []) } },
+  default: {
+    emailAccount: { findMany: vi.fn(() => []) },
+    mcpServerClient: { findUnique: vi.fn() },
+  },
 }));
 vi.mock("@/utils/mcp-server/tokens", () => ({
   validateAccessToken: vi.fn(),
@@ -34,12 +41,15 @@ describe("POST /mcp-server", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(validateAccessToken).mockResolvedValue({
+      aud: MCP_RESOURCE,
       sub: "user-1",
       email_account_id: "account-1",
       client_id: "client-1",
       scope: "mcp:write email:write",
     } as never);
     vi.mocked(buildMcpToolContext).mockResolvedValue({} as never);
+    vi.mocked(getTool).mockReturnValue({ handler: toolHandler } as never);
+    vi.mocked(hasRequiredScope).mockReturnValue(true);
     toolHandler.mockResolvedValue({ ok: true });
   });
 
@@ -176,7 +186,7 @@ describe("POST /mcp-server", () => {
     expect(response.status).toBe(200);
     const payload = await response.json();
     expect(payload.id).toBe(1);
-    expect(payload.result.protocolVersion).toBe("2024-11-05");
+    expect(payload.result.protocolVersion).toBe("2025-11-25");
   });
 
   it("accepts an authenticated notifications/initialized", async () => {
@@ -212,6 +222,187 @@ describe("POST /mcp-server", () => {
     expect((await response.json()).id).toBe(7);
     const args = toolHandler.mock.calls[0][1];
     expect(args.attachments[0].content).toHaveLength(content.length);
+  });
+
+  describe("audience", () => {
+    const ping = { jsonrpc: "2.0", id: 1, method: "ping" };
+
+    it("accepts a token whose aud is the MCP resource", async () => {
+      const response = await POST(post(ping, "good-token"), context);
+
+      expect(response.status).toBe(200);
+    });
+
+    it("accepts a token without aud from an A2A client", async () => {
+      vi.mocked(validateAccessToken).mockResolvedValue(
+        tokenWithout("aud") as never,
+      );
+      vi.mocked(prisma.mcpServerClient.findUnique).mockResolvedValue({
+        type: "A2A",
+      } as never);
+
+      const response = await POST(post(ping, "good-token"), context);
+
+      expect(response.status).toBe(200);
+      expect(prisma.mcpServerClient.findUnique).toHaveBeenCalledWith({
+        where: { clientId: "client-1" },
+        select: { type: true },
+      });
+    });
+
+    it("rejects a token without aud from an MCP client", async () => {
+      vi.mocked(validateAccessToken).mockResolvedValue(
+        tokenWithout("aud") as never,
+      );
+      vi.mocked(prisma.mcpServerClient.findUnique).mockResolvedValue({
+        type: "MCP",
+      } as never);
+
+      const response = await POST(post(ping, "good-token"), context);
+
+      expect(response.status).toBe(401);
+      expect(response.headers.get("www-authenticate")).toContain(
+        'error="invalid_token"',
+      );
+    });
+
+    it("rejects a token without aud from an unknown client", async () => {
+      vi.mocked(validateAccessToken).mockResolvedValue(
+        tokenWithout("aud") as never,
+      );
+      vi.mocked(prisma.mcpServerClient.findUnique).mockResolvedValue(
+        null as never,
+      );
+
+      const response = await POST(post(ping, "good-token"), context);
+
+      expect(response.status).toBe(401);
+    });
+
+    it("rejects a token issued for another resource, even from an A2A client", async () => {
+      vi.mocked(validateAccessToken).mockResolvedValue({
+        ...tokenWithout("aud"),
+        aud: "https://other.example/mcp-server",
+      } as never);
+      vi.mocked(prisma.mcpServerClient.findUnique).mockResolvedValue({
+        type: "A2A",
+      } as never);
+
+      const response = await POST(post(ping, "good-token"), context);
+
+      expect(response.status).toBe(401);
+      expect(response.headers.get("www-authenticate")).toContain(
+        'error="invalid_token"',
+      );
+    });
+  });
+
+  it("answers a call missing its scope with 403 and an insufficient_scope challenge", async () => {
+    vi.mocked(getTool).mockReturnValue({
+      handler: toolHandler,
+      requiredScope: "email:write",
+    } as never);
+    vi.mocked(hasRequiredScope).mockReturnValue(false);
+
+    const response = await POST(
+      post(
+        {
+          jsonrpc: "2.0",
+          id: 3,
+          method: "tools/call",
+          params: { name: "send_email", arguments: {} },
+        },
+        "good-token",
+      ),
+      context,
+    );
+
+    expect(response.status).toBe(403);
+    expect(response.headers.get("www-authenticate")).toBe(
+      `Bearer error="insufficient_scope", scope="email:write", resource_metadata="${PRM_URL}"`,
+    );
+    expect(toolHandler).not.toHaveBeenCalled();
+  });
+
+  describe("initialize", () => {
+    it("echoes a supported protocol version and puts instructions at the top level", async () => {
+      const payload = await initialize("2025-06-18");
+
+      expect(payload.result.protocolVersion).toBe("2025-06-18");
+      expect(typeof payload.result.instructions).toBe("string");
+      expect(payload.result.serverInfo).not.toHaveProperty("instructions");
+    });
+
+    it("answers an unsupported version with the newest supported one", async () => {
+      const payload = await initialize("1999-01-01");
+
+      expect(payload.result.protocolVersion).toBe("2025-11-25");
+    });
+  });
+
+  describe("tool results", () => {
+    const call = (id = 5) =>
+      post(
+        {
+          jsonrpc: "2.0",
+          id,
+          method: "tools/call",
+          params: { name: "search_emails", arguments: {} },
+        },
+        "good-token",
+      );
+
+    it("reports a handler throw as an isError result with HTTP 200", async () => {
+      toolHandler.mockRejectedValue(new Error("boom"));
+
+      const response = await POST(call(), context);
+
+      expect(response.status).toBe(200);
+      const payload = await response.json();
+      expect(payload.error).toBeUndefined();
+      expect(payload.result.isError).toBe(true);
+      expect(payload.result.content[0].text).toContain("boom");
+    });
+
+    it("reports lost access to the email account as an isError result", async () => {
+      vi.mocked(buildMcpToolContext).mockResolvedValue(null as never);
+
+      const payload = await (await POST(call(), context)).json();
+
+      expect(payload.error).toBeUndefined();
+      expect(payload.result.isError).toBe(true);
+      expect(payload.result.content[0].text).toContain("revoked");
+    });
+
+    it("returns structuredContent next to the text block", async () => {
+      toolHandler.mockResolvedValue({ ok: true });
+
+      const payload = await (await POST(call(), context)).json();
+
+      expect(payload.result.structuredContent).toEqual({ ok: true });
+      expect(payload.result.content[0].type).toBe("text");
+      expect(payload.result.isError).toBeUndefined();
+    });
+
+    it("truncates an oversize text block and drops structuredContent", async () => {
+      const big = "x".repeat(MAX_TOOL_TEXT_CHARS + 1234);
+      toolHandler.mockResolvedValue({ big });
+
+      const payload = await (await POST(call(), context)).json();
+
+      const text: string = payload.result.content[0].text;
+      expect(text).toMatch(/\n\[truncated: \d+ chars omitted\]$/);
+      expect(text.startsWith("{") || text.length > 0).toBe(true);
+      expect(payload.result.structuredContent).toBeUndefined();
+    });
+
+    it("keeps an unknown tool a JSON-RPC error", async () => {
+      vi.mocked(getTool).mockReturnValue(undefined as never);
+
+      const payload = await (await POST(call(), context)).json();
+
+      expect(payload.error.code).toBe(-32_601);
+    });
   });
 
   it("returns 413 for an authenticated body over the limit", async () => {
@@ -260,4 +451,32 @@ function post(
     body: JSON.stringify(body),
     headers,
   });
+}
+
+function tokenWithout(field: "aud") {
+  const payload: Record<string, unknown> = {
+    aud: MCP_RESOURCE,
+    sub: "user-1",
+    email_account_id: "account-1",
+    client_id: "client-1",
+    scope: "mcp:write email:write",
+  };
+  delete payload[field];
+  return payload;
+}
+
+async function initialize(protocolVersion: string) {
+  const response = await POST(
+    post(
+      {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: { protocolVersion },
+      },
+      "good-token",
+    ),
+    context,
+  );
+  return response.json();
 }
