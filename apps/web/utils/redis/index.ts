@@ -38,11 +38,12 @@ export const redis = {
     }
   },
 
-  async set(
+  /** With `get`, resolves to the previous value (parsed) or null, like Upstash. */
+  async set<T = string>(
     key: string,
     value: unknown,
-    opts?: { ex?: number; nx?: boolean },
-  ): Promise<string | null> {
+    opts?: { ex?: number; nx?: boolean; get?: boolean },
+  ): Promise<T | "OK" | null> {
     const serialized =
       typeof value === "string" ? value : JSON.stringify(value);
     const args: string[] = [];
@@ -52,15 +53,24 @@ export const redis = {
     if (opts?.nx) {
       args.push("NX");
     }
+    if (opts?.get) {
+      args.push("GET");
+    }
     // ioredis types a trailing string as a Callback, so this spread of
-    // command arguments (EX/NX) cannot be expressed through its overloads.
-    return (
+    // command arguments (EX/NX/GET) cannot be expressed through its overloads.
+    const result = await (
       ioRedisClient.set as unknown as (
         key: string,
         value: string,
         ...args: string[]
       ) => Promise<string | null>
     )(key, serialized, ...args);
+    if (!opts?.get || result === null) return result as "OK" | null;
+    try {
+      return JSON.parse(result) as T;
+    } catch {
+      return result as T;
+    }
   },
 
   async getdel<T = string>(key: string): Promise<T | null> {
@@ -160,8 +170,8 @@ export const redis = {
     key: string,
     field: string,
     increment: number,
-  ): Promise<string> {
-    return ioRedisClient.hincrbyfloat(key, field, increment);
+  ): Promise<number> {
+    return Number(await ioRedisClient.hincrbyfloat(key, field, increment));
   },
 
   // --- Set operations ---

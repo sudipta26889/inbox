@@ -9,6 +9,8 @@ const client = vi.hoisted(() => ({
   publish: vi.fn(),
   getdel: vi.fn(),
   exists: vi.fn(),
+  set: vi.fn(),
+  hincrbyfloat: vi.fn(),
   options: {} as Record<string, unknown>,
 }));
 
@@ -90,6 +92,32 @@ describe("redis key prefix", () => {
 
     await expect(redis.getdel("k")).resolves.toEqual({ a: 1 });
     await expect(redis.exists("k")).resolves.toBe(1);
+  });
+
+  it("returns the old value from SET ... GET like the Upstash client", async () => {
+    client.set.mockResolvedValue('{"status":"processing"}');
+
+    const existing = await redis.set<{ status: string }>(
+      "oauth:code",
+      { status: "processing" },
+      { ex: 600, nx: true, get: true },
+    );
+
+    expect(client.set).toHaveBeenCalledWith(
+      "oauth:code",
+      '{"status":"processing"}',
+      "EX",
+      "600",
+      "NX",
+      "GET",
+    );
+    expect(existing).toEqual({ status: "processing" });
+  });
+
+  it("returns a number from hincrbyfloat like the Upstash client", async () => {
+    client.hincrbyfloat.mockResolvedValue("1.5");
+
+    await expect(redis.hincrbyfloat("usage", "cost", 0.5)).resolves.toBe(1.5);
   });
 
   it("has no unreviewed raw ioredis client", () => {
