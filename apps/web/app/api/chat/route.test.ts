@@ -565,7 +565,11 @@ describe("chat route rule freshness persistence", () => {
         role: "assistant",
         parts: [
           { type: "text", text: "Looking" },
-          { type: "tool-searchInbox", toolCallId: "t1", state: "input-available" },
+          {
+            type: "tool-searchInbox",
+            toolCallId: "t1",
+            state: "input-available",
+          },
           {
             type: "tool-getLabels",
             toolCallId: "t2",
@@ -578,7 +582,8 @@ describe("chat route rule freshness persistence", () => {
 
     await POST(createRequest());
 
-    const sent = mockConvertToModelMessages.mock.calls[0]?.[0] as unknown as Array<{
+    const sent = mockConvertToModelMessages.mock
+      .calls[0]?.[0] as unknown as Array<{
       id: string;
       parts: Array<{ toolCallId?: string }>;
     }>;

@@ -619,8 +619,8 @@ describe("isColdEmail", () => {
   });
 
   it("uses the decision model's answer when the router lets it decide", async () => {
-    vi.mocked(runDecisionModelOrFallback).mockImplementationOnce(
-      ({ decide }) => decide({} as never),
+    vi.mocked(runDecisionModelOrFallback).mockImplementationOnce(({ decide }) =>
+      decide({} as never),
     );
     vi.mocked(prisma.groupItem.findFirst).mockResolvedValue(null);
     vi.mocked(decideColdEmail).mockResolvedValue({

@@ -286,7 +286,7 @@ export async function runDecisionModelOrFallback<T>({
       // Still the LLM's decision, so the error propagates unchanged, but keep
       // the decision model's answer: these are the cases where the comparison
       // matters most.
-      void decision.then((run) =>
+      decision.then((run) =>
         record({
           mode: "shadow",
           outcome: "llm-error",
@@ -301,7 +301,7 @@ export async function runDecisionModelOrFallback<T>({
 
     // ponytail: not awaited, so a slow or failing decision-model call can never
     // delay or break the decision the LLM already made.
-    void decision.then((run) =>
+    decision.then((run) =>
       record({
         mode: "shadow",
         outcome: run.ok
@@ -355,7 +355,7 @@ export async function runDecisionModelOrFallback<T>({
 
   // Audit: the LLM checks each live decision so its accuracy on this feature
   // can be proven. Not awaited, so it never delays or changes the decision.
-  void fallback(emailAccount).then(
+  fallback(emailAccount).then(
     (llmResult) =>
       record({
         mode: "live",

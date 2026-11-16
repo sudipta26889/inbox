@@ -300,9 +300,7 @@ describe("runDecisionModelOrFallback", () => {
   }
 
   function recorded() {
-    return prisma.decisionModelRun.create.mock.calls.map(
-      ([args]) => args.data,
-    );
+    return prisma.decisionModelRun.create.mock.calls.map(([args]) => args.data);
   }
 
   it("keeps the original path and records nothing when the user opted out", async () => {

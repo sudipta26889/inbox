@@ -229,7 +229,7 @@ export async function findMatchingRules({
 
   // ponytail: not awaited, so the shadow call never delays the rule choice.
   if (shadowSelection && decisionModelConfig) {
-    void shadowSelection.then((run) => {
+    shadowSelection.then((run) => {
       const decided =
         run.ok && run.selection.type === "rules" ? run.selection : null;
       return recordDecisionModelRun({
@@ -1125,13 +1125,16 @@ function getPrimaryRuleId(result: {
 }
 
 // Rule ids and the reason only: the full rule objects carry user instructions.
-function summarizeRuleChoice(
-  result:
-    | { type?: string; rules?: { rule: { id: string }; isPrimary?: boolean }[]; reason: string },
-) {
+function summarizeRuleChoice(result: {
+  type?: string;
+  rules?: { rule: { id: string }; isPrimary?: boolean }[];
+  reason: string;
+}) {
   return {
     ruleIds: (result.rules ?? []).map((item) => item.rule.id),
-    primaryRuleId: result.rules ? getPrimaryRuleId({ rules: result.rules }) : null,
+    primaryRuleId: result.rules
+      ? getPrimaryRuleId({ rules: result.rules })
+      : null,
     reason: result.reason,
   };
 }

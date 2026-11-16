@@ -8,5 +8,7 @@ export function isOwnSendingAddress(from: string): boolean {
   const fromAddress = extractEmailAddress(from).toLowerCase();
   if (!fromAddress || !env.RESEND_FROM_EMAIL) return false;
 
-  return extractEmailAddress(env.RESEND_FROM_EMAIL).toLowerCase() === fromAddress;
+  return (
+    extractEmailAddress(env.RESEND_FROM_EMAIL).toLowerCase() === fromAddress
+  );
 }

@@ -125,7 +125,9 @@ describe("aiDraftReplyWithConfidence prompt and repair wiring", () => {
 
     const options = mockGenerateObject.mock.calls[0][0];
     expect(options.instructions).not.toContain("Return plain text only.");
-    expect(options.instructions).toContain("The reply field is plain text only.");
+    expect(options.instructions).toContain(
+      "The reply field is plain text only.",
+    );
     expect(options.repairText).toBeTypeOf("function");
     const repaired = await options.repairText({
       text: "Hi, plain text",

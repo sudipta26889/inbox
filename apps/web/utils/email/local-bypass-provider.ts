@@ -339,12 +339,12 @@ export function createLocalBypassEmailProvider(logger?: Logger): EmailProvider {
   return new Proxy(provider, {
     get(target, property, receiver) {
       if (property in target) return Reflect.get(target, property, receiver);
-      if (typeof property !== "string" || property === "then") return undefined;
+      if (typeof property !== "string" || property === "then") return;
       return async () => {
         log.warn("Local bypass provider has no stub for this method", {
           method: property,
         });
-        return undefined;
+        return;
       };
     },
   }) as unknown as EmailProvider;

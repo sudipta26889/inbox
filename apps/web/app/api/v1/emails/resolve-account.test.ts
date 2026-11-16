@@ -25,7 +25,10 @@ describe("resolveUserAccount", () => {
       expect.objectContaining({
         where: {
           id: "acc-2",
-          OR: [{ userId: "user-1" }, { shares: { some: { userId: "user-1" } } }],
+          OR: [
+            { userId: "user-1" },
+            { shares: { some: { userId: "user-1" } } },
+          ],
         },
       }),
     );
