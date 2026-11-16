@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
-import { env } from "@/env";
 import { redis } from "@/utils/redis";
 import { sleep } from "@/utils/sleep";
+import { isRedisConfigured } from "@/utils/redis/configured";
 
 const CALLBACK_RESULT_POLL_INTERVAL_MS = 250;
 const CALLBACK_RESULT_WAIT_MS = 15_000;
@@ -37,7 +37,7 @@ type OAuthCodeClaimOutcome =
   | { status: "timeout" };
 
 export function isOAuthCodeStoreConfigured() {
-  return Boolean(env.REDIS_HTTP_URL && env.REDIS_HTTP_TOKEN);
+  return isRedisConfigured();
 }
 
 export async function claimOAuthCode(
