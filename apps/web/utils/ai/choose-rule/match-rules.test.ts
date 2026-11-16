@@ -28,7 +28,11 @@ import {
 } from "@/utils/cold-email/cold-email-rule";
 import { isColdEmail } from "@/utils/cold-email/is-cold-email";
 import { decisionModelChooseRule } from "@/utils/decision-model/choose-rule";
-import { getDecisionModelConfig } from "@/utils/decision-model/decision-model";
+import {
+  getDecisionModelConfig,
+  isDecisionFeatureLive,
+  recordDecisionModelRun,
+} from "@/utils/decision-model/decision-model";
 import { checkSenderReplyHistory } from "@/utils/reply-tracker/check-sender-reply-history";
 import { getClassificationFeedback } from "@/utils/rule/classification-feedback";
 
@@ -55,6 +59,8 @@ vi.mock("@/utils/rule/classification-feedback", () => ({
 }));
 vi.mock("@/utils/decision-model/decision-model", () => ({
   getDecisionModelConfig: vi.fn().mockResolvedValue(null),
+  isDecisionFeatureLive: vi.fn().mockReturnValue(false),
+  recordDecisionModelRun: vi.fn(),
 }));
 vi.mock("@/utils/decision-model/choose-rule", () => ({
   decisionModelChooseRule: vi.fn(),
@@ -3096,12 +3102,84 @@ describe("findMatchingRules - decisionModel rule selection", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(getDecisionModelConfig).mockResolvedValue(decisionModel);
+    vi.mocked(isDecisionFeatureLive).mockReturnValue(true);
     vi.mocked(getColdEmailRule).mockResolvedValue(null);
     vi.mocked(isColdEmailRuleEnabled).mockReturnValue(false);
   });
 
   afterEach(() => {
     vi.mocked(getDecisionModelConfig).mockResolvedValue(null);
+    vi.mocked(isDecisionFeatureLive).mockReturnValue(false);
+  });
+
+  it("still records the shadow rule choice when the LLM call fails", async () => {
+    vi.mocked(isDecisionFeatureLive).mockReturnValue(false);
+    const aiRule = getAiRule();
+    vi.mocked(decisionModelChooseRule).mockResolvedValue({
+      type: "rules",
+      rules: [{ rule: aiRule, isPrimary: true }],
+      reason: "Decision model reason",
+    });
+    vi.mocked(aiChooseRule).mockRejectedValue(new Error("llm down"));
+
+    await expect(
+      findMatchingRules({
+        rules: [aiRule],
+        message: getMessage(),
+        emailAccount: getEmailAccount(),
+        provider,
+        modelType: "default",
+        logger,
+      }),
+    ).rejects.toThrow("llm down");
+
+    await vi.waitFor(() =>
+      expect(recordDecisionModelRun).toHaveBeenCalledWith(
+        expect.objectContaining({
+          feature: "choose-rule",
+          mode: "shadow",
+          outcome: "llm-error",
+          jevResult: expect.objectContaining({ primaryRuleId: aiRule.id }),
+          error: expect.stringContaining("LLM: llm down"),
+        }),
+      ),
+    );
+  });
+
+  it("lets the LLM choose and only records the decision model unless choose-rule is live", async () => {
+    vi.mocked(isDecisionFeatureLive).mockReturnValue(false);
+    const aiRule = getAiRule();
+    vi.mocked(decisionModelChooseRule).mockResolvedValue({
+      type: "rules",
+      rules: [{ rule: aiRule, isPrimary: true }],
+      reason: "Decision model reason",
+    });
+    vi.mocked(aiChooseRule).mockResolvedValue({
+      rules: [{ rule: aiRule }],
+      reason: "LLM reason",
+    });
+
+    const result = await findMatchingRules({
+      rules: [aiRule],
+      message: getMessage(),
+      emailAccount: getEmailAccount(),
+      provider,
+      modelType: "default",
+      logger,
+    });
+
+    expect(isDecisionFeatureLive).toHaveBeenCalledWith("choose-rule");
+    expect(aiChooseRule).toHaveBeenCalledTimes(1);
+    expect(result.reasoning).toBe("LLM reason");
+    await vi.waitFor(() =>
+      expect(recordDecisionModelRun).toHaveBeenCalledWith(
+        expect.objectContaining({
+          feature: "choose-rule",
+          mode: "shadow",
+          outcome: "agree",
+        }),
+      ),
+    );
   });
 
   function getAiRule() {

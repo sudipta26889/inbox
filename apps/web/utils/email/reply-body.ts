@@ -1,6 +1,7 @@
 import { env } from "@/env";
 import prisma from "@/utils/prisma";
 import { renderEmailTextWithSafeLinks } from "@/utils/email/render-safe-links";
+import { renderReplyBodyHtml } from "@/utils/email/reply-body-html";
 import { getOrCreateReferralCode } from "@/utils/referral/referral-code";
 import { generateReferralLink } from "@/utils/referral/referral-link";
 import { renderReferralSignatureHtml } from "@/utils/referral/signature";
@@ -32,7 +33,9 @@ export async function buildDraftReplyBody({
   if (emailAccount?.signature) {
     // The marker lets the composer separate the signature again even when a
     // provider normalizes its inner HTML before the draft is reopened.
-    body = `${body}\n\n<div class="gmail_signature" data-smartmail="gmail_signature">${emailAccount.signature}</div>`;
+    // renderReplyBodyHtml keeps a plain-text signature's line breaks inside
+    // the wrapper; an HTML signature passes through.
+    body = `${body}\n\n<div class="gmail_signature" data-smartmail="gmail_signature">${renderReplyBodyHtml(emailAccount.signature)}</div>`;
   }
 
   if (

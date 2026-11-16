@@ -182,6 +182,7 @@ export const createMockEmailProvider = (
   deleteFolder: vi.fn().mockResolvedValue(undefined),
   sendEmailWithHtml: vi.fn().mockResolvedValue(undefined),
   getDrafts: vi.fn().mockResolvedValue([]),
+  getDraftStatus: vi.fn().mockResolvedValue({ status: "unknown" }),
   ...overrides,
 });
 

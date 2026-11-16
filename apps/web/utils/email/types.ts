@@ -1,7 +1,7 @@
 import type { MailPredicate } from "@inboxzero/mail-core/queries";
 import type { LocalMailSyncRequest } from "@/utils/actions/local-mail-sync.validation";
 import type { LocalMailSyncResponse } from "@/utils/email/local-mail-sync-types";
-import type { ParsedMessage } from "@/utils/types";
+import type { DraftStatus, ParsedMessage } from "@/utils/types";
 import type { InboxZeroLabel, LabelColorName } from "@/utils/label";
 import type { ThreadsQuery } from "@/utils/threads/validation";
 import type {
@@ -14,6 +14,7 @@ import type { DraftAttachmentMetadata } from "@/utils/actions/draft-attachments.
 import type { DraftMessageUploadPart } from "@/utils/email/draft-attachment-upload";
 import type { EmailContact } from "@/utils/email/contact";
 import type { SendAsAddress } from "@/utils/email/send-as";
+import type { SendApproval } from "@/utils/mail/send-approval";
 import type {
   LabelVisibility,
   MessageVisibility,
@@ -55,6 +56,8 @@ export type DraftAttachmentUploadStart =
 export type SendEmailOptions = {
   /** Keep the provider's reply subject when changing it would break threading. */
   preserveThreadSubject?: boolean;
+  /** Set when the send was approved before its operation was committed. */
+  approval?: SendApproval;
 };
 
 export interface EmailThread {
@@ -232,7 +235,9 @@ export interface EmailProvider {
     replyToMessageId?: string; // For proper threading
     /** Starts the draft as a forward of this message, carrying its files. */
     forwardedMessageId?: string;
-  }): Promise<{ id: string }>;
+    threadId?: string;
+    attachments?: MailAttachment[];
+  }): Promise<{ id: string; threadId?: string }>;
   createFilter(options: {
     from: string;
     addLabelIds?: string[];
@@ -265,6 +270,8 @@ export interface EmailProvider {
       bcc?: string;
       content?: string;
       from?: string;
+      /** Stable id, so a retried send joins its open approval card. */
+      operationId?: string;
     },
   ): Promise<{ messageId: string }>;
   getAccessToken(): string;
@@ -288,6 +295,7 @@ export interface EmailProvider {
   getDraftReferenceForMessage(
     messageId: string,
   ): Promise<DraftReference | null>;
+  getDraftStatus(draftId: string, threadId?: string): Promise<DraftStatus>;
   getDrafts(options?: { maxResults?: number }): Promise<ParsedMessage[]>;
   getFiltersList(): Promise<EmailFilter[]>;
   getFolderCounts(): Promise<EmailFolderCount[]>;
@@ -447,6 +455,8 @@ export interface EmailProvider {
       cc?: string;
       bcc?: string;
       attachments?: MailAttachment[];
+      /** Stable id, so a retried send joins its open approval card. */
+      operationId?: string;
     },
   ): Promise<{ messageId: string }>;
   searchContacts(query: string): Promise<EmailContact[]>;
@@ -482,7 +492,10 @@ export interface EmailProvider {
     threads: EmailThread[];
     nextPageToken?: string;
   }>;
-  sendDraft(draftId: string): Promise<{ messageId: string; threadId: string }>;
+  sendDraft(
+    draftId: string,
+    options?: Pick<SendEmailOptions, "approval">,
+  ): Promise<{ messageId: string; threadId: string }>;
   sendEmail(args: {
     to: string;
     cc?: string;
@@ -490,6 +503,8 @@ export interface EmailProvider {
     subject: string;
     messageText: string;
     attachments?: MailAttachment[];
+    /** Stable id, so a retried send joins its open approval card. */
+    operationId?: string;
   }): Promise<{ messageId: string }>;
   sendEmailWithHtml(
     body: SendEmailBody,

@@ -188,6 +188,35 @@ describe("updateAiSettingsAction", () => {
     expect(prisma.user.updateMany).not.toHaveBeenCalled();
   });
 
+  it("saves LiteLLM without a per-user key", async () => {
+    const result = await updateAiSettingsAction({
+      aiProvider: Provider.LITELLM,
+      aiModel: "deepseek-v4-flash",
+      aiApiKey: undefined,
+    });
+
+    expect(result?.serverError).toBeUndefined();
+    expect(prisma.user.updateMany).toHaveBeenCalledWith({
+      where: { id: "user-1" },
+      data: {
+        aiProvider: Provider.LITELLM,
+        aiModel: "deepseek-v4-flash",
+        aiApiKey: null,
+      },
+    });
+  });
+
+  it("rejects a provider saved without a model", async () => {
+    const result = await updateAiSettingsAction({
+      aiProvider: Provider.LITELLM,
+      aiModel: "  ",
+      aiApiKey: "key",
+    });
+
+    expect(result?.validationErrors).toBeTruthy();
+    expect(prisma.user.updateMany).not.toHaveBeenCalled();
+  });
+
   it("rejects account-level AI model updates when deployment settings are disabled", async () => {
     mockEnv.NEXT_PUBLIC_AI_MODEL_SETTINGS_DISABLED = true;
 

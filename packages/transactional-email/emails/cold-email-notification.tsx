@@ -31,7 +31,7 @@ const ColdEmailNotification: ColdEmailNotificationComponent = ({
           <Section className="p-8 text-center">
             <Link href={baseUrl} className="text-[15px]">
               <Img
-                src={"https://inbox.sudiptadhara.in/icon.png"}
+                src={`${baseUrl}/icon.png`}
                 width="40"
                 height="40"
                 alt="Inbox"

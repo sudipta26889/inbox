@@ -24,7 +24,8 @@ vi.mock("@vercel/queue", () => ({
   handleCallback: handleCallbackMock,
 }));
 
-vi.mock("@/utils/error", () => ({
+vi.mock("@/utils/error", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/utils/error")>()),
   captureException: (...args: unknown[]) => captureExceptionMock(...args),
 }));
 

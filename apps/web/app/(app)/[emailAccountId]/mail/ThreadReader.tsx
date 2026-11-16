@@ -11,6 +11,7 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import { AlertCircleIcon, Loader2Icon, MailIcon } from "lucide-react";
 import { latestShownMessage } from "@/app/(app)/[emailAccountId]/mail/latest-shown-message";
 import { ReaderToolbar } from "@/app/(app)/[emailAccountId]/mail/ReaderToolbar";
+import { TaskpilotConvertButton } from "@/app/(app)/[emailAccountId]/mail/TaskpilotConvertButton";
 import { MailReaderSurface } from "@inboxzero/mail-ui/MailReaderSurface";
 import { isThreadStarred } from "@/app/(app)/[emailAccountId]/mail/star-state";
 import { useThreadTranslation } from "@/app/(app)/[emailAccountId]/mail/use-thread-translation";
@@ -199,7 +200,17 @@ export function ThreadReader({
       messageExpansion={messageExpansion}
       labelHref={labelHref}
       labels={labels}
-      menu={menu}
+      menu={
+        <>
+          {emailAccountId && headerMessage?.id && (
+            <TaskpilotConvertButton
+              emailAccountId={emailAccountId}
+              messageId={headerMessage.id}
+            />
+          )}
+          {menu}
+        </>
+      }
       showChat={showChat}
       onArchive={onArchive}
       onMoveToInbox={onMoveToInbox}

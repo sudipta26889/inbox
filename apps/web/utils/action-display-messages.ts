@@ -92,6 +92,8 @@ export function getActionDisplayText(
       return i18n._(msg`Notify Sender`);
     case ActionType.HOME_ASSISTANT:
       return i18n._(msg`Home Assistant`);
+    case ActionType.CREATE_TASK:
+      return "TaskPilot";
     case ActionType.INTEGRATION: {
       const label = i18n._(getIntegrationActionLabelMessage(action));
       const displayValue = getIntegrationActionDisplayValue(action);

@@ -57,6 +57,9 @@ export interface ParsedMessage {
   calendarEventId?: string;
   conversationIndex?: string | null;
   date: string;
+  // Set only when the message was read as a draft. On Gmail this differs from
+  // `id` (the message id) and is the only id the drafts API accepts.
+  draftId?: string;
   externalUrl?: string;
   hasAttachment?: boolean;
   headers: ParsedMessageHeaders;
@@ -95,6 +98,17 @@ interface Headers {
   "content-id": string;
   "content-transfer-encoding": string;
   "content-type": string;
+}
+
+/**
+ * Outcome of a draft an agent created. "sent" and "deleted" are opposite
+ * signals for the human-review loop, so they must not collapse into one
+ * "not found" answer.
+ */
+export interface DraftStatus {
+  messageId?: string;
+  status: "draft" | "sent" | "deleted" | "unknown";
+  threadId?: string;
 }
 
 export interface ParsedMessageHeaders {

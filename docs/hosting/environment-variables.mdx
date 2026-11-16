@@ -87,7 +87,10 @@ Reference for environment variables relevant to self-hosting Inbox Zero. Hosted-
 | `AI_GATEWAY_API_KEY` | No | AI Gateway API key | — |
 | `DEFAULT_DECISION_MODEL` | No | Optional decision model as `provider:model`, for example `openrouter:cloudflare/clef`. Providers: `openrouter`, `aigateway`, `openai`, `typesafe`. Uses that provider's key, or `LLM_API_KEY` (except `typesafe`, which needs `TYPESAFE_API_KEY`). See [LLM Setup](/hosting/llm-setup#decision-models). | — |
 | `DEFAULT_DECISION_MODEL_ENABLED` | No | Turn the decision model on for users who haven't chosen; otherwise users opt in | `false` |
-| `DECISION_MODEL_COLD_EMAIL_ENABLED` | No | Also use the decision model for cold email detection. When off, cold email detection always uses the LLM | `false` |
+| `DECISION_MODEL_LIVE` | No | Comma-separated steps where the decision model decides, e.g. `thread-status,cold-email,categorize-sender`. Other steps run in shadow mode (the LLM decides; the decision model is only recorded) | — |
+| `DECISION_MIN_CONFIDENCE` | No | Live answers below this confidence go to the escalation model (0.5–1) | `0.95` |
+| `DECISION_ESCALATION_MODEL` | No | `provider:model` that decides when the decision model is unsure; unset uses the account's own model | — |
+| `DECISION_LIVE_AUDIT` | No | `false` stops the LLM from double-checking live decisions | `true` |
 | `TYPESAFE_API_KEY` | No | TypeSafe API key, for `typesafe:` decision models | — |
 | `PERPLEXITY_API_KEY` | No | Perplexity API key for guest research for meeting briefs | — |
 | **Azure OpenAI** ||||

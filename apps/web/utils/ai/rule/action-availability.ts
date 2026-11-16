@@ -51,6 +51,7 @@ export function getExtraAvailableActionsForRuleEditor({
     existingActionTypes.includes(ActionType.INTEGRATION)
       ? [ActionType.INTEGRATION]
       : []),
+    ActionType.CREATE_TASK,
   ] as ActionType[];
 }
 

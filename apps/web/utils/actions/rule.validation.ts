@@ -55,6 +55,7 @@ const zodActionType = z.enum([
   ActionType.NOTIFY_SENDER,
   ActionType.INTEGRATION,
   ActionType.HOME_ASSISTANT,
+  ActionType.CREATE_TASK,
 ]);
 
 // Arg keys are owned and validated by the selected tool spec below.

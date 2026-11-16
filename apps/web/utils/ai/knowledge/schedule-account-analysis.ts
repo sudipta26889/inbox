@@ -11,6 +11,11 @@ import { flushLoggerSafely } from "@/utils/logger-flush";
 
 type AnalysisKind = "persona" | "behavior" | "writing-style";
 
+// The analysis is started from page loads, so a failing one would otherwise be
+// retried (and paid for) on every load once the short lock expires.
+const FAILED_ANALYSIS_COOLDOWN_SECONDS = 24 * 60 * 60;
+const PROCESSED_TTL_SECONDS = 60;
+
 export async function scheduleAccountAnalysis({
   emailAccountId,
   kind,
@@ -31,12 +36,14 @@ export async function scheduleAccountAnalysis({
     // Provider reads must not hold Next.js's per-client Server Action queue.
     after(async () => {
       let status = "cooldown";
+      let failed = false;
       try {
         const completed = await run(
           async () => (await redis.get(key)) === lockToken,
         );
         if (completed) status = "completed";
       } catch (error) {
+        failed = true;
         logger.warn("Background account analysis did not complete", {
           kind,
           error,
@@ -46,7 +53,9 @@ export async function scheduleAccountAnalysis({
           key,
           lockToken,
           processedStatus: status,
-          processedTtlSeconds: 60,
+          processedTtlSeconds: failed
+            ? FAILED_ANALYSIS_COOLDOWN_SECONDS
+            : PROCESSED_TTL_SECONDS,
         });
         await flushLoggerSafely(logger, {
           action: kind,

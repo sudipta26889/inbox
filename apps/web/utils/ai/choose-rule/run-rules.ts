@@ -53,6 +53,8 @@ import {
 import { internalDateToDate } from "@/utils/date";
 import { ConditionType } from "@/utils/config";
 import type { Logger } from "@/utils/logger";
+import { maybeRouteToTaskPilot } from "@/utils/taskpilot/route";
+import { getEmailUrlForMessage } from "@/utils/url";
 import {
   getBlockedLowTrustStaticFromActionTypes,
   LOW_TRUST_STATIC_FROM_OUTBOUND_MESSAGE,
@@ -213,6 +215,9 @@ export async function runRules({
           }),
         { logger },
       );
+      // Rule-independent: a SKIPPED email can still be a reply to a
+      // thread-linked task or a semantic neighbour; no CREATE_TASK ran.
+      routeToTaskPilot({ message, emailAccount, provider, canCreate: false });
     }
 
     return [
@@ -266,6 +271,17 @@ export async function runRules({
         executedRule.status ||
         executedRule.executedRule?.status ||
         ExecutedRuleStatus.APPLIED,
+    });
+  }
+
+  if (!isTest) {
+    routeToTaskPilot({
+      message,
+      emailAccount,
+      provider,
+      canCreate: executedRules.some((er) =>
+        er.actionItems?.some((ai) => ai.type === ActionType.CREATE_TASK),
+      ),
     });
   }
 
@@ -1061,4 +1077,39 @@ function removeDraftReplyActionsFromMatches<
       ),
     },
   }));
+}
+
+// ponytail: fire-and-forget instead of after(); after() silently dropped these
+// callbacks in production, and the orchestrator swallows its own errors.
+function routeToTaskPilot({
+  message,
+  emailAccount,
+  provider,
+  canCreate,
+}: {
+  message: ParsedMessage;
+  emailAccount: EmailAccountForDrafting;
+  provider: EmailProvider;
+  canCreate: boolean;
+}) {
+  maybeRouteToTaskPilot({
+    userId: emailAccount.userId,
+    emailAccountId: emailAccount.id,
+    messageId: message.id,
+    threadId: message.threadId ?? null,
+    deepLink: getEmailUrlForMessage(
+      message.id,
+      message.threadId ?? "",
+      emailAccount.email,
+      provider.name,
+    ),
+    email: {
+      subject: message.headers.subject ?? "",
+      from: message.headers.from ?? "",
+      snippet: message.snippet ?? "",
+      bodyText: message.textPlain ?? "",
+      receivedAt: new Date(Number(message.internalDate) || Date.now()),
+    },
+    canCreate,
+  }).catch(() => undefined);
 }

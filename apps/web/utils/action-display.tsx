@@ -15,6 +15,7 @@ import {
   WebhookIcon,
   FileTextIcon,
   HomeIcon,
+  ListChecksIcon,
   MailIcon,
   NewspaperIcon,
   SquareCheckBigIcon,
@@ -115,6 +116,8 @@ export function getActionDisplay(
       return "Notify Sender";
     case ActionType.HOME_ASSISTANT:
       return "Home Assistant";
+    case ActionType.CREATE_TASK:
+      return "TaskPilot";
     case ActionType.INTEGRATION: {
       const label = getIntegrationActionLabel(action);
       const displayValue = getIntegrationActionDisplayValue(action);
@@ -145,6 +148,7 @@ export const ACTION_TYPE_LABELS = {
   [ActionType.DIGEST]: msg`Add to digest`,
   [ActionType.NOTIFY_SENDER]: msg`Notify sender`,
   [ActionType.HOME_ASSISTANT]: msg`Home Assistant`,
+  [ActionType.CREATE_TASK]: msg`TaskPilot`,
   // ActionType alone cannot name a specific tool; getIntegrationActionLabel
   // gives the precise name when the action is known.
   [ActionType.INTEGRATION]: getIntegrationActionLabelMessage(),
@@ -199,6 +203,8 @@ export function getActionIcon(actionType: ActionType) {
       return BellIcon;
     case ActionType.HOME_ASSISTANT:
       return HomeIcon;
+    case ActionType.CREATE_TASK:
+      return ListChecksIcon;
     case ActionType.INTEGRATION:
       return SquareCheckBigIcon;
     default: {

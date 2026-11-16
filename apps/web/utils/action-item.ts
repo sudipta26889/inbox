@@ -151,6 +151,7 @@ export const actionInputs: Record<
   [ActionType.INTEGRATION]: { fields: [] },
   // Rendered by HomeAssistantActionFields, not the generic field list.
   [ActionType.HOME_ASSISTANT]: { fields: [] },
+  [ActionType.CREATE_TASK]: { fields: [] },
 };
 
 export function getActionFields(fields: Action | ExecutedAction | undefined) {
@@ -366,7 +367,8 @@ export function sanitizeActionFields(
         url: action.url ?? null,
       };
     }
-    case ActionType.NOTIFY_SENDER: {
+    case ActionType.NOTIFY_SENDER:
+    case ActionType.CREATE_TASK: {
       return base;
     }
     case ActionType.INTEGRATION: {

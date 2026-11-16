@@ -12,6 +12,7 @@ import {
   FolderInputIcon,
   HomeIcon,
   BellIcon,
+  ListChecksIcon,
   StarIcon,
   Trash2Icon,
 } from "lucide-react";
@@ -35,6 +36,7 @@ export const ACTION_TYPE_TEXT_COLORS = {
   [ActionType.NOTIFY_MESSAGING_CHANNEL]: "text-sky-500",
   [ActionType.NOTIFY_SENDER]: "text-amber-500",
   [ActionType.HOME_ASSISTANT]: "text-indigo-500",
+  [ActionType.CREATE_TASK]: "text-sky-500",
 } as const;
 
 export const ACTION_TYPE_ICONS = {
@@ -55,4 +57,5 @@ export const ACTION_TYPE_ICONS = {
   [ActionType.NOTIFY_MESSAGING_CHANNEL]: BellIcon,
   [ActionType.NOTIFY_SENDER]: BellIcon,
   [ActionType.HOME_ASSISTANT]: HomeIcon,
+  [ActionType.CREATE_TASK]: ListChecksIcon,
 } as const;

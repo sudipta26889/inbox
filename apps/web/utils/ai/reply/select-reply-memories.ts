@@ -93,7 +93,7 @@ export async function aiSelectRelevantReplyMemories({
   return runDecisionModelOrFallback({
     emailAccount,
     logger,
-    feature: "reply memory selection",
+    feature: "reply-memory-selection",
     decide: (config) =>
       decideRelevantReplyMemories({
         config,
@@ -102,13 +102,15 @@ export async function aiSelectRelevantReplyMemories({
         emailAccount,
         logger,
       }),
-    fallback: () =>
+    fallback: (account) =>
       selectRelevantReplyMemoriesWithLlm({
         candidates,
         emailContent,
-        emailAccount,
+        emailAccount: account,
         logger,
       }),
+    same: (decided, llm) =>
+      [...(decided ?? [])].sort().join() === [...(llm ?? [])].sort().join(),
   });
 }
 

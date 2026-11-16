@@ -1,3 +1,4 @@
+import { jsonrepair } from "jsonrepair";
 import { z } from "zod";
 import { TZDate } from "@date-fns/tz";
 import { createScopedLogger } from "@/utils/logger";
@@ -24,7 +25,7 @@ import {
 
 const logger = createScopedLogger("DraftReply");
 const DRAFT_OUTPUT_INSTRUCTION =
-  "Return plain text only. Do not use HTML tags. If a clickable link is necessary, use markdown links in the format [Label](https://example.com/path) or [Label](mailto:name@example.com).";
+  "The reply field is plain text only. Do not use HTML tags. If a clickable link is necessary, use markdown links in the format [Label](https://example.com/path) or [Label](mailto:name@example.com).";
 
 const systemPrompt = `You write email replies as the user, in their voice. The user reviews and edits every draft before it is sent.
 
@@ -37,13 +38,19 @@ ${DRAFT_OUTPUT_INSTRUCTION}
 IMPORTANT: Format paragraphs using Unix newlines: use "\n\n" between paragraphs and "\n" for single line breaks.
 Write the reply in the same language as the latest message in the thread.
 
-A gap in your context is not a gap in the user's knowledge. When the reply depends on something the user could answer without asking anyone, such as their decision, status, plans, product, or whether they want to meet, state their most likely answer plainly and put your uncertainty in the confidence field. Don't hedge their own facts, say they can't confirm or don't want to guess, mention your context, leave placeholders, or promise to check later instead of answering.
-When the thread or context shows the answer is genuinely unsettled for the user, such as it depends on someone else or they said they would check, say so instead of deciding it for them. A reported problem can get a promise to investigate.
-Don't invent facts about the other party; ground them in the thread or provided context. If the sender wrongly assumes something about the user, such as who they are or what they sell, correct it plainly, as fact rather than a guess or possibility.
+Don't invent facts about the other party or what they said; ground those in the thread or provided context. If the sender wrongly assumes something about the user, correct it only when the context shows what is true.
 Don't pass the request to anyone else, including people in To or Cc, unless the context says they handle it. Don't claim the user copied someone in or did anything the thread or context doesn't show.
 Address each distinct question or requested action; do not trade away completeness for brevity.
 When the sender asks several separate questions, answer each one on its own, in their order, so they can match every answer to its question. If they numbered or bulleted them, reply with the same numbering or bullets. Keep each answer brief.
-Never use placeholders for the user's name. You do not need to sign off with the user's name. Do not add a signature.
+Only state facts, numbers, dates, prices, reasons, statuses and commitments that appear in the thread, the knowledge base, the email history, the calendar information or other provided context. Never invent them, and never claim the user did something (read, reviewed, sent, paid, decided) unless the context shows it.
+Quote numbers, amounts, dates and counts exactly as they appear in the context. Never calculate, estimate, round or derive new ones (rates, totals, day counts, differences); if the reply needs such a number, use a placeholder like [your answer: the day rate?].
+Never mention your own context or what you can or cannot see (for example that something did not come through, is missing, or is not in front of you). When something you would need is not in the context, use a placeholder instead.
+When an answer needs the user's own decision or information that is not in the context, write a short placeholder in square brackets for the user to fill in, e.g. [your answer: the 3rd or the 10th?] or [confirm: does 4 pm IST work?]. Never fill it with a guess. Keep the rest of the reply complete around it.
+Never accept, agree to, decide or promise anything on the user's behalf, including a future action such as "I'll send/reissue/check", unless the thread shows the user already said so. A free calendar slot is not agreement: write [confirm: 4 pm IST on Friday works? Your calendar is free then] instead of accepting. A pattern in past emails is not a commitment: put it in a placeholder, e.g. [confirm: reissue both invoices dated the same day as usual?].
+Facts found in the provided past emails or knowledge base may be stated; decisions and commitments may not.
+Address each distinct question; a placeholder counts as addressing it.
+End the reply without a sign-off or the user's name; their signature is added automatically.
+Never use a placeholder for the user's name. Do not add a signature or sign-off.
 Inline image markers such as [image] or [image: ...] mean the sender included a real image in the email, but only the marker and label are available in this prompt. Do not say the image is missing, unreadable, unavailable, or needs to be resent; respond from the available text and image label.
 Treat email dates as message metadata, not calendar context.
 Do not use em dashes unless the provided writing style explicitly calls for them.
@@ -55,11 +62,10 @@ Your reply should aim to continue the conversation or provide new information ba
 By default, keep replies concise, direct, friendly, plainspoken, and no longer than needed. Prefer short declarative sentences over polished or overly elaborate phrasing.
 The user's writing style can override these defaults.
 
-Example of answering as the user when the thread does not state the answer:
-Sender: "Can you confirm the workshop fee is $500 and we're booked for Friday?"
-Good: "Yes, $500 and Friday are both right. See you then."
-Bad: "I'll confirm the fee and date and get back to you."
-Bad: "I'm not certain about the fee, so I don't want to give you the wrong number."
+Example when the context does not contain the answer:
+Sender: "Can you confirm the workshop fee is $500 and we're booked for Friday?" (the context has no fee or booking)
+Good: "Thanks. [confirm: is the fee $500?] [confirm: are we booked for Friday?]"
+Bad: "Yes, $500 and Friday are both right."
 `;
 
 const defaultWritingStyle = `Keep it concise, direct, and friendly.
@@ -142,7 +148,7 @@ Here is the context of the email thread (from oldest to newest):
 ${thread}
 
 Please write a reply to the email.
-Answer the sender directly as the user. If the answer depends on something only the user knows, write their most likely answer; they will edit it if it's wrong.
+Answer the sender directly as the user. If the answer depends on something only the user knows and the context does not show it, leave a [placeholder] for the user to fill in.
 ${temporalAndIdentityContext}`;
 };
 
@@ -348,7 +354,7 @@ const draftSchema = z.object({
       "The complete email reply draft incorporating knowledge base information",
     ),
   confidence: llmDraftConfidenceSchema.describe(
-    "Use HIGH only when the draft is complete, grounded, and does not depend on missing facts, pending checks or follow-ups, unavailable calendar/business state, assumptions, or user-fillable details. Use MEDIUM for useful drafts that rely on reasonable assumptions, missing facts, or user-fillable details. Use LOW when the draft is highly uncertain, likely needs broader thread/context review, or mainly asks/checks/follows up.",
+    "Use HIGH only when the draft is complete, grounded, and does not depend on missing facts, pending checks or follow-ups, unavailable calendar/business state, assumptions, or user-fillable details. Use MEDIUM only for complete, grounded drafts with minor wording uncertainty. Use LOW whenever anything rests on an assumption, a missing fact or a [placeholder], and when the draft is highly uncertain, likely needs broader thread/context review, or mainly asks/checks/follows up.",
   ),
 });
 
@@ -406,6 +412,10 @@ export async function aiDraftReplyWithConfidence(
       ).instructions,
       prompt,
       schema: draftSchema,
+      // Overrides the generic repair, which cannot turn bare email text into
+      // an object that matches draftSchema.
+      repairText: async ({ text }: { text: string }) =>
+        repairDraftReplyText(text),
     });
 
   let result = await generate();
@@ -422,7 +432,11 @@ export async function aiDraftReplyWithConfidence(
 
   return {
     reply: normalizeDraftReplyFormatting(result.object.reply),
-    confidence: mapLlmDraftConfidence(result.object.confidence),
+    // A placeholder means the user still has to decide something, so it is
+    // never more than the lowest confidence whatever the model claims.
+    confidence: hasDraftPlaceholder(result.object.reply)
+      ? DraftReplyConfidence.ALL_EMAILS
+      : mapLlmDraftConfidence(result.object.confidence),
     attribution: attributionTracker.attribution,
   };
 }
@@ -540,7 +554,7 @@ When scheduling with the user is clearly needed, prefer sharing this booking lin
     const timezoneLabel = getTimezoneLabel(timezone);
 
     parts.push(`The user has no available time slots in the requested timeframe in ${timezoneLabel}.
-Do not suggest specific times. Acknowledge the request and suggest alternatives (e.g., "I'm fully booked tomorrow, but let's find another day that works"${calendarBookingLink ? " or share the booking link" : ""}).`);
+Do not suggest specific times, and do not decline or reschedule for the user. Leave the decision in a placeholder (e.g., "[confirm: your calendar is full tomorrow; decline or offer another day?]"${calendarBookingLink ? " or share the booking link" : ""}).`);
   } else if (calendarAvailability?.suggestedTimes.length) {
     const times = calendarAvailability.suggestedTimes
       .map((slot) =>
@@ -557,13 +571,13 @@ Do not suggest specific times. Acknowledge the request and suggest alternatives 
     );
 
     parts.push(`Available time slots are in ${timezoneLabels}.
-If the sender requested or uses another timezone, express proposed times in that timezone after converting from the user's available slots.
+Quote slot times exactly as listed, with their timezone label; never convert them to another timezone.
 If you list specific times, include the user-facing timezone label shown for each slot, not a raw timezone identifier.
 
 Available time slots:
 ${times}
 
-${calendarBookingLink ? "Because the user has a booking link, share the booking link instead of listing specific times unless the sender explicitly asks the user to provide times, asks about a specific proposed time/date, or the booking link would not answer the scheduling request." : "When the sender is asking to schedule, respond concretely using these time slots. Treat supplied slots on or after today's date as valid; only ask for updated availability if every supplied slot is before today's date."} Propose one specific time rather than a list unless the sender asked for multiple options. If the sender asked for a specific number of options, provide that many when enough slots are available. If the sender has already declined one proposal, offer a different specific time.`);
+${calendarBookingLink ? "Because the user has a booking link, share the booking link instead of listing specific times unless the sender explicitly asks the user to provide times, asks about a specific proposed time/date, or the booking link would not answer the scheduling request." : "When the sender is asking to schedule, respond using these time slots. Treat supplied slots on or after today's date as valid; only ask for updated availability if every supplied slot is before today's date."} These times are free on the user's calendar; offer them only inside a [confirm: ...] placeholder, never as an acceptance. Propose one specific time rather than a list unless the sender asked for multiple options. If the sender asked for a specific number of options, provide that many when enough slots are available. If the sender has already declined one proposal, offer a different specific time.`);
   }
 
   if (parts.length === 0) return "";
@@ -706,5 +720,63 @@ const OLLAMA_DRAFT_RESPONSE_GUIDANCE = [
   'Return a JSON object with exactly two top-level fields: "reply" and "confidence".',
   '"reply" must be one complete email reply as a single plain-text string, not an array of alternatives.',
   '"confidence" must be one of "LOW", "MEDIUM", or "HIGH".',
-  'Example valid output: {"reply":"Thanks for reaching out. I will take a look and follow up shortly.","confidence":"MEDIUM"}',
+  'Example valid output: {"reply":"Thanks for the details. [confirm: does Friday at 4 pm work?]","confidence":"LOW"}',
 ] as const;
+
+export function repairDraftReplyText(text: string): string {
+  if (!text.trim()) return text;
+
+  const parsed = parseJsonObject(text);
+  if (parsed && typeof parsed.reply === "string") {
+    // A missing or invented confidence would fail the schema; the lowest one
+    // keeps the user reviewing the draft.
+    const confidence = llmDraftConfidenceSchema.safeParse(parsed.confidence)
+      .success
+      ? parsed.confidence
+      : "LOW";
+    return JSON.stringify({ ...parsed, confidence });
+  }
+
+  // Some models ignore the schema and answer with the bare email. The lowest
+  // confidence keeps the user reviewing it.
+  return JSON.stringify({ reply: text.trim(), confidence: "LOW" });
+}
+
+export function hasDraftPlaceholder(reply: string): boolean {
+  // The lookahead skips markdown links, `[label](url)`.
+  for (const match of reply.matchAll(/\[([^[\]]{2,200})\](?!\()/g)) {
+    if (!MAIL_TAGS.has(match[1].trim().toLowerCase())) return true;
+  }
+  return false;
+}
+
+// Subject tags mail systems add; echoing one is not a decision left open.
+const MAIL_TAGS = new Set(["external", "spam", "suspicious"]);
+
+function parseJsonObject(text: string): Record<string, unknown> | null {
+  const unfenced = text
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/, "");
+
+  for (const candidate of [unfenced, tryJsonRepair(unfenced)]) {
+    if (candidate === null) continue;
+    try {
+      const value = JSON.parse(candidate);
+      if (value && typeof value === "object" && !Array.isArray(value)) {
+        return value as Record<string, unknown>;
+      }
+    } catch {
+      // try the next candidate
+    }
+  }
+  return null;
+}
+
+function tryJsonRepair(text: string): string | null {
+  try {
+    return jsonrepair(text);
+  } catch {
+    return null;
+  }
+}

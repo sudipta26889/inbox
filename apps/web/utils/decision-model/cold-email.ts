@@ -3,11 +3,15 @@ import type { EmailAccountWithAI } from "@/utils/llms/types";
 import type { Logger } from "@/utils/logger";
 import type { EmailForLLM } from "@/utils/types";
 import { DEFAULT_COLD_EMAIL_PROMPT } from "@/utils/cold-email/prompt";
-import { type DecisionModelConfig, runDecisionModel } from "./decision-model";
+import {
+  type DecisionModelConfig,
+  DecisionUncertainError,
+  getDecisionMinConfidence,
+  runDecisionModel,
+} from "./decision-model";
 import { getDecisionEmailState } from "./email-state";
 
 const COLD_EMAIL_KEY = "cold_email";
-const MIN_COLD_EMAIL_PROBABILITY = 0.75;
 
 export async function decideColdEmail({
   config,
@@ -54,8 +58,21 @@ export async function decideColdEmail({
     throw new Error("Decision model response is missing the cold-email answer");
   }
 
+  // Upstream marks cold at >= 0.75 and otherwise not cold. Here only a
+  // confident answer either way decides; the middle band is uncertain, since a
+  // false positive hides real mail.
+  const minConfidence = getDecisionMinConfidence();
+  if (
+    answer.probability > 1 - minConfidence &&
+    answer.probability < minConfidence
+  ) {
+    throw new DecisionUncertainError(
+      `Cold-email probability ${answer.probability.toFixed(2)} is not decisive`,
+    );
+  }
+
   return {
-    coldEmail: answer.probability >= MIN_COLD_EMAIL_PROBABILITY,
+    coldEmail: answer.probability >= minConfidence,
     reason: `Decision model cold-email probability: ${answer.probability.toFixed(2)}`,
   };
 }

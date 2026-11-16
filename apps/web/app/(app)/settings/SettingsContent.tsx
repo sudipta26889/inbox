@@ -8,6 +8,7 @@ import {
   ChevronRightIcon,
   CreditCardIcon,
   HomeIcon,
+  ListChecksIcon,
   MailIcon,
   MessageCircleIcon,
   MessagesSquareIcon,
@@ -20,6 +21,7 @@ import {
 } from "lucide-react";
 import { ApiKeysSection } from "@/app/(app)/[emailAccountId]/settings/ApiKeysSection";
 import { McpSection } from "@/app/(app)/[emailAccountId]/settings/McpSection";
+import { McpClientsSection } from "@/app/(app)/[emailAccountId]/settings/McpClientsSection";
 import { EmailOtpSection } from "@/app/(app)/settings/EmailOtpSection";
 import { AppearanceSection } from "@/app/(app)/settings/AppearanceSection";
 import { LanguageSection } from "@/app/(app)/settings/LanguageSection";
@@ -41,6 +43,7 @@ import { MqttSection } from "@/app/(app)/[emailAccountId]/settings/MqttSection";
 import { CopyRulesSection } from "@/app/(app)/[emailAccountId]/settings/CopyRulesSection";
 import { RuleImportExportSetting } from "@/app/(app)/[emailAccountId]/assistant/settings/RuleImportExportSetting";
 import { ToggleAllRulesSection } from "@/app/(app)/[emailAccountId]/settings/ToggleAllRulesSection";
+import { TaskpilotIntegrationSection } from "@/app/(app)/settings/TaskpilotIntegrationSection";
 import type { GetEmailAccountsResponse } from "@/app/api/user/email-accounts/route";
 import { LoadingContent } from "@/components/LoadingContent";
 import { Badge } from "@/components/ui/badge";
@@ -205,6 +208,26 @@ export function SettingsContent() {
         </ItemCard>
       </SettingsGroup>
 
+      <SettingsGroup
+        icon={<ListChecksIcon className="size-5" />}
+        title={t`Integrations`}
+      >
+        <ItemCard>
+          <TaskpilotIntegrationSection />
+        </ItemCard>
+      </SettingsGroup>
+
+      <SettingsGroup
+        icon={<HomeIcon className="size-5" />}
+        title={t`Home Assistant`}
+      >
+        <ItemCard>
+          <HomeAssistantSection />
+          <ItemSeparator />
+          <MqttSection />
+        </ItemCard>
+      </SettingsGroup>
+
       {(env.NEXT_PUBLIC_WEBHOOK_ACTION_ENABLED !== false ||
         env.NEXT_PUBLIC_EXTERNAL_API_ENABLED) && (
         <SettingsGroup
@@ -218,20 +241,11 @@ export function SettingsContent() {
             {env.NEXT_PUBLIC_WEBHOOK_ACTION_ENABLED !== false &&
               env.NEXT_PUBLIC_EXTERNAL_API_ENABLED && <ItemSeparator />}
             {env.NEXT_PUBLIC_EXTERNAL_API_ENABLED && <ApiKeysSection />}
+            <ItemSeparator />
+            <McpClientsSection />
           </ItemCard>
         </SettingsGroup>
       )}
-
-      <SettingsGroup
-        icon={<HomeIcon className="size-5" />}
-        title={t`Home Assistant`}
-      >
-        <ItemCard>
-          <HomeAssistantSection />
-          <ItemSeparator />
-          <MqttSection />
-        </ItemCard>
-      </SettingsGroup>
     </div>
   );
 }

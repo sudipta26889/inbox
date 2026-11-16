@@ -4,13 +4,13 @@ import type { Logger } from "@/utils/logger";
 import {
   type DecisionModelConfig,
   type DecisionQuestion,
+  getDecisionMinConfidence,
   runDecisionModel,
 } from "./decision-model";
 
 const CATEGORY_KEY_PREFIX = "category_";
 const SENDER_KEY_PREFIX = "sender_";
 const UNKNOWN_KEY = "unknown";
-const MIN_CATEGORY_CONFIDENCE = 0.6;
 
 type CategoryOption = Pick<Category, "name" | "description">;
 type SenderInput = {
@@ -144,7 +144,7 @@ async function decideSenderCategories({
     if (
       answer?.type !== "choice" ||
       answer.choice === UNKNOWN_KEY ||
-      answer.confidence < MIN_CATEGORY_CONFIDENCE
+      answer.confidence < getDecisionMinConfidence()
     ) {
       return { sender: sender.emailAddress, category: undefined };
     }

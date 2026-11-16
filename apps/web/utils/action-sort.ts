@@ -28,6 +28,7 @@ const ACTION_TYPE_PRIORITY_ORDER: ActionType[] = [
   ActionType.CALL_WEBHOOK,
   ActionType.HOME_ASSISTANT,
   ActionType.INTEGRATION,
+  ActionType.CREATE_TASK,
 ];
 
 /**

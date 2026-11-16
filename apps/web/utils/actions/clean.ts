@@ -84,7 +84,7 @@ export const cleanInboxAction = actionClient
           skipCalendar: skips.calendar,
           skipReceipt: skips.receipt,
           skipAttachment: skips.attachment,
-          skipConversation: skips.conversation,
+          skipConversation: skips.conversation ?? true,
         },
       });
 
@@ -109,7 +109,12 @@ export const cleanInboxAction = actionClient
                     : [GmailLabel.INBOX, GmailLabel.UNREAD],
                 excludeLabelNames: [inboxZeroLabels.processed.name],
               },
-              maxResults: Math.min(maxEmails || 100, 100),
+              // Ask only for what is left, so the last page cannot overshoot
+              // maxEmails.
+              maxResults: Math.min(
+                maxEmails ? maxEmails - totalEmailsProcessed : 100,
+                100,
+              ),
               pageToken: nextPageToken ?? undefined,
             });
 

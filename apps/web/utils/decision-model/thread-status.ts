@@ -3,11 +3,15 @@ import type { EmailAccountWithAI } from "@/utils/llms/types";
 import type { Logger } from "@/utils/logger";
 import type { EmailForLLM } from "@/utils/types";
 import { getDecisionEmailState } from "./email-state";
-import { type DecisionModelConfig, runDecisionModel } from "./decision-model";
+import {
+  type DecisionModelConfig,
+  DecisionUncertainError,
+  getDecisionMinConfidence,
+  runDecisionModel,
+} from "./decision-model";
 
 const STATUS_QUESTION_KEY = "thread_status";
 const MAX_MESSAGE_CONTENT_LENGTH = 4000;
-const MIN_STATUS_CONFIDENCE = 0.6;
 
 export async function decideThreadStatus({
   config,
@@ -70,8 +74,11 @@ export async function decideThreadStatus({
   if (!statuses.includes(answer.choice as ConversationStatus)) {
     throw new Error("Decision model returned an unknown thread status");
   }
-  if (answer.confidence < MIN_STATUS_CONFIDENCE) {
-    throw new Error("Decision model confidence is too low for thread status");
+  const minConfidence = getDecisionMinConfidence();
+  if (answer.confidence < minConfidence) {
+    throw new DecisionUncertainError(
+      `Thread status confidence ${answer.confidence.toFixed(2)} is below ${minConfidence}`,
+    );
   }
 
   return {

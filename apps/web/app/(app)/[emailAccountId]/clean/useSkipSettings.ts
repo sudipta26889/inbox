@@ -7,6 +7,6 @@ export function useSkipSettings() {
     skipCalendar: parseAsBoolean.withDefault(true),
     skipReceipt: parseAsBoolean.withDefault(false),
     skipAttachment: parseAsBoolean.withDefault(false),
-    skipConversation: parseAsBoolean.withDefault(false),
+    skipConversation: parseAsBoolean.withDefault(true),
   });
 }
