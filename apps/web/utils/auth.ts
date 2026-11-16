@@ -832,7 +832,10 @@ export async function handleLinkAccount(
                 select: { id: true },
               })
             : prisma.emailAccount.upsert({
-                where: { email: normalizedEmail },
+                // Scoped to the signing-in user so this can never move another
+                // user's mailbox (and its shares) to them; a clash fails on the
+                // unique email instead.
+                where: { email: normalizedEmail, userId: account.userId },
                 update: data,
                 create: {
                   ...data,
