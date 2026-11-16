@@ -8,7 +8,10 @@ import { auth } from "@/utils/auth";
 import { createScopedLogger } from "@/utils/logger";
 import { flushLoggerSafely } from "@/utils/logger-flush";
 import prisma from "@/utils/prisma";
-import { accessibleEmailAccountWhere } from "@/utils/email-account-access";
+import {
+  accessibleEmailAccountWhere,
+  assertAccountOwner,
+} from "@/utils/email-account-access";
 import { isAdmin } from "@/utils/admin";
 import {
   captureException,
@@ -205,6 +208,15 @@ export const actionClient = baseClient
         }),
     });
   });
+
+// Bound to an email account, refused for users who reach it through a share.
+export const ownerActionClient = actionClient.use(async ({ next, ctx }) => {
+  assertAccountOwner({
+    ownerUserId: ctx.userId,
+    sessionUserId: ctx.session.user.id,
+  });
+  return next();
+});
 
 // doesn't bind to a specific email
 export const actionClientUser = baseClient.use(
