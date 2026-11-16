@@ -28,7 +28,7 @@ jobs:
     needs: test
     # workflow_dispatch can run on any branch; only this one may publish :latest.
     if: github.ref == 'refs/heads/sudipta_main'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: write
@@ -75,7 +75,7 @@ jobs:
 
   deploy:
     needs: build-and-push
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Trigger Portainer redeploy
         env:
