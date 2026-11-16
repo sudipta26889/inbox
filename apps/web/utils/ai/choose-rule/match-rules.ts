@@ -256,7 +256,7 @@ export async function findMatchingRules({
     });
   };
 
-  let llmResult: Awaited<ReturnType<typeof aiChooseRule>>;
+  let llmResult: Awaited<ReturnType<typeof aiChooseRule<AiRuleCandidate>>>;
   try {
     llmResult = await aiChooseRule({
       email,

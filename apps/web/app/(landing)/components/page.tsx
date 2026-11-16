@@ -1126,6 +1126,7 @@ function ComponentsDemo() {
 function getRule(): Rule {
   return {
     id: "1",
+    displayOrder: 0,
     name: "Test rule",
     instructions: "Test instructions",
     from: null,

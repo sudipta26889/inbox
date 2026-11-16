@@ -2,7 +2,11 @@ import type { McpResult } from "@/utils/mcp-server/envelope";
 import type { EmailAccountWithAI } from "@/utils/llms/types";
 import type { EmailForLLM } from "@/utils/types";
 import type { EmailProvider } from "@/utils/email/types";
-import { ActionType, LogicalOperator } from "@/generated/prisma/enums";
+import {
+  ActionType,
+  type DraftReplyConfidence,
+  LogicalOperator,
+} from "@/generated/prisma/enums";
 import type { Action, Prisma } from "@/generated/prisma/client";
 import { isGoogleProvider } from "@/utils/email/provider-types";
 import { createScopedLogger } from "@/utils/logger";
@@ -226,9 +230,13 @@ type AccountWithEmailAccount = {
   emailAccount?: { id: string } | null;
 };
 
+type TestEmailAccount = EmailAccountWithAI & {
+  draftReplyConfidence: DraftReplyConfidence;
+};
+
 export function getEmailAccount(
-  overrides: Partial<EmailAccountWithAI> = {},
-): EmailAccountWithAI {
+  overrides: Partial<TestEmailAccount> = {},
+): TestEmailAccount {
   return {
     id: "email-account-id",
     userId: "user1",
@@ -238,7 +246,7 @@ export function getEmailAccount(
     sensitiveDataPolicy: overrides.sensitiveDataPolicy ?? "ALLOW",
     timezone: null,
     calendarBookingLink: null,
-    draftReplyConfidence: overrides.draftReplyConfidence ?? "MEDIUM",
+    draftReplyConfidence: overrides.draftReplyConfidence ?? "ALL_EMAILS",
     user: {
       aiModel: null,
       aiProvider: null,
@@ -348,6 +356,7 @@ export function getAction(overrides: Partial<Action> = {}): Action {
     updatedAt: new Date(),
     type: overrides.type ?? ActionType.LABEL,
     ruleId: "rule-id",
+    emailAccountId: "email-account-id",
     to: null,
     subject: null,
     label: null,
@@ -359,8 +368,19 @@ export function getAction(overrides: Partial<Action> = {}): Action {
     folderName: null,
     folderId: null,
     messagingChannelId: null,
+    messagingChannelEmailAccountId: null,
     delayInMinutes: null,
     staticAttachments: null,
+    integrationName: null,
+    integrationToolName: null,
+    integrationArgs: null,
+    haIntegrationType: null,
+    haWebhookId: null,
+    haMqttTopic: null,
+    haServiceDomain: null,
+    haServiceName: null,
+    haServiceData: null,
+    haEntityId: null,
     ...overrides,
   };
 }

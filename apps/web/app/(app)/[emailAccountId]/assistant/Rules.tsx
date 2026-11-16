@@ -147,6 +147,7 @@ export function Rules({
       return [
         {
           id: `placeholder-${systemType}`,
+          displayOrder: 0,
           name: ruleConfiguration.name,
           instructions: ruleConfiguration.instructions,
           enabled: false,
@@ -157,6 +158,13 @@ export function Rules({
             emailAccountId,
             messagingChannel: null,
             messagingChannelEmailAccountId: null,
+            haIntegrationType: null,
+            haWebhookId: null,
+            haMqttTopic: null,
+            haServiceDomain: null,
+            haServiceName: null,
+            haServiceData: null,
+            haEntityId: null,
           })),
           group: null,
           emailAccountId: emailAccountId,

@@ -1,5 +1,5 @@
 import { type CheerioAPI, load } from "cheerio";
-import type { AnyNode, Element } from "domhandler";
+import { type AnyNode, type Element, isTag } from "domhandler";
 import { Marked, type Tokens } from "marked";
 import TurndownService from "turndown";
 import { SIGNATURE_SELECTORS } from "@/utils/email/signature-normalization";
@@ -202,7 +202,9 @@ function splitOutgoingHtml(html: string) {
   // A lone wrapper div that holds all the authored text.
   let innerEnd = authoredEnd;
   for (;;) {
-    const nodes = (container ? $(container).contents() : $.root().contents())
+    const nodes: AnyNode[] = (
+      container ? $(container).contents() : $.root().contents()
+    )
       .toArray()
       .filter((node) => {
         const location = node.sourceCodeLocation;
@@ -213,15 +215,10 @@ function splitOutgoingHtml(html: string) {
           !isBlank(node)
         );
       });
-    const only = nodes.length === 1 ? nodes[0] : undefined;
-    const location = only?.sourceCodeLocation;
-    if (
-      only?.type !== "tag" ||
-      (only as Element).name !== "div" ||
-      !location?.startTag ||
-      !location.endTag
-    )
-      break;
+    const only: AnyNode | undefined = nodes.length === 1 ? nodes[0] : undefined;
+    if (!only || !isTag(only) || only.name !== "div") break;
+    const location = only.sourceCodeLocation;
+    if (!location?.startTag || !location.endTag) break;
     innerStart = location.startTag.endOffset;
     innerEnd = location.endTag.startOffset;
     container = only;
