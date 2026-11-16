@@ -7,7 +7,10 @@ import { withError } from "@/utils/middleware";
 import { captureException, SafeError } from "@/utils/error";
 import { validateOAuthCallback } from "@/utils/oauth/callback-validation";
 import { handleAccountLinking } from "@/utils/oauth/account-linking";
-import { isReconnectTargetMismatch } from "@/utils/oauth/reconnect-target";
+import {
+  canLinkForUser,
+  isReconnectTargetMismatch,
+} from "@/utils/oauth/reconnect-target";
 import {
   createAccountLinkingRedirect,
   createTokensUpdatedRedirect,
@@ -109,7 +112,13 @@ export const GET = withError("outlook/linking/callback", async (request) => {
     targetUserId,
   });
 
-  if (!actorUserId || actorUserId !== targetUserId) {
+  if (
+    !(await canLinkForUser({
+      actorUserId,
+      targetUserId,
+      reconnectEmailAccountId,
+    }))
+  ) {
     return createAccountLinkingRedirect({
       query: { error: "invalid_state" },
       stateCookieName: OUTLOOK_LINKING_STATE_COOKIE_NAME,

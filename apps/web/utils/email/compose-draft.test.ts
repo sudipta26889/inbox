@@ -238,7 +238,9 @@ it("updates and sends the provider draft directly", async () => {
     cc: "",
     bcc: "",
   });
-  expect(provider.sendDraft).toHaveBeenCalledWith("draft-1");
+  expect(provider.sendDraft).toHaveBeenCalledWith("draft-1", {
+    approval: undefined,
+  });
   expect(provider.createDraft).not.toHaveBeenCalled();
 });
 it("sends the attachments already on the mailbox draft instead of replacing them", async () => {

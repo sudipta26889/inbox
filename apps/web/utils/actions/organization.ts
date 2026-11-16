@@ -1,7 +1,10 @@
 "use server";
 
 import { after } from "next/server";
-import { actionClient, actionClientUser } from "@/utils/actions/safe-action";
+import {
+  actionClientUser,
+  ownerActionClient,
+} from "@/utils/actions/safe-action";
 import {
   createOrganizationBody,
   inviteMembersBody,
@@ -32,7 +35,7 @@ import {
   syncOrganizationRulesForNewMember,
 } from "@/utils/organizations/rules";
 
-export const createOrganizationAction = actionClient
+export const createOrganizationAction = ownerActionClient
   .metadata({ name: "createOrganization" })
   .inputSchema(createOrganizationBody)
   .action(async ({ ctx: { emailAccountId }, parsedInput: { name, slug } }) => {
@@ -567,7 +570,7 @@ async function getUserFromEmailAccount(emailAccountId: string) {
   return emailAccount;
 }
 
-export const updateAnalyticsConsentAction = actionClient
+export const updateAnalyticsConsentAction = ownerActionClient
   .metadata({ name: "updateAnalyticsConsent" })
   .inputSchema(updateAnalyticsConsentBody)
   .action(
@@ -593,7 +596,7 @@ export const updateAnalyticsConsentAction = actionClient
     },
   );
 
-export const createOrganizationAndInviteAction = actionClient
+export const createOrganizationAndInviteAction = ownerActionClient
   .metadata({ name: "createOrganizationAndInvite" })
   .inputSchema(createOrganizationAndInviteBody)
   .action(

@@ -47,7 +47,7 @@ services:
       CHAT_LLMS: ${CHAT_LLMS:-}
       NANO_LLMS: ${NANO_LLMS:-}
       DRAFT_LLMS: ${DRAFT_LLMS:-}
-      DHARAHIL_API_KEY: ${DHARAHIL_API_KEY:-}
+      DHARAHIL_API_KEY: ${DHARAHIL_API_KEY:?set DHARAHIL_API_KEY so production sends are gated}
       DIRECT_URL: ${DIRECT_URL:-}
       EMAIL_ENCRYPT_SALT: ${EMAIL_ENCRYPT_SALT:-}
       EMAIL_ENCRYPT_SECRET: ${EMAIL_ENCRYPT_SECRET:-}
@@ -116,63 +116,64 @@ services:
       sh -c "
         until apk add --no-cache curl; do sleep 5; done;
         until curl -sf -o /dev/null http://web:5500/api/health; do sleep 5; done;
+        hit() { code=$$(curl -fsS -o /dev/null -w '%{http_code}' -H \"Authorization: Bearer $${CRON_SECRET}\" \"http://web:5500$$1\") || echo \"cron FAILED $$1 status=$$code\" >&2; };
         (
           while true; do
-            curl -s -X GET 'http://web:5500/api/cron/scheduled-actions' -H \"Authorization: Bearer $${CRON_SECRET}\" || true
+            hit /api/cron/scheduled-actions
             sleep 900
           done
         ) &
         (
           while true; do
-            curl -s -X GET 'http://web:5500/api/cron/automation-jobs' -H \"Authorization: Bearer $${CRON_SECRET}\" || true
+            hit /api/cron/automation-jobs
             sleep 900
           done
         ) &
         (
           while true; do
-            curl -s -X GET 'http://web:5500/api/follow-up-reminders' -H \"Authorization: Bearer $${CRON_SECRET}\" || true
+            hit /api/follow-up-reminders
             sleep 3600
           done
         ) &
         (
           while true; do
-            curl -s -X GET 'http://web:5500/api/resend/digest/all' -H \"Authorization: Bearer $${CRON_SECRET}\" || true
+            hit /api/resend/digest/all
             sleep 1800
           done
         ) &
         (
           while true; do
-            curl -s -X GET 'http://web:5500/api/meeting-briefs' -H \"Authorization: Bearer $${CRON_SECRET}\" || true
+            hit /api/meeting-briefs
             sleep 900
           done
         ) &
         (
           while true; do
-            curl -s -X GET 'http://web:5500/api/watch/all' -H \"Authorization: Bearer $${CRON_SECRET}\" || true
+            hit /api/watch/all
             sleep 21600
           done
         ) &
         (
           while true; do
-            curl -s -X GET 'http://web:5500/api/cron/process-emails' -H \"Authorization: Bearer $${CRON_SECRET}\" || true
+            hit /api/cron/process-emails
             sleep 1800
           done
         ) &
         (
           while true; do
-            curl -s -X GET 'http://web:5500/api/cron/taskpilot-janitor' -H \"Authorization: Bearer $${CRON_SECRET}\" || true
+            hit /api/cron/taskpilot-janitor
             sleep 300
           done
         ) &
         (
           while true; do
-            curl -s -X GET 'http://web:5500/api/cron/a2a-digest' -H \"Authorization: Bearer $${CRON_SECRET}\" || true
+            hit /api/cron/a2a-digest
             sleep 600
           done
         ) &
         (
           while true; do
-            curl -s -X GET 'http://web:5500/api/cron/a2a-tasks' -H \"Authorization: Bearer $${CRON_SECRET}\" || true
+            hit /api/cron/a2a-tasks
             sleep 60
           done
         ) &

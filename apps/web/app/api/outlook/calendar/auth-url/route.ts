@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { withEmailAccount } from "@/utils/middleware";
+import { sharedUserRefusal } from "@/utils/email-account-access";
 import { getCalendarOAuth2Url } from "@/utils/outlook/calendar-client";
 import { CALENDAR_STATE_COOKIE_NAME } from "@/utils/calendar/constants";
 import {
@@ -21,6 +22,8 @@ const getAuthUrl = ({ emailAccountId }: { emailAccountId: string }) => {
 };
 
 export const GET = withEmailAccount(async (request) => {
+  const refusal = sharedUserRefusal(request.auth);
+  if (refusal) return refusal;
   const { emailAccountId } = request.auth;
   const { url, state } = getAuthUrl({ emailAccountId });
 

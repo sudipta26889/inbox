@@ -19,11 +19,11 @@ const getAuthUrl = ({
   reconnectTarget,
 }: {
   userId: string;
-  reconnectTarget: { id: string; email: string } | null;
+  reconnectTarget: { id: string; email: string; userId: string } | null;
 }) => {
   const stateNonce = randomUUID();
   const state = generateSignedOAuthState({
-    userId,
+    userId: reconnectTarget?.userId ?? userId,
     nonce: stateNonce,
     ...(reconnectTarget && { reconnectEmailAccountId: reconnectTarget.id }),
   });
@@ -79,7 +79,7 @@ export const GET = withAuth("outlook/linking/auth-url", async (request) => {
     logger: request.logger,
     provider: "microsoft",
     stateNonce,
-    targetUserId: userId,
+    targetUserId: reconnectTarget?.userId ?? userId,
   });
 
   logger.info("OAuth linking flow initiated");

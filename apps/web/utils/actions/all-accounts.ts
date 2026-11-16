@@ -7,6 +7,7 @@ import {
 } from "@/utils/actions/all-accounts.validation";
 import { SafeError } from "@/utils/error";
 import prisma from "@/utils/prisma";
+import { accessibleEmailAccountWhere } from "@/utils/email-account-access";
 
 export const updateAllAccountsSelectionAction = actionClientUser
   .metadata({ name: "updateAllAccountsSelection" })
@@ -24,6 +25,8 @@ export const updateAllAccountsSelectionAction = actionClientUser
       throw new SafeError("Email account not found");
     }
 
+    // includeInAllAccounts lives on the account, so only its owner sets it;
+    // shared-in accounts follow their owner's choice.
     await prisma.$transaction([
       prisma.emailAccount.updateMany({
         where: { userId, id: { in: emailAccountIds } },
@@ -42,23 +45,25 @@ export const reorderEmailAccountsAction = actionClientUser
   .inputSchema(reorderEmailAccountsBody)
   .action(async ({ ctx: { userId }, parsedInput: { emailAccountIds } }) => {
     const emailAccounts = await prisma.emailAccount.findMany({
-      where: { userId },
+      where: accessibleEmailAccountWhere(userId),
       select: { id: true },
     });
-    const ownedAccountIds = new Set(
+    const accessibleAccountIds = new Set(
       emailAccounts.map((emailAccount) => emailAccount.id),
     );
 
     // A partial list would leave positions colliding with the ones it skipped.
     if (
-      emailAccountIds.length !== ownedAccountIds.size ||
-      emailAccountIds.some((id) => !ownedAccountIds.has(id))
+      emailAccountIds.length !== accessibleAccountIds.size ||
+      emailAccountIds.some((id) => !accessibleAccountIds.has(id))
     ) {
       throw new SafeError(
         "Your accounts changed. Refresh the page and try again.",
       );
     }
 
+    // Shared-in accounts are listed so positions line up, but only owned ones
+    // are written: sortOrder lives on the account and belongs to its owner.
     await prisma.$transaction(
       emailAccountIds.map((id, sortOrder) =>
         prisma.emailAccount.updateMany({

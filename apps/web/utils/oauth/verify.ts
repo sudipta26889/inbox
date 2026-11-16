@@ -1,10 +1,11 @@
 import prisma from "@/utils/prisma";
+import { accessibleEmailAccountWhere } from "@/utils/email-account-access";
 import { auth } from "@/utils/auth";
 import type { Logger } from "@/utils/logger";
 import { RedirectError } from "./redirect";
 
 /**
- * Verify the current user owns the specified email account.
+ * Verify the current user owns, or has been shared, the specified email account.
  * Throws RedirectError if unauthorized.
  */
 export async function verifyEmailAccountAccess(
@@ -23,7 +24,7 @@ export async function verifyEmailAccountAccess(
   const emailAccount = await prisma.emailAccount.findFirst({
     where: {
       id: emailAccountId,
-      userId: session.user.id,
+      ...accessibleEmailAccountWhere(session.user.id),
     },
     select: { id: true },
   });

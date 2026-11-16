@@ -9,6 +9,7 @@ import { isDuplicateError } from "@/utils/prisma-helpers";
 import type { Logger } from "@/utils/logger";
 import type { EmailProvider } from "@/utils/email/types";
 import type { SendEmailBody } from "@/utils/types/mail";
+import type { SendApproval } from "@/utils/mail/send-approval";
 import {
   appendSentMessageOpenPixel,
   isSentMessageOpenToken,
@@ -154,12 +155,15 @@ export async function sendHtmlEmailWithOpenTracking({
   email,
   emailProvider,
   logger,
+  approval,
 }: {
   emailAccountId: string;
   threadId?: string | null;
   email: SendEmailBody;
   emailProvider: EmailProvider;
   logger: Logger;
+  /** Set when the send was approved before its operation was committed. */
+  approval?: SendApproval;
 }) {
   const prepared = await withSentMessageOpenTracking({
     emailAccountId,
@@ -172,8 +176,9 @@ export async function sendHtmlEmailWithOpenTracking({
         draftId: email.providerDraftId,
         provider: emailProvider,
         email: prepared.email,
+        approval,
       })
-    : await emailProvider.sendEmailWithHtml(prepared.email);
+    : await emailProvider.sendEmailWithHtml(prepared.email, { approval });
   await associateSentMessageOpen({
     token: prepared.token,
     messageId: result.messageId,

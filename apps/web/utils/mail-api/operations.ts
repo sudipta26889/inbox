@@ -20,6 +20,7 @@ import {
   parsedMessagePatch,
 } from "@/utils/mail-api/observations";
 import { executeDurableEmailSend } from "@/utils/email/durable-email-send";
+import { SendNotApprovedError } from "@/utils/mail/send-approval";
 import { MAIL_MUTATION_RETRY_WINDOW_MS } from "@/utils/email/send-operation-policy";
 import {
   cancelHeldEmail,
@@ -777,13 +778,23 @@ async function holdEngineSend(
   if (!input.success) {
     return { status: "rejected", code: "invalid", targets: [] };
   }
-  const row = await holdEmailForUndo({
-    emailAccountId: accountId,
-    input: input.data,
-    sendAt: new Date(intent.sendAtMs),
-    logger,
-  });
-  return { status: "held", row };
+  try {
+    const row = await holdEmailForUndo({
+      emailAccountId: accountId,
+      input: input.data,
+      sendAt: new Date(intent.sendAtMs),
+      logger,
+    });
+    return { status: "held", row };
+  } catch (error) {
+    // The human said no before anything was held.
+    if (!(error instanceof SendNotApprovedError)) throw error;
+    return {
+      status: "rejected",
+      code: error.safeMessage ?? error.message,
+      targets: [],
+    };
+  }
 }
 
 async function heldSendResult(

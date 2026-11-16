@@ -45,7 +45,7 @@ describe("verifyEmailAccountAccess", () => {
     expect(prisma.emailAccount.findFirst).toHaveBeenCalledWith({
       where: {
         id: emailAccountId,
-        userId,
+        OR: [{ userId }, { shares: { some: { userId } } }],
       },
       select: { id: true },
     });
@@ -126,7 +126,7 @@ describe("verifyEmailAccountAccess", () => {
     expect(prisma.emailAccount.findFirst).toHaveBeenCalledWith({
       where: {
         id: emailAccountId,
-        userId,
+        OR: [{ userId }, { shares: { some: { userId } } }],
       },
       select: { id: true },
     });

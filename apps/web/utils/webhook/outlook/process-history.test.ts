@@ -28,7 +28,9 @@ vi.mock("@/utils/email/provider", () => ({
   createEmailProvider: vi.fn(),
 }));
 
-vi.mock("@/utils/redis", () => ({ redis: { set: vi.fn(), eval: vi.fn() } }));
+vi.mock("@/utils/redis", () => ({
+  redis: { set: vi.fn(), get: vi.fn(), eval: vi.fn() },
+}));
 
 vi.mock("@/utils/webhook/process-history-item", () => ({
   processHistoryItem: vi.fn(),
@@ -81,10 +83,14 @@ describe("Outlook processHistoryForUser - Folder Filtering", () => {
       locks.set(key, value);
       return "OK";
     });
-    vi.mocked(redis.eval).mockImplementation(async (_script, keys, args) => {
+    vi.mocked(redis.get).mockImplementation(
+      async (key) => (locks.get(key) as never) ?? null,
+    );
+    vi.mocked(redis.eval).mockImplementation(async (script, keys, args) => {
       const key = String(keys[0]);
       if (locks.get(key) !== args[0]) return 0;
-      locks.delete(key);
+      if (script.includes('"DEL"')) locks.delete(key);
+      else locks.set(key, args[1]);
       return 1;
     });
 

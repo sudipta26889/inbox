@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/utils/prisma";
 import { withError } from "@/utils/middleware";
 import { env } from "@/env";
+import { approvalGateStatus } from "@/utils/dharahil/required";
 
 export const GET = withError("health", async (request) => {
   const logger = request.logger;
@@ -11,7 +12,12 @@ export const GET = withError("health", async (request) => {
   // If no API key header provided, return simple OK for ALB/load balancer health checks
   if (!healthApiKey) {
     // The deploy workflows poll this until it reports the commit they built.
-    return NextResponse.json({ status: "ok", version: env.GIT_SHA });
+    // approvalGate lets monitoring alert when sends would go out ungated.
+    return NextResponse.json({
+      status: "ok",
+      version: env.GIT_SHA,
+      approvalGate: approvalGateStatus(),
+    });
   }
 
   // If API key header provided but doesn't match, reject
@@ -27,6 +33,7 @@ export const GET = withError("health", async (request) => {
       {
         status: "healthy",
         timestamp: new Date().toISOString(),
+        approvalGate: approvalGateStatus(),
         database: {
           status: "healthy",
         },

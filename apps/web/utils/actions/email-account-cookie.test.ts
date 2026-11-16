@@ -33,7 +33,10 @@ describe("setLastEmailAccountAction", () => {
 
     expect(result?.serverError).toBeUndefined();
     expect(prisma.emailAccount.findFirst).toHaveBeenCalledWith({
-      where: { id: "account-1", userId: "user-1" },
+      where: {
+        id: "account-1",
+        OR: [{ userId: "user-1" }, { shares: { some: { userId: "user-1" } } }],
+      },
       select: { id: true },
     });
     expect(cookiesSet).toHaveBeenCalledWith(

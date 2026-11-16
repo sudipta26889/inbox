@@ -4,6 +4,7 @@ import { attachmentQuery } from "@/app/api/messages/validation";
 import { EMAIL_ACCOUNT_HEADER } from "@/utils/config";
 import { createEmailProvider } from "@/utils/email/provider";
 import prisma from "@/utils/prisma";
+import { accessibleEmailAccountWhere } from "@/utils/email-account-access";
 
 export const maxDuration = 300;
 
@@ -26,7 +27,10 @@ export const GET = withAuth("messages/attachment", async (request) => {
     filename: searchParams.get("filename"),
   });
   const emailAccount = await prisma.emailAccount.findUnique({
-    where: { id: emailAccountId, userId: request.auth.userId },
+    where: {
+      id: emailAccountId,
+      ...accessibleEmailAccountWhere(request.auth.userId),
+    },
     select: { id: true, account: { select: { provider: true } } },
   });
   if (!emailAccount) {

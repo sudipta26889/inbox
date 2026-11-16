@@ -1,20 +1,24 @@
 "use server";
 
 import { after } from "next/server";
-import { actionClient } from "@/utils/actions/safe-action";
+import { actionClient, ownerActionClient } from "@/utils/actions/safe-action";
 import prisma from "@/utils/prisma";
 import { schedulePersonaAnalysis } from "@/utils/ai/knowledge/analyze-persona";
 import { createEmailProvider } from "@/utils/email/provider";
 import { updateContactRole } from "@inboxzero/loops";
 import {
+  shareEmailAccountBody,
+  unshareEmailAccountBody,
   updateHiddenAiDraftLinksBody,
   updateReferralSignatureBody,
   updateSentWithSignatureBody,
   updateSentMessageOpenTrackingBody,
 } from "@/utils/actions/email-account.validation";
+import { SafeError } from "@/utils/error";
+import { invalidateAccountValidation } from "@/utils/redis/account-validation";
 import { z } from "zod";
 
-export const updateEmailAccountRoleAction = actionClient
+export const updateEmailAccountRoleAction = ownerActionClient
   .metadata({ name: "updateEmailAccountRole" })
   .inputSchema(
     z.object({
@@ -128,4 +132,62 @@ export const fetchSignaturesFromProviderAction = actionClient
     const signatures = await emailProvider.getSignatures();
 
     return { signatures };
+  });
+
+export const shareEmailAccountAction = ownerActionClient
+  .metadata({ name: "shareEmailAccount" })
+  .inputSchema(shareEmailAccountBody)
+  .action(async ({ ctx: { emailAccountId, userId }, parsedInput }) => {
+    // Exact match on the login email or a connected mailbox. Two users can match
+    // (one's login is another's mailbox); refuse rather than guess.
+    const matches = await prisma.user.findMany({
+      where: {
+        OR: [
+          { email: parsedInput.email },
+          { emailAccounts: { some: { email: parsedInput.email } } },
+        ],
+      },
+      select: { id: true },
+      take: 2,
+    });
+
+    if (matches.length > 1) {
+      throw new SafeError(
+        "That email belongs to more than one user. Use the email they sign in with.",
+      );
+    }
+    const target = matches[0];
+    if (!target) {
+      throw new SafeError(
+        "No user found with that email. They need to sign in once first.",
+      );
+    }
+    if (target.id === userId) {
+      throw new SafeError("You already own this account.");
+    }
+
+    await prisma.emailAccountShare.upsert({
+      where: {
+        emailAccountId_userId: { emailAccountId, userId: target.id },
+      },
+      create: { emailAccountId, userId: target.id },
+      update: {},
+    });
+    await invalidateAccountValidation({
+      userId: target.id,
+      emailAccountId,
+    });
+  });
+
+export const unshareEmailAccountAction = ownerActionClient
+  .metadata({ name: "unshareEmailAccount" })
+  .inputSchema(unshareEmailAccountBody)
+  .action(async ({ ctx: { emailAccountId }, parsedInput }) => {
+    await prisma.emailAccountShare.deleteMany({
+      where: { emailAccountId, userId: parsedInput.userId },
+    });
+    await invalidateAccountValidation({
+      userId: parsedInput.userId,
+      emailAccountId,
+    });
   });
