@@ -1042,6 +1042,15 @@ export const importRulesAction = actionClient
             integrationName: action.integrationName,
             integrationToolName: action.integrationToolName,
             integrationArgs: action.integrationArgs ?? undefined,
+            haIntegrationType: action.haIntegrationType,
+            haWebhookId: action.haWebhookId,
+            haMqttTopic: action.haMqttTopic,
+            haServiceDomain: action.haServiceDomain,
+            haServiceName: action.haServiceName,
+            haServiceData: (action.haServiceData ?? undefined) as
+              | Prisma.InputJsonValue
+              | undefined,
+            haEntityId: action.haEntityId,
           }));
 
           await assertIntegrationActionsConnected(

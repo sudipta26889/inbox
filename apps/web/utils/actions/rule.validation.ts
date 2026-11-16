@@ -423,6 +423,13 @@ const importedAction = z
     integrationName: z.string().nullish(),
     integrationToolName: z.string().nullish(),
     integrationArgs: zodIntegrationArgs,
+    haIntegrationType: z.string().nullish(),
+    haWebhookId: z.string().nullish(),
+    haMqttTopic: z.string().nullish(),
+    haServiceDomain: z.string().nullish(),
+    haServiceName: z.string().nullish(),
+    haServiceData: z.any().nullish(),
+    haEntityId: z.string().nullish(),
   })
   .superRefine((data, ctx) => {
     if (addDisabledRuleActionIssue(data.type, ctx)) return;
