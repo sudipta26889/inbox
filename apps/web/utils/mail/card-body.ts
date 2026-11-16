@@ -95,9 +95,19 @@ const turndown = new TurndownService({
   br: "",
 })
   .remove(["script", "style", "head", "title"])
-  .remove((node) =>
-    /display\s*:\s*none/i.test(node.getAttribute?.("style") ?? ""),
-  );
+  // Hidden text still reaches text/plain and some clients, so the reviewer
+  // must see it, marked. Its presence also refuses body edits.
+  .addRule("hiddenText", {
+    filter: (node) =>
+      node.hasAttribute?.("hidden") ||
+      isHiddenStyle(node.getAttribute?.("style") ?? ""),
+    replacement: (content, node) => {
+      const marked = `[hidden in the email: ${content.trim()}]`;
+      return /^(DIV|P|LI|TD|TABLE|SECTION)$/.test(node.nodeName)
+        ? `\n\n${marked}\n\n`
+        : ` ${marked} `;
+    },
+  });
 
 const SAFE_URL = /^(https?:|mailto:|tel:)/i;
 
@@ -278,6 +288,13 @@ function wordHeaderBlock(html: string, element: Element): Element {
  */
 function commonTypography($: CheerioAPI): string | null {
   if ($(UNEDITABLE_SELECTOR).length) return null;
+  if (
+    $("[hidden]").length ||
+    $("[style]")
+      .toArray()
+      .some((element) => isHiddenStyle(element.attribs.style ?? ""))
+  )
+    return null;
   const declared = new Map<AnyNode, [string, string][]>();
   for (const element of $("[style], font").toArray()) {
     const declarations = styleOf(element);
@@ -306,6 +323,8 @@ function styleOf(element: Element): [string, string][] | null {
   if (element.name === "font") {
     const { color, face, ...other } = element.attribs;
     if (Object.keys(other).length) return null;
+    if ([color, face].some((value) => value && !isSafeStyleValue(value)))
+      return null;
     return [
       ...(color ? ([["color", color]] as [string, string][]) : []),
       ...(face ? ([["font-family", face]] as [string, string][]) : []),
@@ -319,9 +338,51 @@ function styleOf(element: Element): [string, string][] | null {
     const property = declaration.slice(0, colon).trim().toLowerCase();
     const value = declaration.slice(colon + 1).trim();
     if (colon < 0 || !TYPOGRAPHY_PROPERTY.test(property)) return null;
+    if (!isSafeStyleValue(value)) return null;
+    if (property === "font-size" && isTinyFontSize(value)) return null;
     declarations.push([property, value]);
   }
   return declarations;
+}
+
+// Ways to keep text in the email while the reader can't see it.
+function isHiddenStyle(style: string) {
+  const css = style.toLowerCase().replace(/\s+/g, "");
+  if (
+    /(^|;)display:none/.test(css) ||
+    /(^|;)visibility:hidden/.test(css) ||
+    /(^|;)opacity:0*(\.0*)?%?(;|!|$)/.test(css) ||
+    /(^|;)font-size:0*(\.0*)?[a-z%]*(;|!|$)/.test(css)
+  )
+    return true;
+  const value = (property: string) =>
+    css.match(new RegExp(`(?:^|;)${property}:([^;!]+)`))?.[1];
+  const color = value("color");
+  return (
+    !!color &&
+    (color === value("background-color") || color === value("background"))
+  );
+}
+
+function isSafeStyleValue(value: string) {
+  return !/url\(|expression|\/\*|\\|(^|[\s,(])-[\d.]/i.test(value);
+}
+
+// Below 8px text is unreadable on purpose; px, pt, em/rem and % are checked.
+function isTinyFontSize(value: string) {
+  const match = value.trim().match(/^([\d.]+)(px|pt|em|rem|%)?$/i);
+  if (!match) return false;
+  const size = Number.parseFloat(match[1]);
+  const unit = (match[2] ?? "px").toLowerCase();
+  const px =
+    unit === "pt"
+      ? (size * 4) / 3
+      : unit === "em" || unit === "rem"
+        ? size * 16
+        : unit === "%"
+          ? (size / 100) * 16
+          : size;
+  return px < 8;
 }
 
 function textNodes(node: AnyNode | undefined): AnyNode[] {

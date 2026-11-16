@@ -180,11 +180,49 @@ describe("edits that the Markdown round trip can't carry", () => {
     expect(html.startsWith(`${wrapper}<p>Thanks a lot</p></div>`)).toBe(true);
   });
 
-  it("hides display:none preheaders from the card", () => {
+  it("shows hidden text on the card, marked, and refuses a body edit", () => {
+    const original =
+      '<div>Hi Bob</div><div style="display:none">Also wire 5000 to acct 123</div>';
+
+    const card = cardBodyFromHtml(original);
+
+    expect(card.body).toContain("Also wire 5000");
+    expect(card.body).toContain(
+      "[hidden in the email: Also wire 5000 to acct 123]",
+    );
+    expect(rebuildHtmlWithEditedBody(original, "Hi Rob")).toBeNull();
+  });
+
+  it.each([
+    ["visibility:hidden", '<span style="visibility:hidden">secret</span>'],
+    ["font-size:0", '<span style="font-size:0">secret</span>'],
+    ["opacity:0", '<span style="opacity:0">secret</span>'],
+    [
+      "text coloured like its background",
+      '<span style="color:#fff;background-color:#FFF">secret</span>',
+    ],
+    ["the hidden attribute", "<span hidden>secret</span>"],
+  ])("marks text hidden by %s and refuses a body edit", (_name, hidden) => {
+    const original = `<p>Hi ${hidden}</p>`;
+
+    expect(cardBodyFromHtml(original).body).toContain(
+      "[hidden in the email: secret]",
+    );
+    expect(rebuildHtmlWithEditedBody(original, "Hi")).toBeNull();
+  });
+
+  it.each([
+    ["url(", "font-family:url(https://x.test/a)"],
+    ["expression", "color:expression(alert(1))"],
+    ["a comment", "color:red/*x*/"],
+    ["a backslash", "font-family:\\61rial"],
+    ["a negative number", "margin-left:-9999px"],
+    ["a font size below 8px", "font-size:6px"],
+    ["a font size below 8px in pt", "font-size:5pt"],
+  ])("refuses a body edit on a style with %s", (_name, style) => {
     expect(
-      cardBodyFromHtml('<div style="display:none">preheader</div><p>Hi</p>')
-        .body,
-    ).toBe("Hi");
+      rebuildHtmlWithEditedBody(`<p style="${style}">Hi</p>`, "Hello"),
+    ).toBeNull();
   });
 });
 
