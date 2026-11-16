@@ -62,3 +62,28 @@ export const toggleDigestBody = z.object({
   timeOfDay: z.coerce.date().optional(),
 });
 export type ToggleDigestBody = z.infer<typeof toggleDigestBody>;
+
+// Mirrors the SLUG_PATTERN in utils/mqtt/topics.ts exactly. Duplicated rather
+// than imported: that module is server-only, but this schema also runs
+// client-side via zodResolver. The slug is substituted into an MQTT topic
+// string and an HA unique_id, so a mismatch here could let a slash or
+// wildcard through to the server unvalidated.
+export const MQTT_SLUG_PATTERN = /^[a-z0-9][a-z0-9_-]{0,30}$/;
+
+export const updateMqttSettingsBody = z
+  .object({
+    mqttEnabled: z.boolean(),
+    mqttTopicSlug: z
+      .string()
+      .trim()
+      .refine((slug) => slug === "" || MQTT_SLUG_PATTERN.test(slug), {
+        message:
+          "Use lowercase letters, numbers, - or _ only, starting with a letter or number (max 31 characters)",
+      }),
+    mqttIncludeDetail: z.boolean(),
+  })
+  .refine((v) => !v.mqttEnabled || v.mqttTopicSlug !== "", {
+    message: "Set a topic name before enabling the bus",
+    path: ["mqttTopicSlug"],
+  });
+export type UpdateMqttSettingsBody = z.infer<typeof updateMqttSettingsBody>;

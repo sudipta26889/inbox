@@ -10,7 +10,9 @@ import {
   saveDigestScheduleBody,
   updateDigestItemsBody,
   toggleDigestBody,
+  updateMqttSettingsBody,
 } from "@/utils/actions/settings.validation";
+import { updateMqttSettings } from "@/utils/mqtt/settings";
 import { DEFAULT_PROVIDER, Provider } from "@/utils/llms/config";
 import prisma from "@/utils/prisma";
 import {
@@ -325,6 +327,13 @@ export const toggleDigestAction = actionClient
       return { success: true };
     },
   );
+
+export const updateMqttSettingsAction = actionClient
+  .metadata({ name: "updateMqttSettings" })
+  .inputSchema(updateMqttSettingsBody)
+  .action(async ({ ctx: { emailAccountId }, parsedInput }) => {
+    return updateMqttSettings({ emailAccountId }, parsedInput);
+  });
 
 // A typo in a custom model name otherwise only shows up later, as failed or
 // empty AI runs. Only definite model or key errors block the save; anything
