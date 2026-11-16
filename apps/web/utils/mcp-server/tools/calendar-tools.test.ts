@@ -926,6 +926,61 @@ describe("DharaHIL approval gate content", () => {
   });
 });
 
+describe("respond_to_calendar_event approval gate", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resolve.mockResolvedValue({
+      account: { id: "acct-1", email: "me@x.com", timezone: "Asia/Kolkata" },
+      providers: [provider],
+    });
+    provider.respondToEvent = vi.fn().mockResolvedValue(undefined);
+  });
+
+  afterEach(() => setDharahilEnabled(false));
+
+  // The RSVP and its comment are emailed to the organizer, so it is outbound.
+  it("asks before RSVPing, showing the response and the comment", async () => {
+    setDharahilEnabled(true);
+    vi.mocked(dharahilClient.runApprovalLoop).mockResolvedValue({
+      action: "APPROVED",
+    });
+
+    await respondToCalendarEvent(context, {
+      eventId: "evt-1",
+      responseStatus: "declined",
+      comment: "Can't make it",
+    });
+
+    expect(dharahilClient.runApprovalLoop).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toolName: "respond_to_calendar_event",
+        toolArgs: {
+          eventId: "evt-1",
+          responseStatus: "declined",
+          comment: "Can't make it",
+        },
+      }),
+    );
+    expect(provider.respondToEvent).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends no RSVP when the reviewer denies it", async () => {
+    setDharahilEnabled(true);
+    vi.mocked(dharahilClient.runApprovalLoop).mockResolvedValue({
+      action: "DENY",
+    });
+    vi.mocked(dharahilClient.wasDenied).mockReturnValue(true);
+
+    await expect(
+      respondToCalendarEvent(context, {
+        eventId: "evt-1",
+        responseStatus: "accepted",
+      }),
+    ).rejects.toThrow("denied");
+    expect(provider.respondToEvent).not.toHaveBeenCalled();
+  });
+});
+
 describe("resolveTimeZone runs before the DharaHIL approval gate", () => {
   beforeEach(() => {
     vi.clearAllMocks();

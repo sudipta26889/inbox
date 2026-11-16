@@ -757,8 +757,8 @@ export async function deleteCalendarEvent(
 }
 
 /**
- * RSVP to a calendar invitation. Not gated by DharaHIL: this only changes
- * the caller's own responseStatus row, nothing organizer-owned on the event.
+ * RSVP to a calendar invitation. Gated by DharaHIL like the other calendar
+ * writes: the response and optional comment are emailed to the organizer.
  */
 export async function respondToCalendarEvent(
   context: McpToolContext,
@@ -786,6 +786,41 @@ export async function respondToCalendarEvent(
     from: params.from,
     logger,
   });
+
+  if (isApprovalGateRequired()) {
+    const decision = await dharahilClient.runApprovalLoop({
+      toolName: "respond_to_calendar_event",
+      toolArgs: {
+        eventId,
+        responseStatus: params.responseStatus,
+        comment: params.comment ?? null,
+      },
+      context: {
+        agentId: "inbox-calendar-provider",
+        runId: context.userId,
+        stepId: "respond_event",
+        contextSummary: `RSVP ${params.responseStatus} to calendar event ${eventId}${params.comment ? " with a comment to the organizer" : ""}`,
+        riskLevel: "MEDIUM",
+        tags: ["calendar", "rsvp"],
+        idempotencyKey: `calendar_respond_${eventId}_${Date.now()}`,
+        metadata: { eventId, responseStatus: params.responseStatus },
+      },
+    });
+
+    if (dharahilClient.wasDenied(decision)) {
+      throw new Error(
+        decision.action === "EXPIRED"
+          ? "Calendar RSVP request timed out. The human approval window expired before a response was received. Please try again."
+          : `Calendar RSVP denied by human reviewer: ${decision.action}${decision.reason ? ` - ${decision.reason}` : ""}`,
+      );
+    }
+
+    if (dharahilClient.shouldRevise(decision)) {
+      throw new Error(
+        `Calendar RSVP revision requested: ${decision.revise_input || "No specific instructions provided"}`,
+      );
+    }
+  }
 
   await providers[0]!.respondToEvent(eventId, {
     responseStatus: params.responseStatus,
