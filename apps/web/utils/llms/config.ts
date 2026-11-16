@@ -14,6 +14,9 @@ export const Provider = {
   AI_GATEWAY: "aigateway",
   OLLAMA: "ollama",
   OPENAI_COMPATIBLE: "openai-compatible",
+  // The homelab LiteLLM gateway. User rows already store "litellm" with a
+  // LiteLLM virtual key, so it stays its own provider id.
+  LITELLM: "litellm",
   CODEX_CLI: "codex-cli",
   CLAUDE_CODE: "claude-code",
 };
@@ -28,4 +31,5 @@ export const providerOptions: { label: string; value: string }[] = [
   { label: "Cerebras", value: Provider.CEREBRAS },
   { label: "OpenRouter", value: Provider.OPENROUTER },
   { label: "Vercel AI Gateway", value: Provider.AI_GATEWAY },
+  { label: "LiteLLM", value: Provider.LITELLM },
 ];

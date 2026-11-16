@@ -322,6 +322,25 @@ function selectModel(
         providerOptions: getLocalThinkingProviderOptions("openai-compatible"),
       };
     }
+    case Provider.LITELLM: {
+      const modelName = aiModel;
+      if (!modelName) throw new SafeError("LLM model name is not set");
+      const litellm = createOpenAICompatible({
+        name: "litellm",
+        baseURL: env.LITELLM_BASE_URL || "http://localhost:4000/v1",
+        apiKey: resolveApiKey(aiApiKey, undefined),
+      });
+      return {
+        provider: Provider.LITELLM,
+        modelName,
+        model: litellm(modelName),
+        // Unbounded <think> output derails multi-step tool chains through the
+        // gateway, so reasoning models get a fixed budget.
+        providerOptions: isLiteLlmReasoningModel(modelName)
+          ? { openaiCompatible: { reasoningEffort: "medium" } }
+          : undefined,
+      };
+    }
     case Provider.BEDROCK: {
       const modelName = aiModel || "global.anthropic.claude-sonnet-5";
       return {
@@ -572,6 +591,7 @@ function getProviderApiKey(provider: string) {
     // when no API key is configured (many OpenAI-compatible servers don't require one)
     [Provider.OPENAI_COMPATIBLE]:
       env.LLM_API_KEY || process.env.LLM_API_KEY || "not-required",
+    [Provider.LITELLM]: resolveApiKey(null, undefined),
   };
 
   return providerApiKeys[provider];
@@ -593,6 +613,20 @@ function resolveApiKey(
   return (
     aiApiKey || providerApiKey || env.LLM_API_KEY || process.env.LLM_API_KEY
   );
+}
+
+// Model families on the LiteLLM gateway that emit reasoning tokens.
+const LITELLM_REASONING_FAMILIES = [
+  "kimi",
+  "gpt-oss",
+  "qwen3",
+  "minimax",
+  "deepseek",
+];
+
+function isLiteLlmReasoningModel(modelName: string) {
+  const name = modelName.toLowerCase();
+  return LITELLM_REASONING_FAMILIES.some((family) => name.includes(family));
 }
 
 function getOpenAiCompatibleBaseUrl() {
