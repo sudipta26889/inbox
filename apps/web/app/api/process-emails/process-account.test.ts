@@ -7,6 +7,7 @@ import { getGmailClientWithRefresh } from "@/utils/gmail/client";
 import { getEmailProviderRateLimitState } from "@/utils/email/rate-limit";
 import { processHistoryItem } from "@/utils/webhook/process-history-item";
 import { withMessageProcessingLock } from "@/utils/redis/message-processing";
+import { captureException } from "@/utils/error";
 
 const logger = createScopedLogger("test");
 
@@ -16,6 +17,10 @@ const state = vi.hoisted(() => ({
 }));
 
 vi.mock("server-only", () => ({}));
+vi.mock("@/utils/error", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/utils/error")>()),
+  captureException: vi.fn(),
+}));
 
 vi.mock("@/utils/redis", () => ({
   redis: {
@@ -175,5 +180,25 @@ describe("processEmailsForAccount - Gmail pointer", () => {
     await webhookRun;
 
     expect(processHistoryItem).not.toHaveBeenCalled();
+  });
+
+  it("treats a revoked Gmail grant as expected, not as an error to report", async () => {
+    mockAccount("1001");
+    vi.mocked(getGmailClientWithRefresh).mockRejectedValue(
+      Object.assign(
+        new Error("invalid_grant: Token has been expired or revoked."),
+        {
+          response: { data: { error: "invalid_grant" } },
+        },
+      ),
+    );
+
+    const result = await processEmailsForAccount({
+      emailAccountId: ACCOUNT_ID,
+      logger,
+    });
+
+    expect(result).toEqual({ success: false });
+    expect(captureException).not.toHaveBeenCalled();
   });
 });

@@ -1,5 +1,5 @@
 import type { gmail_v1 } from "@googleapis/gmail";
-import { captureException } from "@/utils/error";
+import { captureException, isInvalidGrantError } from "@/utils/error";
 import { redis } from "@/utils/redis";
 import {
   validateWebhookAccount,
@@ -172,7 +172,10 @@ export async function processEmailsForAccount({
           { userEmail: validatedEmailAccount.email, messageId: message.id },
           () =>
             processHistoryItem(
-              { messageId: message.id, threadId: message.threadId ?? undefined },
+              {
+                messageId: message.id,
+                threadId: message.threadId ?? undefined,
+              },
               { ...processOptions, logger: messageLogger },
             ),
         );
@@ -201,7 +204,8 @@ export async function processEmailsForAccount({
 
     return { success: true, processed, skipped };
   } catch (error) {
-    if (error instanceof Error && error.message === "invalid_grant") {
+    // The Gmail client already disconnected the account on a revoked grant.
+    if (isInvalidGrantError(error)) {
       logger.warn("Invalid grant");
       return { success: false };
     }
