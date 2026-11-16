@@ -475,6 +475,10 @@ const nextConfig: NextConfig = {
   // Skip TypeScript checking during Docker/E2E CI builds to save memory.
   // App typechecking is covered by the Build Check workflow.
   typescript: {
+    // Type-check the code that ships. Tests stay in the root tsconfig and are
+    // held by scripts/typecheck-ratchet.mjs, so a drifting fixture cannot block
+    // a deploy but a type error in shipped code fails the build.
+    tsconfigPath: "tsconfig.build.json",
     ignoreBuildErrors: process.env.SKIP_TYPE_CHECK === "true",
   },
   webpack: (config) => {

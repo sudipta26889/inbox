@@ -32,6 +32,8 @@
     "prisma:migrate:local": "dotenv run -q -f .env.local -- prisma migrate deploy",
     "start": "next start",
     "start:standalone": "node .next/standalone/server.js",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck:ratchet": "node scripts/typecheck-ratchet.mjs",
     "telegram:setup": "dotenv run -q -f .env.local -- tsx scripts/setup-telegram-bot.ts",
     "test": "cross-env RUN_AI_TESTS=false vitest",
     "test:playwright": "playwright test -c playwright.config.mjs",
