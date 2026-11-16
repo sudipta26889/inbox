@@ -8,8 +8,10 @@ import { env } from "@/env";
 import type { Prisma } from "@/generated/prisma/client";
 import { MessagingProvider } from "@/generated/prisma/enums";
 import { aiProcessAssistantChat } from "@/utils/ai/assistant/chat";
-import { getRecentChatMemories } from "@/utils/ai/assistant/get-recent-chat-memories";
-import { getInboxStatsForChatContext } from "@/utils/ai/assistant/get-inbox-stats-for-chat-context";
+import {
+  loadAgentContext,
+  memoryQueryFromParts,
+} from "@/utils/ai/assistant/agent-context";
 import {
   mergeSeenRulesRevision,
   saveLastSeenRulesRevision,
@@ -188,18 +190,13 @@ async function runSlackSlashCommandAi({
   const assistantMessageId = `${userMessageId}-assistant`;
   let seenRulesRevision: number | null = null;
 
-  const [inboxStats, memories] = await Promise.all([
-    getInboxStatsForChatContext({
-      emailAccountId,
-      provider: emailAccountUser.account.provider,
-      logger,
-    }),
-    getRecentChatMemories({
-      emailAccountId,
-      logger,
-      logContext: "Slack chat",
-    }),
-  ]);
+  const { inboxStats, memories } = await loadAgentContext({
+    emailAccountId,
+    provider: emailAccountUser.account.provider,
+    surface: "Slack chat",
+    query: memoryQueryFromParts(newUserMessage.parts),
+    logger,
+  });
 
   const result = await aiProcessAssistantChat({
     messages: await convertToModelMessages([

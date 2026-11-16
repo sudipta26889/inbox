@@ -381,6 +381,9 @@ const parsedEnv = createEnv({
     // "false" stops the LLM from double-checking live decisions.
     DECISION_LIVE_AUDIT: z.enum(["true", "false"]).optional(),
     TYPESAFE_API_KEY: z.string().optional(),
+    // Long-term agentic memory (MCP). Scoped per email account via project_id.
+    LONGMEMORY_BASE_URL: z.string().url().optional(),
+    LONGMEMORY_API_KEY: z.string().optional(),
     IMAGE_PROXY_SIGNING_SECRET: z.string().min(16).optional(),
     // Set to true on the server that acts as the OAuth proxy (e.g., staging)
     IS_OAUTH_PROXY_SERVER: booleanString.optional().default(false),

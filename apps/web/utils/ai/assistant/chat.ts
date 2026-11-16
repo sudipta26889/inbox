@@ -62,6 +62,7 @@ import { isIntegrationActionEnabledForUserId } from "@/utils/integration-action.
 import { setAnthropicCacheBreakpoints } from "@/utils/ai/assistant/cache-breakpoints";
 import { trimStaleToolResults } from "@/utils/ai/assistant/trim-stale-tool-results";
 import { guardChatTools } from "@/utils/ai/assistant/chat-tool-guards";
+import { withRepeatGuard } from "@/utils/ai/assistant/repeat-guard";
 
 export const maxDuration = 800;
 // Increment when chat prompts, tools, or routing change so run quality remains attributable.
@@ -297,7 +298,7 @@ export async function aiProcessAssistantChat({
       ? [
           {
             role: "user" as const,
-            content: `Memories from previous conversations:\n${memories.map((m) => `- [${m.date}] ${m.content}`).join("\n")}`,
+            content: `Memories from previous conversations:\n${withinMemoryBudget(memories).join("\n")}`,
           },
         ]
       : []),
@@ -317,6 +318,18 @@ export async function aiProcessAssistantChat({
     cacheOptimizedMessages,
     stablePrefixEndIndex,
   );
+
+  // Distinct live subjects, so saveMemory's exact-match supersession has a
+  // chance to fire. Capped: this goes into every request's tool description.
+  const existingSubjects = (
+    await prisma.chatMemory.findMany({
+      where: { emailAccountId, subject: { not: null }, supersededAt: null },
+      select: { subject: true },
+      distinct: ["subject"],
+      orderBy: { createdAt: "desc" },
+      take: 50,
+    })
+  ).flatMap((row) => (row.subject ? [row.subject] : []));
 
   const allTools = {
     getAssistantCapabilities: getAssistantCapabilitiesTool(toolOptions),
@@ -365,6 +378,7 @@ export async function aiProcessAssistantChat({
     saveMemory: saveMemoryTool({
       ...toolOptions,
       conversationMessages: memoryConversationMessages,
+      existingSubjects,
     }),
     // Knowledge
     addToKnowledgeBase: addToKnowledgeBaseTool(toolOptions),
@@ -383,6 +397,7 @@ export async function aiProcessAssistantChat({
   });
 
   const finalReply = createFinalReplyStep();
+  const run = { steps: 0, tools: [] as string[], textLength: 0 };
 
   const result = toolCallAgentStream({
     userAi: user.user,
@@ -411,6 +426,9 @@ export async function aiProcessAssistantChat({
           error: part.error,
         });
       }
+      run.steps += 1;
+      for (const call of step.toolCalls ?? []) run.tools.push(call.toolName);
+      if (step.text) run.textLength += step.text.length;
       finalReply.onStepEnd(step);
       await onStepEnd?.(step);
     },
@@ -423,7 +441,20 @@ export async function aiProcessAssistantChat({
       });
       onModelResolved?.(resolvedModel);
     },
-    onEnd,
+    onEnd: async (...args: Parameters<NonNullable<AssistantChatOnEnd>>) => {
+      // Names and counts only, at info. The step trace carries arguments and
+      // message text, which are PII and stay off in production, so without
+      // this a run that loops on one tool is invisible until someone reads a
+      // transcript.
+      logger.info("Agent run finished", {
+        surface: responseSurface,
+        steps: run.steps,
+        toolSequence: run.tools,
+        repeatedToolCalls: run.tools.length - new Set(run.tools).size,
+        answered: run.textLength > 0,
+      });
+      await onEnd?.(...args);
+    },
     stopWhen: (options) => {
       const lastStep = options?.steps.at(-1);
       return lastStep ? endsWithPendingBulkInboxAction(lastStep) : false;
@@ -450,11 +481,14 @@ export async function aiProcessAssistantChat({
         toolChoice: "none",
       };
     },
-    tools: guardChatTools(allTools, logger, {
-      // The client applies mail screen actions as the call streams in, so a
-      // server-side rejection would arrive after the screen already changed.
-      skipEmailIdCheck: ["controlMailScreen"],
-    }),
+    tools: withRepeatGuard(
+      guardChatTools(allTools, logger, {
+        // The client applies mail screen actions as the call streams in, so a
+        // server-side rejection would arrive after the screen already changed.
+        skipEmailIdCheck: ["controlMailScreen"],
+      }),
+      logger,
+    ),
     abortSignal,
   });
 
@@ -979,4 +1013,41 @@ function buildCurrentTimeMessage({
     role: "user",
     content: `[Automated context — not a message from the user] User timezone: ${userTimezone}. Current timestamp: ${currentTimestamp}.`,
   };
+}
+
+/** ~1k tokens of grounding. Enough for real context, far short of crowding. */
+const MEMORY_CONTEXT_CHAR_BUDGET = 4000;
+
+/**
+ * How much memory is worth injecting.
+ *
+ * Capped by size rather than item count, because one long memory can crowd out
+ * the conversation while twenty short ones cost nothing. Recall degrades with
+ * input length at every increment, so unbounded grounding makes the model
+ * worse at using the grounding.
+ *
+ * Oldest-first order is preserved: the newest memories end up nearest the
+ * question, which is where they read best. An empty date (long-memory recall)
+ * renders without one.
+ */
+export function withinMemoryBudget(
+  memories: { content: string; date?: string }[],
+): string[] {
+  const lines: string[] = [];
+  let budget = MEMORY_CONTEXT_CHAR_BUDGET;
+
+  // Walked newest-first so that when the budget runs out it is the OLDEST
+  // memories that are dropped, then flipped back for rendering.
+  for (const memory of [...memories].reverse()) {
+    const line = memory.date
+      ? `- [${memory.date}] ${memory.content}`
+      : `- ${memory.content}`;
+
+    if (line.length > budget) break;
+
+    budget -= line.length;
+    lines.unshift(line);
+  }
+
+  return lines;
 }
