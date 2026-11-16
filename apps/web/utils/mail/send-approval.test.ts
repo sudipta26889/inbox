@@ -310,6 +310,51 @@ describe("the gate fails closed and honours card edits", () => {
     await expect(requireSendApproval(request)).resolves.toEqual({});
   });
 
+  // The gateway stores args as JSONB: keys come back in a different order.
+  it("treats a plain approval with reordered keys as unedited", async () => {
+    mockRunApprovalLoop.mockImplementation(async (call) => {
+      const reordered = Object.fromEntries(
+        Object.entries(call.toolArgs as Record<string, unknown>)
+          .reverse()
+          .map(([key, value]) => [
+            key,
+            Array.isArray(value)
+              ? value.map((item) =>
+                  Object.fromEntries(Object.entries(item).reverse()),
+                )
+              : value,
+          ]),
+      );
+      return { action: "APPROVED", approvedArgs: reordered };
+    });
+
+    await expect(
+      requireSendApproval({
+        ...request,
+        replyTo: "r@grihatek.com",
+        attachments: [{ filename: "a.pdf", size: 3 }],
+        forwardedAttachments: [{ filename: "b.png", size: 9 }],
+      }),
+    ).resolves.toEqual({});
+  });
+
+  it("still sees a reordered attachment list as a change", async () => {
+    mockRunApprovalLoop.mockImplementation(async (call) => ({
+      action: "APPROVED",
+      approvedArgs: {
+        ...call.toolArgs,
+        attachments: [...call.toolArgs.attachments].reverse(),
+      },
+    }));
+
+    await expect(
+      requireSendApproval({
+        ...request,
+        attachments: [{ filename: "a.pdf" }, { filename: "b.pdf" }],
+      }),
+    ).rejects.toThrow(/only recipients, subject and body/);
+  });
+
   it("returns the recipients, subject and body the reviewer edited", async () => {
     approvedWith({
       to: "right@grihatek.com",

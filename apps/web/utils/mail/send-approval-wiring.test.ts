@@ -26,7 +26,12 @@ vi.mock("@/utils/prisma");
 
 const { decide, draftContent } = vi.hoisted(() => ({
   decide: vi.fn(),
-  draftContent: { to: "to@grihatek.com", subject: "Hi", text: "Body" },
+  draftContent: {
+    to: "to@grihatek.com",
+    subject: "Hi",
+    text: "Body",
+    html: undefined as string | undefined,
+  },
 }));
 
 vi.mock("@/env", async (importOriginal) => {
@@ -71,6 +76,7 @@ vi.mock("@/utils/gmail/message", () => ({
     labelIds: [GmailLabel.DRAFT],
     subject: draftContent.subject,
     textPlain: draftContent.text,
+    textHtml: draftContent.html,
     attachments: [],
     headers: {
       from: "me@grihatek.com",
@@ -183,6 +189,8 @@ describe("every provider send asks first and sends what was approved", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     draftContent.to = "to@grihatek.com";
+    draftContent.text = "Body";
+    draftContent.html = undefined;
     prisma.emailAccount.findUnique.mockResolvedValue({
       email: "me@grihatek.com",
       account: { provider: "google" },
@@ -273,6 +281,16 @@ describe("every provider send asks first and sends what was approved", () => {
 
       await expect(gmailSendDraft(gmail, "r-1", {})).rejects.toThrow();
       expect(gmail.users.drafts.send).not.toHaveBeenCalled();
+    });
+
+    it("gmail: shows an HTML-only draft's text on the card", async () => {
+      draftContent.text = "";
+      draftContent.html = "<p>Only <b>HTML</b> here</p>";
+      approve();
+
+      await gmailSendDraft(fakeGmail(), "r-1", {});
+
+      expect(decide.mock.calls[0][0].toolArgs.body).toContain("Only HTML here");
     });
 
     it("gmail: writes card edits into the draft, then sends it", async () => {

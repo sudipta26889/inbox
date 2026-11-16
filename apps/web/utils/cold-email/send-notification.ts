@@ -1,11 +1,11 @@
-import { sendColdEmailNotification as sendColdEmailNotificationViaResend } from "@inboxzero/transactional-email";
+import {
+  renderColdEmailNotificationText,
+  sendColdEmailNotification as sendColdEmailNotificationViaResend,
+} from "@inboxzero/transactional-email";
 import { env } from "@/env";
 import type { Logger } from "@/utils/logger";
 import { formatReplySubject } from "@/utils/email/subject";
 import { requireSendApproval } from "@/utils/mail/send-approval";
-
-const NOTICE_TEXT =
-  "Inbox's standard notice: your message was filtered as unsolicited and the recipient may not see it.";
 
 export async function sendColdEmailNotification({
   senderEmail,
@@ -43,7 +43,10 @@ export async function sendColdEmailNotification({
       from: env.RESEND_FROM_EMAIL,
       replyTo: recipientEmail,
       subject: proposedSubject,
-      bodyText: NOTICE_TEXT,
+      // The rendered template, so the reviewer reads exactly what is sent.
+      bodyText: await renderColdEmailNotificationText({
+        baseUrl: env.NEXT_PUBLIC_BASE_URL,
+      }),
       isReply: true,
     });
     if (

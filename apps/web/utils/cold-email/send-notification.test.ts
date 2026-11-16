@@ -6,6 +6,7 @@ import { sendColdEmailNotification } from "./send-notification";
 
 vi.mock("@inboxzero/transactional-email", () => ({
   sendColdEmailNotification: vi.fn(),
+  renderColdEmailNotificationText: vi.fn(async () => "Rendered notice text"),
 }));
 
 vi.mock("@/utils/mail/send-approval", () => ({
@@ -73,6 +74,7 @@ describe("sendColdEmailNotification", () => {
         operation: "cold_email_notice",
         emailAccountId: "account",
         to: "sender@grihatek.com",
+        bodyText: "Rendered notice text",
       }),
     );
     expect(result.success).toBe(false);

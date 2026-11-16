@@ -117,9 +117,10 @@ export async function sendDraft({
         cc: joinRecipients(draft.ccRecipients),
         bcc: joinRecipients(draft.bccRecipients),
         subject: draft.subject ?? undefined,
+        // An HTML body shows as text, or as raw HTML if that conversion fails.
         bodyText:
           draft.body?.contentType === "html"
-            ? htmlPreviewText(content)
+            ? htmlPreviewText(content)?.trim() || content
             : content,
         attachments: (draft.attachments ?? []).map((attachment) => ({
           filename: attachment.name ?? "",

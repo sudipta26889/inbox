@@ -518,9 +518,10 @@ function editsFrom(
   const approved = decision.approvedArgs;
   if (!approved) return {};
 
+  // The gateway stores args as JSONB, which reorders object keys, so values
+  // are compared structurally: key order ignored, array order kept.
   const changed = (key: string) =>
-    JSON.stringify(approved[key] ?? null) !==
-    JSON.stringify(proposed[key] ?? null);
+    canonicalJson(approved[key]) !== canonicalJson(proposed[key]);
 
   if (changed("from") || changed("mailbox"))
     throw new SendNotApprovedError(
@@ -645,6 +646,23 @@ function boundedMetadata(metadata: Record<string, string>) {
       value.slice(0, METADATA_VALUE_MAX_CHARS),
     ]),
   );
+}
+
+function canonicalJson(value: unknown): string {
+  return JSON.stringify(canonicalize(value));
+}
+
+function canonicalize(value: unknown): unknown {
+  if (value === undefined || value === null) return null;
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (typeof value === "object")
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .filter(([, entry]) => entry !== undefined && entry !== null)
+        .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+        .map(([key, entry]) => [key, canonicalize(entry)]),
+    );
+  return value;
 }
 
 function hashOf(value: unknown) {
