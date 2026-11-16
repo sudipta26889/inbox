@@ -10,16 +10,14 @@ vi.mock("@/utils/prisma");
 // happened, so it never reaches code that already imported `env`. The
 // repo's established pattern (see utils/mqtt/client.test.ts) is to replace
 // the whole module with a mutable plain object instead.
-const { mockEnv } = vi.hoisted(() => {
-  return {
-    mockEnv: {
-      NTFY_BASE_URL: "https://ntfy.example.com",
-      NTFY_TOPIC: "inbox",
-      NTFY_TOKEN: "tk_test",
-      ADMINS: ["admin@example.com"] as string[] | undefined,
-    } as Record<string, unknown>,
-  };
-});
+const { mockEnv } = vi.hoisted(() => ({
+  mockEnv: {
+    NTFY_BASE_URL: "https://ntfy.example.com",
+    NTFY_TOPIC: "inbox",
+    NTFY_TOKEN: "tk_test",
+    ADMINS: ["admin@example.com"] as string[] | undefined,
+  } as Record<string, unknown>,
+}));
 
 vi.mock("@/env", () => ({ env: mockEnv }));
 

@@ -145,7 +145,10 @@ describe("publishUnreadStats", () => {
 
     expect(await response.json()).toEqual({ total: 1, queued: 1, failed: 0 });
     expect(mockGetInboxStats).toHaveBeenCalledWith(
-      expect.objectContaining({ emailAccountId: "ea-1", provider: "microsoft" }),
+      expect.objectContaining({
+        emailAccountId: "ea-1",
+        provider: "microsoft",
+      }),
     );
     expect(mockPublishUnread).toHaveBeenCalledWith({
       emailAccountId: "ea-1",
