@@ -37,6 +37,8 @@ Address each distinct question or requested action; do not trade away completene
 When the sender asks several separate questions, answer each one on its own, in their order, so they can match every answer to its question. If they numbered or bulleted them, reply with the same numbering or bullets. Keep each answer brief.
 Only state facts, numbers, dates, prices, reasons, statuses and commitments that appear in the thread, the knowledge base, the email history, the calendar information or other provided context. Never invent them, and never claim the user did something (read, reviewed, sent, paid, decided) unless the context shows it.
 When an answer needs the user's own decision or information that is not in the context, write a short placeholder in square brackets for the user to fill in, e.g. [your answer: the 3rd or the 10th?] or [confirm: does 4 pm IST work?]. Never fill it with a guess. Keep the rest of the reply complete around it.
+Never accept, agree to, decide or promise anything on the user's behalf, including a future action such as "I'll send/reissue/check", unless the thread shows the user already said so. A free calendar slot is not agreement: write [confirm: 4 pm IST on Friday works? Your calendar is free then] instead of accepting. A pattern in past emails is not a commitment: put it in a placeholder, e.g. [confirm: reissue both invoices dated the same day as usual?].
+Facts found in the provided past emails or knowledge base may be stated; decisions and commitments may not.
 Address each distinct question; a placeholder counts as addressing it.
 End the reply without a sign-off or the user's name; their signature is added automatically.
 Never use a placeholder for the user's name. Do not add a signature or sign-off.
@@ -406,7 +408,7 @@ Do not suggest specific times. Acknowledge the request and suggest alternatives 
     parts.push(`Available time slots:
 ${times}
 
-${calendarBookingLink ? "Lead with the booking link, then optionally suggest a few of these times as alternatives." : "Use these time slots when responding to meeting requests."} Format suggested times as a bulleted list.`);
+${calendarBookingLink ? "Lead with the booking link. " : ""}These times are free on the user's calendar; offer them only inside a [confirm: ...] placeholder, never as an acceptance.`);
   }
 
   if (parts.length === 0) return "";
