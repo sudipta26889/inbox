@@ -38,6 +38,7 @@ import { isMessagingDraftActionType } from "@/utils/actions/draft-reply";
 import { checkHasAccess } from "@/utils/premium/server";
 import { handlePreviousDraftDeletion } from "@/utils/ai/choose-rule/draft-management";
 import { isIntegrationActionEnabledForUserId } from "@/utils/integration-action.server";
+import { executeCreateTaskAction } from "@/utils/ai/actions/create-task";
 
 const MODULE = "ai-actions";
 
@@ -122,6 +123,12 @@ export const runActionFunction = async (options: {
       return notify_sender(opts);
     case ActionType.INTEGRATION:
       return integration(opts);
+    case ActionType.CREATE_TASK:
+      await executeCreateTaskAction({
+        messageId: opts.email.id,
+        emailAccountId: emailAccount.id,
+      });
+      return { success: true };
     default:
       throw new Error(`Unknown action: ${action}`);
   }

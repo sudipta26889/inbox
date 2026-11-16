@@ -189,6 +189,42 @@ const parsedEnv = createEnv({
     LOCAL_LLM_THINKING: z.enum(["off", "on", "auto"]).default("auto"),
     OPENAI_COMPATIBLE_BASE_URL: z.string().optional(),
     LITELLM_BASE_URL: z.string().optional(),
+
+    TASKPILOT_DECIDER_MODEL: z.string().default("kimi-k2.6"),
+    // Used when the primary model times out (cold GPU). Should be a fast,
+    // reliable non-reasoning model.
+    TASKPILOT_DECIDER_FALLBACK_MODEL: z.string().optional(),
+    TASKPILOT_FIELDS_MODEL: z.string().default("kimi-k2.6"),
+    TASKPILOT_DECIDER_REASONING_EFFORT: z
+      .enum(["low", "medium", "high"])
+      .default("medium"),
+    TASKPILOT_FIELDS_REASONING_EFFORT: z
+      .enum(["low", "medium", "high"])
+      .default("low"),
+    TASKPILOT_DECIDER_MAX_TOKENS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(8000),
+    TASKPILOT_FIELDS_MAX_TOKENS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(4000),
+    TASKPILOT_PREGATE_RECALL_THRESHOLD: z.coerce
+      .number()
+      .min(0)
+      .max(1)
+      .default(0.5),
+    TASKPILOT_DECIDER_TIMEOUT_MS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(30_000),
+    TASKPILOT_DECISIONS_SHADOW: booleanString.optional().default(false),
+    // TaskPilot cross-thread semantic dedupe.
+    QDRANT_URL: z.string().optional(),
+    QDRANT_API_KEY: z.string().optional(),
     GIT_SHA: z.string().optional(),
     OPENAI_COMPATIBLE_MODEL: z.string().optional(),
     OPENAI_COMPATIBLE_AUTH_HEADER: z

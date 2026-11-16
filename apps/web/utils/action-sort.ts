@@ -27,6 +27,7 @@ const ACTION_TYPE_PRIORITY_ORDER: ActionType[] = [
   ActionType.NOTIFY_SENDER,
   ActionType.CALL_WEBHOOK,
   ActionType.INTEGRATION,
+  ActionType.CREATE_TASK,
 ];
 
 /**

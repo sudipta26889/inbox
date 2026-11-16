@@ -139,6 +139,8 @@ function getActionLabel(
     }
     case ActionType.NOTIFY_SENDER:
       return i18n._(msg`Notify Sender`);
+    case ActionType.CREATE_TASK:
+      return "TaskPilot";
     case ActionType.INTEGRATION:
       return i18n._(getIntegrationActionLabelMessage(action));
     default:
@@ -201,6 +203,7 @@ export function getActionColor(actionType: ActionType): Color {
     case ActionType.NOTIFY_MESSAGING_CHANNEL:
     case ActionType.NOTIFY_SENDER:
     case ActionType.INTEGRATION:
+    case ActionType.CREATE_TASK:
       return "purple";
     default: {
       const exhaustiveCheck: never = actionType;

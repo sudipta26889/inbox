@@ -37,6 +37,7 @@ import { Button } from "@/components/ui/button";
 import type { EmailLabels } from "@/providers/email-label-types";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useSentMessageOpensForThreads } from "@/hooks/useSentMessageOpens";
+import { useTaskpilotLinks } from "@/hooks/useTaskpilotLinks";
 import { cn } from "@/utils";
 import { formatDateGroupLabel } from "@/utils/date";
 import { getThreadTimestamp } from "@/utils/threads/sort";
@@ -140,6 +141,7 @@ export const ThreadList = memo(function ThreadList({
   );
   const { data: sentMessageOpens } =
     useSentMessageOpensForThreads(sentThreadIds);
+  const { data: taskpilotLinks } = useTaskpilotLinks(threads);
   const groupHeaderClassName = cn(
     "pt-4 pr-5 pb-1.5 font-normal text-muted-foreground text-sm",
     selectionEnabled ? "pl-[3.25rem]" : "pl-8",
@@ -253,6 +255,7 @@ export const ThreadList = memo(function ThreadList({
                   ? sentMessageOpens?.opens[row.item.messages.at(-1)?.id ?? ""]
                   : undefined
               }
+              taskpilotLink={taskpilotLinks?.[row.item.id]}
               hasLocalDraft={draftThreads.has(
                 `${"account" in row.item ? row.item.account.id : emailAccountId}:${row.item.id}`,
               )}

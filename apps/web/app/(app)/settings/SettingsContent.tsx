@@ -7,6 +7,7 @@ import { useCallback, useMemo, useState } from "react";
 import {
   ChevronRightIcon,
   CreditCardIcon,
+  ListChecksIcon,
   MailIcon,
   MessageCircleIcon,
   MessagesSquareIcon,
@@ -39,6 +40,7 @@ import { WebhookSection } from "@/app/(app)/[emailAccountId]/settings/WebhookSec
 import { CopyRulesSection } from "@/app/(app)/[emailAccountId]/settings/CopyRulesSection";
 import { RuleImportExportSetting } from "@/app/(app)/[emailAccountId]/assistant/settings/RuleImportExportSetting";
 import { ToggleAllRulesSection } from "@/app/(app)/[emailAccountId]/settings/ToggleAllRulesSection";
+import { TaskpilotIntegrationSection } from "@/app/(app)/settings/TaskpilotIntegrationSection";
 import type { GetEmailAccountsResponse } from "@/app/api/user/email-accounts/route";
 import { LoadingContent } from "@/components/LoadingContent";
 import { Badge } from "@/components/ui/badge";
@@ -200,6 +202,15 @@ export function SettingsContent() {
         </ItemCard>
         <ItemCard>
           <DeleteSection />
+        </ItemCard>
+      </SettingsGroup>
+
+      <SettingsGroup
+        icon={<ListChecksIcon className="size-5" />}
+        title={t`Integrations`}
+      >
+        <ItemCard>
+          <TaskpilotIntegrationSection />
         </ItemCard>
       </SettingsGroup>
 
