@@ -32,23 +32,24 @@ ${DRAFT_OUTPUT_INSTRUCTION}
 IMPORTANT: Format paragraphs using Unix newlines: use "\n\n" between paragraphs and "\n" for single line breaks.
 Write the reply in the same language as the latest message in the thread.
 
-When the reply depends on something the user could answer without asking anyone, such as their decision, status, plans, or whether they want to meet, write the answer they would most likely give.
 Don't invent facts about the other party or what they said; ground those in the thread or provided context.
 Address each distinct question or requested action; do not trade away completeness for brevity.
 When the sender asks several separate questions, answer each one on its own, in their order, so they can match every answer to its question. If they numbered or bulleted them, reply with the same numbering or bullets. Keep each answer brief.
-Never mention your own context or its gaps, such as not seeing something in the thread, not having it in front of you, or not wanting to guess. Don't reply with a promise to check, verify, or confirm later in place of an answer; that is only right for a reported problem that needs investigating.
-Use a lower confidence when the draft relies on a guess about the user's answer.
-Never use placeholders for the user's name. You do not need to sign off with the user's name. Do not add a signature.
+Only state facts, numbers, dates, prices, reasons, statuses and commitments that appear in the thread, the knowledge base, the email history, the calendar information or other provided context. Never invent them, and never claim the user did something (read, reviewed, sent, paid, decided) unless the context shows it.
+When an answer needs the user's own decision or information that is not in the context, write a short placeholder in square brackets for the user to fill in, e.g. [your answer: the 3rd or the 10th?] or [confirm: does 4 pm IST work?]. Never fill it with a guess. Keep the rest of the reply complete around it.
+Address each distinct question; a placeholder counts as addressing it.
+End the reply without a sign-off or the user's name; their signature is added automatically.
+Never use a placeholder for the user's name. Do not add a signature or sign-off.
 Do not use em dashes unless the provided writing style explicitly calls for them.
 Don't suggest meeting times or mention availability unless specific calendar information is provided.
 
 Write an email that follows up on the previous conversation.
 Your reply should aim to continue the conversation or provide new information based on the context or knowledge base. If you have nothing substantial to add, keep the reply minimal.
 
-Example of answering as the user when the thread does not state the answer:
-Sender: "Can you confirm the workshop fee is $500 and we're booked for Friday?"
-Good: "Yes, $500 and Friday are both right. See you then."
-Bad: "I'll confirm the fee and date and get back to you."
+Example when the context does not contain the answer:
+Sender: "Can you confirm the workshop fee is $500 and we're booked for Friday?" (the context has no fee or booking)
+Good: "Thanks. [confirm: is the fee $500?] [confirm: are we booked for Friday?]"
+Bad: "Yes, $500 and Friday are both right."
 `;
 
 const defaultWritingStyle = `Keep it concise and friendly.
@@ -280,7 +281,11 @@ export async function aiDraftReplyWithConfidence({
 
   return {
     reply: normalizeDraftReplyFormatting(result.object.reply),
-    confidence: normalizeDraftReplyConfidence(result.object.confidence),
+    // A placeholder means the user still has to decide something, so it is
+    // never more than the lowest confidence whatever the model claims.
+    confidence: hasDraftPlaceholder(result.object.reply)
+      ? DraftReplyConfidence.ALL_EMAILS
+      : normalizeDraftReplyConfidence(result.object.confidence),
     attribution: attributionTracker.attribution,
   };
 }
@@ -467,4 +472,9 @@ function isDraftReplyConfidence(value: unknown): value is DraftReplyConfidence {
   return Object.values(DraftReplyConfidence).includes(
     value as DraftReplyConfidence,
   );
+}
+
+export function hasDraftPlaceholder(reply: string): boolean {
+  // The lookahead skips markdown links, `[label](url)`.
+  return /\[[^[\]]{2,200}\](?!\()/.test(reply);
 }
