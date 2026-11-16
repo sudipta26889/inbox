@@ -3,7 +3,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { lookupMock } = vi.hoisted(() => ({ lookupMock: vi.fn() }));
 vi.mock("node:dns/promises", () => ({ lookup: lookupMock }));
 vi.mock("@/env", () => ({
-  env: { A2A_REMOTE_AGENTS: "http://dharabot.lan:12345" },
+  env: {
+    A2A_REMOTE_AGENTS: "http://dharabot.lan:12345, http://mitra.lan:8080/a2a",
+  },
 }));
 
 import { isAllowedA2aDestination } from "./safe-destination";
@@ -53,6 +55,22 @@ describe("isAllowedA2aDestination", () => {
     ["another port on the agent's host", "http://dharabot.lan:12346/x"],
     ["the agent's host over https", "https://dharabot.lan:12345/x"],
     ["another LAN host", "http://db.lan:12345/x"],
+  ])("refuses %s", async (_label, url) => {
+    expect(await isAllowedA2aDestination(url)).toBe(false);
+  });
+
+  it.each([
+    ["the base path itself", "http://mitra.lan:8080/a2a"],
+    ["a path under the base", "http://mitra.lan:8080/a2a/push/task-1"],
+  ])("allows the configured agent at %s", async (_label, url) => {
+    expect(await isAllowedA2aDestination(url)).toBe(true);
+  });
+
+  it.each([
+    ["another app on the agent's origin", "http://mitra.lan:8080/admin/hook"],
+    ["a sibling path sharing the prefix", "http://mitra.lan:8080/a2a-admin"],
+    ["a dot-segment escape", "http://mitra.lan:8080/a2a/../admin"],
+    ["an encoded dot-segment escape", "http://mitra.lan:8080/a2a/%2e%2e/admin"],
   ])("refuses %s", async (_label, url) => {
     expect(await isAllowedA2aDestination(url)).toBe(false);
   });

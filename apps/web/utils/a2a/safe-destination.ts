@@ -32,8 +32,9 @@ export async function resolveA2aDestination(url: string): Promise<{
   }
 
   // Operator-configured agents (Mitra on the LAN, plain http) are trusted by
-  // exact origin: scheme, host and port. Another port on the same host is not.
-  if (isConfiguredAgentOrigin(parsed)) return { url: parsed };
+  // exact origin (scheme, host and port) and only under the agent's base path.
+  // Another port on the same host, or another app's path on it, is not.
+  if (isConfiguredAgentUrl(parsed)) return { url: parsed };
 
   if (parsed.protocol !== "https:") return null;
 
@@ -122,12 +123,20 @@ export async function postToVettedUrl(
   });
 }
 
-function isConfiguredAgentOrigin(url: URL) {
+function isConfiguredAgentUrl(url: URL) {
   return getRemoteAgentUrls().some((configured) => {
+    let base: URL;
     try {
-      return new URL(configured).origin === url.origin;
+      base = new URL(configured);
     } catch {
       return false;
     }
+    if (base.origin !== url.origin) return false;
+    // URL parsing has already resolved dot segments, so a "/base/../x" path
+    // cannot pass as being under /base.
+    const prefix = base.pathname.endsWith("/")
+      ? base.pathname
+      : `${base.pathname}/`;
+    return url.pathname === base.pathname || url.pathname.startsWith(prefix);
   });
 }
