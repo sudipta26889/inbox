@@ -21,7 +21,10 @@ import {
 import prisma from "@/utils/prisma";
 import { categorizeSender } from "@/utils/categorize/senders/categorize";
 import { sendOtpPushNotification } from "@/utils/otp-push";
-import { runRules } from "@/utils/ai/choose-rule/run-rules";
+import {
+  queueSenderPatternAnalysis,
+  runRules,
+} from "@/utils/ai/choose-rule/run-rules";
 import { sendMobilePushNotification } from "@/utils/mobile-push";
 import { processFilingReply } from "@/utils/drive/handle-filing-reply";
 import { getFilebotEmail } from "@/utils/filebot/is-filebot-email";
@@ -33,6 +36,7 @@ vi.mock("@/utils/prisma", () => ({
     executedRule: {
       findFirst: vi.fn().mockResolvedValue(null),
     },
+    $queryRaw: vi.fn().mockResolvedValue([]),
     newsletter: {
       findFirst: vi.fn().mockResolvedValue(null),
       findMany: vi.fn().mockResolvedValue([]),
@@ -48,7 +52,10 @@ vi.mock("@/utils/cold-email/is-cold-email", () => ({
 vi.mock("@/utils/categorize/senders/categorize", () => ({
   categorizeSender: vi.fn(),
 }));
-vi.mock("@/utils/ai/choose-rule/run-rules", () => ({
+vi.mock("@/utils/ai/choose-rule/run-rules", async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import("@/utils/ai/choose-rule/run-rules")
+  >()),
   runRules: vi.fn(),
 }));
 vi.mock("@/utils/reply-tracker/handle-outbound", () => ({
@@ -861,7 +868,10 @@ describe("Provider Edge Cases", () => {
 });
 
 describe("autoLearnPatterns", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(prisma.executedRule.findFirst).mockResolvedValue(null);
+  });
 
   const emailAccount = {
     ...getEmailAccount(),
@@ -872,7 +882,10 @@ describe("autoLearnPatterns", () => {
     draftReplyConfidence: DraftReplyConfidence.ALL_EMAILS,
   };
 
-  async function run(autoLearnPatterns: boolean) {
+  async function run(
+    autoLearnPatterns: boolean,
+    { hasAutomationRules = false } = {},
+  ) {
     const message = getMockParsedMessage({
       internalDate: String(Date.now()),
       headers: {
@@ -886,7 +899,7 @@ describe("autoLearnPatterns", () => {
       { messageId: message.id, message },
       {
         provider: createMockEmailProvider(),
-        hasAutomationRules: false,
+        hasAutomationRules,
         hasAiAccess: true,
         rules: [],
         emailAccount: { ...emailAccount, autoLearnPatterns },
@@ -897,10 +910,33 @@ describe("autoLearnPatterns", () => {
 
   it("learns the pattern of a sender not yet analyzed when enabled", async () => {
     await run(true);
-    expect(analyzeSenderPattern).toHaveBeenCalledWith(
-      { emailAccountId: emailAccount.id, from: "new@sender.com" },
-      expect.anything(),
+    await vi.waitFor(() =>
+      expect(analyzeSenderPattern).toHaveBeenCalledWith(
+        { emailAccountId: emailAccount.id, from: "new@sender.com" },
+        expect.anything(),
+      ),
     );
+  });
+
+  it("analyzes a sender once when an AI rule match already queued it", async () => {
+    vi.mocked(runRules).mockImplementation(
+      async ({ emailAccount, queuedSenderPatternAnalyses }) => {
+        queueSenderPatternAnalysis({
+          emailAccountId: emailAccount.id,
+          from: "new@sender.com",
+          queuedSenderPatternAnalyses: queuedSenderPatternAnalyses!,
+          logger,
+        });
+        return [];
+      },
+    );
+
+    await run(true, { hasAutomationRules: true });
+
+    expect(runRules).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(analyzeSenderPattern).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(analyzeSenderPattern).toHaveBeenCalledTimes(1);
   });
 
   it("does nothing when disabled", async () => {

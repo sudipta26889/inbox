@@ -1,7 +1,9 @@
 import { after } from "next/server";
 import prisma from "@/utils/prisma";
-import { runRules } from "@/utils/ai/choose-rule/run-rules";
-import { analyzeSenderPattern } from "@/utils/ai/choose-rule/analyze-sender-pattern";
+import {
+  queueSenderPatternAnalysis,
+  runRules,
+} from "@/utils/ai/choose-rule/run-rules";
 import { categorizeSender } from "@/utils/categorize/senders/categorize";
 import {
   isFilebotEmail,
@@ -233,34 +235,9 @@ export async function processHistoryItem(
       }
     }
 
-    // Fork: autoLearnPatterns learns every new sender's pattern, not only
-    // senders an AI rule matched (upstream's run-rules path).
-    if (emailAccount.autoLearnPatterns && email) {
-      const analyzed = await prisma.newsletter.findFirst({
-        where: {
-          emailAccountId,
-          email: { equals: email, mode: "insensitive" },
-          patternAnalyzed: true,
-        },
-        select: { id: true },
-      });
-
-      if (!analyzed) {
-        after(() =>
-          runWithBackgroundLoggerFlush({
-            logger,
-            task: () =>
-              analyzeSenderPattern(
-                { emailAccountId, from: email.toLowerCase() },
-                logger,
-              ),
-            extra: { operation: "auto-learn-pattern" },
-          }),
-        );
-      }
-    }
-
     logger.info("Pre-rules check", { hasAutomationRules, hasAiAccess });
+
+    const queuedSenderPatternAnalyses = new Set<string>();
 
     if (!hasExistingRule && hasAutomationRules && hasAiAccess) {
       logger.info("Running rules...");
@@ -273,6 +250,7 @@ export async function processHistoryItem(
         isTest: false,
         modelType: "default",
         logger,
+        queuedSenderPatternAnalyses,
       });
 
       if (
@@ -287,6 +265,17 @@ export async function processHistoryItem(
           logger,
         });
       }
+    }
+
+    // Fork: autoLearnPatterns learns every new sender's pattern, not only
+    // senders an AI rule matched. The shared set keeps it to one analysis.
+    if (!hasExistingRule && emailAccount.autoLearnPatterns && email) {
+      queueSenderPatternAnalysis({
+        emailAccountId,
+        from: email,
+        queuedSenderPatternAnalyses,
+        logger,
+      });
     }
 
     // Process attachments for document filing (runs in parallel with rules if both enabled)
