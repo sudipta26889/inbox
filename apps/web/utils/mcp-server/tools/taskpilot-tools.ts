@@ -89,10 +89,12 @@ export async function convertToTaskpilotTask(
       };
     }
 
-    // Build Pass 1 context.
-    const config = await getTaskpilotConfigForUser(context.userId);
+    // The caller converts with their own TaskPilot settings, also from a
+    // shared mailbox; the link below still records the mailbox.
+    const actorUserId = getCallerUserId(context);
+    const config = await getTaskpilotConfigForUser(actorUserId);
     const client = new TaskpilotClient(config);
-    const allProjects = await taskpilotCache.getProjects(context.userId, () =>
+    const allProjects = await taskpilotCache.getProjects(actorUserId, () =>
       client.listProjects(),
     );
     const projects = filterToPin(allProjects, config.projectId, (p) => p.id);
@@ -102,7 +104,7 @@ export async function convertToTaskpilotTask(
     > = {};
     for (const p of projects) {
       labelsByProject[p.id] = await taskpilotCache.getLabels(
-        context.userId,
+        actorUserId,
         p.id,
         () => client.listLabels(p.id),
       );
@@ -149,7 +151,7 @@ export async function convertToTaskpilotTask(
     }
 
     const committed = await commitTask({
-      userId: context.userId,
+      userId: actorUserId,
       emailAccountId,
       messageId: message.id,
       threadId: message.threadId ?? null,

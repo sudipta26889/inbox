@@ -28,9 +28,12 @@ export const convertEmailToTaskpilotTaskDraftAction = actionClient
   .inputSchema(convertEmailDraftBody)
   .action(
     async ({
-      ctx: { userId, emailAccountId, provider: providerType, logger },
+      ctx: { session, emailAccountId, provider: providerType, logger },
       parsedInput: { messageId },
     }) => {
+      // The person converting uses their own TaskPilot settings, also on a
+      // shared mailbox; the link below still records the mailbox.
+      const actorUserId = session.user.id;
       const existing = await prisma.emailTaskLink.findFirst({
         where: { emailAccountId, gmailMessageId: messageId },
       });
@@ -52,9 +55,9 @@ export const convertEmailToTaskpilotTaskDraftAction = actionClient
       });
       const message = await provider.getMessage(messageId);
 
-      const config = await getTaskpilotConfigForUser(userId);
+      const config = await getTaskpilotConfigForUser(actorUserId);
       const client = new TaskpilotClient(config);
-      const allProjects = await taskpilotCache.getProjects(userId, () =>
+      const allProjects = await taskpilotCache.getProjects(actorUserId, () =>
         client.listProjects(),
       );
       const projects = filterToPin(allProjects, config.projectId, (p) => p.id);
@@ -64,7 +67,7 @@ export const convertEmailToTaskpilotTaskDraftAction = actionClient
       > = {};
       for (const p of projects) {
         labelsByProject[p.id] = await taskpilotCache.getLabels(
-          userId,
+          actorUserId,
           p.id,
           () => client.listLabels(p.id),
         );
@@ -120,7 +123,7 @@ export const commitTaskpilotTaskAction = actionClient
   .action(
     async ({
       ctx: {
-        userId,
+        session,
         emailAccountId,
         emailAccount,
         provider: providerType,
@@ -136,7 +139,7 @@ export const commitTaskpilotTaskAction = actionClient
       const message = await provider.getMessage(messageId);
       const threadId = message.threadId;
       return commitTask({
-        userId,
+        userId: session.user.id,
         emailAccountId,
         messageId,
         threadId: threadId || null,

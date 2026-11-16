@@ -152,6 +152,23 @@ describe("convertToTaskpilotTask", () => {
   });
 });
 
+// Owner decision: the caller converts with their own TaskPilot settings, also
+// when the token is bound to (or names) a mailbox someone shared with them.
+describe("convertToTaskpilotTask from a shared mailbox", () => {
+  it("uses the caller's settings, not the mailbox owner's", async () => {
+    prisma.emailTaskLink.findFirst.mockResolvedValue(null);
+    vi.mocked(getTaskpilotConfigForUser).mockClear();
+
+    await convertToTaskpilotTask(
+      { ...ctx, userId: "owner", callerUserId: "shared-user" },
+      { emailId: "msg-1", preview: true },
+    );
+
+    expect(getTaskpilotConfigForUser).toHaveBeenCalledWith("shared-user");
+    expect(getTaskpilotConfigForUser).not.toHaveBeenCalledWith("owner");
+  });
+});
+
 describe("convertToTaskpilotTask with a pinned project", () => {
   it("offers the decider only the pinned project", async () => {
     prisma.emailTaskLink.findFirst.mockResolvedValue(null);

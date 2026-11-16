@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import prisma from "@/utils/__mocks__/prisma";
-import { convertEmailToTaskpilotTaskDraftAction } from "@/utils/actions/taskpilot";
+import {
+  commitTaskpilotTaskAction,
+  convertEmailToTaskpilotTaskDraftAction,
+} from "@/utils/actions/taskpilot";
+import { commitTask } from "@/utils/taskpilot/service";
 import { getTaskpilotConfigForUser } from "@/utils/taskpilot/config";
 import { decidePass1 } from "@/utils/taskpilot/decide";
 
@@ -59,6 +63,10 @@ vi.mock("@/utils/taskpilot/cache", () => ({
   },
 }));
 
+vi.mock("@/utils/taskpilot/service", () => ({
+  commitTask: vi.fn(async () => ({ alreadyExisted: false })),
+}));
+
 vi.mock("@/utils/taskpilot/decide", () => ({
   decidePass1: vi.fn(async () => ({
     ok: true,
@@ -98,6 +106,7 @@ describe("convertEmailToTaskpilotTaskDraftAction with a pinned project", () => {
     run({
       ctx: {
         userId: "u1",
+        session: { user: { id: "u1" } },
         emailAccountId: "a1",
         provider: "google",
         logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
@@ -133,5 +142,56 @@ describe("convertEmailToTaskpilotTaskDraftAction with a pinned project", () => {
     expect(
       vi.mocked(decidePass1).mock.calls[0][0].projects.map((p) => p.id),
     ).toEqual(["p1", "p2"]);
+  });
+});
+
+// Owner decision: whoever converts uses their own TaskPilot settings, also on
+// a mailbox shared with them; the link still belongs to the mailbox.
+describe("TaskPilot convert on a shared mailbox", () => {
+  const sharedCtx = {
+    userId: "owner",
+    session: { user: { id: "shared-user" } },
+    emailAccountId: "owners-mailbox",
+    emailAccount: { email: "owner@example.com" },
+    provider: "google",
+    logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    prisma.emailTaskLink.findFirst.mockResolvedValue(null);
+    clientMock.listProjects.mockResolvedValue(projects);
+    clientMock.listLabels.mockResolvedValue([]);
+    vi.mocked(getTaskpilotConfigForUser).mockResolvedValue({
+      apiKey: "k",
+      workspaceSlug: "ws",
+      projectId: null,
+    });
+  });
+
+  it("drafts with the signed-in user's settings, not the owner's", async () => {
+    await run({ ctx: sharedCtx, parsedInput: { messageId: "msg-1" } });
+
+    expect(getTaskpilotConfigForUser).toHaveBeenCalledWith("shared-user");
+    expect(getTaskpilotConfigForUser).not.toHaveBeenCalledWith("owner");
+  });
+
+  it("commits with the signed-in user's settings and links the mailbox", async () => {
+    const commit = commitTaskpilotTaskAction as unknown as (args: {
+      ctx: Record<string, unknown>;
+      parsedInput: { messageId: string; draft: unknown };
+    }) => Promise<unknown>;
+
+    await commit({
+      ctx: sharedCtx,
+      parsedInput: { messageId: "msg-1", draft: { projectId: "p1" } },
+    });
+
+    expect(commitTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: "shared-user",
+        emailAccountId: "owners-mailbox",
+      }),
+    );
   });
 });
