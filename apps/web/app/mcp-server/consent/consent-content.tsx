@@ -1,7 +1,6 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -9,51 +8,39 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { MCP_SCOPES } from "@/utils/mcp-server/constants";
 import { BRAND_NAME } from "@/utils/branding";
 
-function decodeBase64Url(input: string): string {
-  let base64 = input.replace(/-/g, "+").replace(/_/g, "/");
-  const pad = base64.length % 4;
-  if (pad === 2) base64 += "==";
-  else if (pad === 3) base64 += "=";
-  return atob(base64);
-}
+type ConsentRequest = {
+  client_id: string;
+  redirect_uri: string;
+  scope: string;
+  state: string;
+  code_challenge: string;
+  code_challenge_method: string;
+  email_account_id: string;
+};
 
-export default function ConsentContent() {
-  const searchParams = useSearchParams();
+export default function ConsentContent({
+  clientName,
+  logoUri: clientLogoUri,
+  redirectHost,
+  request,
+}: {
+  clientName: string;
+  logoUri: string | null;
+  redirectHost: string;
+  request: ConsentRequest;
+}) {
   const [isLoading, setIsLoading] = useState(false);
 
-  const params = useMemo(() => {
-    const oauthState = searchParams.get("oauth_state");
-    if (oauthState) {
-      try {
-        const decoded = decodeBase64Url(oauthState);
-        return new URLSearchParams(decoded);
-      } catch {
-        return searchParams;
-      }
-    }
-    return searchParams;
-  }, [searchParams]);
-
-  const clientName = params.get("client_name") || "Unknown Application";
-  const clientLogoUri = params.get("client_logo_uri") || null;
-  const scopeString = params.get("scope") || "";
+  const scopeString = request.scope;
   const scopes = scopeString.split(" ").filter(Boolean);
 
-  const handleApprove = async () => {
+  const submit = async (extra: { deny?: boolean }) => {
     setIsLoading(true);
     try {
       const response = await fetch("/mcp-server/consent/approve", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          client_id: params.get("client_id"),
-          redirect_uri: params.get("redirect_uri"),
-          scope: scopeString,
-          state: params.get("state"),
-          code_challenge: params.get("code_challenge"),
-          code_challenge_method: params.get("code_challenge_method"),
-          email_account_id: params.get("email_account_id"),
-        }),
+        body: JSON.stringify({ ...request, ...extra }),
       });
 
       const data = await response.json();
@@ -68,26 +55,14 @@ export default function ConsentContent() {
         throw new Error("No redirect URL received");
       }
     } catch (error) {
-      console.error("Failed to approve consent", error);
-      alert("Failed to authorize application. Please try again.");
+      console.error("Failed to submit consent", error);
+      alert("Something went wrong. Please try again.");
       setIsLoading(false);
     }
   };
 
-  const handleDeny = () => {
-    const redirectUri = params.get("redirect_uri");
-    const state = params.get("state");
-
-    if (redirectUri) {
-      const redirectUrl = new URL(redirectUri);
-      redirectUrl.searchParams.set("error", "access_denied");
-      redirectUrl.searchParams.set("error_description", "User denied access");
-      if (state) {
-        redirectUrl.searchParams.set("state", state);
-      }
-      window.location.href = redirectUrl.toString();
-    }
-  };
+  const handleApprove = () => submit({});
+  const handleDeny = () => submit({ deny: true });
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
@@ -116,6 +91,9 @@ export default function ConsentContent() {
           <p className="text-gray-600">
             <strong>{clientName}</strong> wants to access your {BRAND_NAME}{" "}
             account
+          </p>
+          <p className="text-xs text-gray-500">
+            After you choose, you will be sent to {redirectHost}
           </p>
         </div>
 

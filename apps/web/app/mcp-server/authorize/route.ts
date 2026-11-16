@@ -2,12 +2,15 @@ import { NextResponse } from "next/server";
 import { withError, type RequestWithLogger } from "@/utils/middleware";
 import { SafeError } from "@/utils/error";
 import { env } from "@/env";
-import type { Logger } from "@/utils/logger";
 import {
-  validateCodeChallengeMethod,
-  generateSecureToken,
-} from "@/utils/mcp-server/pkce";
-import { validateRedirectUri } from "@/utils/mcp-server/redirect-uri";
+  isMcpResource,
+  issueAuthorizationCode,
+} from "@/utils/mcp-server/authorization-code";
+import { validateCodeChallengeMethod } from "@/utils/mcp-server/pkce";
+import {
+  redirectUriMatches,
+  validateRedirectUri,
+} from "@/utils/mcp-server/redirect-uri";
 import { validateScopes } from "@/utils/mcp-server/tokens";
 import prisma from "@/utils/prisma";
 import { auth } from "@/utils/auth";
@@ -53,6 +56,7 @@ export const GET = withError(
     let state: string;
     let codeChallenge: string | null;
     let codeChallengeMethod: string;
+    let resource: string | null;
 
     if (oauthState) {
       // Decode base64 oauth_state parameter
@@ -66,6 +70,7 @@ export const GET = withError(
         state = params.get("state") || "";
         codeChallenge = params.get("code_challenge");
         codeChallengeMethod = params.get("code_challenge_method") || "S256";
+        resource = params.get("resource");
       } catch {
         throw new SafeError("Invalid oauth_state parameter");
       }
@@ -78,6 +83,7 @@ export const GET = withError(
       state = searchParams.get("state") || "";
       codeChallenge = searchParams.get("code_challenge");
       codeChallengeMethod = searchParams.get("code_challenge_method") || "S256";
+      resource = searchParams.get("resource");
     }
 
     // Validate required parameters
@@ -104,8 +110,12 @@ export const GET = withError(
 
     if (!validateCodeChallengeMethod(codeChallengeMethod)) {
       throw new SafeError(
-        `Invalid code_challenge_method: ${codeChallengeMethod}. Must be 'S256' or 'plain'`,
+        `invalid_request: unsupported code_challenge_method '${codeChallengeMethod}'. Only 'S256' is supported`,
       );
+    }
+
+    if (resource && !isMcpResource(resource)) {
+      throw new SafeError("invalid_target: unknown resource");
     }
 
     // Auto-add calendar:write if calendar:read is present
@@ -135,8 +145,13 @@ export const GET = withError(
       throw new SafeError("Unknown client");
     }
 
-    // Format-only check — MCP clients use ephemeral localhost ports
     validateRedirectUri(redirectUri);
+    if (!redirectUriMatches(redirectUri, client.redirectUris)) {
+      logger.warn("redirect_uri does not match the client's registration", {
+        clientId,
+      });
+      throw new SafeError("redirect_uri is not registered for this client");
+    }
 
     // Check if user is authenticated
     const session = await auth();
@@ -152,6 +167,7 @@ export const GET = withError(
         ...(state && { state }),
         ...(codeChallenge && { code_challenge: codeChallenge }),
         code_challenge_method: codeChallengeMethod,
+        ...(resource && { resource }),
       });
 
       const encodedState = Buffer.from(oauthParams.toString()).toString(
@@ -201,7 +217,7 @@ export const GET = withError(
 
     if (skipConsent) {
       // Generate authorization code immediately
-      return await generateAndRedirectWithCode({
+      const redirectUrl = await issueAuthorizationCode({
         userId: session.user.id,
         emailAccountId,
         clientId,
@@ -210,15 +226,19 @@ export const GET = withError(
         state,
         codeChallenge,
         codeChallengeMethod,
-        logger,
       });
+      logger.info("Generated MCP authorization code", {
+        userId: session.user.id,
+        emailAccountId,
+        clientId,
+        scope: finalScope,
+      });
+      return NextResponse.redirect(redirectUrl);
     }
 
     // Show consent screen using base64-encoded state to avoid WAF issues
     const consentParams = new URLSearchParams({
       client_id: clientId,
-      client_name: client.clientName,
-      ...(client.logoUri && { client_logo_uri: client.logoUri }),
       redirect_uri: redirectUri,
       scope: finalScope,
       state,
@@ -236,64 +256,3 @@ export const GET = withError(
     return NextResponse.redirect(consentUrl);
   },
 );
-
-/**
- * Generate authorization code and redirect back to client
- */
-async function generateAndRedirectWithCode({
-  userId,
-  emailAccountId,
-  clientId,
-  redirectUri,
-  scope,
-  state,
-  codeChallenge,
-  codeChallengeMethod,
-  logger,
-}: {
-  userId: string;
-  emailAccountId: string;
-  clientId: string;
-  redirectUri: string;
-  scope: string;
-  state: string;
-  codeChallenge: string;
-  codeChallengeMethod: string;
-  logger: Logger;
-}): Promise<NextResponse> {
-  // Generate authorization code
-  const code = generateSecureToken(32);
-  const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
-
-  // Store authorization code in database
-  await prisma.mcpServerAuthorizationCode.create({
-    data: {
-      code,
-      redirectUri,
-      scope,
-      state,
-      codeChallenge,
-      codeChallengeMethod,
-      userId,
-      emailAccountId,
-      clientId,
-      expiresAt,
-    },
-  });
-
-  logger.info("Generated MCP authorization code", {
-    userId,
-    emailAccountId,
-    clientId,
-    scope,
-  });
-
-  // Redirect back to client with authorization code
-  const redirectUrl = new URL(redirectUri);
-  redirectUrl.searchParams.set("code", code);
-  if (state) {
-    redirectUrl.searchParams.set("state", state);
-  }
-
-  return NextResponse.redirect(redirectUrl);
-}

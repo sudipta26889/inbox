@@ -2,9 +2,11 @@ import crypto from "node:crypto";
 import { generateSecureToken } from "./pkce";
 import prisma from "@/utils/prisma";
 import { createScopedLogger } from "@/utils/logger";
+import { accessibleEmailAccountWhere } from "@/utils/email-account-access";
 import {
   MCP_RESOURCE,
   MCP_SCOPES,
+  REFRESH_REPLAY_GRACE_SECONDS,
   TOKEN_CONFIG,
   type McpScope,
 } from "./constants";
@@ -121,6 +123,9 @@ export async function generateAccessToken({
   // resulting token is an ordinary access token — same signature, same
   // revocation check — it just expires far later. Default is unchanged.
   accessTokenTtlSeconds = TOKEN_CONFIG.ACCESS_TOKEN_TTL,
+  // Ties tokens from one authorization (and its refreshes) together so a
+  // replay can revoke them as a set. Static A2A tokens have none.
+  grantId,
 }: {
   userId: string;
   emailAccountId: string;
@@ -128,6 +133,7 @@ export async function generateAccessToken({
   scope: string;
   jwtSecret: string;
   accessTokenTtlSeconds?: number;
+  grantId?: string | null;
 }): Promise<{
   accessToken: string;
   refreshToken: string;
@@ -185,6 +191,7 @@ export async function generateAccessToken({
       userId,
       emailAccountId,
       clientId,
+      grantId: grantId ?? null,
     },
   });
 
@@ -240,21 +247,67 @@ export async function validateAccessToken(
 }
 
 /**
- * Refresh an access token using a refresh token
+ * Refresh an access token using a refresh token.
+ *
+ * Rotation keeps the grant: the old row is marked `rotated` and the new one
+ * carries the same grantId. Presenting a rotated token again after the grace
+ * window means two parties hold it, so the whole grant is revoked.
  */
 export async function refreshAccessToken(
   refreshToken: string,
   jwtSecret: string,
+  expectedClientId: string,
 ): Promise<{
   accessToken: string;
   refreshToken: string;
   expiresIn: number;
   tokenType: string;
 } | null> {
-  // Verify refresh token
   const payload = verifyJwtToken(refreshToken, jwtSecret);
   if (!payload || payload.token_type !== "refresh") {
     logger.warn("Invalid refresh token");
+    return null;
+  }
+
+  if (payload.client_id !== expectedClientId) {
+    logger.warn("Refresh token presented by a different client", {
+      jti: payload.jti,
+    });
+    return null;
+  }
+
+  const row = await prisma.mcpServerAccessToken.findFirst({
+    where: { refreshToken: payload.jti },
+    select: {
+      revoked: true,
+      revokedReason: true,
+      revokedAt: true,
+      grantId: true,
+    },
+  });
+  if (!row) {
+    logger.warn("Refresh token not found", { jti: payload.jti });
+    return null;
+  }
+
+  if (row.revoked) {
+    await revokeGrantOnReplay(row, payload.jti);
+    return null;
+  }
+
+  // Same lookup buildMcpToolContext uses: a token must not outlive access to
+  // the account it is bound to.
+  const stillHasAccess = await prisma.emailAccount.findFirst({
+    where: {
+      id: payload.email_account_id,
+      ...accessibleEmailAccountWhere(payload.sub),
+    },
+    select: { id: true },
+  });
+  if (!stillHasAccess) {
+    logger.warn("Refresh refused: user lost access to the email account", {
+      jti: payload.jti,
+    });
     return null;
   }
 
@@ -269,11 +322,12 @@ export async function refreshAccessToken(
     data: {
       revoked: true,
       revokedAt: new Date(),
+      revokedReason: "rotated",
     },
   });
 
   if (claimed.count === 0) {
-    logger.warn("Refresh token not found or revoked", { jti: payload.jti });
+    logger.warn("Refresh token already claimed", { jti: payload.jti });
     return null;
   }
 
@@ -283,6 +337,8 @@ export async function refreshAccessToken(
     clientId: payload.client_id,
     scope: payload.scope,
     jwtSecret,
+    // Grants issued before grantId existed gain replay protection here.
+    grantId: row.grantId ?? crypto.randomUUID(),
   });
 
   logger.info("Refreshed MCP access token", {
@@ -291,6 +347,36 @@ export async function refreshAccessToken(
   });
 
   return newTokens;
+}
+
+async function revokeGrantOnReplay(
+  row: {
+    revokedReason: string | null;
+    revokedAt: Date | null;
+    grantId: string | null;
+  },
+  jti: string,
+) {
+  if (row.revokedReason !== "rotated" || !row.grantId || !row.revokedAt) {
+    logger.warn("Refresh token revoked", { jti, reason: row.revokedReason });
+    return;
+  }
+
+  const ageSeconds = (Date.now() - row.revokedAt.getTime()) / 1000;
+  if (ageSeconds <= REFRESH_REPLAY_GRACE_SECONDS) {
+    logger.warn("Refresh token reused inside the grace window", { jti });
+    return;
+  }
+
+  // Rows already revoked keep their reason (a user revoke stays a user revoke).
+  const result = await prisma.mcpServerAccessToken.updateMany({
+    where: { grantId: row.grantId, revoked: false },
+    data: { revoked: true, revokedAt: new Date(), revokedReason: "reuse" },
+  });
+  logger.warn("Rotated refresh token replayed; grant revoked", {
+    jti,
+    revokedTokens: result.count,
+  });
 }
 
 /**
@@ -313,6 +399,7 @@ export async function revokeAccessToken(
     data: {
       revoked: true,
       revokedAt: new Date(),
+      revokedReason: "user",
     },
   });
 

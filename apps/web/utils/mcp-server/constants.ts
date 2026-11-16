@@ -20,6 +20,10 @@ export const SUPPORTED_PROTOCOL_VERSIONS = [
 // About 20k tokens, under Claude Code's 25k tool-result limit.
 export const MAX_TOOL_TEXT_CHARS = 80_000;
 
+// A retried refresh whose response was lost lands inside this window and must
+// not be mistaken for token theft.
+export const REFRESH_REPLAY_GRACE_SECONDS = 30;
+
 // URL.hostname form, so IPv6 keeps its brackets.
 export const LOOPBACK_HOSTS = ["localhost", "127.0.0.1", "[::1]"];
 
@@ -72,5 +76,5 @@ export const MCP_SCOPES_SUPPORTED = Object.keys(MCP_SCOPES).filter(
 export const TOKEN_CONFIG = {
   ACCESS_TOKEN_TTL: 60 * 60, // 1 hour in seconds
   REFRESH_TOKEN_TTL: 60 * 60 * 24 * 30, // 30 days in seconds
-  AUTHORIZATION_CODE_TTL: 60 * 10, // 10 minutes in seconds
+  AUTHORIZATION_CODE_TTL: 5 * 60, // 5 minutes in seconds
 } as const;

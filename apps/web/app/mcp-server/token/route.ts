@@ -2,6 +2,11 @@ import type { McpServerClient } from "@/generated/prisma/client";
 import { type NextRequest, NextResponse } from "next/server";
 import { env } from "@/env";
 import {
+  hashAuthorizationCode,
+  isMcpResource,
+} from "@/utils/mcp-server/authorization-code";
+import { redirectUriMatches } from "@/utils/mcp-server/redirect-uri";
+import {
   verifyCodeChallenge,
   validateCodeVerifier,
 } from "@/utils/mcp-server/pkce";
@@ -93,6 +98,11 @@ export async function POST(request: NextRequest) {
       return oauthError("invalid_client", "Unknown client_id");
     }
 
+    const resource = formData.get("resource")?.toString();
+    if (resource && !isMcpResource(resource)) {
+      return oauthError("invalid_target", "Unknown resource");
+    }
+
     if (grantType === "authorization_code") {
       return await handleAuthorizationCodeGrant(formData, client);
     } else if (grantType === "refresh_token") {
@@ -136,42 +146,47 @@ async function handleAuthorizationCodeGrant(
     return oauthError("invalid_request", "Invalid code_verifier format");
   }
 
-  const authCode = await prisma.mcpServerAuthorizationCode.findFirst({
-    where: { code, clientId: client.clientId, used: false },
+  const hashedCode = hashAuthorizationCode(code);
+
+  // Claim atomically: of two concurrent exchanges only one wins.
+  const claimed = await prisma.mcpServerAuthorizationCode.updateMany({
+    where: {
+      code: hashedCode,
+      clientId: client.clientId,
+      used: false,
+      expiresAt: { gt: new Date() },
+    },
+    data: { used: true, usedAt: new Date() },
   });
 
+  if (claimed.count === 0) {
+    await revokeGrantIfCodeReused(hashedCode, client.clientId);
+    return oauthError("invalid_grant", "Invalid or expired authorization code");
+  }
+
+  const authCode = await prisma.mcpServerAuthorizationCode.findFirst({
+    where: { code: hashedCode, clientId: client.clientId },
+  });
   if (!authCode) {
     return oauthError("invalid_grant", "Invalid authorization code");
   }
 
-  if (authCode.expiresAt < new Date()) {
-    return oauthError("invalid_grant", "Authorization code expired");
-  }
-
-  // OAuth 2.1: PKCE binds the code to the client, so the legacy redirect_uri
-  // equality check is dropped — it rejects clients that send variants of the
-  // same callback (localhost vs 127.0.0.1, trailing slash). Log for visibility.
-  if (redirectUri && authCode.redirectUri !== redirectUri) {
-    logger.info("Token redirect_uri differs from authorization request", {
-      stored: authCode.redirectUri,
-      received: redirectUri,
-    });
+  if (redirectUri && !redirectUriMatches(redirectUri, [authCode.redirectUri])) {
+    return oauthError(
+      "invalid_grant",
+      "redirect_uri does not match the authorization request",
+    );
   }
 
   const pkceValid = verifyCodeChallenge(
     codeVerifier,
     authCode.codeChallenge,
-    authCode.codeChallengeMethod as "S256" | "plain",
+    authCode.codeChallengeMethod as "S256",
   );
 
   if (!pkceValid) {
     return oauthError("invalid_grant", "Invalid code_verifier");
   }
-
-  await prisma.mcpServerAuthorizationCode.update({
-    where: { id: authCode.id },
-    data: { used: true, usedAt: new Date() },
-  });
 
   const jwtSecret = env.AUTH_SECRET || env.NEXTAUTH_SECRET || "";
 
@@ -191,6 +206,7 @@ async function handleAuthorizationCodeGrant(
     clientId: client.clientId,
     scope: finalScope,
     jwtSecret,
+    grantId: authCode.grantId,
   });
 
   logger.info("Issued MCP access token via authorization code", {
@@ -231,7 +247,11 @@ async function handleRefreshTokenGrant(
   }
 
   const jwtSecret = env.AUTH_SECRET || env.NEXTAUTH_SECRET || "";
-  const tokens = await refreshAccessToken(refreshToken, jwtSecret);
+  const tokens = await refreshAccessToken(
+    refreshToken,
+    jwtSecret,
+    client.clientId,
+  );
 
   if (!tokens) {
     return oauthError("invalid_grant", "Invalid or expired refresh token");
@@ -254,4 +274,23 @@ async function handleRefreshTokenGrant(
       },
     },
   );
+}
+
+// A code presented after it was used means two parties saw it, so the tokens it
+// already produced are revoked.
+async function revokeGrantIfCodeReused(hashedCode: string, clientId: string) {
+  const row = await prisma.mcpServerAuthorizationCode.findFirst({
+    where: { code: hashedCode, clientId },
+    select: { used: true, grantId: true },
+  });
+  if (!row?.used || !row.grantId) return;
+
+  const result = await prisma.mcpServerAccessToken.updateMany({
+    where: { grantId: row.grantId, revoked: false },
+    data: { revoked: true, revokedAt: new Date(), revokedReason: "reuse" },
+  });
+  logger.warn("Authorization code reused; grant revoked", {
+    clientId,
+    revokedTokens: result.count,
+  });
 }

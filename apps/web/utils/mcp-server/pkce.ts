@@ -14,7 +14,7 @@ import crypto from "node:crypto";
  * 6. Server verifies that hash(code_verifier) matches stored code_challenge
  */
 
-export type CodeChallengeMethod = "S256" | "plain";
+export type CodeChallengeMethod = "S256";
 
 /**
  * Generate a cryptographically secure random code verifier
@@ -30,17 +30,12 @@ export function generateCodeVerifier(): string {
 
 /**
  * Create a code challenge from a code verifier
- * Supports both S256 (SHA-256) and plain methods
+ * Only S256 (SHA-256): `plain` offers no protection if the request is observed
  */
 export function createCodeChallenge(
   codeVerifier: string,
   method: CodeChallengeMethod = "S256",
 ): string {
-  if (method === "plain") {
-    // Plain method: challenge = verifier (not recommended, only for testing)
-    return codeVerifier;
-  }
-
   if (method === "S256") {
     // S256 method: challenge = base64url(sha256(verifier))
     const hash = crypto.createHash("sha256").update(codeVerifier).digest();
@@ -91,7 +86,7 @@ export function validateCodeVerifier(codeVerifier: string): boolean {
 export function validateCodeChallengeMethod(
   method: string,
 ): method is CodeChallengeMethod {
-  return method === "S256" || method === "plain";
+  return method === "S256";
 }
 
 /**
