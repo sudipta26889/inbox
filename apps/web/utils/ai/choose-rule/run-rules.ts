@@ -51,6 +51,7 @@ import {
   saveLearnedPattern,
 } from "@/utils/rule/learned-patterns";
 import { internalDateToDate } from "@/utils/date";
+import { fanOutEmailAnalysis } from "@/utils/email-fanout";
 import { ConditionType } from "@/utils/config";
 import type { Logger } from "@/utils/logger";
 import {
@@ -210,6 +211,14 @@ export async function runRules({
           }),
         { logger },
       );
+      fanOutEmailAnalysis({
+        message,
+        accountEmail: emailAccount.email,
+        rules: [],
+        skippedReason: reason,
+        mitraAlreadyNotified: false,
+        logger,
+      });
     }
 
     return [
@@ -264,6 +273,28 @@ export async function runRules({
         executedRule.status ||
         executedRule.executedRule?.status ||
         ExecutedRuleStatus.APPLIED,
+    });
+  }
+
+  if (!isTest) {
+    fanOutEmailAnalysis({
+      message,
+      accountEmail: emailAccount.email,
+      rules: executedRules.flatMap((er) =>
+        er.rule
+          ? [
+              {
+                name: er.rule.name,
+                systemType: er.rule.systemType,
+                reason: er.reason,
+              },
+            ]
+          : [],
+      ),
+      mitraAlreadyNotified: executedRules.some((er) =>
+        er.actionItems?.some((ai) => ai.type === ActionType.A2A_NOTIFY),
+      ),
+      logger,
     });
   }
 
