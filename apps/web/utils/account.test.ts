@@ -71,7 +71,12 @@ describe("redirectToEmailAccountPath", () => {
     );
 
     expect(mocks.findFirst).toHaveBeenCalledWith({
-      where: { userId: "user_123" },
+      where: {
+        OR: [
+          { userId: "user_123" },
+          { shares: { some: { userId: "user_123" } } },
+        ],
+      },
       select: { id: true },
       orderBy: EMAIL_ACCOUNT_ORDER_BY,
     });
@@ -135,7 +140,13 @@ describe("redirectToEmailAccountPath", () => {
 
     expect(mocks.findFirst).toHaveBeenCalledTimes(1);
     expect(mocks.findFirst).toHaveBeenCalledWith({
-      where: { id: "account_123", userId: "user_123" },
+      where: {
+        id: "account_123",
+        OR: [
+          { userId: "user_123" },
+          { shares: { some: { userId: "user_123" } } },
+        ],
+      },
       select: { id: true },
     });
     expect(getAccountRedirectLog(consoleLogSpy)).toEqual(
@@ -170,11 +181,22 @@ describe("redirectToEmailAccountPath", () => {
     );
 
     expect(mocks.findFirst).toHaveBeenNthCalledWith(1, {
-      where: { id: "deleted_account", userId: "user_123" },
+      where: {
+        id: "deleted_account",
+        OR: [
+          { userId: "user_123" },
+          { shares: { some: { userId: "user_123" } } },
+        ],
+      },
       select: { id: true },
     });
     expect(mocks.findFirst).toHaveBeenNthCalledWith(2, {
-      where: { userId: "user_123" },
+      where: {
+        OR: [
+          { userId: "user_123" },
+          { shares: { some: { userId: "user_123" } } },
+        ],
+      },
       select: { id: true },
       orderBy: EMAIL_ACCOUNT_ORDER_BY,
     });

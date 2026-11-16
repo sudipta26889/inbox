@@ -7,13 +7,14 @@ import {
 } from "@/utils/actions/all-accounts.validation";
 import { SafeError } from "@/utils/error";
 import prisma from "@/utils/prisma";
+import { accessibleEmailAccountWhere } from "@/utils/email-account-access";
 
 export const updateAllAccountsSelectionAction = actionClientUser
   .metadata({ name: "updateAllAccountsSelection" })
   .inputSchema(updateAllAccountsSelectionBody)
   .action(async ({ ctx: { userId }, parsedInput: { emailAccountIds } }) => {
     const emailAccounts = await prisma.emailAccount.findMany({
-      where: { userId },
+      where: accessibleEmailAccountWhere(userId),
       select: { id: true },
     });
     const ownedAccountIds = new Set(
@@ -24,13 +25,16 @@ export const updateAllAccountsSelectionAction = actionClientUser
       throw new SafeError("Email account not found");
     }
 
+    // ponytail: includeInAllAccounts and sortOrder live on the account, so a
+    // shared user's choice applies to the owner too (shared users act as owner).
+    const accessible = accessibleEmailAccountWhere(userId);
     await prisma.$transaction([
       prisma.emailAccount.updateMany({
-        where: { userId, id: { in: emailAccountIds } },
+        where: { ...accessible, id: { in: emailAccountIds } },
         data: { includeInAllAccounts: true },
       }),
       prisma.emailAccount.updateMany({
-        where: { userId, id: { notIn: emailAccountIds } },
+        where: { ...accessible, id: { notIn: emailAccountIds } },
         data: { includeInAllAccounts: false },
       }),
     ]);
@@ -42,7 +46,7 @@ export const reorderEmailAccountsAction = actionClientUser
   .inputSchema(reorderEmailAccountsBody)
   .action(async ({ ctx: { userId }, parsedInput: { emailAccountIds } }) => {
     const emailAccounts = await prisma.emailAccount.findMany({
-      where: { userId },
+      where: accessibleEmailAccountWhere(userId),
       select: { id: true },
     });
     const ownedAccountIds = new Set(
@@ -59,10 +63,11 @@ export const reorderEmailAccountsAction = actionClientUser
       );
     }
 
+    const accessible = accessibleEmailAccountWhere(userId);
     await prisma.$transaction(
       emailAccountIds.map((id, sortOrder) =>
         prisma.emailAccount.updateMany({
-          where: { id, userId },
+          where: { id, ...accessible },
           data: { sortOrder },
         }),
       ),

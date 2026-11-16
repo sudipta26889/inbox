@@ -32,14 +32,14 @@ describe("updateAllAccountsSelectionAction", () => {
     expect(result?.serverError).toBeUndefined();
     expect(prisma.emailAccount.updateMany).toHaveBeenNthCalledWith(1, {
       where: {
-        userId: "user-1",
+        OR: [{ userId: "user-1" }, { shares: { some: { userId: "user-1" } } }],
         id: { in: ["account-1", "account-3"] },
       },
       data: { includeInAllAccounts: true },
     });
     expect(prisma.emailAccount.updateMany).toHaveBeenNthCalledWith(2, {
       where: {
-        userId: "user-1",
+        OR: [{ userId: "user-1" }, { shares: { some: { userId: "user-1" } } }],
         id: { notIn: ["account-1", "account-3"] },
       },
       data: { includeInAllAccounts: false },
@@ -86,25 +86,45 @@ describe("reorderEmailAccountsAction", () => {
 
     expect(result?.serverError).toBeUndefined();
     expect(prisma.emailAccount.findMany).toHaveBeenCalledWith({
-      where: { userId: "user-1" },
+      where: {
+        OR: [{ userId: "user-1" }, { shares: { some: { userId: "user-1" } } }],
+      },
       select: { id: true },
     });
     expect(prisma.emailAccount.updateMany.mock.calls).toEqual([
       [
         {
-          where: { id: "account-3", userId: "user-1" },
+          where: {
+            id: "account-3",
+            OR: [
+              { userId: "user-1" },
+              { shares: { some: { userId: "user-1" } } },
+            ],
+          },
           data: { sortOrder: 0 },
         },
       ],
       [
         {
-          where: { id: "account-1", userId: "user-1" },
+          where: {
+            id: "account-1",
+            OR: [
+              { userId: "user-1" },
+              { shares: { some: { userId: "user-1" } } },
+            ],
+          },
           data: { sortOrder: 1 },
         },
       ],
       [
         {
-          where: { id: "account-2", userId: "user-1" },
+          where: {
+            id: "account-2",
+            OR: [
+              { userId: "user-1" },
+              { shares: { some: { userId: "user-1" } } },
+            ],
+          },
           data: { sortOrder: 2 },
         },
       ],

@@ -53,13 +53,9 @@ describe("copyRulesFromAccountAction", () => {
     );
   });
 
-  it("throws error when source account belongs to different user", async () => {
-    prisma.emailAccount.findUnique.mockResolvedValueOnce(
-      getMockEmailAccountWithAccount({
-        id: sourceAccountId,
-        userId: "other-user",
-      }) as any,
-    );
+  it("only loads a source account the user owns or was shared", async () => {
+    // The access filter runs in the query, so another user's account comes back null.
+    prisma.emailAccount.findUnique.mockResolvedValueOnce(null);
     prisma.emailAccount.findUnique.mockResolvedValueOnce(
       getMockEmailAccountWithAccount({
         id: targetAccountId,
@@ -75,6 +71,14 @@ describe("copyRulesFromAccountAction", () => {
 
     expect(result?.serverError).toBe(
       "Source account not found or unauthorized",
+    );
+    expect(prisma.emailAccount.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: sourceAccountId,
+          OR: [{ userId: "user1" }, { shares: { some: { userId: "user1" } } }],
+        },
+      }),
     );
   });
 
@@ -98,19 +102,14 @@ describe("copyRulesFromAccountAction", () => {
     );
   });
 
-  it("throws error when target account belongs to different user", async () => {
+  it("only loads a target account the user owns or was shared", async () => {
     prisma.emailAccount.findUnique.mockResolvedValueOnce(
       getMockEmailAccountWithAccount({
         id: sourceAccountId,
         userId: "user1",
       }) as any,
     );
-    prisma.emailAccount.findUnique.mockResolvedValueOnce(
-      getMockEmailAccountWithAccount({
-        id: targetAccountId,
-        userId: "other-user",
-      }) as any,
-    );
+    prisma.emailAccount.findUnique.mockResolvedValueOnce(null);
 
     const result = await copyRulesFromAccountAction({
       sourceEmailAccountId: sourceAccountId,
@@ -120,6 +119,14 @@ describe("copyRulesFromAccountAction", () => {
 
     expect(result?.serverError).toBe(
       "Target account not found or unauthorized",
+    );
+    expect(prisma.emailAccount.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: targetAccountId,
+          OR: [{ userId: "user1" }, { shares: { some: { userId: "user1" } } }],
+        },
+      }),
     );
   });
 
