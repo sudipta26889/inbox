@@ -4,6 +4,9 @@ import { withError } from "@/utils/middleware";
 import { hasCronSecret, hasPostCronSecret } from "@/utils/cron";
 import { captureException } from "@/utils/error";
 import type { Logger } from "@/utils/logger";
+import { getInboxStatsForChatContext } from "@/utils/ai/assistant/get-inbox-stats-for-chat-context";
+import { isMqttConfigured } from "@/utils/mqtt/client";
+import { publishUnread } from "@/utils/mqtt/events";
 import { enqueueBackgroundJob } from "@/utils/queue/dispatch";
 import { getPremiumUserFilter } from "@/utils/premium";
 
@@ -47,14 +50,14 @@ async function enqueueEmailProcessingJobs(logger: Logger) {
       },
       ...getPremiumUserFilter(),
     },
-    select: { id: true },
+    select: { id: true, account: { select: { provider: true } } },
     take: BATCH_SIZE,
   });
 
   let queued = 0;
   let failed = 0;
 
-  for (const { id: emailAccountId } of emailAccounts) {
+  for (const { id: emailAccountId, account } of emailAccounts) {
     const accountLogger = logger.with({ emailAccountId });
     try {
       const dispatchMode = await enqueueBackgroundJob({
@@ -71,6 +74,12 @@ async function enqueueEmailProcessingJobs(logger: Logger) {
         dispatchMode,
       });
       queued += 1;
+
+      await publishUnreadStats({
+        emailAccountId,
+        provider: account?.provider || "google",
+        logger: accountLogger,
+      });
     } catch (error) {
       failed += 1;
       accountLogger.error("Failed to enqueue email account for processing", {
@@ -82,4 +91,42 @@ async function enqueueEmailProcessingJobs(logger: Logger) {
   const result = { total: emailAccounts.length, queued, failed };
   logger.info("Finished enqueueing email accounts for processing", result);
   return result;
+}
+
+/**
+ * Best-effort MQTT publish for one account's unread count.
+ *
+ * Exported so this can be tested in isolation: this call site runs inside the
+ * same per-account try/catch as `enqueueBackgroundJob` and the `queued`
+ * counter above — a throw here would double-count the account as both queued
+ * and failed, logged under a misleading label. Every exit is fail-soft on
+ * purpose; nothing here may reject.
+ */
+export async function publishUnreadStats({
+  emailAccountId,
+  provider,
+  logger,
+}: {
+  emailAccountId: string;
+  provider: string;
+  logger: Logger;
+}): Promise<void> {
+  // Skip the provider round trip entirely when MQTT isn't configured on this
+  // instance at all — no point paying for inbox stats nobody can consume.
+  // Per-account consent is still resolved inside publishUnread.
+  if (!isMqttConfigured()) return;
+
+  const stats = await getInboxStatsForChatContext({
+    emailAccountId,
+    provider,
+    logger,
+  });
+
+  if (!stats) return;
+
+  await publishUnread({
+    emailAccountId,
+    unread: stats.unread,
+    total: stats.total,
+  }).catch(() => {});
 }
