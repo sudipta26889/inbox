@@ -1,5 +1,6 @@
 import "server-only";
 import EmailReplyParser from "email-reply-parser";
+import { load } from "cheerio";
 import { convert, type FormatCallback } from "html-to-text";
 import type { ParsedMessage } from "@/utils/types";
 import {
@@ -225,7 +226,9 @@ export function convertEmailHtmlToText({
 // So the text/plain part follows the same format: "text <url>" links, no hard
 // wrapping, single blank lines, and bare ">" on empty quoted lines.
 export function convertOutgoingEmailHtmlToText(html: string): string {
-  return convert(html, {
+  // html-to-text renders only the first <body>; a quoted or forwarded
+  // original often brings its own. Re-serialising merges them into one.
+  return convert(load(html).html(), {
     wordwrap: false,
     selectors: [
       {

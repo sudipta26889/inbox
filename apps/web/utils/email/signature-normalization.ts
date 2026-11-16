@@ -1,7 +1,7 @@
 import { load, type CheerioAPI } from "cheerio";
 import type { ParsedMessage } from "@/utils/types";
 
-const SIGNATURE_SELECTORS = [
+export const SIGNATURE_SELECTORS = [
   ".gmail_signature",
   ".gmail_signature_prefix",
   "[data-smartmail='gmail_signature']",

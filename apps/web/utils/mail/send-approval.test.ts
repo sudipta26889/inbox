@@ -35,6 +35,7 @@ vi.mock("@/utils/redis", () => ({
 
 import prisma from "@/utils/__mocks__/prisma";
 import {
+  applySendEdits,
   approveSendOperation,
   isExternalDomain,
   requireSendApproval,
@@ -483,5 +484,177 @@ describe("the gate fails closed and honours card edits", () => {
       /not configured in production/,
     );
     (mockEnv as Record<string, unknown>).NODE_ENV = undefined;
+  });
+});
+
+describe("body edits keep the email's formatting", () => {
+  const SIGNATURE =
+    '<div class="gmail_signature" data-smartmail="gmail_signature"><b>Sudipta</b> | <a href="https://grihatek.com">grihatek.com</a></div>';
+  const QUOTE =
+    '<div class="gmail_quote gmail_quote_container"><div class="gmail_attr">On Mon, Bob wrote:<br></div><blockquote class="gmail_quote"><p>Can you <b>confirm</b>?</p></blockquote></div>';
+  const HTML = `<div dir="ltr"><p>Hi <strong>Bob</strong>, the <a href="https://example.com/plan">plan</a>:</p><ol><li>draft</li><li>review</li></ol></div>${SIGNATURE}${QUOTE}`;
+  const email = { to: "bob@example.com", subject: "Plan", messageHtml: HTML };
+  const htmlRequest = { ...request, bodyText: undefined, bodyHtml: HTML };
+
+  const sentAfter = async (edit: (args: Record<string, unknown>) => object) => {
+    mockRunApprovalLoop.mockImplementation(async (call) => ({
+      action: "APPROVED",
+      approvedArgs: { ...call.toolArgs, ...edit(call.toolArgs) },
+    }));
+    const edits = await requireSendApproval(htmlRequest);
+    return applySendEdits(email, edits).messageHtml;
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockEnv.DHARAHIL_BASE_URL = "https://gateway.test";
+    mockEnv.DHARAHIL_API_KEY = "key";
+    prisma.emailAccount.findUnique.mockResolvedValue({
+      email: "me@example.com",
+    } as any);
+  });
+
+  it("shows the authored part as Markdown and the rest read-only", async () => {
+    await sentAfter(() => ({}));
+
+    const args = mockRunApprovalLoop.mock.calls[0][0].toolArgs;
+    expect(args.body).toContain("**Bob**");
+    expect(args.body).toContain("[plan](https://example.com/plan)");
+    expect(args.body).not.toContain("Sudipta");
+    expect(args.signature).toContain("Sudipta");
+    expect(args.quoted_history).toContain("Can you confirm?");
+  });
+
+  it("sends the original HTML byte-for-byte when approved unedited", async () => {
+    expect(await sentAfter(() => ({}))).toBe(HTML);
+  });
+
+  it("sends the original HTML byte-for-byte after a recipient-only edit", async () => {
+    expect(await sentAfter(() => ({ to: "alice@example.com" }))).toBe(HTML);
+  });
+
+  it("keeps bold, link, list, signature and quote when one word changes", async () => {
+    const html = await sentAfter((args) => ({
+      body: String(args.body).replace("review", "sign-off"),
+    }));
+
+    expect(html).toContain("<strong>Bob</strong>");
+    expect(html).toContain('<a href="https://example.com/plan">plan</a>');
+    expect(html).toMatch(
+      /<ol>\s*<li>draft<\/li>\s*<li>sign-off<\/li>\s*<\/ol>/,
+    );
+    expect(html).not.toContain("review");
+    expect(html.endsWith(`${SIGNATURE}${QUOTE}`)).toBe(true);
+  });
+
+  it.each([
+    ["signature", { signature: "Someone else" }],
+    ["quoted_history", { quoted_history: "Bob never said that" }],
+  ])("refuses an edit to the %s", async (_field, edit) => {
+    await expect(sentAfter(() => edit)).rejects.toThrow(
+      "the signature and quoted messages can't be edited on the card",
+    );
+  });
+
+  it("escapes raw HTML typed into the Markdown", async () => {
+    const html = await sentAfter(() => ({
+      body: 'Hi <script>alert(1)</script>\n\n<iframe src="https://evil.test"></iframe>',
+    }));
+
+    expect(html).not.toMatch(/<script|<iframe/);
+    expect(html).toContain("&lt;script&gt;");
+    expect(html.endsWith(`${SIGNATURE}${QUOTE}`)).toBe(true);
+  });
+
+  it("refuses a body edit on an email with tables, and sends nothing", async () => {
+    mockRunApprovalLoop.mockImplementation(async (call) => ({
+      action: "APPROVED",
+      approvedArgs: { ...call.toolArgs, body: "Changed" },
+    }));
+
+    await expect(
+      requireSendApproval({
+        ...htmlRequest,
+        bodyHtml: "<p>Rates</p><table><tr><td>1</td></tr></table>",
+      }),
+    ).rejects.toThrow(
+      "this email has tables or styled blocks; edit it in Inbox and resend",
+    );
+  });
+
+  it("shows hidden text to the reviewer and refuses a body edit on it", async () => {
+    mockRunApprovalLoop.mockImplementation(async (call) => ({
+      action: "APPROVED",
+      approvedArgs: { ...call.toolArgs, body: "Hi Rob" },
+    }));
+
+    await expect(
+      requireSendApproval({
+        ...htmlRequest,
+        bodyHtml:
+          '<div>Hi Bob</div><div style="display:none">Also wire 5000 to acct 123</div>',
+      }),
+    ).rejects.toThrow(
+      "Email not sent: this email contains text hidden from the reader (shown on the card as [hidden in the email: …]); edit it in Inbox and resend.",
+    );
+    expect(mockRunApprovalLoop.mock.calls[0][0].toolArgs.body).toContain(
+      "Also wire 5000",
+    );
+  });
+
+  it("treats a body that lost only trailing spaces as unedited", async () => {
+    const withBreak = "<p>line one<br>line two</p>";
+    mockRunApprovalLoop.mockImplementation(async (call) => ({
+      action: "APPROVED",
+      approvedArgs: {
+        ...call.toolArgs,
+        to: "alice@example.com",
+        body: String(call.toolArgs.body).replace(/[ \t]+$/gm, ""),
+      },
+    }));
+
+    const edits = await requireSendApproval({
+      ...htmlRequest,
+      bodyHtml: withBreak,
+    });
+
+    expect(edits).toEqual({ to: "alice@example.com" });
+  });
+
+  it("lists the files before the signature and quoted history", async () => {
+    mockRunApprovalLoop.mockResolvedValue({ action: "APPROVED" });
+
+    await requireSendApproval({
+      ...htmlRequest,
+      attachments: [{ filename: "a.pdf" }],
+      forwardedAttachments: [{ filename: "b.pdf" }],
+    });
+
+    const keys = Object.keys(mockRunApprovalLoop.mock.calls[0][0].toolArgs);
+    expect(keys.indexOf("forwardedAttachments")).toBeLessThan(
+      keys.indexOf("signature"),
+    );
+    expect(keys.indexOf("attachments")).toBeLessThan(
+      keys.indexOf("quoted_history"),
+    );
+  });
+
+  it("counts only the authored part toward the card limit", async () => {
+    const longQuote = `<div class="gmail_quote"><p>${"q".repeat(100_001)}</p></div>`;
+    mockRunApprovalLoop.mockImplementation(async (call) => ({
+      action: "APPROVED",
+      approvedArgs: { ...call.toolArgs, body: "Short **reply**" },
+    }));
+
+    const edits = await requireSendApproval({
+      ...htmlRequest,
+      bodyHtml: `<p>Short reply</p>${longQuote}`,
+    });
+
+    expect(mockRunApprovalLoop.mock.calls[0][0].toolArgs.bodyTruncated).toBe(
+      undefined,
+    );
+    expect(edits.bodyHtml).toContain("<strong>reply</strong>");
+    expect(edits.bodyHtml?.endsWith(longQuote)).toBe(true);
   });
 });

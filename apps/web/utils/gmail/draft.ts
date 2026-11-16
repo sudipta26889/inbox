@@ -10,11 +10,7 @@ import {
 } from "@/utils/gmail/retry";
 
 import { ensureEmailSendingEnabled } from "@/utils/mail";
-import {
-  approveDraftSend,
-  htmlPreviewText,
-  type SendGate,
-} from "@/utils/mail/send-approval";
+import { approveDraftSend, type SendGate } from "@/utils/mail/send-approval";
 
 const logger = createScopedLogger("gmail/draft");
 const MAX_DRAFT_LOOKUP_PAGES = 10;
@@ -158,7 +154,7 @@ export async function sendDraft(
         cc: draft?.headers?.cc || undefined,
         bcc: draft?.headers?.bcc || undefined,
         subject: draft?.subject,
-        bodyText: draftBodyText(draft?.textPlain, draft?.textHtml),
+        ...draftBody(draft?.textPlain, draft?.textHtml),
         attachments: (draft?.attachments ?? []).map(({ filename, size }) => ({
           filename,
           size,
@@ -315,9 +311,8 @@ async function findSentMessageInThread(
   }
 }
 
-// An HTML-only draft still shows its text on the card, or failing that its HTML.
-function draftBodyText(text?: string | null, html?: string | null) {
-  if (text?.trim()) return text;
-  if (!html) return;
-  return htmlPreviewText(html)?.trim() || html;
+// An HTML draft goes on the card as Markdown, so an edit keeps its formatting.
+function draftBody(text?: string | null, html?: string | null) {
+  if (html?.trim()) return { bodyHtml: html };
+  return { bodyText: text ?? undefined };
 }

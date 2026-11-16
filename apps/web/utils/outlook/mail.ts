@@ -6,11 +6,7 @@ import type { ParsedMessage } from "@/utils/types";
 import type { EmailForAction } from "@/utils/ai/types";
 import { createOutlookReplyContent } from "@/utils/outlook/reply";
 import { textToHtmlParagraphs } from "@/utils/string";
-import {
-  forwardEmailHtml,
-  forwardEmailSubject,
-  forwardEmailText,
-} from "@/utils/gmail/forward";
+import { forwardEmailHtml, forwardEmailSubject } from "@/utils/gmail/forward";
 import {
   buildReplyAllRecipients,
   mergeAndDedupeRecipients,
@@ -28,7 +24,6 @@ import type { SendEmailOptions } from "@/utils/email/types";
 import {
   applySendEdits,
   type AttachmentInfo,
-  htmlPreviewText,
   isSendGateOn,
   requireSendApproval,
   SendNotApprovedError,
@@ -68,7 +63,7 @@ export async function sendEmailWithHtml(
     bcc: proposed.bcc,
     replyTo: proposed.replyTo,
     subject: proposed.subject,
-    bodyText: htmlPreviewText(proposed.messageHtml),
+    bodyHtml: proposed.messageHtml,
     attachments: mailerAttachmentInfo(proposed.attachments),
     forwardedAttachments:
       forwardedMessageId && isSendGateOn()
@@ -132,6 +127,10 @@ export async function replyToEmail(
 ) {
   ensureEmailSendingEnabled();
 
+  const { html: proposedHtml } = createOutlookReplyContent({
+    textContent: reply,
+    message,
+  });
   const edits = await requireSendApproval({
     operation: "reply_email",
     provider: "outlook",
@@ -142,16 +141,13 @@ export async function replyToEmail(
     bcc: options?.bcc,
     replyTo: options?.replyTo,
     subject: message.headers.subject,
-    bodyText: reply,
+    bodyHtml: proposedHtml,
     attachments: mailerAttachmentInfo(options?.attachments),
     threadId: message.threadId,
     isReply: true,
   });
-
-  const { html } = createOutlookReplyContent({
-    textContent: edits.bodyText ?? reply,
-    message,
-  });
+  // An edited body keeps the reply header and quote below it.
+  const html = edits.bodyHtml ?? proposedHtml;
 
   // Use createReply to create a properly threaded draft
   // Microsoft Graph's sendMail doesn't support setting In-Reply-To/References headers
@@ -267,7 +263,7 @@ export async function forwardEmail(
   };
 
   // Gated after reading the original, so the card shows the whole forward.
-  const forwardText = forwardEmailText({
+  const forwardHtml = forwardEmailHtml({
     content: options.content ?? "",
     message,
   });
@@ -280,7 +276,7 @@ export async function forwardEmail(
     cc: options.cc,
     bcc: options.bcc,
     subject: forwardEmailSubject(message.headers.subject),
-    bodyText: forwardText,
+    bodyHtml: forwardHtml,
     forwardedAttachments: isSendGateOn()
       ? await listMessageAttachments(client, options.messageId, logger)
       : undefined,
@@ -319,14 +315,8 @@ export async function forwardEmail(
             edits.subject ?? forwardEmailSubject(message.headers.subject),
           body: {
             contentType: "html",
-            // An edited forward sends exactly the text the reviewer approved.
-            content:
-              edits.bodyText !== undefined
-                ? textToHtmlParagraphs(edits.bodyText)
-                : forwardEmailHtml({
-                    content: options.content ?? "",
-                    message,
-                  }),
+            // An edited forward keeps the forwarded message below the new text.
+            content: edits.bodyHtml ?? forwardHtml,
           },
         }),
     logger,
