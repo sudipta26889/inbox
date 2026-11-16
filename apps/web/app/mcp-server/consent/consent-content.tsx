@@ -20,11 +20,13 @@ type ConsentRequest = {
 
 export default function ConsentContent({
   clientName,
+  clientIdHost,
   logoUri: clientLogoUri,
   redirectHost,
   request,
 }: {
   clientName: string;
+  clientIdHost: string | null;
   logoUri: string | null;
   redirectHost: string;
   request: ConsentRequest;
@@ -70,9 +72,11 @@ export default function ConsentContent({
         <div className="text-center space-y-4">
           <div className="flex justify-center">
             {clientLogoUri ? (
-              <Image
+              // biome-ignore lint/performance/noImgElement: the logo is a client-supplied URL on any host, which next/image rejects
+              <img
                 src={clientLogoUri}
-                alt={`${clientName} logo`}
+                alt=""
+                referrerPolicy="no-referrer"
                 width={142}
                 height={38}
                 className="h-10 w-auto"
@@ -92,6 +96,9 @@ export default function ConsentContent({
             <strong>{clientName}</strong> wants to access your {BRAND_NAME}{" "}
             account
           </p>
+          {clientIdHost && (
+            <p className="text-xs text-gray-500">Verified by {clientIdHost}</p>
+          )}
           <p className="text-xs text-gray-500">
             After you choose, you will be sent to {redirectHost}
           </p>

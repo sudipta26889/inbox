@@ -81,6 +81,13 @@ export function validateCodeVerifier(codeVerifier: string): boolean {
 }
 
 /**
+ * An S256 challenge is base64url(sha256(verifier)): always 43 characters.
+ */
+export function isValidCodeChallenge(challenge: unknown): challenge is string {
+  return typeof challenge === "string" && /^[A-Za-z0-9_-]{43}$/.test(challenge);
+}
+
+/**
  * Validate a code challenge method
  */
 export function validateCodeChallengeMethod(

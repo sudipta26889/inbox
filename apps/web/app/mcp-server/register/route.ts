@@ -89,7 +89,9 @@ export const POST = withError(
 
     for (const uri of redirect_uris) {
       try {
-        validateRedirectUri(String(uri));
+        if (typeof uri !== "string")
+          throw new SafeError("Invalid redirect URI");
+        validateRedirectUri(uri);
       } catch (error) {
         return NextResponse.json(
           {

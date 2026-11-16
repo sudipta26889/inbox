@@ -12,7 +12,10 @@ import {
   getClientIp,
 } from "@/utils/a2a/rate-limit";
 import { resolveClientMetadata } from "@/utils/mcp-server/client-metadata";
-import { validateCodeChallengeMethod } from "@/utils/mcp-server/pkce";
+import {
+  isValidCodeChallenge,
+  validateCodeChallengeMethod,
+} from "@/utils/mcp-server/pkce";
 import {
   redirectUriMatches,
   validateRedirectUri,
@@ -111,6 +114,12 @@ export const GET = withError(
     if (!codeChallenge) {
       throw new SafeError(
         "Missing required parameter: code_challenge. PKCE is mandatory in OAuth 2.1",
+      );
+    }
+
+    if (!isValidCodeChallenge(codeChallenge)) {
+      throw new SafeError(
+        "invalid_request: code_challenge must be a 43-character base64url S256 challenge",
       );
     }
 

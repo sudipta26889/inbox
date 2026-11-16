@@ -51,6 +51,21 @@ describe("GET /mcp-server/authorize", () => {
     expect(prisma.mcpServerAuthorizationCode.create).not.toHaveBeenCalled();
   });
 
+  it.each([
+    "short",
+    `${"c".repeat(42)}!`,
+    "c".repeat(44),
+  ])("rejects a malformed code_challenge %j", async (codeChallenge) => {
+    const response = await GET(
+      authorize({ code_challenge: codeChallenge }),
+      context,
+    );
+
+    expect(response.status).toBe(400);
+    expect(JSON.stringify(await response.json())).toContain("invalid_request");
+    expect(prisma.mcpServerAuthorizationCode.create).not.toHaveBeenCalled();
+  });
+
   it("rejects a resource that is not this server with invalid_target", async () => {
     const response = await GET(
       authorize({ resource: "https://other.example/mcp-server" }),
@@ -159,7 +174,7 @@ function authorize(overrides: Record<string, string>) {
     response_type: "code",
     scope: "email:read",
     state: "st",
-    code_challenge: "challenge",
+    code_challenge: "c".repeat(43),
     code_challenge_method: "S256",
     ...overrides,
   });

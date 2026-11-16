@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Image from "next/image";
 import {
   Table,
   TableBody,
@@ -104,14 +103,13 @@ export function McpClientsSection() {
                         <TableCell>
                           <div className="flex items-center gap-2">
                             {client.logoUri && (
-                              <Image
+                              // biome-ignore lint/performance/noImgElement: the logo is a client-supplied URL on any host, which next/image rejects
+                              <img
                                 src={client.logoUri}
-                                alt={client.clientName}
+                                alt=""
+                                referrerPolicy="no-referrer"
                                 width={20}
                                 height={20}
-                                // The logo comes from a client-supplied URL, so
-                                // it can't be on next/image's host allow-list.
-                                unoptimized
                                 className="size-5 rounded"
                               />
                             )}

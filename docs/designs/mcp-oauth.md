@@ -150,7 +150,8 @@ Checks run in this order:
     the same `grantId`.
   - Replay: the row is already revoked with reason `rotated`, and `revokedAt` is more than
     `REFRESH_REPLAY_GRACE_SECONDS` ago. Then every row with that `grantId` is revoked with reason `reuse`. Within the
-    grace window the request just gets `invalid_grant`, which covers a retried request whose response was lost.
+    grace window the request still gets `invalid_grant`, as before this change, but the grant is not revoked. That
+    keeps a retried or concurrent refresh from killing the session.
   - Reason `user`, `admin` or `reuse`: `invalid_grant`, nothing more.
   - Rows with `grantId: null` are never revoked by a replay.
   - On refresh, recheck the user's access to the email account with the same check as `buildMcpToolContext`; if access

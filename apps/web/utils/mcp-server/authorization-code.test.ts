@@ -61,7 +61,7 @@ describe("issueAuthorizationCode", () => {
     await issueAuthorizationCode(input);
 
     const data = prisma.mcpServerAuthorizationCode.create.mock.calls[0][0].data;
-    const ttlMs = data.expiresAt.getTime() - before;
+    const ttlMs = new Date(data.expiresAt).getTime() - before;
     expect(TOKEN_CONFIG.AUTHORIZATION_CODE_TTL).toBe(300);
     expect(ttlMs).toBeGreaterThanOrEqual(299_000);
     expect(ttlMs).toBeLessThanOrEqual(301_000);

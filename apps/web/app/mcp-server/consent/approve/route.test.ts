@@ -98,6 +98,17 @@ describe("POST /mcp-server/consent/approve", () => {
     ).rejects.toThrow("Invalid scope");
   });
 
+  it.each([
+    "short",
+    `${"c".repeat(42)}!`,
+    "c".repeat(44),
+  ])("refuses a malformed code_challenge %j", async (codeChallenge) => {
+    await expect(
+      POST(request({ body: { code_challenge: codeChallenge } }), context),
+    ).rejects.toThrow("invalid_request");
+    expect(prisma.mcpServerAuthorizationCode.create).not.toHaveBeenCalled();
+  });
+
   it("refuses a plain code challenge instead of storing it", async () => {
     await expect(
       POST(request({ body: { code_challenge_method: "plain" } }), context),
@@ -136,7 +147,7 @@ function request({
       redirect_uri: REDIRECT,
       scope: "email:read",
       state: "st",
-      code_challenge: "challenge",
+      code_challenge: "c".repeat(43),
       code_challenge_method: "S256",
       email_account_id: "account-1",
       ...body,

@@ -72,6 +72,10 @@ describe("resolveClientMetadata", () => {
       ["fc00::/7", "fd12:3456::1", 6],
       ["fe80::/10", "fe80::1", 6],
       ["ff00::/8", "ff02::1", 6],
+      ["NAT64 64:ff9b::/96", "64:ff9b::a00:1", 6],
+      ["6to4 2002::/16", "2002:a00:1::1", 6],
+      ["Teredo 2001::/32", "2001:0:4136:e378:8000:63bf:3fff:fdd2", 6],
+      ["site-local fec0::/10", "fec0::1", 6],
       ["IPv4-mapped private", "::ffff:10.0.0.1", 6],
       ["IPv4-mapped public", "::ffff:8.8.8.8", 6],
     ])("refuses %s (%s)", async (_name, address, family) => {
@@ -169,6 +173,24 @@ describe("resolveClientMetadata", () => {
         SafeError,
       );
       expect(lastRequest.destroy).toHaveBeenCalled();
+    });
+
+    it("gives up after 5 seconds in total even if the server keeps sending", async () => {
+      vi.useFakeTimers();
+      try {
+        serve({ stall: true });
+
+        const result = resolveClientMetadata(URL_ID, REDIRECT);
+        const settled = expect(result).rejects.toThrow(SafeError);
+        await vi.advanceTimersByTimeAsync(4999);
+        expect(lastRequest.destroy).not.toHaveBeenCalled();
+        await vi.advanceTimersByTimeAsync(2);
+
+        await settled;
+        expect(lastRequest.destroy).toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it("refuses a body that is not JSON", async () => {
@@ -346,6 +368,7 @@ function serve(behavior: {
   document?: unknown;
   chunks?: Buffer[];
   timeout?: boolean;
+  stall?: boolean;
 }) {
   requestMock.mockImplementation((_url, _options, callback) => {
     const request = new EventEmitter() as typeof lastRequest &
@@ -355,6 +378,7 @@ function serve(behavior: {
     });
     request.end = () => {
       queueMicrotask(() => {
+        if (behavior.stall) return;
         if (behavior.timeout) {
           request.emit("timeout");
           return;

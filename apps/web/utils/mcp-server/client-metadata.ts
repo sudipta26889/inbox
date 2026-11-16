@@ -115,6 +115,7 @@ export function fetchPinnedJson(
           chunks.push(chunk);
         });
         response.on("end", () => {
+          clearTimeout(deadline);
           try {
             resolve(JSON.parse(Buffer.concat(chunks).toString("utf8")));
           } catch {
@@ -125,8 +126,18 @@ export function fetchPinnedJson(
       },
     );
 
+    // The idle timeout above resets on every byte, so a server trickling data
+    // could hold the request open; this caps the whole exchange.
+    const deadline = setTimeout(
+      () => request.destroy(new Error("Timed out")),
+      FETCH_TIMEOUT_MS,
+    );
+    request.on("close", () => clearTimeout(deadline));
     request.on("timeout", () => request.destroy(new Error("Timed out")));
-    request.on("error", reject);
+    request.on("error", (error) => {
+      clearTimeout(deadline);
+      reject(error);
+    });
     request.end();
   });
 }
@@ -250,5 +261,9 @@ function buildBlockList() {
   list.addSubnet("fc00::", 7, "ipv6");
   list.addSubnet("fe80::", 10, "ipv6");
   list.addSubnet("ff00::", 8, "ipv6");
+  list.addSubnet("64:ff9b::", 96, "ipv6"); // NAT64: embeds an IPv4 address
+  list.addSubnet("2002::", 16, "ipv6"); // 6to4: embeds an IPv4 address
+  list.addSubnet("2001::", 32, "ipv6"); // Teredo
+  list.addSubnet("fec0::", 10, "ipv6"); // deprecated site-local
   return list;
 }

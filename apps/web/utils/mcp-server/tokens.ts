@@ -363,6 +363,8 @@ async function revokeGrantOnReplay(
   }
 
   const ageSeconds = (Date.now() - row.revokedAt.getTime()) / 1000;
+  // The grace window only avoids revoking the grant; a retried or concurrent refresh
+  // still gets invalid_grant, as it did before this change.
   if (ageSeconds <= REFRESH_REPLAY_GRACE_SECONDS) {
     logger.warn("Refresh token reused inside the grace window", { jti });
     return;

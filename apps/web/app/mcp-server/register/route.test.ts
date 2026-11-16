@@ -105,6 +105,21 @@ describe("POST /mcp-server/register", () => {
     expect(prisma.mcpServerClient.create).not.toHaveBeenCalled();
   });
 
+  it.each([
+    [123],
+    [null],
+    [{ href: "http://localhost/cb" }],
+  ])("refuses a redirect_uris entry that is not a string (%j)", async (entry) => {
+    const response = await POST(
+      post(JSON.stringify({ redirect_uris: ["http://localhost/cb", entry] })),
+      context,
+    );
+
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toBe("invalid_redirect_uri");
+    expect(prisma.mcpServerClient.create).not.toHaveBeenCalled();
+  });
+
   it("accepts a cursor:// redirect URI", async () => {
     const response = await POST(
       post(

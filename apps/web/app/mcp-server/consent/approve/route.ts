@@ -10,7 +10,10 @@ import {
   redirectUriMatches,
   validateRedirectUri,
 } from "@/utils/mcp-server/redirect-uri";
-import { validateCodeChallengeMethod } from "@/utils/mcp-server/pkce";
+import {
+  isValidCodeChallenge,
+  validateCodeChallengeMethod,
+} from "@/utils/mcp-server/pkce";
 import { validateScopes } from "@/utils/mcp-server/tokens";
 import prisma from "@/utils/prisma";
 import { accessibleEmailAccountWhere } from "@/utils/email-account-access";
@@ -82,6 +85,12 @@ export const POST = withAuth(
 
     if (!codeChallenge || !emailAccountId) {
       throw new SafeError("Missing required parameters");
+    }
+
+    if (!isValidCodeChallenge(codeChallenge)) {
+      throw new SafeError(
+        "invalid_request: code_challenge must be a 43-character base64url S256 challenge",
+      );
     }
 
     if (

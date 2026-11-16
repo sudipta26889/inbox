@@ -43,6 +43,11 @@ export default async function McpConsentPage({
   return (
     <ConsentContent
       clientName={client.clientName}
+      clientIdHost={
+        client.clientId.startsWith("https://")
+          ? new URL(client.clientId).host
+          : null
+      }
       logoUri={client.logoUri}
       redirectHost={new URL(redirectUri).host}
       request={{
