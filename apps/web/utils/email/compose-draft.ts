@@ -3,6 +3,7 @@ import { ensureEmailSendingEnabled } from "@/utils/mail";
 import { SafeError } from "@/utils/error";
 import type { EmailProvider } from "@/utils/email/types";
 import type { SendEmailBody } from "@/utils/types/mail";
+import type { SendApproval } from "@/utils/mail/send-approval";
 import type { Logger } from "@/utils/logger";
 import {
   markComposeSessionSent,
@@ -128,14 +129,16 @@ export async function sendComposeDraft({
   draftId,
   provider,
   email,
+  approval,
 }: {
   draftId: string;
   provider: EmailProvider;
   email: SendEmailBody;
+  approval?: SendApproval;
 }) {
   ensureEmailSendingEnabled();
   await provider.updateDraft(draftId, composeDraftTextUpdate(email));
-  return provider.sendDraft(draftId);
+  return provider.sendDraft(draftId, { approval });
 }
 
 // Attachments are added to and removed from the mailbox draft as the user

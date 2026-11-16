@@ -13,6 +13,10 @@ import type { Logger } from "@/utils/logger";
 import { isSameEmailAddress } from "@/utils/email";
 import { getMessageTimestamp } from "@/utils/email/message-timestamp";
 import { publishToQstashAt } from "@/utils/upstash";
+import {
+  approveSendOperation,
+  htmlPreviewText,
+} from "@/utils/mail/send-approval";
 
 const LEASE_MS = 5 * 60 * 1000;
 const HELD_EMAIL_EXECUTE_PATH = "/api/scheduled-emails/execute";
@@ -42,6 +46,8 @@ export async function scheduleEmail(
     input.email.replyToEmail.threadId !== input.threadId
   )
     throw new SafeError("The reply belongs to a different conversation.");
+  // Asked now, not when the cron sends it: the row is the approval record.
+  await approveScheduledSend(emailAccountId, input, payloadHash);
   try {
     return await prisma.scheduledEmail.create({
       data: {
@@ -95,6 +101,9 @@ export async function holdEmailForUndo({
       assertReusableRequest(existing, hashPayload(input));
     return existing;
   }
+  // Approved before the hold is committed. Undo still works while the card is
+  // open: a cancel records a CANCELLED row, and the hold then never sends.
+  await approveScheduledSend(emailAccountId, input, hashPayload(input));
   let row: ScheduledEmail;
   try {
     row = await prisma.scheduledEmail.create({
@@ -527,6 +536,33 @@ function getSentThreadId(result: unknown) {
     if (typeof threadId === "string" && threadId) return threadId;
   }
   return null;
+}
+
+async function approveScheduledSend(
+  emailAccountId: string,
+  input: z.infer<typeof scheduleEmailBody>,
+  payloadHash: string,
+) {
+  const { email } = input;
+  await approveSendOperation({
+    operation: input.sendAt
+      ? "schedule_email"
+      : email.replyToEmail
+        ? "reply_email"
+        : "send_email",
+    emailAccountId,
+    operationId: input.clientMutationId,
+    payloadHash,
+    to: email.to,
+    from: email.from,
+    cc: email.cc,
+    bcc: email.bcc,
+    subject: email.subject,
+    bodyText: htmlPreviewText(email.messageHtml),
+    threadId: input.threadId ?? undefined,
+    isReply: !!email.replyToEmail,
+    sendAt: input.sendAt ?? undefined,
+  });
 }
 
 function hashPayload(input: z.infer<typeof scheduleEmailBody>) {

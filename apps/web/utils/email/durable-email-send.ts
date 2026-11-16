@@ -10,6 +10,13 @@ import prisma from "@/utils/prisma";
 import type { Logger } from "@/utils/logger";
 import { isDuplicateError } from "@/utils/prisma-helpers";
 import { sendHtmlEmailWithOpenTracking } from "@/utils/email/sent-message-open/sent-message-open.server";
+import {
+  approvalFromScheduledEmail,
+  approveSendOperation,
+  htmlPreviewText,
+  SendNotApprovedError,
+  type SendApproval,
+} from "@/utils/mail/send-approval";
 import type { DurableEmailSendBody } from "./durable-email-send.validation";
 
 const PROCESSING_LEASE_MS = 2 * 60 * 1000;
@@ -45,6 +52,40 @@ export async function executeDurableEmailSend({
       status: "rejected" as const,
       error: "Queued email is too old to send safely",
     };
+  }
+  // Approval comes before the operation is committed: a long human review
+  // must not hold the processing lease, and a retry after a send record was
+  // deleted must not raise a second card.
+  let approval: SendApproval | undefined;
+  if (!found) {
+    try {
+      approval =
+        (await approvalFromScheduledEmail({
+          emailAccountId,
+          mutationId: input.mutationId,
+          threadId: input.threadId,
+          email: input.email,
+        })) ??
+        (await approveSendOperation({
+          operation: input.email.replyToEmail ? "reply_email" : "send_email",
+          provider: provider === "google" ? "gmail" : "outlook",
+          emailAccountId,
+          operationId: input.mutationId,
+          payloadHash,
+          to: input.email.to,
+          from: input.email.from,
+          cc: input.email.cc,
+          bcc: input.email.bcc,
+          subject: input.email.subject,
+          bodyText: htmlPreviewText(input.email.messageHtml),
+          threadId: input.threadId ?? undefined,
+          isReply: !!input.email.replyToEmail,
+        }));
+    } catch (error) {
+      if (!(error instanceof SendNotApprovedError)) throw error;
+      logger.warn("Email send was not approved", { error });
+      return { status: "rejected" as const, error: error.message };
+    }
   }
   const existing = found
     ? { ...found, created: false }
@@ -96,6 +137,7 @@ export async function executeDurableEmailSend({
       email: input.email,
       emailProvider,
       logger,
+      approval,
     });
     stage = "persist_result";
     await prisma.emailSendOperation.update({
