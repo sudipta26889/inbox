@@ -39,7 +39,8 @@ export function rebuildHtmlWithEditedBody(
 ): string | null {
   const parts = splitOutgoingHtml(html);
   const $inner = load(parts.inner, null, false);
-  if ($inner(UNEDITABLE_SELECTOR).length) return null;
+  const style = commonTypography($inner);
+  if (style === null) return null;
 
   const imageSources = new Map<string, string>();
   $inner("img[src]").each((_index, element) => {
@@ -51,7 +52,7 @@ export function rebuildHtmlWithEditedBody(
   return [
     parts.head,
     parts.prefix,
-    markdownToSafeHtml(markdown, imageSources),
+    withBlockStyle(markdownToSafeHtml(markdown, imageSources), style),
     parts.suffix,
     parts.signature,
     parts.quoted,
@@ -76,7 +77,11 @@ const QUOTE_SELECTOR = [
 ].join(", ");
 
 // Markdown can't carry these, so an edit would lose them without a word.
-const UNEDITABLE_SELECTOR = "table, style, font, [style]";
+const UNEDITABLE_SELECTOR = "table, style";
+// Inline styles an edit can keep by putting them on every edited block.
+const TYPOGRAPHY_PROPERTY =
+  /^(font-family|font-size|color|line-height|(margin|padding)(-(top|right|bottom|left))?)$/;
+const STYLABLE_TAGS = new Set(["p", "div", "span"]);
 
 const SIGNATURE_SELECTOR = SIGNATURE_SELECTORS.join(", ");
 
@@ -95,6 +100,19 @@ const turndown = new TurndownService({
   );
 
 const SAFE_URL = /^(https?:|mailto:|tel:)/i;
+
+// Two or more <br> in a row are a blank line: a paragraph break, not one
+// line break. AI replies are built that way (renderReplyBodyHtml).
+turndown.addRule("paragraphBreak", {
+  filter: (node) =>
+    node.nodeName === "BR" &&
+    (isBreak(siblingSkippingSpace(node, "previousSibling")) ||
+      isBreak(siblingSkippingSpace(node, "nextSibling"))),
+  replacement: (_content, node) =>
+    isBreak(siblingSkippingSpace(node as Node, "previousSibling"))
+      ? ""
+      : "\n\n",
+});
 
 /**
  * Cuts the HTML at source offsets so the signature, quote and every wrapper
@@ -119,27 +137,29 @@ function splitOutgoingHtml(html: string) {
         (index) => index >= start,
       )
     : undefined;
-  const end = closing ?? html.length;
-
   const quote = findQuote($, html);
   const quoteStart = startOf(quote);
+  // Never before the quote, or the quote and tail slices would overlap.
+  const end = Math.max(closing ?? html.length, quoteStart ?? 0);
   const quotedFrom = quoteStart ?? end;
 
-  const signature = $(SIGNATURE_SELECTOR)
+  // Gmail web writes a "-- " prefix span, then the signature div: the cut is
+  // at the first, the P.S. check runs from the end of the last.
+  const signatures = $(SIGNATURE_SELECTOR)
     .filter(
       (_index, element) =>
         $(element).parents(`${SIGNATURE_SELECTOR}, ${QUOTE_SELECTOR}`)
-          .length === 0,
+          .length === 0 && (startOf(element) ?? end) < quotedFrom,
     )
-    .get(0);
+    .toArray();
+  const signature = signatures[0];
   const signatureStart = startOf(signature);
-  const signatureEnd = signature?.sourceCodeLocation?.endOffset;
+  const signatureEnd = signatures.at(-1)?.sourceCodeLocation?.endOffset;
   // Text after the signature (a P.S.) must stay editable, so then there is no
   // separate signature and it all belongs to the body.
   const ownSignature =
     signature &&
     signatureStart !== undefined &&
-    signatureStart < quotedFrom &&
     signatureEnd !== undefined &&
     !load(html.slice(signatureEnd, quotedFrom), null, false)
       .root()
@@ -248,6 +268,88 @@ function wordHeaderBlock(html: string, element: Element): Element {
   )
     return parent;
   return element;
+}
+
+/**
+ * The one inline style every piece of authored text has (font, colour,
+ * spacing), as a CSS string; "" when there is none; null when an edit can't
+ * reproduce the styling: tables, layout or background styles, or text styled
+ * differently from other text.
+ */
+function commonTypography($: CheerioAPI): string | null {
+  if ($(UNEDITABLE_SELECTOR).length) return null;
+  const declared = new Map<AnyNode, [string, string][]>();
+  for (const element of $("[style], font").toArray()) {
+    const declarations = styleOf(element);
+    if (!declarations) return null;
+    declared.set(element, declarations);
+  }
+
+  const styles = new Set<string>();
+  for (const text of textNodes($.root().get(0))) {
+    const effective = new Map<string, string>();
+    const chain = $(text).parents().toArray().reverse();
+    for (const ancestor of chain)
+      for (const [property, value] of declared.get(ancestor) ?? [])
+        effective.set(property, value);
+    styles.add(
+      [...effective]
+        .map(([property, value]) => `${property}:${value}`)
+        .join(";"),
+    );
+  }
+  if (styles.size > 1) return null;
+  return [...styles][0] ?? "";
+}
+
+function styleOf(element: Element): [string, string][] | null {
+  if (element.name === "font") {
+    const { color, face, ...other } = element.attribs;
+    if (Object.keys(other).length) return null;
+    return [
+      ...(color ? ([["color", color]] as [string, string][]) : []),
+      ...(face ? ([["font-family", face]] as [string, string][]) : []),
+    ];
+  }
+  if (!STYLABLE_TAGS.has(element.name)) return null;
+  const declarations: [string, string][] = [];
+  for (const declaration of (element.attribs.style ?? "").split(";")) {
+    if (!declaration.trim()) continue;
+    const colon = declaration.indexOf(":");
+    const property = declaration.slice(0, colon).trim().toLowerCase();
+    const value = declaration.slice(colon + 1).trim();
+    if (colon < 0 || !TYPOGRAPHY_PROPERTY.test(property)) return null;
+    declarations.push([property, value]);
+  }
+  return declarations;
+}
+
+function textNodes(node: AnyNode | undefined): AnyNode[] {
+  if (!node) return [];
+  if (node.type === "text")
+    return "data" in node && node.data.trim() ? [node] : [];
+  return "children" in node ? node.children.flatMap(textNodes) : [];
+}
+
+function withBlockStyle(html: string, style: string) {
+  if (!style) return html;
+  const $ = load(html, null, false);
+  $.root().children().attr("style", style);
+  return $.root().html() ?? html;
+}
+
+function siblingSkippingSpace(
+  node: Node,
+  direction: "previousSibling" | "nextSibling",
+): Node | null {
+  let sibling = node[direction];
+  while (sibling && sibling.nodeType === 3 && !sibling.textContent?.trim())
+    sibling = sibling[direction];
+  return sibling;
+}
+
+function isBreak(node: Node | null) {
+  return node?.nodeName === "BR";
 }
 
 function startOf(node: AnyNode | undefined) {

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createReplyContent } from "@/utils/gmail/reply";
+import { load } from "cheerio";
+import { renderReplyBodyHtml } from "@/utils/email/reply-body-html";
 import { createOutlookReplyContent } from "@/utils/outlook/reply";
 import { cardBodyFromHtml, rebuildHtmlWithEditedBody } from "./card-body";
 
@@ -120,14 +122,50 @@ describe("edits that the Markdown round trip can't carry", () => {
 
   it.each([
     ["a table", "<p>Rates</p><table><tr><td>1</td></tr></table>"],
+    ["one coloured word", '<p>Hi <span style="color:red">urgent</span></p>'],
     [
-      "an inline-styled block",
-      '<p>Hi <span style="color:red">urgent</span></p>',
+      "paragraphs in different fonts",
+      '<p style="font-family:Arial">One</p><p style="font-family:Georgia">Two</p>',
     ],
-    ["a font tag", '<p><font color="red">Hi</font></p>'],
+    ["a background colour", '<p style="background-color:yellow">Hi</p>'],
+    [
+      "positioning",
+      '<p style="position:relative;top:2px">Hi</p><p style="position:relative;top:2px">Two</p>',
+    ],
+    ["a font size tag", '<p><font size="4">Hi</font></p>'],
     ["a style element", "<style>p{color:red}</style><p>Hi</p>"],
   ])("refuses a body edit on %s", (_name, original) => {
     expect(rebuildHtmlWithEditedBody(original, "Changed")).toBeNull();
+  });
+
+  it("keeps new Outlook's font style on every paragraph after an edit", () => {
+    const font =
+      "font-family: Aptos, Aptos_EmbeddedFont, Calibri, Helvetica, sans-serif; font-size: 12pt; color: rgb(0, 0, 0);";
+    const original = `<div class="elementToProof" style="${font}">Hi Bob,</div><div class="elementToProof" style="${font}"><br></div><div class="elementToProof" style="${font}">The report is ready.</div>`;
+    const edited = cardBodyFromHtml(original).body.replace("ready", "done");
+
+    const html = rebuildHtmlWithEditedBody(original, edited) ?? "";
+
+    expect(html).toContain("The report is done.");
+    const blocks = load(html, null, false).root().children().toArray();
+    expect(blocks.length).toBeGreaterThan(0);
+    for (const block of blocks) {
+      expect(load(block).root().children().first().attr("style")).toContain(
+        "font-family:Aptos, Aptos_EmbeddedFont, Calibri, Helvetica, sans-serif",
+      );
+    }
+  });
+
+  it("keeps Gmail's coloured text after an edit", () => {
+    const original =
+      '<div dir="ltr"><font color="#0b5394" face="arial, sans-serif">Hello team, all set.</font></div>';
+    const edited = cardBodyFromHtml(original).body.replace("set", "done");
+
+    const html = rebuildHtmlWithEditedBody(original, edited) ?? "";
+
+    expect(html).toBe(
+      '<div dir="ltr"><p style="color:#0b5394;font-family:arial, sans-serif">Hello team, all done.</p></div>',
+    );
   });
 
   it("allows edits inside a styled wrapper, which is kept as it was", () => {
@@ -170,6 +208,46 @@ describe("balanced output", () => {
 
     expect(html).toBe(
       "<html><head><style>p{margin:0}</style></head><p>Hi</p></html>",
+    );
+  });
+
+  it("keeps the wrapper's dir when a P.S. follows the signature", () => {
+    const original = `<div dir="rtl"><p>Hello</p><div class="gmail_signature">Me</div><p>P.S. today</p></div>${QUOTE}`;
+
+    const html =
+      rebuildHtmlWithEditedBody(original, "Hi\n\nMe\n\nP.S. now") ?? "";
+
+    expect(html.startsWith('<div dir="rtl"><p>Hi</p>')).toBe(true);
+    expect(html.endsWith(`</div>${QUOTE}`)).toBe(true);
+  });
+
+  it("splits off a Gmail-web signature with its '-- ' prefix", () => {
+    const signature =
+      '<span class="gmail_signature_prefix">-- </span><br><div dir="ltr" class="gmail_signature" data-smartmail="gmail_signature"><div dir="ltr"><span style="color:rgb(102,102,102)">Me</span></div></div>';
+    const original = `<div dir="ltr"><div>Hello Bob</div><div><br></div><div>Thanks</div><br clear="all"><div><br></div>${signature}</div>`;
+
+    const card = cardBodyFromHtml(original);
+    const html = rebuildHtmlWithEditedBody(original, "Hello Rob\n\nThanks");
+
+    expect(card.body).toBe("Hello Bob\n\nThanks");
+    expect(card.signature).toBe("--\n\nMe");
+    expect(html).toContain("Hello Rob");
+    expect(html?.endsWith(`${signature}</div>`)).toBe(true);
+  });
+
+  it("keeps blank lines of an AI reply as paragraphs", () => {
+    const original = renderReplyBodyHtml(
+      "Hi Bob,\n\nPara two line1\nline2\n\nThanks,\nMe",
+    );
+    const card = cardBodyFromHtml(original);
+    expect(card.body).toBe("Hi Bob,\n\nPara two line1\nline2\n\nThanks,\nMe");
+
+    const html =
+      rebuildHtmlWithEditedBody(original, card.body.replace("Bob", "Rob")) ??
+      "";
+
+    expect(html).toBe(
+      "<p>Hi Rob,</p>\n<p>Para two line1<br>line2</p>\n<p>Thanks,<br>Me</p>",
     );
   });
 
