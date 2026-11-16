@@ -28,6 +28,7 @@ import {
 import { formatReplySubject } from "@/utils/email/subject";
 import { buildThreadingHeaders } from "@/utils/email/threading";
 import { ensureEmailSendingEnabled } from "@/utils/mail";
+import { requireSendApproval, type SendGate } from "@/utils/mail/send-approval";
 import { getMessage } from "@/utils/gmail/message";
 import {
   getGmailAttachment,
@@ -111,6 +112,7 @@ export async function sendEmailWithHtml(
   gmail: gmail_v1.Gmail,
   body: MailSendEmailBody,
   sendLogger: Logger = logger,
+  gate: SendGate = {},
 ) {
   ensureEmailSendingEnabled();
 
@@ -122,6 +124,22 @@ export async function sendEmailWithHtml(
     sendLogger.error("Error converting email html to text", { error });
     messageText = stripHtmlTagsForPlainText(body.messageHtml).trim();
   }
+
+  await requireSendApproval({
+    operation: body.replyToEmail?.forwardedMessageId
+      ? "forward_email"
+      : "send_email",
+    provider: "gmail",
+    ...gate,
+    to: body.to,
+    from: body.from,
+    cc: body.cc,
+    bcc: body.bcc,
+    subject: body.subject,
+    bodyText: messageText,
+    threadId: body.replyToEmail?.threadId,
+    isReply: !!body.replyToEmail?.messageId,
+  });
 
   const forwardedAttachments = body.replyToEmail?.forwardedMessageId
     ? (await getForwardedMessage(gmail, body.replyToEmail.forwardedMessageId))
@@ -193,9 +211,10 @@ export async function sendEmailWithHtml(
 export async function sendEmailWithPlainText(
   gmail: gmail_v1.Gmail,
   body: Omit<MailSendEmailBody, "messageHtml"> & { messageText: string },
+  gate: SendGate = {},
 ) {
   const messageHtml = convertTextToHtmlParagraphs(body.messageText);
-  return sendEmailWithHtml(gmail, { ...body, messageHtml });
+  return sendEmailWithHtml(gmail, { ...body, messageHtml }, logger, gate);
 }
 
 export async function replyToEmail(
@@ -212,6 +231,7 @@ export async function replyToEmail(
     bcc?: string;
     attachments?: Attachment[];
   },
+  gate: SendGate = {},
 ) {
   ensureEmailSendingEnabled();
 
@@ -223,6 +243,20 @@ export async function replyToEmail(
   const messageText = buildReplyMessageText({
     textContent: reply,
     message,
+  });
+
+  await requireSendApproval({
+    operation: "reply_email",
+    provider: "gmail",
+    ...gate,
+    to: message.headers["reply-to"] || message.headers.from,
+    from,
+    cc: options?.cc,
+    bcc: options?.bcc,
+    subject: formatReplySubject(message.headers.subject),
+    bodyText: reply,
+    threadId: message.threadId,
+    isReply: true,
   });
 
   // Only replying to the original sender
@@ -266,6 +300,7 @@ export async function forwardEmail(
     content?: string;
     from?: string;
   },
+  gate: SendGate = {},
 ) {
   ensureEmailSendingEnabled();
 
@@ -274,6 +309,19 @@ export async function forwardEmail(
       `Recipient address is required for forwarding email. Received: "${options.to}"`,
     );
   }
+
+  await requireSendApproval({
+    operation: "forward_email",
+    provider: "gmail",
+    ...gate,
+    to: options.to,
+    from: options.from,
+    cc: options.cc,
+    bcc: options.bcc,
+    subject: forwardEmailSubject(message.headers.subject),
+    bodyText: forwardEmailText({ content: options.content ?? "", message }),
+    threadId: message.threadId,
+  });
 
   const attachments = await Promise.all(
     [...(message.attachments ?? []), ...(message.inline ?? [])].map(

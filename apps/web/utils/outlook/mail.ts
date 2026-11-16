@@ -21,6 +21,11 @@ import { ensureEmailSendingEnabled } from "@/utils/mail";
 import { uploadResumableChunks } from "@/utils/outlook/upload-session";
 import type { Logger } from "@/utils/logger";
 import type { SendEmailOptions } from "@/utils/email/types";
+import {
+  htmlPreviewText,
+  requireSendApproval,
+  type SendGate,
+} from "@/utils/mail/send-approval";
 
 type GraphRecipient = {
   emailAddress: { address: string; name?: string };
@@ -37,12 +42,29 @@ export async function sendEmailWithHtml(
   body: MailSendEmailBody,
   logger: Logger,
   options?: SendEmailOptions,
+  gate: SendGate = {},
 ): Promise<SentEmailResult> {
   ensureEmailSendingEnabled();
 
   const toRecipients = buildGraphRecipients(body.to);
   if (!toRecipients?.length)
     throw new SafeError("Recipient address is required");
+
+  await requireSendApproval({
+    operation: body.replyToEmail?.forwardedMessageId
+      ? "forward_email"
+      : "send_email",
+    provider: "outlook",
+    ...gate,
+    to: body.to,
+    from: body.from,
+    cc: body.cc,
+    bcc: body.bcc,
+    subject: body.subject,
+    bodyText: htmlPreviewText(body.messageHtml),
+    threadId: body.replyToEmail?.threadId,
+    isReply: !!body.replyToEmail?.messageId,
+  });
 
   // For replies with a message ID, use createReply for proper threading
   // Microsoft Graph's sendMail doesn't support In-Reply-To/References headers
@@ -66,9 +88,16 @@ export async function sendEmailWithPlainText(
   client: OutlookClient,
   body: Omit<MailSendEmailBody, "messageHtml"> & { messageText: string },
   logger: Logger,
+  gate: SendGate = {},
 ) {
   const messageHtml = convertTextToHtmlParagraphs(body.messageText);
-  return sendEmailWithHtml(client, { ...body, messageHtml }, logger);
+  return sendEmailWithHtml(
+    client,
+    { ...body, messageHtml },
+    logger,
+    undefined,
+    gate,
+  );
 }
 
 export async function replyToEmail(
@@ -83,8 +112,23 @@ export async function replyToEmail(
     bcc?: string;
     attachments?: Attachment[];
   },
+  gate: SendGate = {},
 ) {
   ensureEmailSendingEnabled();
+
+  await requireSendApproval({
+    operation: "reply_email",
+    provider: "outlook",
+    ...gate,
+    to: message.headers["reply-to"] || message.headers.from,
+    from: options?.from,
+    cc: options?.cc,
+    bcc: options?.bcc,
+    subject: message.headers.subject,
+    bodyText: reply,
+    threadId: message.threadId,
+    isReply: true,
+  });
 
   const { html } = createOutlookReplyContent({
     textContent: reply,
@@ -159,6 +203,7 @@ export async function forwardEmail(
     from?: string;
   },
   logger: Logger,
+  gate: SendGate = {},
 ) {
   ensureEmailSendingEnabled();
 
@@ -166,6 +211,17 @@ export async function forwardEmail(
 
   const toRecipients = buildGraphRecipients(options.to);
   if (!toRecipients?.length) throw new Error("Recipient address is required");
+
+  await requireSendApproval({
+    operation: "forward_email",
+    provider: "outlook",
+    ...gate,
+    to: options.to,
+    from: options.from,
+    cc: options.cc,
+    bcc: options.bcc,
+    bodyText: options.content,
+  });
   const ccRecipients = buildGraphRecipients(options.cc);
   const bccRecipients = buildGraphRecipients(options.bcc);
 

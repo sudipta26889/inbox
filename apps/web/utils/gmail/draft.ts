@@ -9,6 +9,9 @@ import {
   withGmailNonIdempotentWriteRetry,
 } from "@/utils/gmail/retry";
 
+import { ensureEmailSendingEnabled } from "@/utils/mail";
+import { requireSendApproval, type SendGate } from "@/utils/mail/send-approval";
+
 const logger = createScopedLogger("gmail/draft");
 const MAX_DRAFT_LOOKUP_PAGES = 10;
 
@@ -129,7 +132,28 @@ function isValidGmailDraftId(draftId: string): boolean {
 export async function sendDraft(
   gmail: gmail_v1.Gmail,
   draftId: string,
+  gate: SendGate = {},
 ): Promise<{ messageId: string; threadId: string }> {
+  // Sending a draft is still sending. Without this the drafts API is a way
+  // around the kill switch that guards every other send path.
+  ensureEmailSendingEnabled();
+
+  // Same reasoning for the approval gate. Read the draft first so the reviewer
+  // sees who it goes to rather than an opaque draft id.
+  const draft = gate.approval ? null : await getDraft(draftId, gmail);
+  await requireSendApproval({
+    operation: "send_draft",
+    provider: "gmail",
+    ...gate,
+    to: draft?.headers?.to || "unknown",
+    from: draft?.headers?.from || undefined,
+    cc: draft?.headers?.cc || undefined,
+    bcc: draft?.headers?.bcc || undefined,
+    subject: draft?.subject,
+    bodyText: draft?.textPlain ?? undefined,
+    threadId: draft?.threadId,
+  });
+
   logger.info("Sending draft", { draftId });
 
   const response = await withGmailNonIdempotentWriteRetry(() =>

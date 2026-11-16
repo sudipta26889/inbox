@@ -103,6 +103,7 @@ import type {
   SendEmailOptions,
   DraftAttachmentUploadStart,
 } from "@/utils/email/types";
+import type { SendGate } from "@/utils/mail/send-approval";
 import type { SendAsAddress } from "@/utils/email/send-as";
 import type { DraftAttachmentMetadata } from "@/utils/actions/draft-attachments.validation";
 import { assertDraftAttachmentLimits } from "@/utils/email/draft-attachment-upload";
@@ -164,9 +165,11 @@ export class OutlookProvider implements EmailProvider {
   readonly localMailSyncStrategy = "folder-delta";
   private readonly client: OutlookClient;
   private readonly logger: Logger;
+  private readonly emailAccountId?: string;
 
-  constructor(client: OutlookClient, logger?: Logger) {
+  constructor(client: OutlookClient, logger?: Logger, emailAccountId?: string) {
     this.client = client;
+    this.emailAccountId = emailAccountId;
     this.logger = (logger || createScopedLogger("outlook-provider")).with({
       provider: "microsoft",
     });
@@ -174,6 +177,10 @@ export class OutlookProvider implements EmailProvider {
 
   toJSON() {
     return { name: this.name, type: "OutlookProvider" };
+  }
+
+  private sendGate(options?: Pick<SendEmailOptions, "approval">): SendGate {
+    return { emailAccountId: this.emailAccountId, approval: options?.approval };
   }
 
   async countMessages({
@@ -721,8 +728,14 @@ export class OutlookProvider implements EmailProvider {
 
   async sendDraft(
     draftId: string,
+    options?: Pick<SendEmailOptions, "approval">,
   ): Promise<{ messageId: string; threadId: string }> {
-    return sendDraft({ client: this.client, draftId, logger: this.logger });
+    return sendDraft({
+      client: this.client,
+      draftId,
+      logger: this.logger,
+      gate: this.sendGate(options),
+    });
   }
 
   async createDraft(params: {
@@ -980,6 +993,7 @@ export class OutlookProvider implements EmailProvider {
       content,
       this.logger,
       options,
+      this.sendGate(),
     );
     return { messageId: requireSentMessageId(result.id) };
   }
@@ -992,7 +1006,12 @@ export class OutlookProvider implements EmailProvider {
     messageText: string;
     attachments?: MailAttachment[];
   }): Promise<{ messageId: string }> {
-    const result = await sendEmailWithPlainText(this.client, args, this.logger);
+    const result = await sendEmailWithPlainText(
+      this.client,
+      args,
+      this.logger,
+      this.sendGate(),
+    );
     return { messageId: requireSentMessageId(result.id) };
   }
 
@@ -1005,6 +1024,7 @@ export class OutlookProvider implements EmailProvider {
       },
       this.logger,
       options,
+      this.sendGate(options),
     );
     return {
       messageId: result.id || "",
@@ -1026,6 +1046,7 @@ export class OutlookProvider implements EmailProvider {
       this.client,
       { messageId: email.id, ...args },
       this.logger,
+      this.sendGate(),
     );
     return { messageId: requireSentMessageId(result.id) };
   }

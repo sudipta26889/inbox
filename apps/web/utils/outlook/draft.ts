@@ -1,6 +1,8 @@
 import type { Message } from "@microsoft/microsoft-graph-types";
 import type { OutlookClient } from "@/utils/outlook/client";
 import type { Logger } from "@/utils/logger";
+import { ensureEmailSendingEnabled } from "@/utils/mail";
+import { requireSendApproval, type SendGate } from "@/utils/mail/send-approval";
 import {
   isNotFoundError,
   isPreconditionFailedError,
@@ -71,24 +73,45 @@ export async function sendDraft({
   client,
   draftId,
   logger,
+  gate = {},
 }: {
   client: OutlookClient;
   draftId: string;
   logger: Logger;
+  gate?: SendGate;
 }): Promise<{ messageId: string; threadId: string }> {
-  logger.info("Sending draft", { draftId });
+  // Sending a draft is still sending: kill switch and approval gate apply.
+  ensureEmailSendingEnabled();
 
   // Graph may return 404 while moving a sent draft to Sent Items. Capture the
   // conversation ID before sending so that metadata reads cannot fail a send.
+  // The recipients are read too, so the reviewer sees who the draft goes to.
   const draft = await withMicrosoftGraphRetry(
     () =>
       client
         .getClient()
         .api(`/me/messages/${draftId}`)
-        .select("conversationId")
+        .select(
+          "conversationId,toRecipients,ccRecipients,bccRecipients,from,subject,bodyPreview",
+        )
         .get() as Promise<Message>,
     logger,
   );
+
+  await requireSendApproval({
+    operation: "send_draft",
+    provider: "outlook",
+    ...gate,
+    to: joinRecipients(draft.toRecipients) || "unknown",
+    from: draft.from?.emailAddress?.address || undefined,
+    cc: joinRecipients(draft.ccRecipients),
+    bcc: joinRecipients(draft.bccRecipients),
+    subject: draft.subject ?? undefined,
+    bodyText: draft.bodyPreview ?? undefined,
+    threadId: draft.conversationId ?? undefined,
+  });
+
+  logger.info("Sending draft", { draftId });
 
   const threadId = draft.conversationId;
   if (!threadId) {
@@ -189,4 +212,16 @@ function draftVersionFromMessage(message: Message): string | undefined {
   return message.changeKey.startsWith("W/")
     ? message.changeKey
     : `W/"${message.changeKey}"`;
+}
+
+function joinRecipients(
+  recipients:
+    | { emailAddress?: { address?: string | null } | null }[]
+    | null
+    | undefined,
+): string | undefined {
+  const addresses = (recipients ?? [])
+    .map((recipient) => recipient.emailAddress?.address)
+    .filter((address): address is string => !!address);
+  return addresses.length ? addresses.join(", ") : undefined;
 }

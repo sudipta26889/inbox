@@ -327,7 +327,7 @@ async function createEmailProviderForWebhookCleanup({
 
   if (isMicrosoftProvider(provider)) {
     const client = await getOutlookClientForEmail({ emailAccountId, logger });
-    return new OutlookProvider(client, logger);
+    return new OutlookProvider(client, logger, emailAccountId);
   }
 
   return null;
