@@ -134,7 +134,7 @@ function ClientItem({
 
       toastSuccess({ description: "Client deleted successfully" });
       onDelete();
-    } catch (error) {
+    } catch {
       toastError({ description: "Failed to delete client" });
     } finally {
       setIsDeleting(false);

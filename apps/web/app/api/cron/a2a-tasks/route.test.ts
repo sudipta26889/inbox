@@ -11,7 +11,9 @@ vi.mock("@/utils/a2a/rate-limit", () => ({
 }));
 vi.mock("@/utils/a2a/token-hygiene", () => ({
   cleanupExpiredAccessTokens: vi.fn().mockResolvedValue(0),
-  reportA2aTokenHygiene: vi.fn().mockResolvedValue({ checked: 0, findings: [] }),
+  reportA2aTokenHygiene: vi
+    .fn()
+    .mockResolvedValue({ checked: 0, findings: [] }),
 }));
 vi.mock("@/utils/mqtt/events", () => ({
   publishServiceHealth: vi.fn().mockResolvedValue(undefined),

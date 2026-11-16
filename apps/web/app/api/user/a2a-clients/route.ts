@@ -44,9 +44,9 @@ const updateClientSchema = z.object({
  * GET /api/user/a2a-clients
  * List all A2A clients owned by the current user
  */
-export const GET = withAuth("user/a2a-clients", async (request) => {
-  return Response.json(await getA2aClients(request.auth.userId));
-});
+export const GET = withAuth("user/a2a-clients", async (request) =>
+  Response.json(await getA2aClients(request.auth.userId)),
+);
 
 export type GetA2aClientsResponse = Awaited<ReturnType<typeof getA2aClients>>;
 

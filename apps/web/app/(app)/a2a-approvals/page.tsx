@@ -56,7 +56,7 @@ export default function A2aApprovalsPage() {
 
       toastSuccess({ description: "Task approved successfully" });
       mutate();
-    } catch (error) {
+    } catch {
       toastError({ description: "Failed to approve task" });
     } finally {
       setIsApproving(false);
@@ -89,7 +89,7 @@ export default function A2aApprovalsPage() {
       setSelectedApproval(null);
       setRejectionReason("");
       mutate();
-    } catch (error) {
+    } catch {
       toastError({ description: "Failed to reject task" });
     } finally {
       setIsApproving(false);

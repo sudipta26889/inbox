@@ -70,7 +70,7 @@ export async function queueWebhook(
     },
   });
 
-  if (!task || !task.clientId) {
+  if (!task?.clientId) {
     logger.warn("Cannot queue webhook - task not found or no client ID", {
       taskId,
       event,
@@ -291,7 +291,7 @@ export async function deliverWebhook(deliveryId: string): Promise<boolean> {
         attempts: delivery.attempts + 1,
         lastAttemptAt: new Date(),
         responseStatus: response.status,
-        responseBody: responseBody.substring(0, 10_000), // Limit to 10KB
+        responseBody: responseBody.slice(0, 10_000), // Limit to 10KB
         status: response.ok
           ? A2aWebhookStatus.delivered
           : A2aWebhookStatus.pending,
@@ -301,7 +301,7 @@ export async function deliverWebhook(deliveryId: string): Promise<boolean> {
           : calculateNextAttempt(delivery.attempts + 1),
         errorMessage: response.ok
           ? undefined
-          : `HTTP ${response.status}: ${responseBody.substring(0, 500)}`,
+          : `HTTP ${response.status}: ${responseBody.slice(0, 500)}`,
       },
     });
 
@@ -319,7 +319,7 @@ export async function deliverWebhook(deliveryId: string): Promise<boolean> {
         taskId: delivery.taskId,
         event: delivery.event,
         status: response.status,
-        responseBody: responseBody.substring(0, 200),
+        responseBody: responseBody.slice(0, 200),
       });
 
       // Check if we should mark as failed
@@ -495,7 +495,7 @@ export async function processPendingWebhooks(): Promise<{
  */
 export async function queueWebhooksForStateChange(
   taskId: string,
-  fromState: A2aTaskState,
+  _fromState: A2aTaskState,
   toState: A2aTaskState,
 ): Promise<void> {
   // Always send state_changed event

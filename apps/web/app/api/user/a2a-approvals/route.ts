@@ -17,9 +17,9 @@ const logger = createScopedLogger("api/a2a-approvals");
  * GET /api/user/a2a-approvals
  * List all pending approval requests for the current user
  */
-export const GET = withAuth("user/a2a-approvals", async (request) => {
-  return Response.json(await getA2aApprovals(request.auth.userId));
-});
+export const GET = withAuth("user/a2a-approvals", async (request) =>
+  Response.json(await getA2aApprovals(request.auth.userId)),
+);
 
 // `withAuth` returns a NextHandler, which has no `.json`, so deriving the
 // response type from the handler resolved to an error and every consumer of

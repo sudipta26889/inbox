@@ -31,12 +31,12 @@ export interface A2aAuthContext {
 export async function authenticateA2aRequest(
   authHeader: string | null,
 ): Promise<A2aAuthContext | null> {
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+  if (!authHeader?.startsWith("Bearer ")) {
     logger.warn("Missing or invalid Authorization header");
     return null;
   }
 
-  const token = authHeader.substring(7);
+  const token = authHeader.slice(7);
   const jwtSecret = env.AUTH_SECRET || env.NEXTAUTH_SECRET || "";
 
   // Validate token using existing MCP infrastructure
