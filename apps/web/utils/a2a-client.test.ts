@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
+  clearAgentEndpointCache,
   fetchAgentCard,
   resolveA2aEndpoint,
   sendA2aMessage,
@@ -12,6 +13,7 @@ vi.mock("server-only", () => ({}));
 vi.mock("@/env", () => ({
   env: {
     A2A_REMOTE_AGENTS: "http://agent1:8080,http://agent2:9090",
+    A2A_REMOTE_AGENT_TOKEN: "mitra-key",
   },
 }));
 
@@ -21,6 +23,7 @@ vi.stubGlobal("fetch", mockFetch);
 describe("fetchAgentCard", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    clearAgentEndpointCache();
   });
 
   it("fetches agent card from well-known URL", async () => {
@@ -65,6 +68,7 @@ describe("fetchAgentCard", () => {
 describe("resolveA2aEndpoint", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    clearAgentEndpointCache();
   });
 
   it("resolves endpoint from agent card json-rpc binding", async () => {
@@ -122,6 +126,7 @@ describe("resolveA2aEndpoint", () => {
 describe("resolveA2aEndpoint — card interface shapes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    clearAgentEndpointCache();
   });
 
   function cardReturns(card: Record<string, unknown>) {
@@ -173,6 +178,7 @@ describe("resolveA2aEndpoint — card interface shapes", () => {
 describe("sendA2aMessage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    clearAgentEndpointCache();
   });
 
   it("sends a spec-shaped JSON-RPC message and returns the task result", async () => {
@@ -284,6 +290,52 @@ describe("sendA2aMessage", () => {
 
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
     expect(body.params.message.contextId).toBe("my-ctx");
+  });
+});
+
+describe("A2A client token and card hardening", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearAgentEndpointCache();
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ result: { id: "t" } }),
+    });
+  });
+
+  it("sends the bearer token to a configured agent origin", async () => {
+    await sendA2aMessage("http://agent1:8080/a2a", { text: "hi" });
+
+    expect(mockFetch.mock.calls[0][1].headers.Authorization).toBe(
+      "Bearer mitra-key",
+    );
+  });
+
+  it("withholds the token from an origin a remote card pointed at", async () => {
+    await sendA2aMessage("http://attacker.example/rpc", { text: "hi" });
+
+    expect(mockFetch.mock.calls[0][1].headers).not.toHaveProperty(
+      "Authorization",
+    );
+  });
+
+  it("fetches a base's card once and reuses the endpoint", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          name: "agent",
+          bindings: [{ url: "/rpc", transport: "json-rpc" }],
+        }),
+    });
+
+    expect(await resolveA2aEndpoint("http://agent1:8080")).toBe(
+      "http://agent1:8080/rpc",
+    );
+    expect(await resolveA2aEndpoint("http://agent1:8080")).toBe(
+      "http://agent1:8080/rpc",
+    );
+    expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 });
 

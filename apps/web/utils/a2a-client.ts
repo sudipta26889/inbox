@@ -10,6 +10,11 @@ const A2A_CARD_TIMEOUT_MS = 10_000;
 // Mitra measured 11.1s for a trivial prompt, so the old shared 10s budget
 // aborted the request just before it completed.
 const A2A_TIMEOUT_MS = 120_000;
+const ENDPOINT_CACHE_TTL_MS = 10 * 60 * 1000;
+const endpointCache = new Map<
+  string,
+  { endpoint: string; expiresAt: number }
+>();
 
 type AgentInterface = {
   url: string;
@@ -61,6 +66,27 @@ export async function resolveA2aEndpoint(
 ): Promise<string> {
   const base = agentBaseUrl.replace(/\/$/, "");
 
+  // The fan-out resolves the endpoint for every email; the card rarely
+  // changes, so one fetch per base per TTL.
+  const cached = endpointCache.get(base);
+  if (cached && cached.expiresAt > Date.now()) return cached.endpoint;
+
+  const endpoint = await resolveFromCard(base);
+  if (endpoint) {
+    endpointCache.set(base, {
+      endpoint,
+      expiresAt: Date.now() + ENDPOINT_CACHE_TTL_MS,
+    });
+    return endpoint;
+  }
+  return `${base}/a2a`;
+}
+
+export function clearAgentEndpointCache() {
+  endpointCache.clear();
+}
+
+async function resolveFromCard(base: string): Promise<string | null> {
   try {
     const card = await fetchAgentCard(base);
 
@@ -94,12 +120,12 @@ export async function resolveA2aEndpoint(
     }
   } catch (error) {
     logger.warn("Failed to fetch agent card, falling back to /a2a", {
-      agentBaseUrl,
+      agentBaseUrl: base,
       error,
     });
   }
 
-  return `${base}/a2a`;
+  return null;
 }
 
 /**
@@ -140,9 +166,15 @@ export async function sendA2aMessage(
     "Content-Type": "application/json",
   };
 
+  // The endpoint comes from the remote card. Our bearer goes only to an
+  // origin we configured, so a spoofed card cannot redirect the token.
   const token = env.A2A_REMOTE_AGENT_TOKEN;
-  if (token) {
+  if (token && isConfiguredAgentOrigin(endpoint)) {
     headers.Authorization = `Bearer ${token}`;
+  } else if (token) {
+    logger.warn("Not sending A2A token to an unconfigured origin", {
+      endpoint,
+    });
   }
 
   try {
@@ -251,5 +283,14 @@ function rewriteLocalhost(endpointUrl: string, baseUrl: string): string {
     return endpoint.toString().replace(/\/$/, "");
   } catch {
     return endpointUrl;
+  }
+}
+
+function isConfiguredAgentOrigin(endpoint: string) {
+  try {
+    const origin = new URL(endpoint).origin;
+    return getRemoteAgentUrls().some((url) => new URL(url).origin === origin);
+  } catch {
+    return false;
   }
 }
