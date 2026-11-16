@@ -168,7 +168,7 @@ describe("background persona scheduling", () => {
     expect(mocks.getMessages).toHaveBeenNthCalledWith(1, { maxResults: 200 });
   });
 
-  it("cools down after throttling and allows another attempt after expiry", async () => {
+  it("cools down for a day after throttling, then allows another attempt", async () => {
     vi.useFakeTimers();
     mocks.getMessages.mockRejectedValue(
       Object.assign(new Error("Quota exceeded"), {
@@ -185,7 +185,13 @@ describe("background persona scheduling", () => {
     await drainAfter();
     expect(mocks.getMessages).toHaveBeenCalledTimes(1);
 
+    // A failed analysis holds the lock for a day, not the 60 s a success does.
     await vi.advanceTimersByTimeAsync(60_001);
+    await analyzePersonaAction("account-1");
+    await drainAfter();
+    expect(mocks.getMessages).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(24 * 60 * 60 * 1000);
     await analyzePersonaAction("account-1");
     await drainAfter();
     expect(mocks.getMessages).toHaveBeenCalledTimes(2);

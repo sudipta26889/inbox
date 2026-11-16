@@ -610,7 +610,9 @@
                                     "NOTIFY_MESSAGING_CHANNEL",
                                     "NOTIFY_SENDER",
                                     "DELETE",
-                                    "INTEGRATION"
+                                    "INTEGRATION",
+                                    "HOME_ASSISTANT",
+                                    "A2A_NOTIFY"
                                   ]
                                 },
                                 "messagingChannelId": {
@@ -1091,7 +1093,9 @@
                                   "NOTIFY_MESSAGING_CHANNEL",
                                   "NOTIFY_SENDER",
                                   "DELETE",
-                                  "INTEGRATION"
+                                  "INTEGRATION",
+                                  "HOME_ASSISTANT",
+                                  "A2A_NOTIFY"
                                 ]
                               },
                               "messagingChannelId": {
@@ -1417,7 +1421,9 @@
                                   "NOTIFY_MESSAGING_CHANNEL",
                                   "NOTIFY_SENDER",
                                   "DELETE",
-                                  "INTEGRATION"
+                                  "INTEGRATION",
+                                  "HOME_ASSISTANT",
+                                  "A2A_NOTIFY"
                                 ]
                               },
                               "messagingChannelId": {
@@ -1927,7 +1933,9 @@
                                   "NOTIFY_MESSAGING_CHANNEL",
                                   "NOTIFY_SENDER",
                                   "DELETE",
-                                  "INTEGRATION"
+                                  "INTEGRATION",
+                                  "HOME_ASSISTANT",
+                                  "A2A_NOTIFY"
                                 ]
                               },
                               "messagingChannelId": {
