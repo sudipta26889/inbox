@@ -3,6 +3,7 @@ import { withAuth } from "@/utils/middleware";
 import prisma from "@/utils/prisma";
 import crypto from "node:crypto";
 import { getWebhookStats, WEBHOOK_EVENTS } from "@/utils/a2a/webhooks";
+import { isAllowedA2aDestination } from "@/utils/a2a/safe-destination";
 
 /**
  * A2A Webhook Configuration API
@@ -99,11 +100,12 @@ export const POST = withAuth("user/a2a-webhooks", async (request) => {
     return NextResponse.json({ error: "Client not found" }, { status: 404 });
   }
 
-  // Validate URL
-  try {
-    new URL(url);
-  } catch {
-    return NextResponse.json({ error: "Invalid URL" }, { status: 400 });
+  // Same vetting as a peer's push config: https, public, resolvable.
+  if (typeof url !== "string" || !(await isAllowedA2aDestination(url))) {
+    return NextResponse.json(
+      { error: "url must be a public https URL" },
+      { status: 400 },
+    );
   }
 
   // Validate events

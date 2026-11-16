@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import prisma from "@/utils/__mocks__/prisma";
-import { DELETE, GET } from "./route";
+import { DELETE, GET, POST } from "./route";
+
+const { lookupMock } = vi.hoisted(() => ({ lookupMock: vi.fn() }));
+vi.mock("node:dns/promises", () => ({ lookup: lookupMock }));
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/utils/prisma");
@@ -160,5 +163,40 @@ describe("GET /api/user/a2a-webhooks", () => {
     expect(prisma.a2aWebhookConfig.count).toHaveBeenCalledWith({
       where: { clientId: "client_1" },
     });
+  });
+});
+
+describe("POST /api/user/a2a-webhooks", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    prisma.mcpServerClient.findUnique.mockResolvedValue({
+      clientId: "client_1",
+      userId: "user_1",
+    } as any);
+    lookupMock.mockImplementation(async (hostname: string) =>
+      hostname === "peer.example"
+        ? [{ address: "93.184.216.34", family: 4 }]
+        : [{ address: "10.0.0.7", family: 4 }],
+    );
+  });
+
+  function postRequest(url: string) {
+    return {
+      auth: { userId: "user_1" },
+      json: async () => ({ clientId: "client_1", url }),
+    } as any;
+  }
+
+  it.each([
+    "https://db.lan/hook",
+    "https://nuc.lan:4726/x",
+    "http://peer.example/hook",
+    "https://resolves-private.example/hook",
+  ])("refuses %s", async (url) => {
+    const response = await POST(postRequest(url), routeContext);
+
+    expect(response.status).toBe(400);
+    expect(prisma.a2aWebhookConfig.upsert).not.toHaveBeenCalled();
+    expect(prisma.a2aWebhookConfig.create).not.toHaveBeenCalled();
   });
 });

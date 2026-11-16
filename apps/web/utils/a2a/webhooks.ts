@@ -5,6 +5,7 @@ import { A2aTaskState, A2aWebhookStatus } from "@/generated/prisma/enums";
 import { toWireState } from "@/utils/a2a/wire-state";
 import { TERMINAL_A2A_TASK_STATES } from "@/utils/a2a/task-executor";
 import crypto from "node:crypto";
+import { postToVettedUrl } from "@/utils/a2a/safe-destination";
 
 const logger = createScopedLogger("a2a-webhooks");
 
@@ -269,20 +270,34 @@ export async function deliverWebhook(deliveryId: string): Promise<boolean> {
       headers["X-A2A-Notification-Token"] = webhookConfig.token;
     }
 
-    // Make HTTP request
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10_000); // 10 second timeout
-
-    const response = await fetch(delivery.url, {
+    // Re-vetted now, not only when the URL was stored: DNS may have changed.
+    // A redirect counts as a failed delivery (postToVettedUrl never follows).
+    const response = await postToVettedUrl(delivery.url, {
       method: delivery.method,
       headers,
       body: JSON.stringify(delivery.payload),
-      signal: controller.signal,
+      timeoutMs: 10_000,
     });
 
-    clearTimeout(timeoutId);
+    if (response.blocked) {
+      logger.warn("Webhook delivery blocked: destination not allowed", {
+        deliveryId,
+        taskId: delivery.taskId,
+      });
+      await prisma.a2aWebhookDelivery.update({
+        where: { id: deliveryId },
+        data: {
+          status: A2aWebhookStatus.failed,
+          attempts: delivery.attempts + 1,
+          lastAttemptAt: new Date(),
+          errorMessage: "Destination is not an allowed webhook destination",
+          nextAttemptAt: null,
+        },
+      });
+      return false;
+    }
 
-    const responseBody = await response.text();
+    const responseBody = response.body;
 
     // Update delivery record
     await prisma.a2aWebhookDelivery.update({

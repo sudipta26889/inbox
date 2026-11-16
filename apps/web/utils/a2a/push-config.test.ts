@@ -10,6 +10,14 @@ import {
 } from "@/utils/a2a/push-config";
 
 vi.mock("server-only", () => ({}));
+// *.example resolves to a public address; anything else does not resolve.
+vi.mock("node:dns/promises", () => ({
+  lookup: vi.fn(async (hostname: string) => {
+    if (hostname.endsWith(".example"))
+      return [{ address: "93.184.216.34", family: 4 }];
+    throw Object.assign(new Error("nx"), { code: "ENOTFOUND" });
+  }),
+}));
 vi.mock("@/utils/prisma");
 
 const authContext = {
@@ -262,6 +270,23 @@ describe("push notification config", () => {
       }),
     ).rejects.toThrow(/not an allowed webhook destination/i);
 
+    expect(prisma.a2aWebhookConfig.upsert).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    "https://db.lan/hook",
+    "https://nuc.lan:4726/api/v1/pkm/ingest/inbox",
+    "https://localtest.me/hook",
+    "https://[::ffff:7f00:1]/hook",
+  ])("rejects internal destination %s (SSRF)", async (url) => {
+    prisma.a2aTask.findUnique.mockResolvedValue({ taskId: "task_1" } as any);
+
+    await expect(
+      handlePushConfigSet(authContext, {
+        taskId: "task_1",
+        pushNotificationConfig: { url },
+      }),
+    ).rejects.toThrow(/not an allowed webhook destination/i);
     expect(prisma.a2aWebhookConfig.upsert).not.toHaveBeenCalled();
   });
 

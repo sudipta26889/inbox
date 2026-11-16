@@ -11,10 +11,21 @@ import {
 } from "@/utils/a2a/webhooks";
 
 vi.mock("server-only", () => ({}));
+// *.example resolves to a public address; anything else does not resolve.
+vi.mock("node:dns/promises", () => ({
+  lookup: vi.fn(async (hostname: string) => {
+    if (hostname.endsWith(".example"))
+      return [{ address: "93.184.216.34", family: 4 }];
+    throw Object.assign(new Error("nx"), { code: "ENOTFOUND" });
+  }),
+}));
 vi.mock("@/utils/prisma");
 
-const mockFetch = vi.fn();
-vi.stubGlobal("fetch", mockFetch);
+const { mockPost } = vi.hoisted(() => ({ mockPost: vi.fn() }));
+vi.mock("@/utils/a2a/safe-destination", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/utils/a2a/safe-destination")>()),
+  postToVettedUrl: mockPost,
+}));
 
 const authContext = {
   userId: "user_1",
@@ -157,6 +168,60 @@ describe("deliverWebhook", () => {
     vi.clearAllMocks();
   });
 
+  function mockPendingDelivery(url = "https://peer.example/hook") {
+    prisma.a2aWebhookDelivery.findUnique.mockResolvedValue({
+      id: "delivery_1",
+      taskId: "internal_task_1",
+      clientId: "client_1",
+      url,
+      method: "POST",
+      event: WEBHOOK_EVENTS.TASK_COMPLETED,
+      payload: {},
+      signature: "sha256=abc",
+      status: A2aWebhookStatus.pending,
+      attempts: 0,
+      maxAttempts: 5,
+    } as any);
+    prisma.a2aTask.findUnique.mockResolvedValue({ taskId: "task_1" } as any);
+    prisma.a2aWebhookConfig.findFirst.mockResolvedValue(
+      fakeConfig({ token: null }),
+    );
+    prisma.a2aWebhookDelivery.update.mockResolvedValue({} as any);
+  }
+
+  it("fails the delivery for good when the destination no longer vets", async () => {
+    mockPendingDelivery();
+    mockPost.mockResolvedValue({ blocked: true });
+
+    expect(await deliverWebhook("delivery_1")).toBe(false);
+    expect(prisma.a2aWebhookDelivery.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: A2aWebhookStatus.failed,
+          nextAttemptAt: null,
+        }),
+      }),
+    );
+  });
+
+  it("treats a redirect as a failed delivery, not a hop", async () => {
+    mockPendingDelivery();
+    mockPost.mockResolvedValue({
+      blocked: false,
+      ok: false,
+      status: 302,
+      body: "",
+    });
+
+    expect(await deliverWebhook("delivery_1")).toBe(false);
+    expect(mockPost).toHaveBeenCalledTimes(1);
+    expect(prisma.a2aWebhookDelivery.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: A2aWebhookStatus.delivered }),
+      }),
+    );
+  });
+
   it("sends the peer's stored token back as X-A2A-Notification-Token", async () => {
     prisma.a2aWebhookDelivery.findUnique.mockResolvedValue({
       id: "delivery_1",
@@ -175,16 +240,17 @@ describe("deliverWebhook", () => {
     prisma.a2aWebhookConfig.findFirst.mockResolvedValue(
       fakeConfig({ token: "peer-issued-token" }),
     );
-    mockFetch.mockResolvedValue({
+    mockPost.mockResolvedValue({
+      blocked: false,
       ok: true,
       status: 200,
-      text: () => Promise.resolve(""),
+      body: "",
     });
     prisma.a2aWebhookDelivery.update.mockResolvedValue({} as any);
 
     await deliverWebhook("delivery_1");
 
-    const [, options] = mockFetch.mock.calls[0];
+    const [, options] = mockPost.mock.calls[0];
     expect(options.headers["X-A2A-Notification-Token"]).toBe(
       "peer-issued-token",
     );
@@ -208,16 +274,17 @@ describe("deliverWebhook", () => {
     prisma.a2aWebhookConfig.findFirst.mockResolvedValue(
       fakeConfig({ token: null }),
     );
-    mockFetch.mockResolvedValue({
+    mockPost.mockResolvedValue({
+      blocked: false,
       ok: true,
       status: 200,
-      text: () => Promise.resolve(""),
+      body: "",
     });
     prisma.a2aWebhookDelivery.update.mockResolvedValue({} as any);
 
     await deliverWebhook("delivery_1");
 
-    const [, options] = mockFetch.mock.calls[0];
+    const [, options] = mockPost.mock.calls[0];
     expect(options.headers).not.toHaveProperty("X-A2A-Notification-Token");
   });
 
@@ -247,7 +314,7 @@ describe("deliverWebhook", () => {
     const result = await deliverWebhook("delivery_1");
 
     expect(result).toBe(false);
-    expect(mockFetch).not.toHaveBeenCalled();
+    expect(mockPost).not.toHaveBeenCalled();
     expect(prisma.a2aWebhookDelivery.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: "delivery_1" },
@@ -279,7 +346,7 @@ describe("deliverWebhook", () => {
     const result = await deliverWebhook("delivery_1");
 
     expect(result).toBe(false);
-    expect(mockFetch).not.toHaveBeenCalled();
+    expect(mockPost).not.toHaveBeenCalled();
   });
 });
 

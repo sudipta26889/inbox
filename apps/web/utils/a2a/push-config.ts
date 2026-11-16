@@ -10,7 +10,7 @@ import {
   TASK_CONFIG_ORDER,
 } from "@/utils/a2a/webhooks";
 import prisma from "@/utils/prisma";
-import { validateWebhookUrlFormat } from "@/utils/outbound-webhook/url-validation";
+import { isAllowedA2aDestination } from "@/utils/a2a/safe-destination";
 
 /**
  * A2A v1.0 §3.1.7 push notification configuration.
@@ -62,7 +62,7 @@ export async function handlePushConfigSet(
     );
   }
 
-  assertDeliverableUrl(pushNotificationConfig.url);
+  await assertDeliverableUrl(pushNotificationConfig.url);
 
   // Scoped BEFORE the write, per §13.1: without this a peer could attach its
   // own callback to another peer's task and be handed that task's payloads.
@@ -198,7 +198,7 @@ export async function handlePushConfigDelete(
   return { deleted: result.count > 0 };
 }
 
-function assertDeliverableUrl(url: string) {
+async function assertDeliverableUrl(url: string) {
   let parsed: URL;
   try {
     parsed = new URL(url);
@@ -220,8 +220,9 @@ function assertDeliverableUrl(url: string) {
   // failed, so a peer can't distinguish "resolves to a private IP" from
   // "hostname is blocked" and map internal network topology by trial and
   // error.
-  const result = validateWebhookUrlFormat(url);
-  if (!result.valid) {
+  // Resolves DNS too: internal names, private or IPv4-mapped addresses, and
+  // names that resolve to them are all refused. Delivery re-checks.
+  if (!(await isAllowedA2aDestination(url))) {
     throw new Error(
       "pushNotificationConfig.url is not an allowed webhook destination",
     );
