@@ -54,7 +54,8 @@ export async function aiDetectRecurringPattern({
   return runDecisionModelOrFallback({
     emailAccount,
     logger,
-    feature: "recurring pattern detection",
+    feature: "recurring-pattern",
+    subjectKey: senderEmail,
     decide: (config) =>
       decideRecurringPattern({
         config,
@@ -64,14 +65,15 @@ export async function aiDetectRecurringPattern({
         consistentRuleName,
         logger,
       }),
-    fallback: () =>
+    fallback: (account) =>
       detectRecurringPatternWithLlm({
         emails,
-        emailAccount,
+        emailAccount: account,
         rules,
         consistentRuleName,
         logger,
       }),
+    same: (decided, llm) => decided?.matchedRule === llm?.matchedRule,
   });
 }
 

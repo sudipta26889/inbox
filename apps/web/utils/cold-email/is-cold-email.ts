@@ -180,22 +180,11 @@ export async function isColdEmail({
 
   if (guardResult) return guardResult;
 
-  // Off by default: a false "cold" archives a real email, and in evals the
-  // decision model could not separate personalized pitches from legitimate outreach.
-  if (!env.DECISION_MODEL_COLD_EMAIL_ENABLED) {
-    return checkColdEmailWithLlm({
-      email,
-      emailAccount,
-      coldEmailRule,
-      modelType,
-      logger,
-    });
-  }
-
   return runDecisionModelOrFallback({
     emailAccount,
     logger,
-    feature: "cold-email classification",
+    feature: "cold-email",
+    subjectKey: extractEmailAddress(email.from) || email.from,
     decide: async (config) => {
       const result = await decideColdEmail({
         config,
@@ -213,14 +202,15 @@ export async function isColdEmail({
         aiReason: result.reason,
       };
     },
-    fallback: () =>
+    fallback: (account) =>
       checkColdEmailWithLlm({
         email,
-        emailAccount,
+        emailAccount: account,
         coldEmailRule,
         modelType,
         logger,
       }),
+    same: (decided, llm) => decided.isColdEmail === llm.isColdEmail,
   });
 }
 

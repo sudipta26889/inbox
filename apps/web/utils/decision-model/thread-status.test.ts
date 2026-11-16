@@ -7,11 +7,13 @@ import {
 import { SystemType } from "@/generated/prisma/enums";
 
 const runDecisionModelMock = vi.hoisted(() => vi.fn());
-vi.mock("./decision-model", () => ({
+vi.mock("./decision-model", async (importActual) => ({
+  ...(await importActual<typeof import("./decision-model")>()),
   runDecisionModel: runDecisionModelMock,
 }));
 
 import { decideThreadStatus } from "./thread-status";
+import { DecisionUncertainError } from "./decision-model";
 
 const config = {
   provider: "typesafe" as const,
@@ -36,7 +38,7 @@ describe("decideThreadStatus", () => {
         thread_status: {
           type: "choice",
           choice: SystemType.TO_REPLY,
-          confidence: 0.85,
+          confidence: 0.97,
           probabilities: {},
         },
       },
@@ -52,16 +54,16 @@ describe("decideThreadStatus", () => {
     });
 
     expect(result.status).toBe(SystemType.TO_REPLY);
-    expect(result.rationale).toContain("85% confidence");
+    expect(result.rationale).toContain("97% confidence");
   });
 
-  it("rejects a low-confidence status so the caller can use the LLM", async () => {
+  it("rejects a status below the 0.95 bar as uncertain, so the caller escalates", async () => {
     runDecisionModelMock.mockResolvedValue({
       answers: {
         thread_status: {
           type: "choice",
           choice: SystemType.ACTIONED,
-          confidence: 0.59,
+          confidence: 0.94,
           probabilities: {},
         },
       },
@@ -76,6 +78,6 @@ describe("decideThreadStatus", () => {
         userSentLastEmail: false,
         logger: createTestLogger(),
       }),
-    ).rejects.toThrow("confidence is too low");
+    ).rejects.toBeInstanceOf(DecisionUncertainError);
   });
 });

@@ -7,6 +7,10 @@ const envMock = vi.hoisted(() => ({
   TYPESAFE_API_KEY: undefined as string | undefined,
   OPENROUTER_API_KEY: undefined as string | undefined,
   LLM_API_KEY: undefined as string | undefined,
+  DECISION_MODEL_LIVE: undefined as string | undefined,
+  DECISION_ESCALATION_MODEL: undefined as string | undefined,
+  DECISION_MIN_CONFIDENCE: undefined as number | undefined,
+  DECISION_LIVE_AUDIT: undefined as "true" | "false" | undefined,
 }));
 
 vi.mock("@/env", () => ({ env: envMock }));
@@ -20,6 +24,7 @@ import { Experimental_DecisionMockModelV4 } from "ai/test";
 import prisma from "@/utils/__mocks__/prisma";
 import { saveAiUsage } from "@/utils/usage";
 import {
+  DecisionUncertainError,
   getDecisionModelConfig,
   runDecisionModel,
   runDecisionModelOrFallback,
@@ -123,11 +128,13 @@ describe("getDecisionModelConfig", () => {
     expect(await getDecisionModelConfig(getEmailAccount())).toBeNull();
   });
 
-  it("does not enroll users with their own AI key through the deployment default", async () => {
+  it("enrolls users with their own (LiteLLM virtual) AI key through the deployment default", async () => {
     envMock.DEFAULT_DECISION_MODEL_ENABLED = true;
 
     mockUserSetting(null, "user-key");
-    expect(await getDecisionModelConfig(getEmailAccount())).toBeNull();
+    expect(await getDecisionModelConfig(getEmailAccount())).toMatchObject(
+      deploymentConfig,
+    );
 
     mockUserSetting(true, "user-key");
     expect(await getDecisionModelConfig(getEmailAccount())).toMatchObject(
@@ -264,66 +271,190 @@ describe("runDecisionModelOrFallback", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     envMock.DEFAULT_DECISION_MODEL = "typesafe:jev-latest";
-    envMock.DEFAULT_DECISION_MODEL_ENABLED = false;
+    envMock.DEFAULT_DECISION_MODEL_ENABLED = true;
     envMock.TYPESAFE_API_KEY = "key";
+    envMock.DECISION_MODEL_LIVE = undefined;
+    envMock.DECISION_ESCALATION_MODEL = undefined;
+    envMock.DECISION_LIVE_AUDIT = undefined;
+    prisma.user.findUnique.mockResolvedValue({
+      decisionModelEnabled: null,
+      aiApiKey: "litellm-key",
+    } as never);
+    prisma.decisionModelRun.create.mockResolvedValue({} as never);
   });
 
-  it("keeps the original path when the decision model is not enabled", async () => {
+  function route(
+    decide: () => Promise<string>,
+    fallback: (account: ReturnType<typeof getEmailAccount>) => Promise<string>,
+    feature = "thread-status",
+  ) {
+    return runDecisionModelOrFallback({
+      emailAccount: getEmailAccount(),
+      logger,
+      feature,
+      subjectKey: "thread-1",
+      decide,
+      fallback,
+      same: (a, b) => a === b,
+    });
+  }
+
+  function recorded() {
+    return prisma.decisionModelRun.create.mock.calls.map(
+      ([args]) => args.data,
+    );
+  }
+
+  it("keeps the original path and records nothing when the user opted out", async () => {
     prisma.user.findUnique.mockResolvedValue({
       decisionModelEnabled: false,
       aiApiKey: null,
     } as never);
     const decide = vi.fn();
-    const fallback = vi.fn().mockResolvedValue("llm");
 
-    const result = await runDecisionModelOrFallback({
-      emailAccount: getEmailAccount(),
-      logger,
-      feature: "test",
-      decide,
-      fallback,
-    });
-
-    expect(result).toBe("llm");
+    expect(await route(decide, async () => "llm")).toBe("llm");
     expect(decide).not.toHaveBeenCalled();
-  });
-
-  it("falls back when the enabled decision model fails", async () => {
-    prisma.user.findUnique.mockResolvedValue({
-      decisionModelEnabled: true,
-      aiApiKey: null,
-    } as never);
-    const decide = vi.fn().mockRejectedValue(new Error("provider down"));
-    const fallback = vi.fn().mockResolvedValue("llm");
-
-    const result = await runDecisionModelOrFallback({
-      emailAccount: getEmailAccount(),
-      logger,
-      feature: "test",
-      decide,
-      fallback,
-    });
-
-    expect(result).toBe("llm");
-    expect(fallback).toHaveBeenCalledOnce();
+    expect(prisma.decisionModelRun.create).not.toHaveBeenCalled();
   });
 
   it("falls back when decision-model configuration lookup fails", async () => {
     prisma.user.findUnique.mockRejectedValue(new Error("database unavailable"));
     const decide = vi.fn();
-    const fallback = vi.fn().mockResolvedValue("llm");
 
-    const result = await runDecisionModelOrFallback({
-      emailAccount: getEmailAccount(),
-      logger,
-      feature: "test",
-      decide,
-      fallback,
+    expect(await route(decide, async () => "llm")).toBe("llm");
+    expect(decide).not.toHaveBeenCalled();
+  });
+
+  it("shadow: the LLM decides and both answers are recorded", async () => {
+    const result = await route(
+      async () => "TO_REPLY",
+      async () => "FYI",
+    );
+
+    expect(result).toBe("FYI");
+    await vi.waitFor(() =>
+      expect(recorded()).toEqual([
+        expect.objectContaining({
+          feature: "thread-status",
+          subjectKey: "thread-1",
+          mode: "shadow",
+          outcome: "disagree",
+          jevResult: "TO_REPLY",
+          llmResult: "FYI",
+        }),
+      ]),
+    );
+  });
+
+  it("shadow: an uncertain decision model is recorded as uncertain", async () => {
+    await route(
+      async () => {
+        throw new DecisionUncertainError("0.90 is below 0.95");
+      },
+      async () => "FYI",
+    );
+
+    await vi.waitFor(() =>
+      expect(recorded()).toEqual([
+        expect.objectContaining({ mode: "shadow", outcome: "uncertain" }),
+      ]),
+    );
+  });
+
+  it("shadow: keeps the record and rethrows when the LLM fails", async () => {
+    await expect(
+      route(
+        async () => "TO_REPLY",
+        async () => {
+          throw new Error("llm down");
+        },
+      ),
+    ).rejects.toThrow("llm down");
+
+    await vi.waitFor(() =>
+      expect(recorded()).toEqual([
+        expect.objectContaining({
+          mode: "shadow",
+          outcome: "llm-error",
+          jevResult: "TO_REPLY",
+        }),
+      ]),
+    );
+  });
+
+  it("live: the decision model decides and the LLM audit is recorded", async () => {
+    envMock.DECISION_MODEL_LIVE = "cold-email, thread-status";
+
+    const result = await route(
+      async () => "TO_REPLY",
+      async () => "TO_REPLY",
+    );
+
+    expect(result).toBe("TO_REPLY");
+    await vi.waitFor(() =>
+      expect(recorded()).toEqual([
+        expect.objectContaining({ mode: "live", outcome: "decided-agree" }),
+      ]),
+    );
+  });
+
+  it("live: no audit call when DECISION_LIVE_AUDIT=false", async () => {
+    envMock.DECISION_MODEL_LIVE = "thread-status";
+    envMock.DECISION_LIVE_AUDIT = "false";
+    const fallback = vi.fn();
+
+    expect(await route(async () => "TO_REPLY", fallback)).toBe("TO_REPLY");
+    expect(fallback).not.toHaveBeenCalled();
+    expect(recorded()).toEqual([
+      expect.objectContaining({ mode: "live", outcome: "decided" }),
+    ]);
+  });
+
+  it("live: an uncertain answer escalates to DECISION_ESCALATION_MODEL", async () => {
+    envMock.DECISION_MODEL_LIVE = "thread-status";
+    envMock.DECISION_ESCALATION_MODEL = "litellm:deepseek-v4-flash";
+    const fallback = vi.fn(async () => "AWAITING_REPLY");
+
+    const result = await route(async () => {
+      throw new DecisionUncertainError("unsure");
+    }, fallback);
+
+    expect(result).toBe("AWAITING_REPLY");
+    expect(fallback.mock.calls[0][0].user).toMatchObject({
+      aiProvider: "litellm",
+      aiModel: "deepseek-v4-flash",
     });
+    expect(recorded()).toEqual([
+      expect.objectContaining({ mode: "live", outcome: "escalated" }),
+    ]);
+  });
+
+  it("live: any other failure falls back to the account's own model", async () => {
+    envMock.DECISION_MODEL_LIVE = "thread-status";
+    envMock.DECISION_ESCALATION_MODEL = "litellm:deepseek-v4-flash";
+    const account = getEmailAccount();
+    const fallback = vi.fn(async () => "llm");
+
+    await route(async () => {
+      throw new Error("provider down");
+    }, fallback);
+
+    expect(fallback.mock.calls[0][0].user.aiModel).toBe(account.user.aiModel);
+    expect(recorded()).toEqual([
+      expect.objectContaining({ mode: "live", outcome: "fallback" }),
+    ]);
+  });
+
+  it("a feature not listed in DECISION_MODEL_LIVE stays in shadow", async () => {
+    envMock.DECISION_MODEL_LIVE = "thread-status";
+
+    const result = await route(
+      async () => "decided",
+      async () => "llm",
+      "recurring-pattern",
+    );
 
     expect(result).toBe("llm");
-    expect(decide).not.toHaveBeenCalled();
-    expect(fallback).toHaveBeenCalledOnce();
   });
 });
 
