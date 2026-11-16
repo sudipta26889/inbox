@@ -143,7 +143,7 @@ export async function sendEmailWithHtml(
     bcc: proposed.bcc,
     replyTo: proposed.replyTo,
     subject: proposed.subject,
-    bodyText: toPlainText(proposed.messageHtml, sendLogger),
+    bodyHtml: proposed.messageHtml,
     attachments: mailerAttachmentInfo(proposed.attachments),
     forwardedAttachments: mailerAttachmentInfo(forwardedAttachments),
     threadId: proposed.replyToEmail?.threadId,
@@ -257,6 +257,11 @@ export async function replyToEmail(
     bcc: options?.bcc,
     subject: formatReplySubject(message.headers.subject),
   };
+  const { html: proposedHtml } = createReplyContent({
+    textContent: reply,
+    htmlContent: renderReplyBodyHtml(reply),
+    message,
+  });
   const edits = await requireSendApproval({
     operation: "reply_email",
     provider: "gmail",
@@ -264,22 +269,17 @@ export async function replyToEmail(
     ...proposed,
     from,
     replyTo: options?.replyTo,
-    bodyText: reply,
+    bodyHtml: proposedHtml,
     attachments: mailerAttachmentInfo(options?.attachments),
     threadId: message.threadId,
     isReply: true,
   });
-  const replyText = edits.bodyText ?? reply;
-
-  const { html } = createReplyContent({
-    textContent: replyText,
-    htmlContent: renderReplyBodyHtml(replyText),
-    message,
-  });
-  const messageText = buildReplyMessageText({
-    textContent: replyText,
-    message,
-  });
+  // An edited body keeps the quote; its text part follows the edited HTML.
+  const html = edits.bodyHtml ?? proposedHtml;
+  const messageText =
+    edits.bodyHtml === undefined
+      ? buildReplyMessageText({ textContent: reply, message })
+      : toPlainText(edits.bodyHtml, logger);
 
   const raw = await createRawMailMessage({
     to: edits.to ?? proposed.to,
@@ -335,6 +335,10 @@ export async function forwardEmail(
     content: options.content ?? "",
     message,
   });
+  const forwardHtml = forwardEmailHtml({
+    content: options.content ?? "",
+    message,
+  });
   const edits = await requireSendApproval({
     operation: "forward_email",
     provider: "gmail",
@@ -344,7 +348,7 @@ export async function forwardEmail(
     cc: options.cc,
     bcc: options.bcc,
     subject: forwardEmailSubject(message.headers.subject),
-    bodyText: forwardText,
+    bodyHtml: forwardHtml,
     forwardedAttachments: [
       ...(message.attachments ?? []),
       ...(message.inline ?? []),
@@ -387,12 +391,12 @@ export async function forwardEmail(
     cc: edits.cc ?? options.cc,
     bcc: edits.bcc ?? options.bcc,
     subject: edits.subject ?? forwardEmailSubject(message.headers.subject),
-    // An edited forward sends exactly the text the reviewer approved.
-    messageText: edits.bodyText ?? forwardText,
-    messageHtml:
-      edits.bodyText !== undefined
-        ? textToHtmlParagraphs(edits.bodyText)
-        : forwardEmailHtml({ content: options.content ?? "", message }),
+    // An edited forward keeps the forwarded message below the new text.
+    messageText:
+      edits.bodyHtml === undefined
+        ? forwardText
+        : toPlainText(edits.bodyHtml, logger),
+    messageHtml: edits.bodyHtml ?? forwardHtml,
     replyToEmail: {
       threadId: message.threadId || "",
       references: "",

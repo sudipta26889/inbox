@@ -4,11 +4,14 @@ import { type DharaHILDecision, dharahilClient } from "@/utils/dharahil/client";
 import { createScopedLogger } from "@/utils/logger";
 import { isApprovalGateRequired } from "@/utils/dharahil/required";
 import { extractEmailAddress, extractEmailAddresses } from "@/utils/email";
-import { convertOutgoingEmailHtmlToText } from "@/utils/mail";
 import { SafeError } from "@/utils/error";
 import prisma from "@/utils/prisma";
 import { redis } from "@/utils/redis";
 import { textToHtmlParagraphs } from "@/utils/string";
+import {
+  cardBodyFromHtml,
+  rebuildHtmlWithEditedBody,
+} from "@/utils/mail/card-body";
 import { scheduleEmailBody } from "@/utils/actions/scheduled-email.validation";
 import { MAIL_MUTATION_RETRY_WINDOW_MS } from "@/utils/email/send-operation-policy";
 import type { SendEmailBody } from "@/utils/types/mail";
@@ -45,6 +48,11 @@ export type SendApprovalRequest = {
   subject?: string;
   /** Plain-text body, shown in full so the reviewer approves what is sent. */
   bodyText?: string;
+  /**
+   * The HTML that will be sent. Takes precedence over bodyText: the card shows
+   * the authored part as Markdown and keeps the signature and quote intact.
+   */
+  bodyHtml?: string;
   /** Files this send carries (payload or mailbox draft). */
   attachments?: AttachmentInfo[];
   /** Files a forward copies from its (immutable) source message. */
@@ -75,6 +83,8 @@ export type SendEdits = {
   bcc?: string;
   subject?: string;
   bodyText?: string;
+  /** The full HTML to send: edited body, original signature and quote. */
+  bodyHtml?: string;
 };
 
 /**
@@ -303,8 +313,8 @@ export function applySendEdits<
     ...(edits.cc !== undefined && { cc: edits.cc }),
     ...(edits.bcc !== undefined && { bcc: edits.bcc }),
     ...(edits.subject !== undefined && { subject: edits.subject }),
-    ...(edits.bodyText !== undefined && {
-      messageHtml: textToHtmlParagraphs(edits.bodyText),
+    ...(editedHtml(edits) !== undefined && {
+      messageHtml: editedHtml(edits),
     }),
   };
 }
@@ -327,6 +337,7 @@ export type DraftSnapshot = {
   bcc?: string;
   subject?: string;
   bodyText?: string;
+  bodyHtml?: string;
   attachments: AttachmentInfo[];
   threadId?: string;
 };
@@ -382,20 +393,9 @@ export async function approveDraftSend({
     cc: edits.cc,
     bcc: edits.bcc,
     subject: edits.subject,
-    messageHtml:
-      edits.bodyText === undefined
-        ? undefined
-        : textToHtmlParagraphs(edits.bodyText),
+    messageHtml: editedHtml(edits),
   });
   return before;
-}
-
-export function htmlPreviewText(html: string): string | undefined {
-  try {
-    return convertOutgoingEmailHtmlToText(html);
-  } catch {
-    return;
-  }
 }
 
 /**
@@ -446,7 +446,12 @@ async function askReviewer(request: SendApprovalRequest): Promise<SendEdits> {
   logger.trace("DharaHIL: send details", { to, subject });
 
   const external = isExternalDomain(to);
-  const body = request.bodyText ?? "";
+  const card =
+    request.bodyHtml !== undefined
+      ? cardBodyFromHtml(request.bodyHtml)
+      : { body: request.bodyText ?? "" };
+  // The cap counts only what the user wrote, not the signature or quote.
+  const body = card.body;
   const bodyTruncated = body.length > CARD_BODY_MAX_CHARS;
 
   const toolArgs = {
@@ -461,6 +466,8 @@ async function askReviewer(request: SendApprovalRequest): Promise<SendEdits> {
       ? `[preview: full body is ${body.length} characters; body edits are disabled]\n\n${body.slice(0, CARD_BODY_MAX_CHARS)}`
       : body,
     ...(bodyTruncated && { bodyTruncated: true, bodyLength: body.length }),
+    ...(card.signature && { signature: card.signature }),
+    ...(card.quotedHistory && { quoted_history: card.quotedHistory }),
     ...(request.attachments?.length && { attachments: request.attachments }),
     ...(request.forwardedAttachments?.length && {
       forwardedAttachments: request.forwardedAttachments,
@@ -500,7 +507,15 @@ async function askReviewer(request: SendApprovalRequest): Promise<SendEdits> {
     throw new SendNotApprovedError(notApprovedMessage(decision));
   }
 
-  const edits = editsFrom(toolArgs, decision, bodyTruncated);
+  const { bodyHtml } = request;
+  const edits = editsFrom(
+    toolArgs,
+    decision,
+    bodyTruncated,
+    bodyHtml === undefined
+      ? undefined
+      : (markdown) => rebuildHtmlWithEditedBody(bodyHtml, markdown),
+  );
 
   logger.info("DharaHIL: outbound send approved", {
     operation,
@@ -514,6 +529,8 @@ function editsFrom(
   proposed: Record<string, unknown>,
   decision: DharaHILDecision,
   bodyTruncated: boolean,
+  /** Turns the edited Markdown back into the full HTML, for HTML cards. */
+  rebuildHtml?: (markdown: string) => string,
 ): SendEdits {
   const approved = decision.approvedArgs;
   if (!approved) return {};
@@ -526,6 +543,10 @@ function editsFrom(
   if (changed("from") || changed("mailbox"))
     throw new SendNotApprovedError(
       "Email not sent: the sender can't be changed on the approval card.",
+    );
+  if (changed("signature") || changed("quoted_history"))
+    throw new SendNotApprovedError(
+      "Email not sent: the signature and quoted messages can't be edited on the card.",
     );
   const other = Object.keys({ ...proposed, ...approved }).filter(
     (key) =>
@@ -552,8 +573,9 @@ function editsFrom(
         `Email not sent: the edited ${key} is not text.`,
       );
     const text = typeof value === "string" ? value : "";
-    if (key === "body") edits.bodyText = text;
-    else edits[key] = text;
+    if (key !== "body") edits[key] = text;
+    else if (rebuildHtml) edits.bodyHtml = rebuildHtml(text);
+    else edits.bodyText = text;
   }
   // An edited recipient list that parses to nothing must never fall back to
   // the original recipients. An emptied cc/bcc is a deliberate removal.
@@ -567,6 +589,11 @@ function editsFrom(
       );
   }
   return edits;
+}
+
+function editedHtml(edits: SendEdits) {
+  if (edits.bodyHtml !== undefined) return edits.bodyHtml;
+  if (edits.bodyText !== undefined) return textToHtmlParagraphs(edits.bodyText);
 }
 
 function notApprovedMessage(decision: DharaHILDecision) {

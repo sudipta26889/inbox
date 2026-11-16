@@ -274,6 +274,73 @@ describe("every provider send asks first and sends what was approved", () => {
     });
   });
 
+  describe("body edits keep the quote and formatting", () => {
+    it("gmail reply: the gmail_quote is sent unchanged after a body edit", async () => {
+      approve();
+      const unedited = fakeGmail();
+      await gmailSends.replyToEmail(unedited);
+      const originalHtml = htmlPart(sentRaw(unedited));
+      const quote = originalHtml.slice(
+        originalHtml.indexOf('<div class="gmail_quote'),
+      );
+
+      editBody(() => "Thanks, **will do**");
+      const gmail = fakeGmail();
+      await gmailSends.replyToEmail(gmail);
+
+      const html = htmlPart(sentRaw(gmail));
+      expect(html).toContain("<strong>will do</strong>");
+      expect(html.endsWith(quote)).toBe(true);
+      expect(decide.mock.calls[0][0].toolArgs.quoted_history).toContain(
+        "Original",
+      );
+    });
+
+    it("gmail forward: the forwarded message is sent unchanged after a body edit", async () => {
+      editBody(() => "FYI *see below*");
+      const gmail = fakeGmail();
+
+      await gmailSends.forwardEmail(gmail);
+
+      const html = htmlPart(sentRaw(gmail));
+      expect(html).toContain("<em>see below</em>");
+      expect(html).toContain("---------- Forwarded message ----------");
+      expect(html).toContain("<p>Original</p>");
+    });
+
+    it("outlook reply: the reply header and quote are patched unchanged after a body edit", async () => {
+      approve();
+      const unedited = fakeOutlook();
+      await outlookSends.replyToEmail(unedited);
+      const originalHtml = patchedHtml(unedited);
+      const quote = originalHtml.slice(
+        originalHtml.indexOf('<div style="border-top'),
+      );
+
+      editBody(() => "Thanks, **will do**");
+      const client = fakeOutlook();
+      await outlookSends.replyToEmail(client);
+
+      const html = patchedHtml(client);
+      expect(html).toContain("<strong>will do</strong>");
+      expect(html.endsWith(quote)).toBe(true);
+      expect(client.sent()).toHaveLength(1);
+    });
+
+    it("refuses an edit to the quoted messages and sends nothing", async () => {
+      decide.mockImplementation(async ({ toolArgs }) => ({
+        action: "APPROVED",
+        approvedArgs: { ...toolArgs, quoted_history: "rewritten" },
+      }));
+      const gmail = fakeGmail();
+
+      await expect(gmailSends.replyToEmail(gmail)).rejects.toThrow(
+        /signature and quoted messages can't be edited/,
+      );
+      expect(gmail.users.messages.send).not.toHaveBeenCalled();
+    });
+  });
+
   describe("draft sends", () => {
     it("gmail: rejects without sending", async () => {
       reject();
@@ -290,7 +357,24 @@ describe("every provider send asks first and sends what was approved", () => {
 
       await gmailSendDraft(fakeGmail(), "r-1", {});
 
-      expect(decide.mock.calls[0][0].toolArgs.body).toContain("Only HTML here");
+      expect(decide.mock.calls[0][0].toolArgs.body).toContain(
+        "Only **HTML** here",
+      );
+    });
+
+    it("gmail: a body edit on an HTML draft keeps its formatting and quote", async () => {
+      const quote =
+        '<div class="gmail_quote"><blockquote>Earlier <b>note</b></blockquote></div>';
+      draftContent.html = `<p>Send <b>today</b>, see <a href="https://x.test/a">this</a></p>${quote}`;
+      editBody((body) => body.replace("today", "tomorrow"));
+      const update = vi.fn();
+
+      await gmailSendDraft(fakeGmail(), "r-1", {}, update);
+
+      const { messageHtml } = update.mock.calls[0][0];
+      expect(messageHtml).toContain("<strong>tomorrow</strong>");
+      expect(messageHtml).toContain('<a href="https://x.test/a">this</a>');
+      expect(messageHtml.endsWith(quote)).toBe(true);
     });
 
     it("gmail: writes card edits into the draft, then sends it", async () => {
@@ -421,6 +505,42 @@ describe("send primitives live only behind the gate", () => {
 });
 
 type OutlookFake = ReturnType<typeof fakeOutlook>;
+
+function editBody(change: (body: string) => string) {
+  decide.mockImplementation(async ({ toolArgs }) => ({
+    action: "APPROVED",
+    approvedArgs: { ...toolArgs, body: change(String(toolArgs.body)) },
+  }));
+}
+
+// The text/html part of a raw MIME message, quoted-printable decoded.
+function htmlPart(raw: string) {
+  const part = raw.split(/Content-Type: text\/html[^\n]*\n/)[1] ?? "";
+  const encoded = part
+    .split(/\r?\n\r?\n/)
+    .slice(1)
+    .join("\n\n");
+  const body = encoded.split(/\r?\n--/)[0];
+  return Buffer.from(
+    body
+      .replace(/=\r?\n/g, "")
+      .replace(/=([0-9A-F]{2})/g, (_m, hex) =>
+        String.fromCharCode(Number.parseInt(hex, 16)),
+      ),
+    "latin1",
+  )
+    .toString("utf8")
+    .trim();
+}
+
+function patchedHtml(client: OutlookFake) {
+  const patch = client
+    .writes()
+    .find((body) => (body as { body?: unknown })?.body) as {
+    body: { content: string };
+  };
+  return patch.body.content;
+}
 
 function fakeGmail() {
   return {

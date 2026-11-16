@@ -3,11 +3,7 @@ import type { OutlookClient } from "@/utils/outlook/client";
 import type { Logger } from "@/utils/logger";
 import type { DraftStatus } from "@/utils/types";
 import { ensureEmailSendingEnabled } from "@/utils/mail";
-import {
-  approveDraftSend,
-  htmlPreviewText,
-  type SendGate,
-} from "@/utils/mail/send-approval";
+import { approveDraftSend, type SendGate } from "@/utils/mail/send-approval";
 import {
   isNotFoundError,
   isPreconditionFailedError,
@@ -118,11 +114,9 @@ export async function sendDraft({
         cc: joinRecipients(draft.ccRecipients),
         bcc: joinRecipients(draft.bccRecipients),
         subject: draft.subject ?? undefined,
-        // An HTML body shows as text, or as raw HTML if that conversion fails.
-        bodyText:
-          draft.body?.contentType === "html"
-            ? htmlPreviewText(content)?.trim() || content
-            : content,
+        ...(draft.body?.contentType === "html"
+          ? { bodyHtml: content }
+          : { bodyText: content }),
         attachments: (draft.attachments ?? []).map((attachment) => ({
           filename: attachment.name ?? "",
           size: attachment.size ?? undefined,

@@ -18,7 +18,6 @@ import {
   approveSendOperation,
   attachmentsForCard,
   hasSendEdits,
-  htmlPreviewText,
   recallSendApproval,
   rememberApprovedPayload,
 } from "@/utils/mail/send-approval";
@@ -587,7 +586,7 @@ async function approveScheduledSend(
     bcc: email.bcc,
     replyTo: email.replyTo,
     subject: email.subject,
-    bodyText: htmlPreviewText(email.messageHtml),
+    bodyHtml: email.messageHtml,
     loadAttachments: () => attachmentsForCard(email, getProvider),
     threadId: input.threadId ?? undefined,
     isReply: !!email.replyToEmail,
