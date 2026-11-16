@@ -30,16 +30,21 @@ describe("updateAllAccountsSelectionAction", () => {
     });
 
     expect(result?.serverError).toBeUndefined();
+    // Only owned accounts: a shared-in one keeps its owner's choice.
+    expect(prisma.emailAccount.findMany).toHaveBeenCalledWith({
+      where: { userId: "user-1" },
+      select: { id: true },
+    });
     expect(prisma.emailAccount.updateMany).toHaveBeenNthCalledWith(1, {
       where: {
-        OR: [{ userId: "user-1" }, { shares: { some: { userId: "user-1" } } }],
+        userId: "user-1",
         id: { in: ["account-1", "account-3"] },
       },
       data: { includeInAllAccounts: true },
     });
     expect(prisma.emailAccount.updateMany).toHaveBeenNthCalledWith(2, {
       where: {
-        OR: [{ userId: "user-1" }, { shares: { some: { userId: "user-1" } } }],
+        userId: "user-1",
         id: { notIn: ["account-1", "account-3"] },
       },
       data: { includeInAllAccounts: false },
@@ -79,7 +84,7 @@ describe("reorderEmailAccountsAction", () => {
     prisma.$transaction.mockResolvedValue([]);
   });
 
-  it("saves each account's new position, scoped to the user", async () => {
+  it("lists shared-in accounts for positions but only writes owned ones", async () => {
     const result = await reorderEmailAccountsAction({
       emailAccountIds: ["account-3", "account-1", "account-2"],
     });
@@ -96,10 +101,7 @@ describe("reorderEmailAccountsAction", () => {
         {
           where: {
             id: "account-3",
-            OR: [
-              { userId: "user-1" },
-              { shares: { some: { userId: "user-1" } } },
-            ],
+            userId: "user-1",
           },
           data: { sortOrder: 0 },
         },
@@ -108,10 +110,7 @@ describe("reorderEmailAccountsAction", () => {
         {
           where: {
             id: "account-1",
-            OR: [
-              { userId: "user-1" },
-              { shares: { some: { userId: "user-1" } } },
-            ],
+            userId: "user-1",
           },
           data: { sortOrder: 1 },
         },
@@ -120,10 +119,7 @@ describe("reorderEmailAccountsAction", () => {
         {
           where: {
             id: "account-2",
-            OR: [
-              { userId: "user-1" },
-              { shares: { some: { userId: "user-1" } } },
-            ],
+            userId: "user-1",
           },
           data: { sortOrder: 2 },
         },
