@@ -5,6 +5,7 @@ import {
 import { env } from "@/env";
 import { createScopedLogger } from "@/utils/logger";
 import prisma from "@/utils/prisma";
+import { accessibleEmailAccountWhere } from "@/utils/email-account-access";
 
 const logger = createScopedLogger("a2a-auth");
 
@@ -54,6 +55,24 @@ export async function authenticateA2aRequest(
 
   if (!client) {
     logger.warn("Client not found", { clientId: tokenPayload.client_id });
+    return null;
+  }
+
+  // Re-checked on every call, not only at token refresh: a revoked
+  // EmailAccountShare must stop a sharee's long-lived peer token at once.
+  if (
+    tokenPayload.email_account_id &&
+    !(await prisma.emailAccount.findFirst({
+      where: {
+        id: tokenPayload.email_account_id,
+        ...accessibleEmailAccountWhere(tokenPayload.sub),
+      },
+      select: { id: true },
+    }))
+  ) {
+    logger.warn("Caller no longer has access to the bound email account", {
+      clientId: tokenPayload.client_id,
+    });
     return null;
   }
 

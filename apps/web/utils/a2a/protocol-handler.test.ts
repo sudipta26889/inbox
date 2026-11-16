@@ -20,6 +20,7 @@ const authContext = {
   userId: "user_1",
   emailAccountId: "acct_1",
   clientId: "client_1",
+  scopes: ["email:read"],
 } as A2aAuthContext;
 
 describe("handleMessageSend — answering a message about a referenced task", () => {
@@ -135,5 +136,36 @@ describe("handleMessageSend — answering a message about a referenced task", ()
     const storedId = prisma.a2aMessage.create.mock.calls[0]?.[0]?.data?.id;
     expect(result.messageId).toBe(storedId);
     expect(answerA2aMessage).toHaveBeenCalled();
+  });
+});
+
+describe("handleMessageSend — plain-text answers need email:read", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("does not answer for a calendar-only token", async () => {
+    prisma.a2aMessage.create.mockResolvedValue({ id: "msg_1" } as any);
+
+    const result = await handleMessageSend(
+      { ...authContext, scopes: ["calendar:read"] },
+      { contextId: "ctx_1", content: "What is in my inbox?" },
+    );
+
+    expect(answerA2aMessage).not.toHaveBeenCalled();
+    expect(result).not.toHaveProperty("answer");
+  });
+
+  it("answers for a token with email:read", async () => {
+    prisma.a2aMessage.create.mockResolvedValue({ id: "msg_1" } as any);
+    vi.mocked(answerA2aMessage).mockResolvedValue("Two unread.");
+
+    const result = await handleMessageSend(
+      { ...authContext, scopes: ["email:read"] },
+      { contextId: "ctx_1", content: "What is in my inbox?" },
+    );
+
+    expect(answerA2aMessage).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({ answer: "Two unread." });
   });
 });

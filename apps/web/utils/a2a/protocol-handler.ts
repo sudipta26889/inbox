@@ -9,7 +9,7 @@ import {
   type A2aSkillDefinition,
 } from "@/utils/a2a/skill-registry";
 import type { A2aAuthContext } from "./auth";
-import { validateSkillAccess } from "./auth";
+import { hasRequiredScope, validateSkillAccess } from "./auth";
 import { A2aApprovalStatus, A2aTaskState } from "@/generated/prisma/enums";
 import { canonicalActionKey } from "@/utils/dharahil/prior-decision";
 import { publishApprovals } from "@/utils/mqtt/events";
@@ -183,6 +183,16 @@ export async function handleMessageSend(
     // a bare messageId, which is what made every plain-text message a silent
     // no-op behind an HTTP 200.
     const question = extractQuestion(content);
+
+    // Answering reads the mailbox, so it needs the same scope a read skill
+    // does. A calendar- or stats-only token gets its message stored, no answer.
+    if (question && !hasRequiredScope(authContext, "email:read")) {
+      logger.warn("Not answering A2A message: token lacks email:read", {
+        contextId,
+        clientId: authContext.clientId,
+      });
+      return { contextId, messageId };
+    }
 
     if (question) {
       try {

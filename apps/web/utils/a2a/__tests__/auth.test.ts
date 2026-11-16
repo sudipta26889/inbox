@@ -63,6 +63,10 @@ const mockAuthContext: A2aAuthContext = {
 describe("A2A Authentication", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // The caller still has access to its bound account unless a test says not.
+    (prisma.emailAccount.findFirst as any).mockResolvedValue({
+      id: "email-account-456",
+    });
   });
 
   describe("authenticateA2aRequest", () => {
@@ -74,6 +78,9 @@ describe("A2A Authentication", () => {
         type: "A2A",
       });
       (prisma.mcpServerClient.update as any).mockResolvedValue({});
+      (prisma.emailAccount.findFirst as any).mockResolvedValue({
+        id: "email-account-456",
+      });
 
       const result = await authenticateA2aRequest("Bearer valid-token-123");
 
@@ -116,6 +123,33 @@ describe("A2A Authentication", () => {
       const result = await authenticateA2aRequest("Bearer expired-token");
 
       expect(result).toBeNull();
+    });
+
+    it("refuses a sharee at once when the share was revoked", async () => {
+      // validateAccessToken only checks the token's own revocation; the
+      // mailbox access is re-checked here on every call.
+      (validateAccessToken as any).mockResolvedValue(mockTokenPayload);
+      (prisma.mcpServerClient.findUnique as any).mockResolvedValue({
+        id: "client-internal-123",
+        clientId: "client-789",
+      });
+      (prisma.emailAccount.findFirst as any).mockResolvedValue(null);
+
+      const result = await authenticateA2aRequest("Bearer sharee-token");
+
+      expect(result).toBeNull();
+      expect(prisma.emailAccount.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            id: "email-account-456",
+            OR: [
+              { userId: "user-123" },
+              { shares: { some: { userId: "user-123" } } },
+            ],
+          },
+        }),
+      );
+      expect(prisma.mcpServerClient.update).not.toHaveBeenCalled();
     });
 
     it("should reject if client not found", async () => {
