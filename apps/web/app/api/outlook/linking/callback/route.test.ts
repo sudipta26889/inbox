@@ -447,36 +447,7 @@ describe("outlook linking callback route", () => {
       reconnectEmailAccountId: "email-account-123",
       code: "valid-auth-code",
     });
-    vi.stubGlobal(
-      "fetch",
-      vi
-        .fn()
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
-            access_token: "access-token",
-            refresh_token: "refresh-token",
-            id_token: createIdToken({
-              oid: "other-object-id",
-              sub: "other-subject",
-            }),
-            scope: "Mail.ReadWrite Mail.Send MailboxSettings.ReadWrite",
-            token_type: "Bearer",
-            expires_in: 3600,
-          }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
-            id: "other-graph-id",
-            userPrincipalName: "other@example.com",
-          }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ sub: "other-subject" }),
-        }),
-    );
+    stubOtherMicrosoftIdentity();
 
     const response = await GET(
       createRequest("http://localhost:3000/api/outlook/linking/callback"),
@@ -487,6 +458,65 @@ describe("outlook linking callback route", () => {
     );
     expect(mockHandleAccountLinking).not.toHaveBeenCalled();
     expect(prisma.account.create).not.toHaveBeenCalled();
+    expect(prisma.account.update).not.toHaveBeenCalled();
+  });
+
+  it("refuses a stranger carrying the owner's reconnect state", async () => {
+    mockAuth.mockResolvedValue({
+      user: { id: "stranger" },
+      session: { emailOtp: false },
+    });
+    mockValidateOAuthCallback.mockReturnValue({
+      success: true,
+      targetUserId: "owner-user",
+      stateNonce: "state-nonce",
+      reconnectEmailAccountId: "email-account-123",
+      code: "valid-auth-code",
+    });
+    prisma.emailAccountShare.findFirst.mockResolvedValue(null);
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await GET(
+      createRequest("http://localhost:3000/api/outlook/linking/callback"),
+    );
+
+    expect(response.headers.get("location")).toContain("error=invalid_state");
+    expect(prisma.emailAccountShare.findFirst).toHaveBeenCalledWith({
+      where: {
+        userId: "stranger",
+        emailAccount: { id: "email-account-123", userId: "owner-user" },
+      },
+      select: { id: true },
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("refuses a shared user who authorised a different mailbox identity", async () => {
+    mockAuth.mockResolvedValue({
+      user: { id: "shared-user" },
+      session: { emailOtp: false },
+    });
+    mockValidateOAuthCallback.mockReturnValue({
+      success: true,
+      targetUserId: "owner-user",
+      stateNonce: "state-nonce",
+      reconnectEmailAccountId: "email-account-123",
+      code: "valid-auth-code",
+    });
+    prisma.emailAccountShare.findFirst.mockResolvedValue({
+      id: "share-1",
+    } as never);
+    stubOtherMicrosoftIdentity();
+
+    const response = await GET(
+      createRequest("http://localhost:3000/api/outlook/linking/callback"),
+    );
+
+    expect(response.headers.get("location")).toContain(
+      "error=reconnect_account_mismatch",
+    );
+    expect(mockHandleAccountLinking).not.toHaveBeenCalled();
     expect(prisma.account.update).not.toHaveBeenCalled();
   });
 
@@ -836,4 +866,37 @@ function createFetchFailedError(code: string) {
   error.cause = new AggregateError([connectError], `connect ${code}`);
 
   return error;
+}
+
+function stubOtherMicrosoftIdentity() {
+  vi.stubGlobal(
+    "fetch",
+    vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          access_token: "access-token",
+          refresh_token: "refresh-token",
+          id_token: createIdToken({
+            oid: "other-object-id",
+            sub: "other-subject",
+          }),
+          scope: "Mail.ReadWrite Mail.Send MailboxSettings.ReadWrite",
+          token_type: "Bearer",
+          expires_in: 3600,
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: "other-graph-id",
+          userPrincipalName: "other@example.com",
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ sub: "other-subject" }),
+      }),
+  );
 }

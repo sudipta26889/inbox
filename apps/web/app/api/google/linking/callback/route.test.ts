@@ -342,6 +342,35 @@ describe("google linking callback route", () => {
     expect(mockGetToken).not.toHaveBeenCalled();
   });
 
+  it("refuses a shared user who authorised a different mailbox identity", async () => {
+    mockAuth.mockResolvedValue({
+      user: { id: "shared-user" },
+      session: { emailOtp: false },
+    });
+    mockValidateOAuthCallback.mockReturnValue({
+      success: true,
+      targetUserId: "owner-user",
+      stateNonce: "state-nonce",
+      code: "valid-auth-code",
+      reconnectEmailAccountId: "mailbox-1",
+    });
+    prisma.emailAccountShare.findFirst.mockResolvedValue({
+      id: "share-1",
+    } as never);
+    // The authorised identity maps to no existing account, so not to mailbox-1.
+    prisma.account.findUnique.mockResolvedValue(null);
+
+    const response = await GET(
+      createRequest("http://localhost:3000/api/google/linking/callback"),
+    );
+
+    expect(response.headers.get("location")).toContain(
+      "error=reconnect_account_mismatch",
+    );
+    expect(mockHandleAccountLinking).not.toHaveBeenCalled();
+    expect(prisma.account.update).not.toHaveBeenCalled();
+  });
+
   it("lets a shared user reconnect the owner's mailbox", async () => {
     mockAuth.mockResolvedValue({
       user: { id: "shared-user" },
