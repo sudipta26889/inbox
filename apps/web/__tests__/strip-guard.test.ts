@@ -117,6 +117,14 @@ describe("strip guard", () => {
     expect(hits).toEqual([]);
   });
 
+  it("has no upstream founder email address, env defaults included", () => {
+    const hits = [...files, join(WEB_ROOT, "env.ts")]
+      .filter((file) => readFileSync(file, "utf8").includes("elie@"))
+      .map((file) => relative(REPO_ROOT, file));
+
+    expect(hits).toEqual([]);
+  });
+
   it("names the product Inbox by default", () => {
     const envSource = readFileSync(join(WEB_ROOT, "env.ts"), "utf8");
 
