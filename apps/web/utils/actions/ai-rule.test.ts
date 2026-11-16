@@ -253,6 +253,13 @@ describe("runRulesAction", () => {
 
     expect(result?.data).toHaveLength(1);
     expect(prisma.executedRule.findMany).not.toHaveBeenCalled();
+    expect(prisma.executedRule.deleteMany).toHaveBeenCalledWith({
+      where: {
+        emailAccountId: "account-1",
+        threadId: "thread-1",
+        messageId: "message-1",
+      },
+    });
     expect(runRulesMock).toHaveBeenCalledTimes(1);
   });
 

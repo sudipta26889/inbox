@@ -85,7 +85,9 @@ export const updateAiSettingsAction = actionClientUser
         nextAiApiKey =
           existingUser.aiProvider === aiProvider ? existingUser.aiApiKey : null;
 
-        if (!nextAiApiKey) {
+        // The LiteLLM gateway can run on the deployment's key, so a blank
+        // per-user key is allowed there.
+        if (!nextAiApiKey && aiProvider !== Provider.LITELLM) {
           throw new SafeError("You must provide an API key for this provider");
         }
       }

@@ -38,6 +38,16 @@ export const saveAiSettingsBody = z.object({
   ]),
   aiModel: z.string(),
   aiApiKey: z.string().optional(),
+}).superRefine((val, ctx) => {
+  // An empty model saved with a provider fails every request later, so
+  // reject it on save.
+  if (val.aiProvider !== DEFAULT_PROVIDER && !val.aiModel.trim()) {
+    ctx.addIssue({
+      code: "custom",
+      message: "You must pick a model for this provider",
+      path: ["aiModel"],
+    });
+  }
 });
 export type SaveAiSettingsBody = z.infer<typeof saveAiSettingsBody>;
 

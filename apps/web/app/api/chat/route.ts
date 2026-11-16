@@ -213,6 +213,8 @@ export const POST = withEmailAccount("chat", async (request) => {
     );
 
     const conversationUiMessages = [
+      // A stream that crashed mid-turn can leave a stored tool call with no
+      // result; the SDK then rejects every later turn of this chat.
       ...convertToUIMessages({
         ...chat,
         messages: messagesForModel.map((m) =>
@@ -220,7 +222,9 @@ export const POST = withEmailAccount("chat", async (request) => {
             ? withMailViewNote(m, getStoredMailView(m.metadata))
             : m,
         ),
-      }),
+      }).map((m) =>
+        m.role === "assistant" ? removeIncompleteToolParts(m) : m,
+      ),
       withMailViewNote(message, mailViewChange),
     ];
 
