@@ -387,6 +387,38 @@ describe("backfillTaskpilotLinks", () => {
     });
   });
 
+  describe("with a pinned project", () => {
+    it("skips an item in another project without calling TaskPilot or marking it done", async () => {
+      getConfig.mockResolvedValue({
+        apiKey: "tk",
+        workspaceSlug: "acme",
+        projectId: "pin-project",
+      });
+      findRows(row("r1", "issue-1")); // project p1, not the pin
+
+      const result = await run({ maxTotal: 5 });
+
+      expect(result).toMatchObject({ checked: 1, skipped: 1, added: 0 });
+      expect(getTask).not.toHaveBeenCalled();
+      expect(addLink).not.toHaveBeenCalled();
+      expect(redisMock.sadd).not.toHaveBeenCalled();
+    });
+
+    it("still backfills an item in the pinned project", async () => {
+      getConfig.mockResolvedValue({
+        apiKey: "tk",
+        workspaceSlug: "acme",
+        projectId: "p1",
+      });
+      findRows(row("r1", "issue-1"));
+
+      const result = await run();
+
+      expect(result).toMatchObject({ added: 1, skipped: 0 });
+      expect(redisMock.sadd).toHaveBeenCalledWith(DONE_KEY, "r1");
+    });
+  });
+
   it("counts a row whose TaskPilot client cannot be built as failed and moves on", async () => {
     findRows(row("r1", "issue-1"));
     getConfig.mockRejectedValue(new Error("not configured"));

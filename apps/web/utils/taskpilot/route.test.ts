@@ -48,9 +48,21 @@ vi.mock("@/utils/taskpilot/cache", () => ({
     getMembers: vi.fn().mockResolvedValue([]),
   },
 }));
+vi.mock("@/utils/taskpilot/service", () => ({
+  commitTask: vi.fn(),
+}));
+const { clientMock } = vi.hoisted(() => ({
+  clientMock: {
+    addComment: vi.fn(),
+    moveTask: vi.fn(),
+    updateTask: vi.fn(),
+    listStates: vi.fn(),
+    listMembers: vi.fn(),
+  },
+}));
 vi.mock("@/utils/taskpilot/client", () => ({
   TaskpilotClient: vi.fn().mockImplementation(function () {
-    return {};
+    return clientMock;
   }),
 }));
 
@@ -63,6 +75,7 @@ import {
 import { findSimilarTasksTopK } from "@/utils/taskpilot/similar";
 import { decidePass1 } from "@/utils/taskpilot/decide";
 import { hydrateCandidates } from "@/utils/taskpilot/hydrate";
+import { commitTask } from "@/utils/taskpilot/service";
 
 const baseInput = {
   userId: "u1",
@@ -220,5 +233,280 @@ describe("maybeRouteToTaskPilot pre-gate", () => {
       -1,
     )[0].data;
     expect(lastUpdate.status).toBe("LLM_FAILED");
+  });
+});
+
+describe("maybeRouteToTaskPilot with a pinned project", () => {
+  const PIN = "pin-project";
+  const OTHER = "other-project";
+
+  const candidate = (issueId: string, projectId: string) => ({
+    projectId,
+    taskpilotIssueId: issueId,
+    taskpilotIdentifier: `X-${issueId}`,
+    workspaceSlug: "ws",
+    score: 0.9,
+    detail: {
+      id: issueId,
+      identifier: `X-${issueId}`,
+      name: "t",
+      description_html: "",
+      state: { id: "s", name: "n", group: "started" },
+      priority: "medium",
+      assignees: [],
+      labels: [],
+    },
+    recentComments: [],
+  });
+
+  const ignoreDecision = {
+    ok: true,
+    decision: { action: "IGNORE", reason: "no action" },
+    model: "m",
+    effort: "low",
+    durationMs: 0,
+    usage: null,
+  };
+
+  const workspaceProjects = [
+    { id: PIN, identifier: "PIN", name: "Pinned" },
+    { id: OTHER, identifier: "OTH", name: "Other" },
+  ];
+
+  const decisionUpdates = () =>
+    (prisma.taskpilotDecision.update as any).mock.calls.map(
+      (call: any[]) => call[0].data,
+    );
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (prisma.emailTaskLink.findFirst as any).mockResolvedValue(null);
+    (prisma.taskpilotDecision.findFirst as any).mockResolvedValue(null);
+    (prisma.taskpilotDecision.create as any).mockResolvedValue({ id: "d1" });
+    (prisma.taskpilotDecision.update as any).mockResolvedValue({});
+    (findSimilarTasksTopK as any).mockResolvedValue([]);
+    (getTaskpilotConfigStatus as any).mockResolvedValue({
+      configured: true,
+      projectId: PIN,
+    });
+    (getTaskpilotConfigForUser as any).mockResolvedValue({
+      apiKey: "k",
+      workspaceSlug: "ws",
+      projectId: PIN,
+    });
+    (taskpilotCache.getProjects as any).mockResolvedValue(workspaceProjects);
+    (taskpilotCache.getLabels as any).mockResolvedValue([]);
+    (decidePass1 as any).mockResolvedValue(ignoreDecision);
+  });
+
+  it("gives the decider only candidates from the pinned project", async () => {
+    (hydrateCandidates as any).mockResolvedValue([
+      candidate("in-pin", PIN),
+      candidate("elsewhere", OTHER),
+    ]);
+
+    await maybeRouteToTaskPilot({ ...baseInput, canCreate: true });
+
+    const args = (decidePass1 as any).mock.calls[0][0];
+    expect(args.candidates.map((c: any) => c.taskpilotIssueId)).toEqual([
+      "in-pin",
+    ]);
+    expect(
+      decisionUpdates().find((d: any) => d.candidateIssueIds).candidateIssueIds,
+    ).toEqual(["in-pin"]);
+  });
+
+  it("offers the decider only the pinned project", async () => {
+    (hydrateCandidates as any).mockResolvedValue([]);
+
+    await maybeRouteToTaskPilot({ ...baseInput, canCreate: true });
+
+    const args = (decidePass1 as any).mock.calls[0][0];
+    expect(args.projects.map((p: any) => p.id)).toEqual([PIN]);
+    expect(Object.keys(args.labelsByProject)).toEqual([PIN]);
+  });
+
+  it("rejects a CREATE draft for another project and writes nothing to TaskPilot", async () => {
+    (hydrateCandidates as any).mockResolvedValue([]);
+    (decidePass1 as any).mockResolvedValue({
+      ...ignoreDecision,
+      decision: {
+        action: "CREATE",
+        reason: "r",
+        draft: {
+          projectId: OTHER,
+          title: "t",
+          descriptionHtml: "<p>x</p>",
+          priority: "medium",
+          labelNames: [],
+          targetDate: null,
+        },
+      },
+    });
+
+    await maybeRouteToTaskPilot({ ...baseInput, canCreate: true });
+
+    expect(commitTask).not.toHaveBeenCalled();
+    expect(decisionUpdates().some((d: any) => d.status === "DOWNGRADED")).toBe(
+      true,
+    );
+  });
+
+  it("accepts a CREATE draft for the pinned project", async () => {
+    (hydrateCandidates as any).mockResolvedValue([]);
+    (commitTask as any).mockResolvedValue({ taskpilotIssueId: "new-1" });
+    (decidePass1 as any).mockResolvedValue({
+      ...ignoreDecision,
+      decision: {
+        action: "CREATE",
+        reason: "r",
+        draft: {
+          projectId: PIN,
+          title: "t",
+          descriptionHtml: "<p>x</p>",
+          priority: "medium",
+          labelNames: [],
+          targetDate: null,
+        },
+      },
+    });
+
+    await maybeRouteToTaskPilot({ ...baseInput, canCreate: true });
+
+    expect(commitTask).toHaveBeenCalledTimes(1);
+  });
+
+  it("records an error and does nothing when the pin is not in the workspace", async () => {
+    (taskpilotCache.getProjects as any).mockResolvedValue([
+      { id: OTHER, identifier: "OTH", name: "Other" },
+    ]);
+    (hydrateCandidates as any).mockResolvedValue([]);
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await maybeRouteToTaskPilot({ ...baseInput, canCreate: true });
+
+    expect(decidePass1).not.toHaveBeenCalled();
+    expect(commitTask).not.toHaveBeenCalled();
+    expect(hydrateCandidates).not.toHaveBeenCalled();
+    expect(decisionUpdates()).toContainEqual({
+      status: "TASKPILOT_FAILED",
+      errorMsg: "pinned TaskPilot project not found in workspace",
+    });
+    expect(
+      errorLog.mock.calls.map((call) => String(call[0])).join("\n"),
+    ).toContain("pinned TaskPilot project not found in workspace");
+  });
+
+  it("checks the pin even when the email cannot create tasks", async () => {
+    (taskpilotCache.getProjects as any).mockResolvedValue([]);
+    (findSimilarTasksTopK as any).mockResolvedValue([
+      { projectId: PIN, taskpilotIssueId: "i", score: 0.9 },
+    ]);
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await maybeRouteToTaskPilot({ ...baseInput, canCreate: false });
+
+    expect(decidePass1).not.toHaveBeenCalled();
+  });
+
+  it("searches similar tasks inside the pinned project only", async () => {
+    (hydrateCandidates as any).mockResolvedValue([]);
+
+    await maybeRouteToTaskPilot({ ...baseInput, canCreate: true });
+
+    expect((findSimilarTasksTopK as any).mock.calls[0][4]).toBe(PIN);
+  });
+
+  it("ignores a thread link into another project before the pre-gate", async () => {
+    (prisma.emailTaskLink.findFirst as any)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        taskpilotIssueId: "iss-x",
+        taskpilotIdentifier: "OTH-1",
+        workspaceSlug: "ws",
+        projectId: OTHER,
+      });
+
+    await maybeRouteToTaskPilot({ ...baseInput, canCreate: false });
+
+    // With the link ignored, nothing opens the pre-gate.
+    expect(decidePass1).not.toHaveBeenCalled();
+    const row = (prisma.taskpilotDecision.create as any).mock.calls[0][0].data;
+    expect(row.preGateInvoked).toBe(false);
+    expect(row.preGateSignals.hasThreadLink).toBe(false);
+  });
+
+  it("keeps a thread link into the pinned project", async () => {
+    (prisma.emailTaskLink.findFirst as any)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        taskpilotIssueId: "iss-1",
+        taskpilotIdentifier: "PIN-1",
+        workspaceSlug: "ws",
+        projectId: PIN,
+      });
+    (hydrateCandidates as any).mockResolvedValue([candidate("iss-1", PIN)]);
+
+    await maybeRouteToTaskPilot({ ...baseInput, canCreate: false });
+
+    expect(decidePass1).toHaveBeenCalled();
+  });
+
+  it("does nothing to TaskPilot when the decider names another project's issue", async () => {
+    (hydrateCandidates as any).mockResolvedValue([
+      candidate("in-pin", PIN),
+      candidate("elsewhere", OTHER),
+    ]);
+    (decidePass1 as any).mockResolvedValue({
+      ...ignoreDecision,
+      decision: {
+        action: "COMMENT_ON",
+        reason: "r",
+        targetIssueIds: ["elsewhere"],
+        comment: { summary: "s", highlights: [] },
+        stateGroup: "completed",
+        stateConfidence: "HIGH",
+        fieldUpdatesNeeded: true,
+      },
+    });
+
+    await maybeRouteToTaskPilot({ ...baseInput, canCreate: true });
+
+    expect(clientMock.addComment).not.toHaveBeenCalled();
+    expect(clientMock.moveTask).not.toHaveBeenCalled();
+    expect(clientMock.updateTask).not.toHaveBeenCalled();
+    expect(decisionUpdates().some((d: any) => d.status === "DOWNGRADED")).toBe(
+      true,
+    );
+  });
+
+  it("fetches the workspace projects once", async () => {
+    (hydrateCandidates as any).mockResolvedValue([]);
+
+    await maybeRouteToTaskPilot({ ...baseInput, canCreate: true });
+
+    expect(taskpilotCache.getProjects).toHaveBeenCalledTimes(1);
+  });
+
+  it("behaves as before with no pin: every project and candidate is kept", async () => {
+    (getTaskpilotConfigStatus as any).mockResolvedValue({
+      configured: true,
+      projectId: null,
+    });
+    (getTaskpilotConfigForUser as any).mockResolvedValue({
+      apiKey: "k",
+      workspaceSlug: "ws",
+      projectId: null,
+    });
+    (hydrateCandidates as any).mockResolvedValue([
+      candidate("a", PIN),
+      candidate("b", OTHER),
+    ]);
+
+    await maybeRouteToTaskPilot({ ...baseInput, canCreate: true });
+
+    const args = (decidePass1 as any).mock.calls[0][0];
+    expect(args.candidates).toHaveLength(2);
+    expect(args.projects.map((p: any) => p.id)).toEqual([PIN, OTHER]);
   });
 });

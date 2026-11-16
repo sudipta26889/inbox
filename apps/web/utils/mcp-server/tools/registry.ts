@@ -1765,7 +1765,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
   admin_account_get: {
     name: "admin_account_get",
     description:
-      "Read the bound email account's non-credential profile (name, about, signature, timezone, calendarBookingLink, role) plus read-only fields (id, email, image, createdAt, updatedAt). Also returns taskpilot: { configured, workspaceSlug } indicating whether TaskPilot integration is set up and the workspace slug (the raw API key is never returned). Never returns API keys, webhooks, MCP client registration, AI model, premium, or any subsystem-owned setting (cold-email, digest, reply-tracker, follow-ups, categorization, drafting, persona, writingStyle, behavior, meeting briefings).",
+      "Read the bound email account's non-credential profile (name, about, signature, timezone, calendarBookingLink, role) plus read-only fields (id, email, image, createdAt, updatedAt). Also returns taskpilot: { configured, workspaceSlug, projectId } indicating whether TaskPilot integration is set up, the workspace slug and the pinned project id, if any (the raw API key is never returned). Never returns API keys, webhooks, MCP client registration, AI model, premium, or any subsystem-owned setting (cold-email, digest, reply-tracker, follow-ups, categorization, drafting, persona, writingStyle, behavior, meeting briefings).",
     inputSchema: {
       type: "object",
       properties: {},
@@ -1881,7 +1881,7 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
   admin_account_update: {
     name: "admin_account_update",
     description:
-      "Update non-credential profile fields on the bound email account. Accepts ONLY: name, about, signature, timezone (IANA), calendarBookingLink (http(s) URL), role. Also accepts taskpilotApiKey (string, nullable) and taskpilotWorkspaceSlug (alphanumeric/dash, max 100 chars, nullable) — these two must always be set or cleared together; the API key is encrypted at rest and is never echoed back. Unknown fields — including apiKey, webhookUrl, mcpClient*, aiModel/aiProvider/aiApiKey, premium*, coldEmail*, writingStyle, behaviorProfile, personaAnalysis, digestSchedule, follow-up flags, and provider sync state — are rejected with VALIDATION_ERROR and the row is unchanged.",
+      "Update non-credential profile fields on the bound email account. Accepts ONLY: name, about, signature, timezone (IANA), calendarBookingLink (http(s) URL), role. Also accepts taskpilotApiKey (string, nullable) and taskpilotWorkspaceSlug (alphanumeric/dash, max 100 chars, nullable) — these two must always be set or cleared together; the API key is encrypted at rest and is never echoed back. taskpilotProjectId (UUID, nullable) limits TaskPilot work to one project and is set independently of those two. Unknown fields — including apiKey, webhookUrl, mcpClient*, aiModel/aiProvider/aiApiKey, premium*, coldEmail*, writingStyle, behaviorProfile, personaAnalysis, digestSchedule, follow-up flags, and provider sync state — are rejected with VALIDATION_ERROR and the row is unchanged.",
     inputSchema: {
       type: "object",
       properties: {
@@ -1920,6 +1920,11 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
           type: ["string", "null"],
           description:
             "TaskPilot workspace slug (alphanumeric and hyphens, max 100 chars). Must be set or cleared together with taskpilotApiKey.",
+        },
+        taskpilotProjectId: {
+          type: ["string", "null"],
+          description:
+            "UUID; limits TaskPilot work to this project; independent of key/slug",
         },
       },
       additionalProperties: false,

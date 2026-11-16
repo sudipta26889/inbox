@@ -12,6 +12,7 @@ import { decidePass1, decidePass2 } from "@/utils/taskpilot/decide";
 import { hydrateCandidates } from "@/utils/taskpilot/hydrate";
 import { reindexTask } from "@/utils/taskpilot/reindex";
 import { commitTask } from "@/utils/taskpilot/service";
+import { filterToPin } from "@/utils/taskpilot/pin";
 import { findSimilarTasksTopK } from "@/utils/taskpilot/similar";
 import type { Pass1Decision } from "@/utils/taskpilot/schemas";
 import type { CreateTaskDraft, RichCandidate } from "@/utils/taskpilot/types";
@@ -81,7 +82,8 @@ export async function maybeRouteToTaskPilot(input: RouteInput): Promise<void> {
     if (!status.configured) return;
 
     // Step 1: pre-gate signals — thread link, semantic similarity, canCreate.
-    const threadLinkRow = input.threadId
+    const pin = status.projectId ?? null;
+    const latestThreadLink = input.threadId
       ? await prisma.emailTaskLink.findFirst({
           where: {
             emailAccountId: input.emailAccountId,
@@ -90,6 +92,12 @@ export async function maybeRouteToTaskPilot(input: RouteInput): Promise<void> {
           orderBy: { createdAt: "desc" },
         })
       : null;
+    // A thread already linked to another project's task must not pull that
+    // project in: ignored here, before it can open the pre-gate.
+    const threadLinkRow =
+      latestThreadLink && (!pin || latestThreadLink.projectId === pin)
+        ? latestThreadLink
+        : null;
 
     const embedText = [
       input.email.subject,
@@ -102,6 +110,7 @@ export async function maybeRouteToTaskPilot(input: RouteInput): Promise<void> {
       embedText,
       MAX_CANDIDATES,
       env.TASKPILOT_PREGATE_RECALL_THRESHOLD,
+      pin,
     );
 
     const preGateInvoke =
@@ -211,9 +220,35 @@ async function runLive(
 ): Promise<void> {
   const config = await getTaskpilotConfigForUser(input.userId);
   const client = new TaskpilotClient(config);
+  const pin = config.projectId;
+
+  // Fetched once: the pin check and the creation choices both need it.
+  const workspaceProjects =
+    pin || input.canCreate
+      ? await taskpilotCache.getProjects(input.userId, () =>
+          client.listProjects(),
+        )
+      : [];
+
+  // A pinned project that is not in the workspace means there is nowhere
+  // allowed to read or write: stop before touching anything.
+  if (pin && !workspaceProjects.some((p) => p.id === pin)) {
+    logger.error("route: pinned TaskPilot project not found in workspace", {
+      projectId: pin,
+      workspaceSlug: config.workspaceSlug,
+    });
+    await prisma.taskpilotDecision.update({
+      where: { id: decisionId },
+      data: {
+        status: "TASKPILOT_FAILED",
+        errorMsg: PINNED_PROJECT_MISSING,
+      },
+    });
+    return;
+  }
 
   // Step 3: hydrate candidates (thread-link + semantic hits).
-  const candidates = await hydrateCandidates(
+  const hydrated = await hydrateCandidates(
     client,
     similar,
     threadLinkRow
@@ -226,11 +261,10 @@ async function runLive(
       : null,
     { maxCandidates: MAX_CANDIDATES, commentLimit: COMMENT_LIMIT_FOR_PASS1 },
   );
+  const candidates = filterToPin(hydrated, pin, (c) => c.projectId);
 
   const projects = input.canCreate
-    ? await taskpilotCache.getProjects(input.userId, () =>
-        client.listProjects(),
-      )
+    ? filterToPin(workspaceProjects, pin, (p) => p.id)
     : [];
   const labelsByProject: Record<
     string,
@@ -290,7 +324,7 @@ async function runLive(
   const ctx = {
     canCreate: input.canCreate,
     candidateIssueIds: new Set(candidates.map((c) => c.taskpilotIssueId)),
-    projectIds: new Set(projects.map((p) => p.id)),
+    projectIds: pin ? new Set([pin]) : new Set(projects.map((p) => p.id)),
     projectLabels: new Map(
       Object.entries(labelsByProject).map(([k, v]) => [
         k,
@@ -350,7 +384,7 @@ async function runShadow(
   // Shadow mode: run Pass 1 to populate audit row, skip all TaskPilot mutations.
   const config = await getTaskpilotConfigForUser(input.userId);
   const client = new TaskpilotClient(config);
-  const candidates = await hydrateCandidates(
+  const hydrated = await hydrateCandidates(
     client,
     similar,
     threadLinkRow
@@ -362,6 +396,11 @@ async function runShadow(
         }
       : null,
     { maxCandidates: MAX_CANDIDATES, commentLimit: COMMENT_LIMIT_FOR_PASS1 },
+  );
+  const candidates = filterToPin(
+    hydrated,
+    config.projectId,
+    (c) => c.projectId,
   );
 
   const pass1 = await decidePass1({
@@ -693,3 +732,6 @@ function buildCommentHtml(
     `<p><a href="${safe(deepLink)}">View in Inbox</a></p>`
   );
 }
+
+const PINNED_PROJECT_MISSING =
+  "pinned TaskPilot project not found in workspace";

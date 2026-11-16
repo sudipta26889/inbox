@@ -33,6 +33,7 @@ export async function findSimilarTasksTopK(
   text: string,
   k: number,
   scoreThreshold: number,
+  projectId?: string | null,
 ): Promise<SimilarTaskHit[]> {
   const qdrantUrl = env.QDRANT_URL;
   if (!qdrantUrl) return [];
@@ -51,8 +52,15 @@ export async function findSimilarTasksTopK(
           limit: k,
           with_payload: true,
           score_threshold: scoreThreshold,
+          // Filtered here, not after: other projects' hits would otherwise
+          // take up the top-K slots and push the pinned project's out.
           filter: {
-            must: [{ key: "emailAccountId", match: { value: emailAccountId } }],
+            must: [
+              { key: "emailAccountId", match: { value: emailAccountId } },
+              ...(projectId
+                ? [{ key: "projectId", match: { value: projectId } }]
+                : []),
+            ],
           },
         }),
       },

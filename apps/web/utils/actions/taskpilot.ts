@@ -13,11 +13,12 @@ import prisma from "@/utils/prisma";
 import { taskpilotCache } from "@/utils/taskpilot/cache";
 import { TaskpilotClient } from "@/utils/taskpilot/client";
 import {
-  getTaskpilotClientForUser,
   getTaskpilotConfigForUser,
   getTaskpilotConfigStatus,
 } from "@/utils/taskpilot/config";
 import { decidePass1 } from "@/utils/taskpilot/decide";
+import { filterToPin } from "@/utils/taskpilot/pin";
+import { checkTaskpilotConnection } from "@/utils/taskpilot/connection";
 import { commitTask } from "@/utils/taskpilot/service";
 import type { CreateTaskDraft } from "@/utils/taskpilot/types";
 import { getEmailUrlForMessage } from "@/utils/url";
@@ -53,9 +54,10 @@ export const convertEmailToTaskpilotTaskDraftAction = actionClient
 
       const config = await getTaskpilotConfigForUser(userId);
       const client = new TaskpilotClient(config);
-      const projects = await taskpilotCache.getProjects(userId, () =>
+      const allProjects = await taskpilotCache.getProjects(userId, () =>
         client.listProjects(),
       );
+      const projects = filterToPin(allProjects, config.projectId, (p) => p.id);
       const labelsByProject: Record<
         string,
         Array<{ id: string; name: string }>
@@ -160,12 +162,20 @@ export const updateTaskpilotIntegrationAction = actionClientUser
   .metadata({ name: "updateTaskpilotIntegration" })
   .inputSchema(updateTaskpilotIntegrationBody)
   .action(
-    async ({ ctx: { userId }, parsedInput: { apiKey, workspaceSlug } }) => {
+    async ({
+      ctx: { userId },
+      parsedInput: { apiKey, workspaceSlug, projectId },
+    }) => {
       await prisma.user.update({
         where: { id: userId },
         data: {
-          taskpilotApiKey: apiKey === null ? null : encryptToken(apiKey),
-          taskpilotWorkspaceSlug: workspaceSlug,
+          ...(apiKey !== undefined && {
+            taskpilotApiKey: apiKey === null ? null : encryptToken(apiKey),
+          }),
+          ...(workspaceSlug !== undefined && {
+            taskpilotWorkspaceSlug: workspaceSlug,
+          }),
+          ...(projectId !== undefined && { taskpilotProjectId: projectId }),
         },
       });
       return { ok: true as const };
@@ -175,7 +185,9 @@ export const updateTaskpilotIntegrationAction = actionClientUser
 export const testTaskpilotConnectionAction = actionClientUser
   .metadata({ name: "testTaskpilotConnection" })
   .action(async ({ ctx: { userId } }) => {
-    const client = await getTaskpilotClientForUser(userId);
-    const projects = await client.listProjects();
-    return { ok: true as const, projectCount: projects.length };
+    const config = await getTaskpilotConfigForUser(userId);
+    return checkTaskpilotConnection(
+      new TaskpilotClient(config),
+      config.projectId,
+    );
   });
