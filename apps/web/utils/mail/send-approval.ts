@@ -466,12 +466,14 @@ async function askReviewer(request: SendApprovalRequest): Promise<SendEdits> {
       ? `[preview: full body is ${body.length} characters; body edits are disabled]\n\n${body.slice(0, CARD_BODY_MAX_CHARS)}`
       : body,
     ...(bodyTruncated && { bodyTruncated: true, bodyLength: body.length }),
-    ...(card.signature && { signature: card.signature }),
-    ...(card.quotedHistory && { quoted_history: card.quotedHistory }),
     ...(request.attachments?.length && { attachments: request.attachments }),
     ...(request.forwardedAttachments?.length && {
       forwardedAttachments: request.forwardedAttachments,
     }),
+    // After the files: Slack shows only the first six long fields, and the
+    // files must never be the ones cut.
+    ...(card.signature && { signature: card.signature }),
+    ...(card.quotedHistory && { quoted_history: card.quotedHistory }),
     isReply: !!request.isReply,
     ...(request.sendAt && { sendAt: request.sendAt }),
   };
@@ -530,7 +532,7 @@ function editsFrom(
   decision: DharaHILDecision,
   bodyTruncated: boolean,
   /** Turns the edited Markdown back into the full HTML, for HTML cards. */
-  rebuildHtml?: (markdown: string) => string,
+  rebuildHtml?: (markdown: string) => string | null,
 ): SendEdits {
   const approved = decision.approvedArgs;
   if (!approved) return {};
@@ -538,7 +540,9 @@ function editsFrom(
   // The gateway stores args as JSONB, which reorders object keys, so values
   // are compared structurally: key order ignored, array order kept.
   const changed = (key: string) =>
-    canonicalJson(approved[key]) !== canonicalJson(proposed[key]);
+    key === "body"
+      ? comparableBody(approved.body) !== comparableBody(proposed.body)
+      : canonicalJson(approved[key]) !== canonicalJson(proposed[key]);
 
   if (changed("from") || changed("mailbox"))
     throw new SendNotApprovedError(
@@ -574,8 +578,14 @@ function editsFrom(
       );
     const text = typeof value === "string" ? value : "";
     if (key !== "body") edits[key] = text;
-    else if (rebuildHtml) edits.bodyHtml = rebuildHtml(text);
-    else edits.bodyText = text;
+    else if (rebuildHtml) {
+      const html = rebuildHtml(text);
+      if (html === null)
+        throw new SendNotApprovedError(
+          "Email not sent: this email has tables or styled blocks; edit it in Inbox and resend.",
+        );
+      edits.bodyHtml = html;
+    } else edits.bodyText = text;
   }
   // An edited recipient list that parses to nothing must never fall back to
   // the original recipients. An emptied cc/bcc is a deliberate removal.
@@ -673,6 +683,14 @@ function boundedMetadata(metadata: Record<string, string>) {
       value.slice(0, METADATA_VALUE_MAX_CHARS),
     ]),
   );
+}
+
+// A channel that trims trailing spaces must not turn an untouched body into
+// an edit.
+function comparableBody(value: unknown) {
+  return typeof value === "string"
+    ? value.replace(/[ \t]+$/gm, "").trim()
+    : canonicalJson(value);
 }
 
 function canonicalJson(value: unknown): string {

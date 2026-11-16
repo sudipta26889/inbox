@@ -1,5 +1,5 @@
-import { load } from "cheerio";
-import type { Element } from "domhandler";
+import { type CheerioAPI, load } from "cheerio";
+import type { AnyNode, Element } from "domhandler";
 import { Marked, type Tokens } from "marked";
 import TurndownService from "turndown";
 import { SIGNATURE_SELECTORS } from "@/utils/email/signature-normalization";
@@ -23,19 +23,45 @@ export function cardBodyFromHtml(html: string): CardBody {
   const signature = htmlText(parts.signature);
   const quotedHistory = htmlText(parts.quoted);
   return {
-    body: htmlToMarkdown(parts.authored),
+    body: htmlToMarkdown(parts.inner),
     ...(signature && { signature }),
     ...(quotedHistory && { quotedHistory }),
   };
 }
 
-export function rebuildHtmlWithEditedBody(html: string, markdown: string) {
+/**
+ * The full HTML with the authored part replaced, or null when the authored
+ * part holds something the Markdown round trip would silently drop.
+ */
+export function rebuildHtmlWithEditedBody(
+  html: string,
+  markdown: string,
+): string | null {
   const parts = splitOutgoingHtml(html);
-  return `${parts.head}${markdownToSafeHtml(markdown)}${parts.signature}${parts.quoted}${parts.tail}`;
+  const $inner = load(parts.inner, null, false);
+  if ($inner(UNEDITABLE_SELECTOR).length) return null;
+
+  const imageSources = new Map<string, string>();
+  $inner("img[src]").each((_index, element) => {
+    const src = $inner(element).attr("src") ?? "";
+    imageSources.set(src, src);
+    imageSources.set(encodeURI(src), src);
+  });
+
+  return [
+    parts.head,
+    parts.prefix,
+    markdownToSafeHtml(markdown, imageSources),
+    parts.suffix,
+    parts.signature,
+    parts.quoted,
+    parts.tail,
+  ].join("");
 }
 
 // Same boundaries the reader uses (split-email-content.client.ts, which needs
-// a browser DOM), plus the quote block createOutlookReplyContent writes.
+// a browser DOM), plus the quote block createOutlookReplyContent writes and
+// the headers of Outlook for Mac / new Outlook and old Hotmail.
 const QUOTE_SELECTOR = [
   ".gmail_quote_container",
   "div.gmail_quote",
@@ -45,89 +71,225 @@ const QUOTE_SELECTOR = [
   ".moz-cite-prefix",
   'blockquote[type="cite"]',
   'div[style^="border-top: 1px solid #e1e1e1"]',
+  "#mail-editor-reference-message-container",
+  "hr#stopSpelling",
 ].join(", ");
+
+// Markdown can't carry these, so an edit would lose them without a word.
+const UNEDITABLE_SELECTOR = "table, style, font, [style]";
+
+const SIGNATURE_SELECTOR = SIGNATURE_SELECTORS.join(", ");
 
 const turndown = new TurndownService({
   headingStyle: "atx",
   bulletListMarker: "-",
   codeBlockStyle: "fenced",
   emDelimiter: "*",
-}).remove(["script", "style", "head", "title"]);
+  // A plain newline, which marked (breaks: true) turns back into <br>. Two
+  // trailing spaces would be lost by any channel that trims the card text.
+  br: "",
+})
+  .remove(["script", "style", "head", "title"])
+  .remove((node) =>
+    /display\s*:\s*none/i.test(node.getAttribute?.("style") ?? ""),
+  );
 
-const marked = new Marked({
-  gfm: true,
-  breaks: true,
-  async: false,
-  renderer: {
-    // Never pass HTML typed on the card through to the email.
-    html: ({ text }: Tokens.HTML | Tokens.Tag) => escapeHtml(text),
-    link({ href, tokens }: Tokens.Link) {
-      const text = this.parser.parseInline(tokens);
-      return SAFE_URL.test(href)
-        ? `<a href="${escapeHtml(href)}">${text}</a>`
-        : text;
-    },
-    image: ({ href, text }: Tokens.Image) =>
-      SAFE_URL.test(href)
-        ? `<img src="${escapeHtml(href)}" alt="${escapeHtml(text)}">`
-        : escapeHtml(text),
-  },
-});
 const SAFE_URL = /^(https?:|mailto:|tel:)/i;
 
 /**
- * Cuts the HTML at source offsets so the signature and quote are slices of the
- * original string: reassembly can never alter them.
- *
- * ponytail: a wrapper opened before the signature (Gmail's `<div dir="ltr">`)
- * closes inside the signature slice, so an edited body leaves one stray
- * closing tag, which every mail client ignores.
+ * Cuts the HTML at source offsets so the signature, quote and every wrapper
+ * around the authored text are slices of the original string: reassembly can
+ * never alter them, and an edited body still sits inside its original
+ * wrappers (Gmail's `<div dir="ltr">`, Outlook's font div), so the output
+ * stays balanced.
  */
 function splitOutgoingHtml(html: string) {
-  const isDocument = /<(?:html|body)[\s>]/i.test(html);
+  const isDocument = /<(?:html|head|body)[\s>]/i.test(html);
   const $ = load(html, { sourceCodeLocationInfo: true }, isDocument);
-  const offset = (node: Element | undefined) =>
-    node?.sourceCodeLocation?.startOffset;
+  const lower = html.toLowerCase();
 
-  const bodyLocation = isDocument
-    ? $("body").get(0)?.sourceCodeLocation
-    : undefined;
-  const start = bodyLocation?.startTag?.endOffset ?? 0;
-  const end = bodyLocation?.endTag?.startOffset ?? html.length;
-
-  const quoteStart = offset($(QUOTE_SELECTOR).get(0));
-  const signatureSelector = SIGNATURE_SELECTORS.join(", ");
-  const signatureStart = offset(
-    $(signatureSelector)
-      .filter(
-        (_index, element) =>
-          $(element).parents(`${signatureSelector}, ${QUOTE_SELECTOR}`)
-            .length === 0,
+  const body = isDocument ? $("body").get(0) : undefined;
+  const start =
+    body?.sourceCodeLocation?.startTag?.endOffset ??
+    $("head").get(0)?.sourceCodeLocation?.endOffset ??
+    0;
+  // The last closing tag: a quoted original often carries its own </body>.
+  const closing = isDocument
+    ? [lower.lastIndexOf("</body"), lower.lastIndexOf("</html")].find(
+        (index) => index >= start,
       )
-      .get(0),
-  );
-  const ownSignatureStart =
+    : undefined;
+  const end = closing ?? html.length;
+
+  const quote = findQuote($, html);
+  const quoteStart = startOf(quote);
+  const quotedFrom = quoteStart ?? end;
+
+  const signature = $(SIGNATURE_SELECTOR)
+    .filter(
+      (_index, element) =>
+        $(element).parents(`${SIGNATURE_SELECTOR}, ${QUOTE_SELECTOR}`)
+          .length === 0,
+    )
+    .get(0);
+  const signatureStart = startOf(signature);
+  const signatureEnd = signature?.sourceCodeLocation?.endOffset;
+  // Text after the signature (a P.S.) must stay editable, so then there is no
+  // separate signature and it all belongs to the body.
+  const ownSignature =
+    signature &&
     signatureStart !== undefined &&
-    (quoteStart === undefined || signatureStart < quoteStart)
-      ? signatureStart
+    signatureStart < quotedFrom &&
+    signatureEnd !== undefined &&
+    !load(html.slice(signatureEnd, quotedFrom), null, false)
+      .root()
+      .text()
+      .trim()
+      ? signature
       : undefined;
 
-  const quotedFrom = quoteStart ?? end;
-  const authoredEnd = ownSignatureStart ?? quotedFrom;
+  const authoredEnd = ownSignature ? (signatureStart as number) : quotedFrom;
+  const cut = ownSignature ?? quote;
+
+  // Wrappers that open in the authored part and close after the cut.
+  let innerStart = start;
+  let container: AnyNode | undefined = body;
+  if (cut) {
+    for (const ancestor of $(cut).parents().toArray().reverse()) {
+      const tag = ancestor.sourceCodeLocation?.startTag;
+      if (!tag || tag.startOffset < innerStart) continue;
+      if (html.slice(innerStart, tag.startOffset).trim()) break;
+      innerStart = tag.endOffset;
+      container = ancestor;
+    }
+  }
+
+  // A lone wrapper div that holds all the authored text.
+  let innerEnd = authoredEnd;
+  for (;;) {
+    const nodes = (container ? $(container).contents() : $.root().contents())
+      .toArray()
+      .filter((node) => {
+        const location = node.sourceCodeLocation;
+        return (
+          !!location &&
+          location.startOffset >= innerStart &&
+          location.endOffset <= innerEnd &&
+          !isBlank(node)
+        );
+      });
+    const only = nodes.length === 1 ? nodes[0] : undefined;
+    const location = only?.sourceCodeLocation;
+    if (
+      only?.type !== "tag" ||
+      (only as Element).name !== "div" ||
+      !location?.startTag ||
+      !location.endTag
+    )
+      break;
+    innerStart = location.startTag.endOffset;
+    innerEnd = location.endTag.startOffset;
+    container = only;
+  }
+
   return {
     head: html.slice(0, start),
-    authored: html.slice(start, authoredEnd),
+    prefix: html.slice(start, innerStart),
+    inner: html.slice(innerStart, innerEnd),
+    suffix: html.slice(innerEnd, authoredEnd),
     signature: html.slice(authoredEnd, quotedFrom),
     quoted: html.slice(quotedFrom, end),
     tail: html.slice(end),
   };
 }
 
+function findQuote($: CheerioAPI, html: string): Element | undefined {
+  const candidates = [
+    $(QUOTE_SELECTOR).get(0),
+    $("div[style]")
+      .filter((_index, element) => isWordReplyHeader($, element))
+      .map((_index, element) => wordHeaderBlock(html, element))
+      .get(0),
+  ].filter((element): element is Element => startOf(element) !== undefined);
+  return candidates.sort(
+    (a, b) => (startOf(a) as number) - (startOf(b) as number),
+  )[0];
+}
+
+// Outlook desktop (Word) writes the reply header as a bordered div holding
+// From / Sent / To / Subject; Outlook 2007-2010 uses a blue border.
+function isWordReplyHeader($: CheerioAPI, element: Element) {
+  const style = ($(element).attr("style") ?? "")
+    .toLowerCase()
+    .replace(/\s+/g, "");
+  if (
+    !style.includes("border-top:solid#e1e1e1") &&
+    !style.includes("border-top:solid#b5c4df")
+  )
+    return false;
+  const text = $(element).text();
+  return (
+    /^\s*From:/.test(text) && /(Sent|Date):/.test(text) && /Subject:/.test(text)
+  );
+}
+
+// Word wraps the header in a bare div that also holds the quoted message.
+function wordHeaderBlock(html: string, element: Element): Element {
+  const parent = element.parent as Element | null;
+  const parentTag = parent?.sourceCodeLocation?.startTag;
+  const start = startOf(element);
+  if (
+    parent?.type === "tag" &&
+    parent.name === "div" &&
+    Object.keys(parent.attribs).length === 0 &&
+    parentTag &&
+    start !== undefined &&
+    html.slice(parentTag.endOffset, start).trim() === ""
+  )
+    return parent;
+  return element;
+}
+
+function startOf(node: AnyNode | undefined) {
+  return node?.sourceCodeLocation?.startOffset;
+}
+
+function isBlank(node: AnyNode) {
+  if (node.type === "text") return !("data" in node && node.data.trim());
+  if (node.type === "comment") return true;
+  return node.type === "tag" && (node as Element).name === "br";
+}
+
 function htmlToMarkdown(html: string) {
   return turndown.turndown(html).trim();
 }
 
-function markdownToSafeHtml(markdown: string) {
+// Never passes HTML typed on the card through to the email; images render
+// only when their source was already in the authored part.
+function markdownToSafeHtml(
+  markdown: string,
+  imageSources: Map<string, string>,
+) {
+  const marked = new Marked({
+    gfm: true,
+    breaks: true,
+    async: false,
+    renderer: {
+      html: ({ text }: Tokens.HTML | Tokens.Tag) => escapeHtml(text),
+      link({ href, tokens }: Tokens.Link) {
+        const text = this.parser.parseInline(tokens);
+        return SAFE_URL.test(href)
+          ? `<a href="${escapeHtml(href)}">${text}</a>`
+          : text;
+      },
+      image({ href, text }: Tokens.Image) {
+        const src = imageSources.get(href);
+        return src === undefined
+          ? escapeHtml(text)
+          : `<img src="${escapeHtml(src)}" alt="${escapeHtml(text)}">`;
+      },
+    },
+  });
   return (marked.parse(markdown) as string).trim();
 }
 

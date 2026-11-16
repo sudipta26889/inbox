@@ -308,6 +308,37 @@ describe("every provider send asks first and sends what was approved", () => {
       expect(html).toContain("<p>Original</p>");
     });
 
+    it.each([
+      ["forward", "---------- Forwarded message ----------"],
+      ["reply", "wrote:"],
+    ])("gmail %s of a full HTML document: the edited text part has the new words, header and quote", async (kind, header) => {
+      const fullDocument = {
+        ...message,
+        textHtml:
+          "<html><head><style>p{}</style></head><body><p>Original text</p></body></html>",
+      } as ParsedMessage;
+      editBody(() => "My *new* sentence");
+      const gmail = fakeGmail();
+
+      if (kind === "forward")
+        await gmailForward(
+          gmail,
+          fullDocument,
+          { to: "fwd@grihatek.com" },
+          { emailAccountId: "acct-1" },
+        );
+      else
+        await gmailReply(gmail, fullDocument, "Thanks", undefined, undefined, {
+          emailAccountId: "acct-1",
+        });
+
+      const text = mimePart(sentRaw(gmail), "text/plain");
+      expect(text).toContain("My new sentence");
+      expect(text).toContain(header);
+      expect(text).toContain("Original text");
+      expect(decide.mock.calls[0][0].toolArgs.quoted_history).toContain(header);
+    });
+
     it("outlook reply: the reply header and quote are patched unchanged after a body edit", async () => {
       approve();
       const unedited = fakeOutlook();
@@ -513,14 +544,21 @@ function editBody(change: (body: string) => string) {
   }));
 }
 
-// The text/html part of a raw MIME message, quoted-printable decoded.
 function htmlPart(raw: string) {
-  const part = raw.split(/Content-Type: text\/html[^\n]*\n/)[1] ?? "";
-  const encoded = part
+  return mimePart(raw, "text/html");
+}
+
+// One part of a raw MIME message, quoted-printable decoded.
+function mimePart(raw: string, type: "text/html" | "text/plain") {
+  const boundary = raw.match(/boundary="?([^";\r\n]+)/)?.[1] ?? "";
+  const part =
+    raw
+      .split(`--${boundary}`)
+      .find((section) => section.includes(`Content-Type: ${type}`)) ?? "";
+  const body = part
     .split(/\r?\n\r?\n/)
     .slice(1)
     .join("\n\n");
-  const body = encoded.split(/\r?\n--/)[0];
   return Buffer.from(
     body
       .replace(/=\r?\n/g, "")

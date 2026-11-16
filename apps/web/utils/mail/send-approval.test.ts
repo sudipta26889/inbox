@@ -566,6 +566,59 @@ describe("body edits keep the email's formatting", () => {
     expect(html.endsWith(`${SIGNATURE}${QUOTE}`)).toBe(true);
   });
 
+  it("refuses a body edit on an email with tables, and sends nothing", async () => {
+    mockRunApprovalLoop.mockImplementation(async (call) => ({
+      action: "APPROVED",
+      approvedArgs: { ...call.toolArgs, body: "Changed" },
+    }));
+
+    await expect(
+      requireSendApproval({
+        ...htmlRequest,
+        bodyHtml: "<p>Rates</p><table><tr><td>1</td></tr></table>",
+      }),
+    ).rejects.toThrow(
+      "this email has tables or styled blocks; edit it in Inbox and resend",
+    );
+  });
+
+  it("treats a body that lost only trailing spaces as unedited", async () => {
+    const withBreak = "<p>line one<br>line two</p>";
+    mockRunApprovalLoop.mockImplementation(async (call) => ({
+      action: "APPROVED",
+      approvedArgs: {
+        ...call.toolArgs,
+        to: "alice@example.com",
+        body: String(call.toolArgs.body).replace(/[ \t]+$/gm, ""),
+      },
+    }));
+
+    const edits = await requireSendApproval({
+      ...htmlRequest,
+      bodyHtml: withBreak,
+    });
+
+    expect(edits).toEqual({ to: "alice@example.com" });
+  });
+
+  it("lists the files before the signature and quoted history", async () => {
+    mockRunApprovalLoop.mockResolvedValue({ action: "APPROVED" });
+
+    await requireSendApproval({
+      ...htmlRequest,
+      attachments: [{ filename: "a.pdf" }],
+      forwardedAttachments: [{ filename: "b.pdf" }],
+    });
+
+    const keys = Object.keys(mockRunApprovalLoop.mock.calls[0][0].toolArgs);
+    expect(keys.indexOf("forwardedAttachments")).toBeLessThan(
+      keys.indexOf("signature"),
+    );
+    expect(keys.indexOf("attachments")).toBeLessThan(
+      keys.indexOf("quoted_history"),
+    );
+  });
+
   it("counts only the authored part toward the card limit", async () => {
     const longQuote = `<div class="gmail_quote"><p>${"q".repeat(100_001)}</p></div>`;
     mockRunApprovalLoop.mockImplementation(async (call) => ({

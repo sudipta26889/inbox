@@ -91,7 +91,129 @@ describe("rebuildHtmlWithEditedBody", () => {
     const html = rebuildHtmlWithEditedBody(original, "Hello");
 
     expect(html).toBe(
-      `<html><head><meta charset="utf-8"></head><body><p>Hello</p>${quote}</body></html>`,
+      `<html><head><meta charset="utf-8"></head><body><div><p>Hello</p></div>${quote}</body></html>`,
+    );
+  });
+});
+
+describe("edits that the Markdown round trip can't carry", () => {
+  it("keeps an inline cid image through a one-word edit", () => {
+    const original =
+      '<p>See the chart:</p><p><img src="cid:ii_abc" alt="chart"></p><p>Thanks</p>';
+    const edited = cardBodyFromHtml(original).body.replace("Thanks", "Cheers");
+
+    const html = rebuildHtmlWithEditedBody(original, edited);
+
+    expect(html).toContain('<img src="cid:ii_abc" alt="chart">');
+    expect(html).toContain("Cheers");
+  });
+
+  it("does not render an image URL that was not in the original", () => {
+    const html = rebuildHtmlWithEditedBody(
+      "<p>Hi</p>",
+      "Hi ![x](https://tracker.test/pixel.png)",
+    );
+
+    expect(html).not.toContain("<img");
+    expect(html).not.toContain("tracker.test");
+  });
+
+  it.each([
+    ["a table", "<p>Rates</p><table><tr><td>1</td></tr></table>"],
+    [
+      "an inline-styled block",
+      '<p>Hi <span style="color:red">urgent</span></p>',
+    ],
+    ["a font tag", '<p><font color="red">Hi</font></p>'],
+    ["a style element", "<style>p{color:red}</style><p>Hi</p>"],
+  ])("refuses a body edit on %s", (_name, original) => {
+    expect(rebuildHtmlWithEditedBody(original, "Changed")).toBeNull();
+  });
+
+  it("allows edits inside a styled wrapper, which is kept as it was", () => {
+    const { html: original } = createOutlookReplyContent({
+      textContent: "Thanks",
+      message: quotedMessage,
+    });
+    const wrapper = original.slice(0, original.indexOf(">") + 1);
+
+    const html = rebuildHtmlWithEditedBody(original, "Thanks a lot") ?? "";
+
+    expect(html.startsWith(`${wrapper}<p>Thanks a lot</p></div>`)).toBe(true);
+  });
+
+  it("hides display:none preheaders from the card", () => {
+    expect(
+      cardBodyFromHtml('<div style="display:none">preheader</div><p>Hi</p>')
+        .body,
+    ).toBe("Hi");
+  });
+});
+
+describe("balanced output", () => {
+  it("keeps the edited text inside Gmail's dir=ltr wrapper", () => {
+    const original = `<div dir="ltr"><p>Hello</p>${SIGNATURE}</div>${QUOTE}`;
+
+    const html = rebuildHtmlWithEditedBody(original, "Hi there") ?? "";
+
+    expect(html).toBe(
+      `<div dir="ltr"><p>Hi there</p>${SIGNATURE}</div>${QUOTE}`,
+    );
+    expect(html.match(/<div/g)?.length).toBe(html.match(/<\/div>/g)?.length);
+  });
+
+  it("keeps a head with styles when the body tag is implied", () => {
+    const original =
+      "<html><head><style>p{margin:0}</style></head><p>Hello</p></html>";
+
+    const html = rebuildHtmlWithEditedBody(original, "Hi") ?? "";
+
+    expect(html).toBe(
+      "<html><head><style>p{margin:0}</style></head><p>Hi</p></html>",
+    );
+  });
+
+  it("keeps a P.S. after the signature in the editable body", () => {
+    const card = cardBodyFromHtml(
+      `<p>Hello</p>${SIGNATURE}<p>P.S. wire it today</p>`,
+    );
+
+    expect(card.body).toContain("P.S. wire it today");
+  });
+});
+
+describe("Outlook client quote headers", () => {
+  const wordHeader = (color: string) =>
+    `<div style="border:none;border-top:solid ${color} 1.0pt;padding:3.0pt 0in 0in 0in"><p class=MsoNormal><b>From:</b> Bob &lt;bob@x.com&gt;<br><b>Sent:</b> Monday<br><b>To:</b> Me<br><b>Subject:</b> Q</p></div><p class=MsoNormal>Old text</p>`;
+
+  it.each([
+    [
+      "Outlook desktop",
+      `<div class=WordSection1><p class=MsoNormal>Reply</p><div>${wordHeader("#E1E1E1")}</div></div>`,
+      `<div>${wordHeader("#E1E1E1")}</div></div>`,
+    ],
+    [
+      "Outlook 2010",
+      `<p>Reply</p>${wordHeader("#B5C4DF")}`,
+      wordHeader("#B5C4DF"),
+    ],
+    [
+      "Outlook for Mac",
+      '<p>Reply</p><div id="mail-editor-reference-message-container"><b>From:</b> Bob</div>',
+      '<div id="mail-editor-reference-message-container"><b>From:</b> Bob</div>',
+    ],
+    [
+      "Hotmail",
+      '<p>Reply</p><hr id="stopSpelling">Old text',
+      '<hr id="stopSpelling">Old text',
+    ],
+  ])("treats the %s header as quoted history", (_name, original, quote) => {
+    const card = cardBodyFromHtml(original);
+
+    expect(card.body).toBe("Reply");
+    expect(card.quotedHistory).toBeTruthy();
+    expect(rebuildHtmlWithEditedBody(original, "Edited")?.endsWith(quote)).toBe(
+      true,
     );
   });
 });
