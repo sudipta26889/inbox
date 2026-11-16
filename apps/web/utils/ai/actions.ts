@@ -1027,5 +1027,5 @@ function toServiceData(value: unknown): Record<string, unknown> | undefined {
     return value as Record<string, unknown>;
   }
 
-  return undefined;
+  return;
 }

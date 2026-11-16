@@ -496,6 +496,10 @@ async function executeMatchedRule(
                       item.selectedAttachments != null
                         ? (item.selectedAttachments as Prisma.InputJsonValue)
                         : undefined,
+                    haServiceData:
+                      executedActionFields.haServiceData != null
+                        ? (executedActionFields.haServiceData as Prisma.InputJsonValue)
+                        : undefined,
                     draftModelProvider: item.draftModelProvider ?? null,
                     draftModelName: item.draftModelName ?? null,
                     draftPipelineVersion: isDraftReplyActionType(item.type)

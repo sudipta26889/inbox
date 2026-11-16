@@ -82,6 +82,7 @@ import {
   getDraftReplyMessagingChannelIds,
   type DraftReplyDelivery,
 } from "@/app/(app)/[emailAccountId]/assistant/draftReplyActions";
+import { HomeAssistantActionFields } from "@/app/(app)/[emailAccountId]/assistant/HomeAssistantActionFields";
 
 type MessagingChannelOption = GetMessagingChannelsResponse["channels"][number];
 type MessagingProviderOption =
@@ -836,6 +837,15 @@ function ActionCard({
         </Card>
       ) : isMessagingNotification ? (
         <Card className="p-4 space-y-4">{deliverySummary}</Card>
+      ) : actionType === ActionType.HOME_ASSISTANT ? (
+        <Card className="p-4 space-y-4">
+          <HomeAssistantActionFields
+            index={index}
+            register={register}
+            watch={watch}
+            setValue={setValue}
+          />
+        </Card>
       ) : actionType === ActionType.INTEGRATION ? (
         <Card className="p-4 space-y-4">
           <IntegrationArgFields
