@@ -26,12 +26,15 @@ const RENDERED_DIRS = [
 // White-label checks compare against upstream's own name; they render nothing.
 const BRAND_COMPARISON = /BRAND_NAME === "Inbox Zero"/;
 
-// Files that use upstream's billing UI. Each was checked to render nothing, or
-// to grant access, when NEXT_PUBLIC_BYPASS_PREMIUM_CHECKS is true: usePremium
-// returns full access, so PremiumAlertWithData, PremiumModal openers and
-// EndTrialButton never show, and unsubscribe credits are not consumed (see
-// utils/premium/bypass.test.ts). A new file here, usually from an upstream
-// merge, fails this test until it is checked the same way and added.
+// Files that use upstream's billing UI or link to its plan pages. Each was
+// checked to render nothing, or to grant access, when
+// NEXT_PUBLIC_BYPASS_PREMIUM_CHECKS is true: usePremium returns full access,
+// so PremiumAlertWithData, PremiumModal openers and EndTrialButton never show,
+// unsubscribe credits are not consumed (utils/premium/bypass.test.ts), and
+// /pricing, /premium, /welcome-upgrade and /checkout-complete redirect into
+// the app (app/(landing)/pricing/billing-off.test.ts). A new file here,
+// usually from an upstream merge, fails this test until it is checked the
+// same way and added.
 const REVIEWED_BILLING_UI_FILES = [
   "app/(app)/AiAutomationStatusBanner.tsx",
   "app/(app)/[emailAccountId]/assistant/BulkRunRules.tsx",
@@ -49,6 +52,7 @@ const REVIEWED_BILLING_UI_FILES = [
   "app/(app)/[emailAccountId]/integrations/page.tsx",
   "app/(app)/[emailAccountId]/mail/ListSenderCommands.tsx",
   "app/(app)/[emailAccountId]/mail/ThreadActionsMenu.tsx",
+  "app/(app)/[emailAccountId]/mail/page.tsx",
   "app/(app)/[emailAccountId]/mail/use-unsubscribe-sender.ts",
   "app/(app)/[emailAccountId]/meetings/page.tsx",
   "app/(app)/[emailAccountId]/onboarding/StepBulkUnsubscribe.tsx",
@@ -63,24 +67,44 @@ const REVIEWED_BILLING_UI_FILES = [
   "app/(app)/accounts/page.tsx",
   "app/(app)/layout.tsx",
   "app/(app)/license/page.tsx",
+  "app/(app)/premium/AppPricingLazy.tsx",
   "app/(app)/premium/ManageSubscription.tsx",
   "app/(app)/premium/PremiumModal.tsx",
   "app/(app)/premium/Pricing.tsx",
+  "app/(app)/premium/page.tsx",
   "app/(app)/settings/SettingsContent.tsx",
+  "app/(landing)/home/Footer.tsx",
+  "app/(landing)/home/HomePage.tsx",
+  "app/(landing)/l/[locale]/pricing/page.tsx",
+  "app/(landing)/pricing/PricingFAQs.tsx",
+  "app/(landing)/pricing/PricingPage.tsx",
+  "app/(landing)/pricing/page.tsx",
+  "app/(landing)/pricing/pricing-metadata.ts",
+  "app/(landing)/welcome-upgrade/WelcomeUpgradePricing.tsx",
+  "app/(landing)/welcome-upgrade/page.tsx",
   "app/(landing)/welcome/form.tsx",
+  "app/api/stripe/success/route.ts",
   "app/api/user/trial-preview/route.ts",
   "components/ContinueWhenSubscribed.tsx",
   "components/EndTrialButton.tsx",
+  "components/NavUser.tsx",
   "components/PremiumAlert.tsx",
+  "components/PremiumCard.tsx",
   "components/UpgradeToPlusButton.tsx",
   "components/assistant-chat/message-part.tsx",
+  "components/new-landing/HeaderLinks.tsx",
+  "components/new-landing/sections/Pricing.tsx",
   "hooks/useAiAutomationStatus.ts",
+  "hooks/useAnalytics.ts",
   "hooks/usePremium.ts",
   "utils/actions/premium.ts",
+  "utils/agent-markdown/content.ts",
+  "utils/i18n/landing.ts",
+  "utils/llms/model-usage-guard.ts",
 ];
 
 const BILLING_UI_NAMES =
-  /\b(usePremium|PremiumModal|usePremiumModal|PremiumAlertWithData|decrementUnsubscribeCredit\w*|AiAutomationStatusBanner|EndTrialButton)\b|trial-preview/;
+  /\b(usePremium|PremiumModal|usePremiumModal|PremiumAlertWithData|decrementUnsubscribeCredit\w*|AiAutomationStatusBanner|EndTrialButton|Pricing|PricingPage|AppPricing\w*)\b|trial-preview|"\/pricing"|"\/premium"|"\/welcome-upgrade"/;
 
 describe("strip guard", () => {
   const files = RENDERED_DIRS.flatMap((dir) =>
@@ -144,6 +168,17 @@ describe("strip guard", () => {
       .sort();
 
     expect(billingFiles).toEqual([...REVIEWED_BILLING_UI_FILES].sort());
+  });
+
+  it("hides the landing header's pricing link when billing is off", () => {
+    const headerLinks = readFileSync(
+      join(WEB_ROOT, "components/new-landing/HeaderLinks.tsx"),
+      "utf8",
+    );
+
+    expect(headerLinks).toMatch(
+      /NEXT_PUBLIC_BYPASS_PREMIUM_CHECKS\s*\?\s*\[\]\s*:\s*\[\{ name: msg`Pricing`, href: "\/pricing" \}\]/,
+    );
   });
 
   it.each([

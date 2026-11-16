@@ -8,6 +8,7 @@ import {
 import { PageHeading, TypographyP } from "@/components/Typography";
 import { BasicLayout } from "@/components/layouts/BasicLayout";
 import { CardBasic } from "@/components/ui/card";
+import { env } from "@/env";
 import { getStripe } from "@/ee/billing/stripe";
 import { syncStripeDataToDb } from "@/ee/billing/stripe/sync-stripe";
 import {
@@ -27,6 +28,8 @@ const logger = createScopedLogger("checkout-complete");
 export default async function CheckoutCompletePage(props: {
   searchParams: Promise<{ session_id?: string; status?: string }>;
 }) {
+  // No billing on this deployment: plans and checkout lead into the app.
+  if (env.NEXT_PUBLIC_BYPASS_PREMIUM_CHECKS) redirect("/welcome-redirect");
   const { session_id: sessionId, status } = await props.searchParams;
 
   if (sessionId) {
