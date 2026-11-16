@@ -59,6 +59,13 @@ export function RuleImportExportSetting({
           integrationName: action.integrationName,
           integrationToolName: action.integrationToolName,
           integrationArgs: action.integrationArgs,
+          haIntegrationType: action.haIntegrationType,
+          haWebhookId: action.haWebhookId,
+          haMqttTopic: action.haMqttTopic,
+          haServiceDomain: action.haServiceDomain,
+          haServiceName: action.haServiceName,
+          haServiceData: action.haServiceData,
+          haEntityId: action.haEntityId,
         })),
       }));
 

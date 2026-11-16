@@ -43,4 +43,22 @@ describe("buildDraftReplyBody", () => {
       combineEmailHtml(reopenedDraft).match(/Example Person/gu),
     ).toHaveLength(1);
   });
+
+  it("keeps line breaks in a plain-text signature", async () => {
+    prisma.emailAccount.findUnique.mockResolvedValue({
+      allowHiddenAiDraftLinks: false,
+      includeReferralSignature: false,
+      signature: "Example Person\nSenior Consultant & Co",
+    } as never);
+
+    const body = await buildDraftReplyBody({
+      text: "Thanks.",
+      emailAccountId: "account",
+      userId: "user",
+    });
+
+    expect(body).toContain(
+      '<div class="gmail_signature" data-smartmail="gmail_signature">Example Person<br>Senior Consultant &amp; Co</div>',
+    );
+  });
 });

@@ -20,7 +20,7 @@ import { updateAllAccountsSelectionAction } from "@/utils/actions/all-accounts";
 import { getActionErrorMessage } from "@/utils/error";
 
 export function AllAccountsSelectionDialog({
-  emailAccounts,
+  emailAccounts: allEmailAccounts,
   onClose,
   onSaved,
 }: {
@@ -29,6 +29,10 @@ export function AllAccountsSelectionDialog({
   onSaved: () => Promise<unknown>;
 }) {
   const { t } = useLingui();
+  // Inclusion is stored on the account, so only its owner can change it.
+  const emailAccounts = allEmailAccounts.filter(
+    (emailAccount) => !emailAccount.isShared,
+  );
   const [selectedAccountIds, setSelectedAccountIds] = useState(
     () =>
       new Set(

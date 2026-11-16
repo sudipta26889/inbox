@@ -590,6 +590,29 @@ describe("handleLinkAccount", () => {
     expect(prisma.emailAccount.update).not.toHaveBeenCalled();
   });
 
+  it("only upserts a mailbox that already belongs to the signing-in user", async () => {
+    mockGoogleProfile();
+    prisma.emailAccount.findUnique.mockResolvedValue(null);
+    prisma.user.findUnique.mockResolvedValue({
+      email: "user@example.com",
+      name: "Test User",
+      image: null,
+    } as Awaited<ReturnType<typeof prisma.user.findUnique>>);
+    prisma.$transaction.mockResolvedValue([
+      { id: "email_account_1" },
+      { id: "account_1" },
+    ] as never);
+    vi.mocked(ensureEmailAccountsWatched).mockResolvedValue([]);
+
+    await handleLinkAccount(getGoogleAccount());
+
+    // Without userId, a sign-in could rewrite another user's mailbox (and keep its shares).
+    expect(prisma.emailAccount.upsert.mock.calls[0]?.[0].where).toEqual({
+      email: expect.any(String),
+      userId: "user_1",
+    });
+  });
+
   it("schedules email watch registration after a Google account is linked", async () => {
     mockGoogleProfile();
     prisma.emailAccount.findUnique.mockResolvedValue(null);

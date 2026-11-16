@@ -189,6 +189,42 @@ const parsedEnv = createEnv({
     LOCAL_LLM_THINKING: z.enum(["off", "on", "auto"]).default("auto"),
     OPENAI_COMPATIBLE_BASE_URL: z.string().optional(),
     LITELLM_BASE_URL: z.string().optional(),
+
+    TASKPILOT_DECIDER_MODEL: z.string().default("kimi-k2.6"),
+    // Used when the primary model times out (cold GPU). Should be a fast,
+    // reliable non-reasoning model.
+    TASKPILOT_DECIDER_FALLBACK_MODEL: z.string().optional(),
+    TASKPILOT_FIELDS_MODEL: z.string().default("kimi-k2.6"),
+    TASKPILOT_DECIDER_REASONING_EFFORT: z
+      .enum(["low", "medium", "high"])
+      .default("medium"),
+    TASKPILOT_FIELDS_REASONING_EFFORT: z
+      .enum(["low", "medium", "high"])
+      .default("low"),
+    TASKPILOT_DECIDER_MAX_TOKENS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(8000),
+    TASKPILOT_FIELDS_MAX_TOKENS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(4000),
+    TASKPILOT_PREGATE_RECALL_THRESHOLD: z.coerce
+      .number()
+      .min(0)
+      .max(1)
+      .default(0.5),
+    TASKPILOT_DECIDER_TIMEOUT_MS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(30_000),
+    TASKPILOT_DECISIONS_SHADOW: booleanString.optional().default(false),
+    // TaskPilot cross-thread semantic dedupe.
+    QDRANT_URL: z.string().optional(),
+    QDRANT_API_KEY: z.string().optional(),
     GIT_SHA: z.string().optional(),
     OPENAI_COMPATIBLE_MODEL: z.string().optional(),
     OPENAI_COMPATIBLE_AUTH_HEADER: z
@@ -252,6 +288,15 @@ const parsedEnv = createEnv({
     // Defaults to false. Only enable on a trusted, single-tenant self-hosted
     // deployment — never on a shared/multi-tenant instance.
     WEBHOOK_ALLOW_PRIVATE_IPS: booleanString.optional().default(false),
+    // DharaHIL human approval gateway. Every outbound send is gated once
+    // DHARAHIL_BASE_URL and DHARAHIL_API_KEY are both set.
+    DHARAHIL_BASE_URL: z.string().url().optional(),
+    DHARAHIL_API_KEY: z.string().optional(),
+    DHARAHIL_TENANT_ID: z.string().uuid().optional(),
+    DHARAHIL_APP_ID: z.string().uuid().optional(),
+    DHARAHIL_ENVIRONMENT: z
+      .enum(["production", "development", "staging"])
+      .optional(),
     DIGEST_MAX_SUMMARIES_PER_24H: z.coerce
       .number()
       .int()
@@ -359,6 +404,9 @@ const parsedEnv = createEnv({
     HEALTH_API_KEY: z.string().optional(),
     OAUTH_PROXY_URL: z.string().url().optional(),
     MCP_SERVER_ENABLED: booleanString.optional().default(false),
+    // Dev only: a "Bypass login" button on /login signs in a separate local
+    // test user with a mock mailbox. Ignored unless NODE_ENV=development.
+    LOCAL_AUTH_BYPASS_ENABLED: booleanString.optional().default(false),
     // Optional provider:model for structured decisions, e.g. openrouter:typesafe/jev-1.13
     DEFAULT_DECISION_MODEL: z
       .string()
@@ -369,9 +417,21 @@ const parsedEnv = createEnv({
       .optional(),
     // Whether users who haven't chosen get the decision model; otherwise opt-in
     DEFAULT_DECISION_MODEL_ENABLED: booleanString.optional().default(false),
-    // Also use the decision model for cold email detection; otherwise the LLM decides
-    DECISION_MODEL_COLD_EMAIL_ENABLED: booleanString.optional().default(false),
+    // Comma-separated features where the decision model decides, e.g.
+    // "thread-status,cold-email,categorize-sender". Every other feature runs in
+    // shadow mode: the LLM decides and the decision model is only recorded.
+    DECISION_MODEL_LIVE: z.string().optional(),
+    // "provider:model" used when the decision model is unsure, e.g. "litellm:deepseek-v4-flash".
+    DECISION_ESCALATION_MODEL: z.string().optional(),
+    // A live feature uses the decision model's answer only at or above this
+    // confidence; below it the escalation model decides. Default 0.95.
+    DECISION_MIN_CONFIDENCE: z.coerce.number().min(0.5).max(1).optional(),
+    // "false" stops the LLM from double-checking live decisions.
+    DECISION_LIVE_AUDIT: z.enum(["true", "false"]).optional(),
     TYPESAFE_API_KEY: z.string().optional(),
+    // Long-term agentic memory (MCP). Scoped per email account via project_id.
+    LONGMEMORY_BASE_URL: z.string().url().optional(),
+    LONGMEMORY_API_KEY: z.string().optional(),
     IMAGE_PROXY_SIGNING_SECRET: z.string().min(16).optional(),
     // Set to true on the server that acts as the OAuth proxy (e.g., staging)
     IS_OAUTH_PROXY_SERVER: booleanString.optional().default(false),
@@ -430,6 +490,17 @@ const parsedEnv = createEnv({
       .refine((value) => new URL(value).protocol === "https:")
       .optional(),
     UNSUBSCRIBE_WORKER_SECRET: z.string().min(32).optional(),
+
+    // MQTT agent bus. All optional: no broker configured means no publishing.
+    MQTT_HOST: z.string().optional(),
+    MQTT_PORT: z.coerce.number().optional(),
+    MQTT_USERNAME: z.string().optional(),
+    MQTT_PASSWORD: z.string().optional(),
+
+    // ntfy push notifications. All optional: no base URL means no pushing.
+    NTFY_BASE_URL: z.string().url().optional(),
+    NTFY_TOPIC: z.string().optional(),
+    NTFY_TOKEN: z.string().optional(),
   },
   client: {
     // stripe

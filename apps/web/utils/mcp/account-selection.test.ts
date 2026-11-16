@@ -82,4 +82,23 @@ describe("account-selection", () => {
       "Provide either emailAccountId or emailAddress, not both.",
     );
   });
+
+  it("only resolves an account the user owns or was shared", async () => {
+    prisma.emailAccount.findFirst.mockResolvedValue(null);
+
+    await expect(
+      resolveMcpEmailAccount({ userId: "user_1", emailAccountId: "foreign" }),
+    ).rejects.toThrow("Email account not found for the authenticated user.");
+    expect(prisma.emailAccount.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: "foreign",
+          OR: [
+            { userId: "user_1" },
+            { shares: { some: { userId: "user_1" } } },
+          ],
+        },
+      }),
+    );
+  });
 });

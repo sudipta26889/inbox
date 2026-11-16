@@ -31,7 +31,10 @@ describe("Mail realtime stream", () => {
     vi.mocked(RedisSubscriber.createInstance).mockReturnValue(
       subscriber as never,
     );
-    vi.mocked(getEmailAccount).mockResolvedValue("user@example.com");
+    vi.mocked(getEmailAccount).mockResolvedValue({
+      email: "user@example.com",
+      ownerUserId: "user-1",
+    });
     vi.mocked(refreshLocalMailInterest).mockResolvedValue(undefined);
   });
   afterEach(() => {

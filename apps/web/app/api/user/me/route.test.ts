@@ -33,6 +33,8 @@ describe("user/me route", () => {
       aiModel: "gpt-5.1",
       aiApiKey: "secret-api-key",
       webhookSecret: "secret-webhook-key",
+      homeAssistantUrl: "https://ha.example",
+      homeAssistantToken: "secret-ha-token",
       referralCode: null,
       announcementDismissedAt: null,
       dismissedHints: [],
@@ -94,6 +96,10 @@ describe("user/me route", () => {
     expect(body.aiApiKey).toBeUndefined();
     expect(body.webhookSecret).toBeUndefined();
     expect(body.referralCode).toBeUndefined();
+    expect(body.hasHomeAssistantToken).toBe(true);
+    expect(body.homeAssistantUrl).toBe("https://ha.example");
+    expect(body).not.toHaveProperty("homeAssistantToken");
+    expect(JSON.stringify(body)).not.toContain("secret-ha-token");
     expect(body.members).toEqual([
       {
         organizationId: "org-1",

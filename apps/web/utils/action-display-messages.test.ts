@@ -34,6 +34,8 @@ const actionCases: Record<ActionType, Omit<DisplayAction, "type">[]> = {
     { messagingChannel: { provider: MessagingProvider.SLACK } },
   ],
   [ActionType.NOTIFY_SENDER]: [{}],
+  [ActionType.HOME_ASSISTANT]: [{}],
+  [ActionType.CREATE_TASK]: [{}],
   [ActionType.INTEGRATION]: [
     {},
     { integrationName: "unknown", integrationToolName: "unknown" },

@@ -33,6 +33,7 @@ import { getActionItemsWithAiArgs } from "@/utils/ai/choose-rule/choose-args";
 import { executeAct } from "@/utils/ai/choose-rule/execute";
 import { determineConversationStatus } from "@/utils/reply-tracker/handle-conversation-status";
 import { isDraftReplyActionType } from "@/utils/actions/draft-reply";
+import { maybeRouteToTaskPilot } from "@/utils/taskpilot/route";
 import { fanOutEmailAnalysis } from "@/utils/email-fanout";
 
 const logger = createTestLogger();
@@ -61,6 +62,9 @@ vi.mock("@/utils/rule/learned-patterns", () => ({
 }));
 vi.mock("@/utils/rule/ai-sender-pattern-learning", () => ({
   shouldLearnAiSenderPatterns: vi.fn(() => true),
+}));
+vi.mock("@/utils/taskpilot/route", () => ({
+  maybeRouteToTaskPilot: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("@/utils/email-fanout", () => ({
   fanOutEmailAnalysis: vi.fn(),
@@ -848,6 +852,70 @@ describe("runRules saved delays on actions that can't be delayed", () => {
 
     expect(executeAct).toHaveBeenCalled();
     expect(results[0]?.status).toBe(ExecutedRuleStatus.APPLIED);
+  });
+});
+
+describe("runRules TaskPilot routing", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  function matchRuleWith(type: ActionType) {
+    const action = getAction({ id: `${type}-action`, type });
+    const rule = createRule(`${type}-rule`, null, [action]);
+    mockMatchingRules([{ rule, matchReasons: [] }]);
+    prisma.executedRule.findFirst.mockResolvedValue(null);
+    vi.mocked(getActionItemsWithAiArgs).mockResolvedValue([action] as any);
+    vi.mocked(executeAct).mockResolvedValue(ExecutedRuleStatus.APPLIED);
+    mockExecutedRuleCreate({ rule, actionItems: [action] });
+    return rule;
+  }
+
+  it("never routes a test run", async () => {
+    const rule = matchRuleWith(ActionType.CREATE_TASK);
+    await runRulesWithDefaults({ rules: [rule], isTest: true });
+
+    mockMatchingRules([], "No rules matched");
+    await runRulesWithDefaults({ rules: [regularRule], isTest: true });
+
+    expect(maybeRouteToTaskPilot).not.toHaveBeenCalled();
+  });
+
+  it("routes a skipped email once, without permission to create", async () => {
+    mockMatchingRules([], "No rules matched");
+
+    await runRulesWithDefaults({ rules: [regularRule] });
+
+    expect(maybeRouteToTaskPilot).toHaveBeenCalledTimes(1);
+    expect(maybeRouteToTaskPilot).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messageId: "message-1",
+        threadId,
+        canCreate: false,
+      }),
+    );
+  });
+
+  it("routes a matched email once, allowed to create when CREATE_TASK ran", async () => {
+    const rule = matchRuleWith(ActionType.CREATE_TASK);
+
+    await runRulesWithDefaults({ rules: [rule] });
+
+    expect(maybeRouteToTaskPilot).toHaveBeenCalledTimes(1);
+    expect(maybeRouteToTaskPilot).toHaveBeenCalledWith(
+      expect.objectContaining({ canCreate: true }),
+    );
+  });
+
+  it("routes a matched email without permission to create otherwise", async () => {
+    const rule = matchRuleWith(ActionType.ARCHIVE);
+
+    await runRulesWithDefaults({ rules: [rule] });
+
+    expect(maybeRouteToTaskPilot).toHaveBeenCalledTimes(1);
+    expect(maybeRouteToTaskPilot).toHaveBeenCalledWith(
+      expect.objectContaining({ canCreate: false }),
+    );
   });
 });
 

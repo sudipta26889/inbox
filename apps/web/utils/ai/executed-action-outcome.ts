@@ -20,6 +20,7 @@ const ACTION_RESULT_FAILURE_TYPES = new Set<ActionType>([
   ActionType.NOTIFY_MESSAGING_CHANNEL,
   ActionType.NOTIFY_SENDER,
   ActionType.INTEGRATION,
+  ActionType.HOME_ASSISTANT,
 ]);
 
 export async function persistExecutedActionOutcome({
@@ -172,5 +173,7 @@ function getUnknownActionFailureCode(actionType: ActionType) {
   if (actionType === ActionType.NOTIFY_SENDER) return "UNKNOWN_NOTIFY_FAILURE";
   if (actionType === ActionType.INTEGRATION)
     return "UNKNOWN_INTEGRATION_FAILURE";
+  if (actionType === ActionType.HOME_ASSISTANT)
+    return "UNKNOWN_HOME_ASSISTANT_FAILURE";
   return "UNKNOWN_MESSAGING_FAILURE";
 }

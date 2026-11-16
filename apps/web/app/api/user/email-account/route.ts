@@ -6,9 +6,9 @@ import { getEmailProviderRateLimitState } from "@/utils/email/rate-limit";
 import type { Logger } from "@/utils/logger";
 import { resolveSensitiveDataPolicy } from "@/utils/dlp/policy.server";
 
-export type EmailAccountFullResponse = Awaited<
-  ReturnType<typeof getEmailAccount>
-> | null;
+export type EmailAccountFullResponse =
+  | (Awaited<ReturnType<typeof getEmailAccount>> & { hasFullAccess: boolean })
+  | null;
 
 async function getEmailAccount({
   emailAccountId,
@@ -46,6 +46,9 @@ async function getEmailAccount({
       followUpNeedsReplyDays: true,
       followUpAutoDraftEnabled: true,
       digestSendEmail: true,
+      mqttEnabled: true,
+      mqttTopicSlug: true,
+      mqttIncludeDetail: true,
     },
   });
 
@@ -79,7 +82,10 @@ export const GET = withEmailAccount(
       logger: request.logger,
     });
 
-    return NextResponse.json(emailAccount);
+    // Owners and shared users resolve to the owner's userId; org admins keep their own.
+    const hasFullAccess = request.auth.userId === emailAccount.userId;
+
+    return NextResponse.json({ ...emailAccount, hasFullAccess });
   },
   { allowOrgAdmins: true },
 );

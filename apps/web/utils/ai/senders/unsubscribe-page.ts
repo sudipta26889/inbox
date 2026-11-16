@@ -46,7 +46,7 @@ export async function aiCheckUnsubscribePageState({
     return await runDecisionModelOrFallback({
       emailAccount,
       logger,
-      feature: "unsubscribe-page classification",
+      feature: "unsubscribe-page",
       decide: (config) =>
         decideUnsubscribePageState({
           config,
@@ -54,11 +54,12 @@ export async function aiCheckUnsubscribePageState({
           emailAccount,
           logger,
         }),
-      fallback: () =>
+      fallback: (account) =>
         checkUnsubscribePageStateWithLlm({
           pageText: text,
-          emailAccount,
+          emailAccount: account,
         }),
+      same: (decided, llm) => decided === llm,
     });
   } catch (error) {
     logger.error("Failed to classify unsubscribe page", { error });
@@ -95,7 +96,7 @@ ${text}
 
   const result = await generateObject({
     ...modelOptions,
-    system,
+    instructions: system,
     prompt,
     schema: z.object({ state: z.enum(["confirmed", "not_confirmed"]) }),
   });

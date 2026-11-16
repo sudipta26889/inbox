@@ -9,7 +9,11 @@ import { publishConversationChange } from "@/utils/team-comments/events";
 import { deleteContact as deleteLoopsContact } from "@inboxzero/loops";
 import { releaseAccountRecordings } from "@/utils/meeting-recorder/delete-media";
 import { cancelStripeSubscriptionForDeletedUser } from "@/ee/billing/stripe/account-deletion";
+import { clearAccountTopics } from "@/utils/mqtt/events";
 
+vi.mock("@/utils/mqtt/events", () => ({
+  clearAccountTopics: vi.fn(),
+}));
 vi.mock("@/utils/prisma");
 vi.mock("@/utils/redis/thread-page-buffer", () => ({
   withThreadPageBufferDeletion: vi.fn(async (_ids, operation) => operation()),
@@ -218,6 +222,38 @@ describe("deleteUser", () => {
     await deleteUser({ userId: "user-1", logger });
 
     expect(deleteLoopsContact).toHaveBeenCalledWith("user@example.com");
+  });
+
+  // Retained MQTT topics outlive the account that published them (see
+  // clearAccountTopics); deleting the whole user must clear every slug.
+  it("clears MQTT topics for every email account's slug", async () => {
+    prisma.account.findMany.mockResolvedValue([
+      {
+        provider: "google",
+        emailAccount: {
+          id: "email-account-1",
+          email: "one@example.com",
+          watchEmailsSubscriptionId: null,
+          mqttTopicSlug: "acct-1-slug",
+        },
+      },
+      {
+        provider: "google",
+        emailAccount: {
+          id: "email-account-2",
+          email: "two@example.com",
+          watchEmailsSubscriptionId: null,
+          mqttTopicSlug: null,
+        },
+      },
+    ] as Awaited<ReturnType<typeof prisma.account.findMany>>);
+    prisma.executedRule.findMany.mockResolvedValue([]);
+    prisma.user.deleteMany.mockResolvedValue({ count: 1 } as any);
+
+    await deleteUser({ userId: "user-1", logger });
+
+    expect(clearAccountTopics).toHaveBeenCalledTimes(1);
+    expect(clearAccountTopics).toHaveBeenCalledWith("acct-1-slug");
   });
 
   it("releases every mailbox's recordings before deleting the user", async () => {

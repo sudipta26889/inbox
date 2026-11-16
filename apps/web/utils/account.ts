@@ -3,6 +3,7 @@ import { auth } from "@/utils/auth";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 import prisma from "@/utils/prisma";
+import { accessibleEmailAccountWhere } from "@/utils/email-account-access";
 import {
   LAST_EMAIL_ACCOUNT_COOKIE,
   parseLastEmailAccountCookieValue,
@@ -46,7 +47,7 @@ export async function redirectToEmailAccountPath(
       "fallback-email-account-lookup",
       () =>
         prisma.emailAccount.findFirst({
-          where: { userId },
+          where: accessibleEmailAccountWhere(userId),
           select: { id: true },
           orderBy: EMAIL_ACCOUNT_ORDER_BY,
         }),
@@ -95,7 +96,10 @@ async function getLastEmailAccountFromCookie(
     if (!lastEmailAccountId) return null;
 
     const emailAccount = await prisma.emailAccount.findFirst({
-      where: { id: lastEmailAccountId, userId },
+      where: {
+        id: lastEmailAccountId,
+        ...accessibleEmailAccountWhere(userId),
+      },
       select: { id: true },
     });
     return emailAccount?.id ?? null;

@@ -9,7 +9,10 @@ import { createGenerateObject } from "@/utils/llms";
 import { strictOptional } from "@/utils/llms/strict-optional";
 import { createScopedLogger } from "@/utils/logger";
 import { decideBulkSenderCategories } from "@/utils/decision-model/categorize-sender";
-import { runDecisionModelOrFallback } from "@/utils/decision-model/decision-model";
+import {
+  DecisionUncertainError,
+  runDecisionModelOrFallback,
+} from "@/utils/decision-model/decision-model";
 
 const logger = createScopedLogger("categorize-senders-bulk");
 
@@ -48,7 +51,7 @@ export async function aiCategorizeSenders({
   return runDecisionModelOrFallback({
     emailAccount,
     logger,
-    feature: "bulk sender categorization",
+    feature: "categorize-senders-bulk",
     decide: async (config) => {
       const result = await decideBulkSenderCategories({
         config,
@@ -58,14 +61,21 @@ export async function aiCategorizeSenders({
         logger,
       });
       if (result.some(({ category }) => !category)) {
-        throw new Error(
+        throw new DecisionUncertainError(
           "Decision model was uncertain about one or more sender categories",
         );
       }
       return result;
     },
-    fallback: () =>
-      categorizeSendersWithLlm({ emailAccount, senders, categories }),
+    fallback: (account) =>
+      categorizeSendersWithLlm({ emailAccount: account, senders, categories }),
+    same: (decided, llm) =>
+      decided.length === llm.length &&
+      decided.every(
+        (item) =>
+          llm.find((other) => other.sender === item.sender)?.category ===
+          item.category,
+      ),
   });
 }
 

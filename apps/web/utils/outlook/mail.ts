@@ -6,7 +6,11 @@ import type { ParsedMessage } from "@/utils/types";
 import type { EmailForAction } from "@/utils/ai/types";
 import { createOutlookReplyContent } from "@/utils/outlook/reply";
 import { textToHtmlParagraphs } from "@/utils/string";
-import { forwardEmailHtml, forwardEmailSubject } from "@/utils/gmail/forward";
+import {
+  forwardEmailHtml,
+  forwardEmailSubject,
+  forwardEmailText,
+} from "@/utils/gmail/forward";
 import {
   buildReplyAllRecipients,
   mergeAndDedupeRecipients,
@@ -21,6 +25,15 @@ import { ensureEmailSendingEnabled } from "@/utils/mail";
 import { uploadResumableChunks } from "@/utils/outlook/upload-session";
 import type { Logger } from "@/utils/logger";
 import type { SendEmailOptions } from "@/utils/email/types";
+import {
+  applySendEdits,
+  type AttachmentInfo,
+  htmlPreviewText,
+  isSendGateOn,
+  requireSendApproval,
+  SendNotApprovedError,
+  type SendGate,
+} from "@/utils/mail/send-approval";
 
 type GraphRecipient = {
   emailAddress: { address: string; name?: string };
@@ -34,14 +47,39 @@ type SentEmailResult = Pick<Message, "id" | "conversationId">;
 
 export async function sendEmailWithHtml(
   client: OutlookClient,
-  body: MailSendEmailBody,
+  proposed: MailSendEmailBody,
   logger: Logger,
   options?: SendEmailOptions,
+  gate: SendGate = {},
 ): Promise<SentEmailResult> {
   ensureEmailSendingEnabled();
 
-  const toRecipients = buildGraphRecipients(body.to);
-  if (!toRecipients?.length)
+  if (!buildGraphRecipients(proposed.to)?.length)
+    throw new SafeError("Recipient address is required");
+
+  const forwardedMessageId = proposed.replyToEmail?.forwardedMessageId;
+  const edits = await requireSendApproval({
+    operation: forwardedMessageId ? "forward_email" : "send_email",
+    provider: "outlook",
+    ...gate,
+    to: proposed.to,
+    from: proposed.from,
+    cc: proposed.cc,
+    bcc: proposed.bcc,
+    replyTo: proposed.replyTo,
+    subject: proposed.subject,
+    bodyText: htmlPreviewText(proposed.messageHtml),
+    attachments: mailerAttachmentInfo(proposed.attachments),
+    forwardedAttachments:
+      forwardedMessageId && isSendGateOn()
+        ? await listMessageAttachments(client, forwardedMessageId, logger)
+        : undefined,
+    threadId: proposed.replyToEmail?.threadId,
+    isReply: !!proposed.replyToEmail?.messageId,
+  });
+  // The reviewer may have corrected recipients, subject or body on the card.
+  const body = applySendEdits(proposed, edits);
+  if (!buildGraphRecipients(body.to)?.length)
     throw new SafeError("Recipient address is required");
 
   // For replies with a message ID, use createReply for proper threading
@@ -66,9 +104,16 @@ export async function sendEmailWithPlainText(
   client: OutlookClient,
   body: Omit<MailSendEmailBody, "messageHtml"> & { messageText: string },
   logger: Logger,
+  gate: SendGate = {},
 ) {
   const messageHtml = convertTextToHtmlParagraphs(body.messageText);
-  return sendEmailWithHtml(client, { ...body, messageHtml }, logger);
+  return sendEmailWithHtml(
+    client,
+    { ...body, messageHtml },
+    logger,
+    undefined,
+    gate,
+  );
 }
 
 export async function replyToEmail(
@@ -83,11 +128,28 @@ export async function replyToEmail(
     bcc?: string;
     attachments?: Attachment[];
   },
+  gate: SendGate = {},
 ) {
   ensureEmailSendingEnabled();
 
+  const edits = await requireSendApproval({
+    operation: "reply_email",
+    provider: "outlook",
+    ...gate,
+    to: message.headers["reply-to"] || message.headers.from,
+    from: options?.from,
+    cc: options?.cc,
+    bcc: options?.bcc,
+    replyTo: options?.replyTo,
+    subject: message.headers.subject,
+    bodyText: reply,
+    attachments: mailerAttachmentInfo(options?.attachments),
+    threadId: message.threadId,
+    isReply: true,
+  });
+
   const { html } = createOutlookReplyContent({
-    textContent: reply,
+    textContent: edits.bodyText ?? reply,
     message,
   });
 
@@ -104,8 +166,16 @@ export async function replyToEmail(
     options?.from,
     replyDraft.from?.emailAddress?.address,
   );
-  const ccRecipients = buildGraphRecipients(options?.cc);
-  const bccRecipients = buildGraphRecipients(options?.bcc);
+  // createReply addresses the sender itself; an edited card overrides it.
+  const toRecipients =
+    edits.to !== undefined ? buildGraphRecipients(edits.to) : undefined;
+  // Never fall back to the original sender when the edited list is unusable.
+  if (edits.to !== undefined && !toRecipients?.length)
+    throw new SendNotApprovedError(
+      "Email not sent: the edited to has no valid email address.",
+    );
+  const ccRecipients = buildGraphRecipients(edits.cc ?? options?.cc);
+  const bccRecipients = buildGraphRecipients(edits.bcc ?? options?.bcc);
   const replyToRecipients = buildGraphRecipients(options?.replyTo);
 
   // Update the draft with our content
@@ -120,9 +190,11 @@ export async function replyToEmail(
             content: html,
           },
           ...(fromField ? { from: fromField } : {}),
+          ...(toRecipients ? { toRecipients } : {}),
           ...(ccRecipients ? { ccRecipients } : {}),
           ...(bccRecipients ? { bccRecipients } : {}),
           ...(replyToRecipients ? { replyTo: replyToRecipients } : {}),
+          ...(edits.subject !== undefined ? { subject: edits.subject } : {}),
         }),
     logger,
   );
@@ -159,15 +231,14 @@ export async function forwardEmail(
     from?: string;
   },
   logger: Logger,
+  gate: SendGate = {},
 ) {
   ensureEmailSendingEnabled();
 
   if (!options.to.trim()) throw new Error("Recipient address is required");
 
-  const toRecipients = buildGraphRecipients(options.to);
-  if (!toRecipients?.length) throw new Error("Recipient address is required");
-  const ccRecipients = buildGraphRecipients(options.cc);
-  const bccRecipients = buildGraphRecipients(options.bcc);
+  if (!buildGraphRecipients(options.to)?.length)
+    throw new Error("Recipient address is required");
 
   // Get the original message
   const originalMessage: Message = await withMicrosoftGraphRetry(
@@ -195,6 +266,31 @@ export async function forwardEmail(
     conversationIndex: originalMessage.conversationId || "",
   };
 
+  // Gated after reading the original, so the card shows the whole forward.
+  const forwardText = forwardEmailText({
+    content: options.content ?? "",
+    message,
+  });
+  const edits = await requireSendApproval({
+    operation: "forward_email",
+    provider: "outlook",
+    ...gate,
+    to: options.to,
+    from: options.from,
+    cc: options.cc,
+    bcc: options.bcc,
+    subject: forwardEmailSubject(message.headers.subject),
+    bodyText: forwardText,
+    forwardedAttachments: isSendGateOn()
+      ? await listMessageAttachments(client, options.messageId, logger)
+      : undefined,
+    threadId: message.threadId,
+  });
+  const toRecipients = buildGraphRecipients(edits.to ?? options.to);
+  if (!toRecipients?.length) throw new Error("Recipient address is required");
+  const ccRecipients = buildGraphRecipients(edits.cc ?? options.cc);
+  const bccRecipients = buildGraphRecipients(edits.bcc ?? options.bcc);
+
   const forwardDraft: Message = await withMicrosoftGraphWriteRetry(
     () =>
       client
@@ -219,13 +315,18 @@ export async function forwardEmail(
           ...(ccRecipients ? { ccRecipients } : {}),
           ...(bccRecipients ? { bccRecipients } : {}),
           ...(fromField ? { from: fromField } : {}),
-          subject: forwardEmailSubject(message.headers.subject),
+          subject:
+            edits.subject ?? forwardEmailSubject(message.headers.subject),
           body: {
             contentType: "html",
-            content: forwardEmailHtml({
-              content: options.content ?? "",
-              message,
-            }),
+            // An edited forward sends exactly the text the reviewer approved.
+            content:
+              edits.bodyText !== undefined
+                ? textToHtmlParagraphs(edits.bodyText)
+                : forwardEmailHtml({
+                    content: options.content ?? "",
+                    message,
+                  }),
           },
         }),
     logger,
@@ -814,4 +915,38 @@ async function uploadAttachmentViaSession({
     action: "upload Outlook attachment chunk",
     statusAction: "fetch Outlook upload session status",
   });
+}
+
+function mailerAttachmentInfo(
+  attachments: Attachment[] | undefined,
+): AttachmentInfo[] {
+  return (attachments ?? []).map((attachment) => ({
+    filename:
+      typeof attachment.filename === "string" ? attachment.filename : "",
+    size: Buffer.isBuffer(attachment.content)
+      ? attachment.content.length
+      : undefined,
+  }));
+}
+
+// A forward copies the source message's files, so the card names them.
+async function listMessageAttachments(
+  client: OutlookClient,
+  messageId: string,
+  logger: Logger,
+): Promise<AttachmentInfo[]> {
+  const response: { value?: { name?: string | null; size?: number | null }[] } =
+    await withMicrosoftGraphRetry(
+      () =>
+        client
+          .getClient()
+          .api(`/me/messages/${messageId}/attachments`)
+          .select("name,size")
+          .get(),
+      logger,
+    );
+  return (response.value ?? []).map((attachment) => ({
+    filename: attachment.name ?? "",
+    size: attachment.size ?? undefined,
+  }));
 }

@@ -166,6 +166,31 @@ const nextConfig: NextConfig = {
             },
           ]),
       {
+        // The fork's MCP server: any origin (browser MCP clients such as
+        // claude.ai). Config headers win over route headers in Next, so the
+        // static CORS below must not match it.
+        headers: [
+          ...securityHeaders,
+          {
+            key: "Access-Control-Allow-Origin",
+            value: "*",
+          },
+          {
+            key: "Access-Control-Allow-Methods",
+            value: "GET, POST, PUT, DELETE, OPTIONS",
+          },
+          {
+            key: "Access-Control-Allow-Headers",
+            value: "Content-Type, Authorization",
+          },
+          {
+            key: "Access-Control-Expose-Headers",
+            value: "WWW-Authenticate",
+          },
+        ],
+        source: "/mcp-server/:path*",
+      },
+      {
         headers: [
           ...securityHeaders,
           {
@@ -178,7 +203,7 @@ const nextConfig: NextConfig = {
           },
         ],
         // Apply all security headers + static CORS to non-auth routes
-        source: "/((?!api/auth).*)",
+        source: "/((?!api/auth|mcp-server).*)",
       },
       {
         headers: securityHeaders,
@@ -475,6 +500,10 @@ const nextConfig: NextConfig = {
   // Skip TypeScript checking during Docker/E2E CI builds to save memory.
   // App typechecking is covered by the Build Check workflow.
   typescript: {
+    // Type-check the code that ships. Tests stay in the root tsconfig and are
+    // held by scripts/typecheck-ratchet.mjs, so a drifting fixture cannot block
+    // a deploy but a type error in shipped code fails the build.
+    tsconfigPath: "tsconfig.build.json",
     ignoreBuildErrors: process.env.SKIP_TYPE_CHECK === "true",
   },
   webpack: (config) => {

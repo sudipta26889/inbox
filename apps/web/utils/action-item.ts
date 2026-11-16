@@ -149,6 +149,9 @@ export const actionInputs: Record<
     fields: [],
   },
   [ActionType.INTEGRATION]: { fields: [] },
+  // Rendered by HomeAssistantActionFields, not the generic field list.
+  [ActionType.HOME_ASSISTANT]: { fields: [] },
+  [ActionType.CREATE_TASK]: { fields: [] },
   [ActionType.A2A_NOTIFY]: { fields: [] },
 };
 
@@ -223,6 +226,13 @@ type ActionFieldsSelection = {
   delayInMinutes: number | null;
   integrationName: string | null;
   integrationToolName: string | null;
+  haIntegrationType: string | null;
+  haWebhookId: string | null;
+  haMqttTopic: string | null;
+  haServiceDomain: string | null;
+  haServiceName: string | null;
+  haEntityId: string | null;
+  haServiceData?: Prisma.JsonValue;
   staticAttachments?: Prisma.JsonValue;
   selectedAttachments?: Prisma.JsonValue;
   integrationArgs?: Prisma.JsonValue;
@@ -231,13 +241,17 @@ type ActionFieldsSelection = {
 type SanitizableActionFields = Partial<
   Omit<
     ActionFieldsSelection,
-    "staticAttachments" | "selectedAttachments" | "integrationArgs"
+    | "staticAttachments"
+    | "selectedAttachments"
+    | "integrationArgs"
+    | "haServiceData"
   >
 > & {
   type: ActionType;
   staticAttachments?: Prisma.JsonValue | null;
   selectedAttachments?: Prisma.JsonValue | null;
   integrationArgs?: Prisma.JsonValue | null;
+  haServiceData?: Prisma.JsonValue | null;
 };
 
 export function sanitizeActionFields(
@@ -265,6 +279,13 @@ export function sanitizeActionFields(
     delayInMinutes: action.delayInMinutes || null,
     integrationName: null,
     integrationToolName: null,
+    haIntegrationType: null,
+    haWebhookId: null,
+    haMqttTopic: null,
+    haServiceDomain: null,
+    haServiceName: null,
+    haEntityId: null,
+    haServiceData: undefined,
     staticAttachments: supportsStaticAttachments
       ? (action.staticAttachments ?? undefined)
       : undefined,
@@ -348,6 +369,7 @@ export function sanitizeActionFields(
       };
     }
     case ActionType.NOTIFY_SENDER:
+    case ActionType.CREATE_TASK:
     case ActionType.A2A_NOTIFY: {
       return base;
     }
@@ -357,6 +379,18 @@ export function sanitizeActionFields(
         integrationName: action.integrationName ?? null,
         integrationToolName: action.integrationToolName ?? null,
         integrationArgs: action.integrationArgs ?? undefined,
+      };
+    }
+    case ActionType.HOME_ASSISTANT: {
+      return {
+        ...base,
+        haIntegrationType: action.haIntegrationType ?? null,
+        haWebhookId: action.haWebhookId ?? null,
+        haMqttTopic: action.haMqttTopic ?? null,
+        haServiceDomain: action.haServiceDomain ?? null,
+        haServiceName: action.haServiceName ?? null,
+        haEntityId: action.haEntityId ?? null,
+        haServiceData: action.haServiceData ?? undefined,
       };
     }
     default:

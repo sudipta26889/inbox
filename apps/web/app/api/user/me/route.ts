@@ -37,6 +37,8 @@ async function getUser({
       aiApiKey: true,
       decisionModelEnabled: true,
       webhookSecret: true,
+      homeAssistantUrl: true,
+      homeAssistantToken: true,
       announcementDismissedAt: true,
       dismissedHints: true,
       premium: {
@@ -91,7 +93,7 @@ async function getUser({
     })),
   );
 
-  const { aiApiKey, webhookSecret, emailAccounts } = user;
+  const { aiApiKey, webhookSecret, homeAssistantToken, emailAccounts } = user;
   const billingAccessDenial = getBillingAccessDenial(user.id, user);
   const canManageBillingAccess = billingAccessDenial === null;
   let premium = null;
@@ -130,6 +132,8 @@ async function getUser({
     })),
     hasAiApiKey: !!aiApiKey,
     hasWebhookSecret: !!webhookSecret,
+    homeAssistantUrl: user.homeAssistantUrl,
+    hasHomeAssistantToken: !!homeAssistantToken,
     canManageBilling: canManageBillingAccess,
     billingAccessDenial,
     members,

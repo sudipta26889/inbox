@@ -1,5 +1,6 @@
 import { after } from "next/server";
 import { ActionType, MessagingMessageStatus } from "@/generated/prisma/enums";
+import type { Prisma } from "@/generated/prisma/client";
 import type { Logger } from "@/utils/logger";
 import { callWebhook } from "@/utils/outbound-webhook/call-webhook";
 import type {
@@ -38,6 +39,11 @@ import { isMessagingDraftActionType } from "@/utils/actions/draft-reply";
 import { checkHasAccess } from "@/utils/premium/server";
 import { handlePreviousDraftDeletion } from "@/utils/ai/choose-rule/draft-management";
 import { isIntegrationActionEnabledForUserId } from "@/utils/integration-action.server";
+import {
+  executeHomeAssistantAction,
+  type HomeAssistantIntegrationType,
+} from "@/utils/home-assistant";
+import { executeCreateTaskAction } from "@/utils/ai/actions/create-task";
 import {
   buildA2aEmailPayload,
   getRemoteAgentUrls,
@@ -128,6 +134,14 @@ export const runActionFunction = async (options: {
       return notify_sender(opts);
     case ActionType.INTEGRATION:
       return integration(opts);
+    case ActionType.HOME_ASSISTANT:
+      return home_assistant(opts);
+    case ActionType.CREATE_TASK:
+      await executeCreateTaskAction({
+        messageId: opts.email.id,
+        emailAccountId: emailAccount.id,
+      });
+      return { success: true };
     case ActionType.A2A_NOTIFY:
       return a2a_notify(opts);
     default:
@@ -356,6 +370,7 @@ const reply: ActionFunction<{
       attachments,
       cc: args.cc ?? undefined,
       bcc: args.bcc ?? undefined,
+      operationId: actionOperationId(executedRule, args),
     },
   );
   return { sentMessageIds: [messageId] };
@@ -387,6 +402,7 @@ const send_email: ActionFunction<{
     subject: args.subject,
     messageText: args.content,
     attachments,
+    operationId: actionOperationId(executedRule, args),
   };
 
   const { messageId } = await client.sendEmail(emailArgs);
@@ -398,7 +414,7 @@ const forward: ActionFunction<{
   to?: string | null;
   cc?: string | null;
   bcc?: string | null;
-}> = async ({ client, email, args, logger }) => {
+}> = async ({ client, email, args, executedRule, logger }) => {
   if (!args.to) return;
 
   const messageParticipants = [
@@ -443,6 +459,7 @@ const forward: ActionFunction<{
   const forwardArgs = {
     messageId: email.id,
     content: args.content ?? undefined,
+    operationId: actionOperationId(executedRule, args),
   };
 
   if (!toRecipients.length && !ccRecipients.length) {
@@ -453,6 +470,8 @@ const forward: ActionFunction<{
       try {
         const { messageId } = await client.forwardEmail(forwardMessage, {
           ...forwardArgs,
+          // One send per BCC recipient, so one approval card each.
+          operationId: `${forwardArgs.operationId}:${recipient}`,
           to: recipient,
         });
         sentMessageIds.push(messageId);
@@ -709,6 +728,8 @@ const integration: ActionFunction<{
 const notify_sender: ActionFunction<Record<string, unknown>> = async ({
   email,
   emailAccount,
+  executedRule,
+  args,
   logger,
 }) => {
   const senderEmail = extractEmailAddress(email.headers.from);
@@ -729,6 +750,8 @@ const notify_sender: ActionFunction<Record<string, unknown>> = async ({
     recipientEmail: emailAccount.email,
     originalSubject: email.headers.subject,
     originalMessageId: email.headers["message-id"],
+    emailAccountId: emailAccount.id,
+    operationId: actionOperationId(executedRule, args),
     logger,
   });
 
@@ -757,6 +780,76 @@ const notify_sender: ActionFunction<Record<string, unknown>> = async ({
   }
 
   return { success: true };
+};
+
+const home_assistant: ActionFunction<{
+  haIntegrationType?: string | null;
+  haWebhookId?: string | null;
+  haMqttTopic?: string | null;
+  haServiceDomain?: string | null;
+  haServiceName?: string | null;
+  haServiceData?: Prisma.JsonValue | null;
+  haEntityId?: string | null;
+}> = async ({ email, args, emailAccount, executedRule, logger }) => {
+  if (!args.haIntegrationType) {
+    logger.error("Home Assistant integration type is required");
+    return { success: false, errorCode: "MISSING_INTEGRATION_TYPE" };
+  }
+
+  const config = {
+    type: args.haIntegrationType as HomeAssistantIntegrationType,
+    webhookId: args.haWebhookId || undefined,
+    mqttTopic: args.haMqttTopic || undefined,
+    serviceDomain: args.haServiceDomain || undefined,
+    serviceName: args.haServiceName || undefined,
+    serviceData: toServiceData(args.haServiceData),
+    entityId: args.haEntityId || undefined,
+  };
+
+  const emailData = {
+    threadId: email.threadId,
+    messageId: email.id,
+    subject: email.headers.subject,
+    from: email.headers.from,
+    cc: email.headers.cc,
+    bcc: email.headers.bcc,
+    headerMessageId: email.headers["message-id"] || "",
+    snippet: email.snippet,
+    labels: email.labelIds,
+    receivedAt: email.internalDate
+      ? new Date(Number(email.internalDate))
+      : undefined,
+  };
+
+  const ruleData = {
+    id: executedRule.id,
+    ruleId: executedRule.ruleId,
+    ruleName: undefined,
+  };
+
+  try {
+    await executeHomeAssistantAction(
+      emailAccount.userId,
+      emailData,
+      ruleData,
+      executedRule,
+      config,
+    );
+    return { success: true };
+  } catch (error) {
+    logger.error("Home Assistant action failed", { error });
+    captureException(
+      error instanceof Error
+        ? error
+        : new Error("Home Assistant action failed"),
+      {
+        emailAccountId: emailAccount.id,
+        extra: { actionType: ActionType.HOME_ASSISTANT },
+        sampleRate: 0.1,
+      },
+    );
+    return { success: false, errorCode: "EXECUTION_FAILED" };
+  }
 };
 
 const a2a_notify: ActionFunction<Record<string, unknown>> = async ({
@@ -993,4 +1086,25 @@ function attachSentMessageIds(error: unknown, sentMessageIds: string[]) {
   }
 
   return Object.assign(new Error(String(error)), { sentMessageIds });
+}
+
+/**
+ * haServiceData is a Json column, so it may hold a scalar or array. Home
+ * Assistant spreads it into a service-call payload, which only makes sense for
+ * an object; anything else is dropped rather than spread into garbage.
+ */
+function toServiceData(value: unknown): Record<string, unknown> | undefined {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+
+  return;
+}
+
+// A rerun of the same rule action asks on the same card, not a second one.
+function actionOperationId(
+  executedRule: ExecutedRuleForAction,
+  action: Pick<ActionItem, "id">,
+) {
+  return `rule_${executedRule.id}_${action.id}`;
 }

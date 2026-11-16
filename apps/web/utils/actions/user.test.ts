@@ -11,6 +11,7 @@ import { clearLastEmailAccountCookie } from "@/utils/cookies.server";
 import { LAST_EMAIL_ACCOUNT_COOKIE } from "@/utils/cookies";
 import { publishConversationChange } from "@/utils/team-comments/events";
 import { deleteTinybirdEmailData } from "@inboxzero/tinybird";
+import { clearAccountTopics } from "@/utils/mqtt/events";
 import { deleteAccountAction, deleteEmailAccountAction } from "./user";
 
 vi.mock("@/utils/prisma");
@@ -57,6 +58,9 @@ vi.mock("@/utils/posthog", () => ({
 vi.mock("@/utils/premium/seats", () => ({
   updateAccountSeats: vi.fn(),
 }));
+vi.mock("@/utils/mqtt/events", () => ({
+  clearAccountTopics: vi.fn(),
+}));
 vi.mock("@/utils/ai/draft-cleanup", () => ({
   cleanupAIDraftsForAccount: vi.fn(),
   getConfiguredDraftCleanupDays: vi.fn(),
@@ -100,6 +104,41 @@ describe("deleteEmailAccountAction", () => {
     });
     expect(result?.serverError).toBeDefined();
     expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  // Retained MQTT topics outlive the account that published them (see
+  // clearAccountTopics). Deletion is a stronger opt-out than the settings
+  // toggle, so it must clear them too, using the slug read before the delete.
+  it("clears the account's MQTT topics after deleting it", async () => {
+    prisma.emailAccount.findUnique.mockResolvedValue({
+      email: "secondary@example.com",
+      accountId: "account-1",
+      mqttTopicSlug: "acct-1-slug",
+      account: { provider: "google" },
+      user: { email: "primary@example.com" },
+    } as Awaited<ReturnType<typeof prisma.emailAccount.findUnique>>);
+
+    const result = await deleteEmailAccountAction({
+      emailAccountId: "secondary-account",
+    });
+
+    expect(result?.serverError).toBeUndefined();
+    expect(clearAccountTopics).toHaveBeenCalledTimes(1);
+    expect(clearAccountTopics).toHaveBeenCalledWith("acct-1-slug");
+  });
+
+  it("does not clear MQTT topics when the account never had a slug", async () => {
+    prisma.emailAccount.findUnique.mockResolvedValue({
+      email: "secondary@example.com",
+      accountId: "account-1",
+      mqttTopicSlug: null,
+      account: { provider: "google" },
+      user: { email: "primary@example.com" },
+    } as Awaited<ReturnType<typeof prisma.emailAccount.findUnique>>);
+
+    await deleteEmailAccountAction({ emailAccountId: "secondary-account" });
+
+    expect(clearAccountTopics).not.toHaveBeenCalled();
   });
 
   it("promotes another account before deleting the primary account", async () => {

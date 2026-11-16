@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createTestLogger, getEmailAccount } from "@/__tests__/helpers";
 
 const runDecisionModelMock = vi.hoisted(() => vi.fn());
-vi.mock("./decision-model", () => ({
+vi.mock("./decision-model", async (importActual) => ({
+  ...(await importActual<typeof import("./decision-model")>()),
   runDecisionModel: runDecisionModelMock,
 }));
 
@@ -30,7 +31,7 @@ describe("sender categorization decisions", () => {
         sender_0: {
           type: "choice",
           choice: "category_1",
-          confidence: 0.9,
+          confidence: 0.96,
           probabilities: {},
         },
       },
@@ -54,13 +55,13 @@ describe("sender categorization decisions", () => {
         sender_0: {
           type: "choice",
           choice: "category_0",
-          confidence: 0.8,
+          confidence: 0.97,
           probabilities: {},
         },
         sender_1: {
           type: "choice",
           choice: "category_1",
-          confidence: 0.4,
+          confidence: 0.9,
           probabilities: {},
         },
       },

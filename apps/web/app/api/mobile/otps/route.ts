@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createEmailProvider } from "@/utils/email/provider";
 import { withAuth } from "@/utils/middleware";
 import prisma from "@/utils/prisma";
+import { accessibleEmailAccountWhere } from "@/utils/email-account-access";
 import { loadRecentOtpSummary } from "./summary";
 import { EMAIL_ACCOUNT_ORDER_BY } from "@/utils/email-account-order";
 
@@ -23,7 +24,7 @@ export const GET = withAuth("mobile/otps", async (request) => {
   const accounts = await prisma.emailAccount.findMany({
     where: {
       ...(accountId ? { id: accountId } : {}),
-      userId: request.auth.userId,
+      ...accessibleEmailAccountWhere(request.auth.userId),
       account: { disconnectedAt: null },
     },
     select: {

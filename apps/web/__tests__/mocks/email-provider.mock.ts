@@ -78,6 +78,7 @@ export function createMockEmailProvider(
     getSentMessageIds: vi.fn().mockResolvedValue({ messages: [] }),
     getSentThreadsExcluding: vi.fn().mockResolvedValue([]),
     getDrafts: vi.fn().mockResolvedValue([]),
+    getDraftStatus: vi.fn().mockResolvedValue({ status: "unknown" }),
     getMessagesWithPagination: vi
       .fn()
       .mockResolvedValue({ messages: [], nextPageToken: undefined }),

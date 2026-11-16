@@ -947,6 +947,22 @@ export function getRuleActionTypeOptions({
           },
         ]
       : []),
+    ...(extraActions.has(ActionType.HOME_ASSISTANT)
+      ? [
+          {
+            label: ACTION_TYPE_LABELS[ActionType.HOME_ASSISTANT],
+            value: ActionType.HOME_ASSISTANT,
+          },
+        ]
+      : []),
+    ...(extraActions.has(ActionType.CREATE_TASK)
+      ? [
+          {
+            label: ACTION_TYPE_LABELS[ActionType.CREATE_TASK],
+            value: ActionType.CREATE_TASK,
+          },
+        ]
+      : []),
     ...(extraActions.has(ActionType.A2A_NOTIFY)
       ? [
           {

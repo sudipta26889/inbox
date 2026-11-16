@@ -558,6 +558,39 @@ describe("chat route rule freshness persistence", () => {
     expect(currentMessage.parts[0].text).toContain("left the mail screen");
   });
 
+  it("drops stored tool calls that never got a result, so the chat keeps working", async () => {
+    mockConvertToUIMessages.mockReturnValueOnce([
+      {
+        id: "assistant-old",
+        role: "assistant",
+        parts: [
+          { type: "text", text: "Looking" },
+          {
+            type: "tool-searchInbox",
+            toolCallId: "t1",
+            state: "input-available",
+          },
+          {
+            type: "tool-getLabels",
+            toolCallId: "t2",
+            state: "output-available",
+            output: {},
+          },
+        ],
+      },
+    ]);
+
+    await POST(createRequest());
+
+    const sent = mockConvertToModelMessages.mock
+      .calls[0]?.[0] as unknown as Array<{
+      id: string;
+      parts: Array<{ toolCallId?: string }>;
+    }>;
+    const old = sent.find((m) => m.id === "assistant-old");
+    expect(old?.parts.map((p) => p.toolCallId)).toEqual([undefined, "t2"]);
+  });
+
   it("marks chats with prior messages as having history", async () => {
     prisma.chat.findUnique.mockResolvedValueOnce({
       id: "chat-1",

@@ -17,7 +17,11 @@ import chunk from "lodash/chunk";
 import type { Attachment as MailAttachment } from "nodemailer/lib/mailer";
 import { mapWithConcurrency } from "@/utils/async";
 import { toMailerAttachments } from "@/utils/types/mail";
-import type { MessageWithPayload, ParsedMessage } from "@/utils/types";
+import type {
+  DraftStatus,
+  MessageWithPayload,
+  ParsedMessage,
+} from "@/utils/types";
 import { parseMessage } from "@/utils/gmail/message";
 import {
   getMessage,
@@ -92,6 +96,7 @@ import { decodeSnippet } from "@/utils/gmail/decode";
 import {
   getDraft,
   getDraftIdForMessage,
+  getDraftStatus,
   deleteDraft,
   sendDraft,
 } from "@/utils/gmail/draft";
@@ -122,7 +127,9 @@ import type {
   EmailLabelUpdate,
   GetThreadOptions,
   DraftAttachmentUploadStart,
+  SendEmailOptions,
 } from "@/utils/email/types";
+import type { SendApproval, SendGate } from "@/utils/mail/send-approval";
 import type { DraftAttachmentMetadata } from "@/utils/actions/draft-attachments.validation";
 import {
   buildGmailDraftUploadTemplate,
@@ -176,6 +183,17 @@ export class GmailProvider implements EmailProvider {
 
   toJSON() {
     return { name: this.name, type: "GmailProvider" };
+  }
+
+  private sendGate(options?: {
+    approval?: SendApproval;
+    operationId?: string;
+  }): SendGate {
+    return {
+      emailAccountId: this.emailAccountId,
+      approval: options?.approval,
+      operationId: options?.operationId,
+    };
   }
 
   async countMessages({
@@ -974,7 +992,15 @@ export class GmailProvider implements EmailProvider {
   }
 
   async getDraft(draftId: string): Promise<ParsedMessage | null> {
-    return getDraft(draftId, this.client);
+    const message = await getDraft(draftId, this.client);
+    return message && { ...message, draftId };
+  }
+
+  async getDraftStatus(
+    draftId: string,
+    threadId?: string,
+  ): Promise<DraftStatus> {
+    return getDraftStatus(this.client, draftId, threadId);
   }
 
   async getDraftReferenceForMessage(messageId: string) {
@@ -988,8 +1014,11 @@ export class GmailProvider implements EmailProvider {
 
   async sendDraft(
     draftId: string,
+    options?: Pick<SendEmailOptions, "approval">,
   ): Promise<{ messageId: string; threadId: string }> {
-    return sendDraft(this.client, draftId);
+    return sendDraft(this.client, draftId, this.sendGate(options), (changes) =>
+      this.updateDraft(draftId, changes),
+    );
   }
 
   async createDraft(params: {
@@ -1001,7 +1030,9 @@ export class GmailProvider implements EmailProvider {
     messageHtml: string;
     replyToMessageId?: string;
     forwardedMessageId?: string;
-  }): Promise<{ id: string }> {
+    threadId?: string;
+    attachments?: MailAttachment[];
+  }): Promise<{ id: string; threadId?: string }> {
     this.logger.info("Creating Gmail draft", {
       replyToMessageId: params.replyToMessageId,
       forwardedMessageId: params.forwardedMessageId,
@@ -1042,7 +1073,7 @@ export class GmailProvider implements EmailProvider {
       subject: params.subject,
       text: convertEmailHtmlToText({ htmlText: params.messageHtml }),
       html: params.messageHtml,
-      attachments: forwardedAttachments,
+      attachments: [...(params.attachments ?? []), ...forwardedAttachments],
       ...buildThreadingHeaders({
         headerMessageId,
         references: parentReferences,
@@ -1052,12 +1083,15 @@ export class GmailProvider implements EmailProvider {
 
     const result = await uploadGmailDraftMessage(
       this.client,
-      { threadId },
+      { threadId: threadId ?? params.threadId },
       message,
     );
 
     this.logger.info("Gmail draft created", { draftId: result.id });
-    return { id: result.id || "" };
+    return {
+      id: result.id || "",
+      threadId: result.message?.threadId || undefined,
+    };
   }
 
   async updateDraft(
@@ -1190,6 +1224,7 @@ export class GmailProvider implements EmailProvider {
       cc?: string;
       bcc?: string;
       attachments?: MailAttachment[];
+      operationId?: string;
     },
   ): Promise<{ messageId: string }> {
     const result = await replyToEmail(
@@ -1198,6 +1233,7 @@ export class GmailProvider implements EmailProvider {
       content,
       options?.from ?? (await this.getReplyFromAddress(email)),
       options,
+      this.sendGate(options),
     );
     return { messageId: requireSentMessageId(result.data.id) };
   }
@@ -1209,12 +1245,17 @@ export class GmailProvider implements EmailProvider {
     subject: string;
     messageText: string;
     attachments?: MailAttachment[];
+    operationId?: string;
   }): Promise<{ messageId: string }> {
-    const result = await sendEmailWithPlainText(this.client, args);
+    const result = await sendEmailWithPlainText(
+      this.client,
+      args,
+      this.sendGate(args),
+    );
     return { messageId: requireSentMessageId(result.data.id) };
   }
 
-  async sendEmailWithHtml(body: SendEmailBody) {
+  async sendEmailWithHtml(body: SendEmailBody, options?: SendEmailOptions) {
     const result = await sendEmailWithHtml(
       this.client,
       {
@@ -1222,6 +1263,7 @@ export class GmailProvider implements EmailProvider {
         attachments: toMailerAttachments(body.attachments),
       },
       this.logger,
+      this.sendGate(options),
     );
     return {
       messageId: result.data.id || "",
@@ -1237,11 +1279,17 @@ export class GmailProvider implements EmailProvider {
       bcc?: string;
       content?: string;
       from?: string;
+      operationId?: string;
     },
   ): Promise<{ messageId: string }> {
     const parsedMessage = await this.getMessage(email.id);
 
-    const result = await forwardEmail(this.client, parsedMessage, args);
+    const result = await forwardEmail(
+      this.client,
+      parsedMessage,
+      args,
+      this.sendGate(args),
+    );
     return { messageId: requireSentMessageId(result.data.id) };
   }
 
@@ -1636,9 +1684,13 @@ export class GmailProvider implements EmailProvider {
     });
 
     const drafts = response.data.drafts || [];
+    // Gmail's draft id is not the message id; the drafts API needs the former.
     const messagePromises = drafts
       .filter((draft) => draft.message?.id)
-      .map((draft) => this.getMessage(draft.message!.id!));
+      .map(async (draft) => ({
+        ...(await this.getMessage(draft.message!.id!)),
+        draftId: draft.id ?? undefined,
+      }));
 
     return Promise.all(messagePromises);
   }

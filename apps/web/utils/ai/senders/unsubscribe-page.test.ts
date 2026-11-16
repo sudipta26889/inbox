@@ -57,6 +57,27 @@ describe("aiCheckUnsubscribePageState", () => {
     expect(result).toBe("not_confirmed");
   });
 
+  // createGenerateObject hardens and forwards `instructions` only; a prompt
+  // passed as `system` is replaced by the hardening text and never reaches the
+  // model.
+  it("sends the classification rules as the model's instructions", async () => {
+    mockGenerateObject.mockResolvedValue({ object: { state: "confirmed" } });
+
+    await aiCheckUnsubscribePageState({
+      pageText: "You have been removed from this list.",
+      emailAccount: getEmailAccount(),
+    });
+
+    const call = mockGenerateObject.mock.calls[0]?.[0] as {
+      instructions?: string;
+      system?: string;
+    };
+    expect(call.instructions).toContain(
+      "does the page state that the unsubscribe has already happened?",
+    );
+    expect(call.system).toBeUndefined();
+  });
+
   it("does not confirm when the model call fails", async () => {
     mockGenerateObject.mockRejectedValue(new Error("no model configured"));
 

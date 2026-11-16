@@ -90,6 +90,10 @@ export function getActionDisplayText(
     }
     case ActionType.NOTIFY_SENDER:
       return i18n._(msg`Notify Sender`);
+    case ActionType.HOME_ASSISTANT:
+      return i18n._(msg`Home Assistant`);
+    case ActionType.CREATE_TASK:
+      return "TaskPilot";
     case ActionType.A2A_NOTIFY:
       return i18n._(msg`A2A Notify`);
     case ActionType.INTEGRATION: {

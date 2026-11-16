@@ -14,6 +14,8 @@ import {
   TagIcon,
   WebhookIcon,
   FileTextIcon,
+  HomeIcon,
+  ListChecksIcon,
   MailIcon,
   NewspaperIcon,
   RadioTowerIcon,
@@ -113,6 +115,10 @@ export function getActionDisplay(
         : "Notify";
     case ActionType.NOTIFY_SENDER:
       return "Notify Sender";
+    case ActionType.HOME_ASSISTANT:
+      return "Home Assistant";
+    case ActionType.CREATE_TASK:
+      return "TaskPilot";
     case ActionType.A2A_NOTIFY:
       return "A2A Notify";
     case ActionType.INTEGRATION: {
@@ -144,6 +150,8 @@ export const ACTION_TYPE_LABELS = {
   [ActionType.CALL_WEBHOOK]: msg`Call webhook`,
   [ActionType.DIGEST]: msg`Add to digest`,
   [ActionType.NOTIFY_SENDER]: msg`Notify sender`,
+  [ActionType.HOME_ASSISTANT]: msg`Home Assistant`,
+  [ActionType.CREATE_TASK]: msg`TaskPilot`,
   [ActionType.A2A_NOTIFY]: msg`A2A notify`,
   // ActionType alone cannot name a specific tool; getIntegrationActionLabel
   // gives the precise name when the action is known.
@@ -197,6 +205,10 @@ export function getActionIcon(actionType: ActionType) {
       return BellIcon;
     case ActionType.NOTIFY_SENDER:
       return BellIcon;
+    case ActionType.HOME_ASSISTANT:
+      return HomeIcon;
+    case ActionType.CREATE_TASK:
+      return ListChecksIcon;
     case ActionType.A2A_NOTIFY:
       return RadioTowerIcon;
     case ActionType.INTEGRATION:

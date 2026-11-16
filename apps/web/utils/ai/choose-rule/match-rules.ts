@@ -47,7 +47,11 @@ import {
   isColdEmail,
 } from "@/utils/cold-email/is-cold-email";
 import { decisionModelChooseRule } from "@/utils/decision-model/choose-rule";
-import { getDecisionModelConfig } from "@/utils/decision-model/decision-model";
+import {
+  getDecisionModelConfig,
+  isDecisionFeatureLive,
+  recordDecisionModelRun,
+} from "@/utils/decision-model/decision-model";
 import { isConversationStatusType } from "@/utils/reply-tracker/conversation-status-config";
 import { getClassificationFeedback } from "@/utils/rule/classification-feedback";
 import {
@@ -148,9 +152,30 @@ export async function findMatchingRules({
         })
       : null;
 
-  const decisionModel = potentialAiMatches.length
+  const decisionModelConfig = potentialAiMatches.length
     ? await getDecisionModelConfig(emailAccount)
     : null;
+  // Rule choice stays with the LLM unless "choose-rule" is in
+  // DECISION_MODEL_LIVE; otherwise the decision model only runs in shadow.
+  const decisionModel =
+    decisionModelConfig && isDecisionFeatureLive("choose-rule")
+      ? decisionModelConfig
+      : null;
+  const shadowStartedAt = Date.now();
+  const shadowSelection =
+    decisionModelConfig && !decisionModel
+      ? decisionModelChooseRule({
+          decisionModel: decisionModelConfig,
+          message,
+          emailAccount,
+          rules: potentialAiMatches,
+          classificationFeedback,
+          logger,
+        }).then(
+          (selection) => ({ ok: true as const, selection }),
+          (error: unknown) => ({ ok: false as const, error }),
+        )
+      : null;
 
   if (decisionModel) {
     const selection = await decisionModelChooseRule({
@@ -193,14 +218,59 @@ export async function findMatchingRules({
     };
   }
 
-  const llmResult = await aiChooseRule({
-    email,
-    rules: potentialAiMatches,
-    emailAccount,
-    modelType,
-    logger,
-    classificationFeedback,
-  });
+  // ponytail: the shadow record is not awaited, so it never delays the rule
+  // choice. It is written on LLM failure too: those are the cases where the
+  // comparison matters most.
+  const recordShadow = (
+    llm: { ok: true; result: RuleChoice } | { ok: false; error: unknown },
+  ) => {
+    if (!shadowSelection || !decisionModelConfig) return;
+    shadowSelection.then((run) => {
+      const decided =
+        run.ok && run.selection.type === "rules" ? run.selection : null;
+      const errors = [
+        llm.ok ? null : `LLM: ${getErrorMessage(llm.error)}`,
+        run.ok ? null : `Jev: ${getErrorMessage(run.error)}`,
+      ].filter(Boolean);
+      return recordDecisionModelRun({
+        emailAccountId: emailAccount.id,
+        feature: "choose-rule",
+        subjectKey: message.threadId,
+        mode: "shadow",
+        model: decisionModelConfig.modelId,
+        latencyMs: Date.now() - shadowStartedAt,
+        outcome: !llm.ok
+          ? "llm-error"
+          : !run.ok
+            ? "error"
+            : !decided
+              ? "uncertain"
+              : getPrimaryRuleId(decided) === getPrimaryRuleId(llm.result)
+                ? "agree"
+                : "disagree",
+        jevResult: run.ok ? summarizeRuleChoice(run.selection) : undefined,
+        llmResult: llm.ok ? summarizeRuleChoice(llm.result) : undefined,
+        error: errors.length ? errors.join(" | ") : undefined,
+        logger,
+      });
+    });
+  };
+
+  let llmResult: Awaited<ReturnType<typeof aiChooseRule>>;
+  try {
+    llmResult = await aiChooseRule({
+      email,
+      rules: potentialAiMatches,
+      emailAccount,
+      modelType,
+      logger,
+      classificationFeedback,
+    });
+  } catch (error) {
+    recordShadow({ ok: false, error });
+    throw error;
+  }
+  recordShadow({ ok: true, result: llmResult });
 
   return mergeAiResultsIntoMatches({
     matches,
@@ -1060,4 +1130,38 @@ function getStaticMatchBodyText(message: ParsedMessage) {
     wordwrap: false,
     uppercaseHeadings: false,
   });
+}
+
+type RuleChoice = {
+  rules: { rule: { id: string }; isPrimary?: boolean }[];
+  reason: string;
+};
+
+function getPrimaryRuleId(result: {
+  rules: { rule: { id: string }; isPrimary?: boolean }[];
+}) {
+  return (
+    result.rules.find((item) => item.isPrimary)?.rule.id ??
+    result.rules[0]?.rule.id ??
+    null
+  );
+}
+
+// Rule ids and the reason only: the full rule objects carry user instructions.
+function summarizeRuleChoice(result: {
+  type?: string;
+  rules?: { rule: { id: string }; isPrimary?: boolean }[];
+  reason: string;
+}) {
+  return {
+    ruleIds: (result.rules ?? []).map((item) => item.rule.id),
+    primaryRuleId: result.rules
+      ? getPrimaryRuleId({ rules: result.rules })
+      : null,
+    reason: result.reason,
+  };
+}
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Non-Error rejection";
 }

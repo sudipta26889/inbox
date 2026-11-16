@@ -26,8 +26,10 @@ import {
   extractMemories,
 } from "@/utils/ai/assistant/compact";
 import { toChatActionTotals } from "@/utils/ai/assistant/chat-action-totals";
-import { getInboxStatsForChatContext } from "@/utils/ai/assistant/get-inbox-stats-for-chat-context";
-import { formatUtcDate } from "@/utils/date";
+import {
+  loadAgentContext,
+  memoryQueryFromParts,
+} from "@/utils/ai/assistant/agent-context";
 import {
   buildUserChatMessageMetadata,
   mapUiMessagesToChatMessageRows,
@@ -74,12 +76,6 @@ export const POST = withEmailAccount("chat", async (request) => {
       { status: 404 },
     );
   }
-
-  const inboxStatsPromise = getInboxStatsForChatContext({
-    emailAccountId,
-    provider: user.account.provider,
-    logger: request.logger,
-  });
 
   const json = await request.json();
   const { data, error } = assistantInputSchema.safeParse(json);
@@ -158,6 +154,13 @@ export const POST = withEmailAccount("chat", async (request) => {
   const chatHasHistory =
     chat.messages.length > 0 || chat.compactions.length > 0;
   const { message, context, inlineActions } = data;
+  const agentContextPromise = loadAgentContext({
+    emailAccountId,
+    provider: user.account.provider,
+    surface: "web chat",
+    query: memoryQueryFromParts(message.parts),
+    logger: request.logger,
+  });
   const chatRunId = crypto.randomUUID();
   const runLogger = request.logger.with({ chatId: chat.id, chatRunId });
 
@@ -213,6 +216,8 @@ export const POST = withEmailAccount("chat", async (request) => {
     );
 
     const conversationUiMessages = [
+      // A stream that crashed mid-turn can leave a stored tool call with no
+      // result; the SDK then rejects every later turn of this chat.
       ...convertToUIMessages({
         ...chat,
         messages: messagesForModel.map((m) =>
@@ -220,7 +225,9 @@ export const POST = withEmailAccount("chat", async (request) => {
             ? withMailViewNote(m, getStoredMailView(m.metadata))
             : m,
         ),
-      }),
+      }).map((m) =>
+        m.role === "assistant" ? removeIncompleteToolParts(m) : m,
+      ),
       withMailViewNote(message, mailViewChange),
     ];
 
@@ -317,23 +324,7 @@ export const POST = withEmailAccount("chat", async (request) => {
       }
     }
 
-    let memories: { content: string; date: string }[] = [];
-    try {
-      const recentMemories = await prisma.chatMemory.findMany({
-        where: { emailAccountId },
-        orderBy: { createdAt: "desc" },
-        take: 20,
-        select: { content: true, createdAt: true },
-      });
-      memories = recentMemories.map((m) => ({
-        content: m.content,
-        date: formatUtcDate(m.createdAt),
-      }));
-    } catch (error) {
-      request.logger.warn("Failed to load memories for chat", { error });
-    }
-
-    const inboxStats = await inboxStatsPromise;
+    const { inboxStats, memories } = await agentContextPromise;
     let seenRulesRevision: number | null = null;
     const assistantRun: AssistantChatRunMetadata = {
       runId: chatRunId,

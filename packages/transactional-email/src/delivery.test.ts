@@ -45,7 +45,7 @@ describe("transactional email delivery", () => {
       html: "<p>Hello</p>",
       subject: "Subject",
       text: "Hello",
-      to: "recipient@example.test",
+      to: "recipient@grihatek.com",
     };
 
     expect(isTransactionalEmailConfigured()).toBe(true);
@@ -56,5 +56,21 @@ describe("transactional email delivery", () => {
     expect(send).toHaveBeenCalledWith(message, {
       idempotencyKey: "delivery_1",
     });
+  });
+
+  it("refuses a live send to a reserved address before reaching the provider", async () => {
+    vi.stubEnv("RESEND_API_KEY", "api_key");
+    const { deliverTransactionalEmail } = await import("./delivery");
+
+    await expect(
+      deliverTransactionalEmail({
+        from: "sender@grihatek.com",
+        html: "<p>Hello</p>",
+        subject: "Subject",
+        text: "Hello",
+        to: "user@test.com",
+      }),
+    ).rejects.toThrow(/reserved\/test address/);
+    expect(send).not.toHaveBeenCalled();
   });
 });

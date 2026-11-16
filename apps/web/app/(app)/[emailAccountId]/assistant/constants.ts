@@ -10,7 +10,9 @@ import {
   WebhookIcon,
   FileTextIcon,
   FolderInputIcon,
+  HomeIcon,
   BellIcon,
+  ListChecksIcon,
   RadioTowerIcon,
   StarIcon,
   Trash2Icon,
@@ -34,6 +36,8 @@ export const ACTION_TYPE_TEXT_COLORS = {
   [ActionType.MOVE_FOLDER]: "text-emerald-500",
   [ActionType.NOTIFY_MESSAGING_CHANNEL]: "text-sky-500",
   [ActionType.NOTIFY_SENDER]: "text-amber-500",
+  [ActionType.HOME_ASSISTANT]: "text-indigo-500",
+  [ActionType.CREATE_TASK]: "text-sky-500",
   [ActionType.A2A_NOTIFY]: "text-cyan-500",
 } as const;
 
@@ -54,5 +58,7 @@ export const ACTION_TYPE_ICONS = {
   [ActionType.MOVE_FOLDER]: FolderInputIcon,
   [ActionType.NOTIFY_MESSAGING_CHANNEL]: BellIcon,
   [ActionType.NOTIFY_SENDER]: BellIcon,
+  [ActionType.HOME_ASSISTANT]: HomeIcon,
+  [ActionType.CREATE_TASK]: ListChecksIcon,
   [ActionType.A2A_NOTIFY]: RadioTowerIcon,
 } as const;

@@ -27,7 +27,10 @@ describe("/api/user/drafts", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     authMock.mockResolvedValue({ user: { id: "user-1" } });
-    getEmailAccountMock.mockResolvedValue("developer@example.com");
+    getEmailAccountMock.mockResolvedValue({
+      email: "developer@example.com",
+      ownerUserId: "user-1",
+    });
     provider.createDraft.mockResolvedValue({ id: "draft-1" });
     provider.updateDraft.mockResolvedValue(undefined);
     provider.getDraft.mockResolvedValue({

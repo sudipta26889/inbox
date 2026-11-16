@@ -24,9 +24,11 @@ import {
   importRulesBody,
 } from "@/utils/actions/rule.validation";
 import prisma from "@/utils/prisma";
+import { accessibleEmailAccountWhere } from "@/utils/email-account-access";
 import { isDuplicateError, isNotFoundError } from "@/utils/prisma-helpers";
 import { flattenConditions } from "@/utils/condition";
 import { ActionType, SystemType } from "@/generated/prisma/enums";
+import type { Prisma } from "@/generated/prisma/client";
 import { sanitizeActionFields } from "@/utils/action-item";
 import {
   deleteRule,
@@ -559,10 +561,11 @@ export const copyRulesFromAccountAction = actionClientUser
         throw new SafeError("Source and target accounts must be different");
       }
 
-      // Validate user owns both accounts
+      // Validate user owns, or has been shared, both accounts
+      const accessible = accessibleEmailAccountWhere(userId);
       const [sourceAccount, targetAccount] = await Promise.all([
         prisma.emailAccount.findUnique({
-          where: { id: sourceEmailAccountId },
+          where: { id: sourceEmailAccountId, ...accessible },
           select: {
             id: true,
             email: true,
@@ -570,7 +573,7 @@ export const copyRulesFromAccountAction = actionClientUser
           },
         }),
         prisma.emailAccount.findUnique({
-          where: { id: targetEmailAccountId },
+          where: { id: targetEmailAccountId, ...accessible },
           select: {
             id: true,
             email: true,
@@ -579,10 +582,10 @@ export const copyRulesFromAccountAction = actionClientUser
         }),
       ]);
 
-      if (!sourceAccount || sourceAccount.account.userId !== userId) {
+      if (!sourceAccount) {
         throw new SafeError("Source account not found or unauthorized");
       }
-      if (!targetAccount || targetAccount.account.userId !== userId) {
+      if (!targetAccount) {
         throw new SafeError("Target account not found or unauthorized");
       }
 
@@ -724,6 +727,13 @@ function mapActionToSanitizedFields(action: {
   integrationName?: string | null;
   integrationToolName?: string | null;
   integrationArgs?: Record<string, string | null | undefined> | null;
+  haIntegrationType?: string | null;
+  haWebhookId?: string | null;
+  haMqttTopic?: string | null;
+  haServiceDomain?: string | null;
+  haServiceName?: string | null;
+  haServiceData?: Prisma.JsonValue | null;
+  haEntityId?: string | null;
 }) {
   const nonEmptyIntegrationArgs = action.integrationArgs
     ? (Object.fromEntries(
@@ -753,6 +763,13 @@ function mapActionToSanitizedFields(action: {
     integrationName: action.integrationName,
     integrationToolName: action.integrationToolName,
     integrationArgs: nonEmptyIntegrationArgs,
+    haIntegrationType: action.haIntegrationType,
+    haWebhookId: action.haWebhookId,
+    haMqttTopic: action.haMqttTopic,
+    haServiceDomain: action.haServiceDomain,
+    haServiceName: action.haServiceName,
+    haServiceData: action.haServiceData,
+    haEntityId: action.haEntityId,
   });
 
   return {
@@ -775,6 +792,13 @@ function mapActionToSanitizedFields(action: {
     integrationName: sanitized.integrationName ?? null,
     integrationToolName: sanitized.integrationToolName ?? null,
     integrationArgs: sanitized.integrationArgs ?? null,
+    haIntegrationType: sanitized.haIntegrationType,
+    haWebhookId: sanitized.haWebhookId,
+    haMqttTopic: sanitized.haMqttTopic,
+    haServiceDomain: sanitized.haServiceDomain,
+    haServiceName: sanitized.haServiceName,
+    haServiceData: sanitized.haServiceData ?? null,
+    haEntityId: sanitized.haEntityId,
   };
 }
 
@@ -1018,6 +1042,15 @@ export const importRulesAction = actionClient
             integrationName: action.integrationName,
             integrationToolName: action.integrationToolName,
             integrationArgs: action.integrationArgs ?? undefined,
+            haIntegrationType: action.haIntegrationType,
+            haWebhookId: action.haWebhookId,
+            haMqttTopic: action.haMqttTopic,
+            haServiceDomain: action.haServiceDomain,
+            haServiceName: action.haServiceName,
+            haServiceData: (action.haServiceData ?? undefined) as
+              | Prisma.InputJsonValue
+              | undefined,
+            haEntityId: action.haEntityId,
           }));
 
           await assertIntegrationActionsConnected(

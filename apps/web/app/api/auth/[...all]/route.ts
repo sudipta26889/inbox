@@ -4,6 +4,12 @@ import { deduplicateOAuthCallback } from "@/utils/oauth/auth-callback-deduplicat
 import { createScopedLogger } from "@/utils/logger";
 import { isMcpServerAvailable } from "@/utils/mcp/config";
 import { getMcpOAuthRateLimitResponse } from "@/utils/mcp/rate-limit";
+import {
+  AUTH_BODY_LIMIT,
+  bodyTooLargeResponse,
+  readBodyWithLimit,
+  rebuildRequest,
+} from "@/utils/request-body-limit";
 
 const logger = createScopedLogger("auth/oauth-callback");
 const handlers = toNextJsHandler(betterAuthConfig);
@@ -11,9 +17,16 @@ const handlers = toNextJsHandler(betterAuthConfig);
 export const maxDuration = 300;
 export const { PUT, PATCH, DELETE } = handlers;
 
-export const POST: typeof handlers.POST = async (...args) => {
-  const [request] = args;
-  return withMcpOAuthRateLimit(request, () => handlers.POST(...args));
+export const POST: typeof handlers.POST = async (request) => {
+  return withMcpOAuthRateLimit(request, async () => {
+    // Read through a hard byte limit: this route is public and better-auth
+    // would otherwise buffer any body it is sent.
+    const body = await readBodyWithLimit(request, AUTH_BODY_LIMIT);
+    if (!body.ok)
+      return bodyTooLargeResponse({ error: "Request body too large" });
+
+    return handlers.POST(rebuildRequest(request, body.bytes));
+  });
 };
 
 export const GET: typeof handlers.GET = async (...args) => {

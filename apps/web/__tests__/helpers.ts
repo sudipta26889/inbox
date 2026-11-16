@@ -1,3 +1,4 @@
+import type { McpResult } from "@/utils/mcp-server/envelope";
 import type { EmailAccountWithAI } from "@/utils/llms/types";
 import type { EmailForLLM } from "@/utils/types";
 import type { EmailProvider } from "@/utils/email/types";
@@ -25,6 +26,7 @@ type TestAuth = {
 };
 
 type TestEmailAccountAuth = {
+  actorUserId?: string;
   email: string;
   emailAccountId: string;
   userId: string;
@@ -150,7 +152,11 @@ export function addTestEmailAccountAuth<TRequest extends Request>(
     logger?: ReturnType<typeof createTestLogger>;
   } = {},
 ) {
-  return Object.assign(request, { auth, logger });
+  // Tests act as the owner unless they set a different signed-in user.
+  return Object.assign(request, {
+    auth: { actorUserId: auth.userId, ...auth },
+    logger,
+  });
 }
 
 function createAuthTestMiddlewareWrapper(
@@ -545,4 +551,43 @@ export function getMockOrganizationMembership({
       ],
     },
   };
+}
+
+type DeepPartial<T> = T extends Date
+  ? T
+  : T extends (infer U)[]
+    ? DeepPartial<U>[]
+    : T extends object
+      ? { [K in keyof T]?: DeepPartial<T[K]> }
+      : T;
+
+/**
+ * A partial prisma row typed as the full row, for mocks whose code under test
+ * reads only a few fields. Pass `T` explicitly when the query includes
+ * relations the bare row type does not have.
+ */
+export function partialRow<T>(
+  value: {
+    [K in keyof NoInfer<T>]?: DeepPartial<NoInfer<T>[K]>;
+  },
+): T {
+  return value as T;
+}
+
+/**
+ * Unwrap a successful MCP envelope, failing with the error code otherwise, so
+ * a test that unexpectedly gets a failure reports why.
+ */
+export function expectMcpData<T>(result: McpResult<T>): T {
+  if (!result.ok) {
+    throw new Error(
+      `Expected a successful envelope, got ${result.error.code}: ${result.error.message}`,
+    );
+  }
+
+  if (result.data === undefined) {
+    throw new Error("Expected data on the success envelope, got none");
+  }
+
+  return result.data;
 }

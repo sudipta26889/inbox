@@ -7,6 +7,7 @@ import {
 } from "@/generated/prisma/enums";
 import type { gmail_v1 } from "@googleapis/gmail";
 import { redis } from "@/utils/redis";
+import { MessageInFlightError } from "@/utils/redis/message-processing";
 import { ProviderRateLimitModeError } from "@/utils/email/rate-limit-mode-error";
 import { GmailLabel } from "@/utils/gmail/label";
 import { getEmailAccount, createTestLogger } from "@/__tests__/helpers";
@@ -17,7 +18,9 @@ import { handleLabelRemovedEvent } from "@/utils/webhook/google/process-label-re
 const logger = createTestLogger();
 
 vi.mock("@/utils/prisma");
-vi.mock("@/utils/redis", () => ({ redis: { set: vi.fn(), eval: vi.fn() } }));
+vi.mock("@/utils/redis", () => ({
+  redis: { set: vi.fn(), get: vi.fn(), eval: vi.fn() },
+}));
 
 vi.mock("@/utils/gmail/thread", () => ({
   getThreadMessages: vi.fn().mockImplementation(async (_gmail, threadId) => [
@@ -111,10 +114,14 @@ describe("processHistoryItem", () => {
       locks.set(key, value);
       return "OK";
     });
-    vi.mocked(redis.eval).mockImplementation(async (_script, keys, args) => {
+    vi.mocked(redis.get).mockImplementation(
+      async (key) => (locks.get(key) as never) ?? null,
+    );
+    vi.mocked(redis.eval).mockImplementation(async (script, keys, args) => {
       const key = String(keys[0]);
       if (locks.get(key) !== args[0]) return 0;
-      locks.delete(key);
+      if (script.includes('"DEL"')) locks.delete(key);
+      else locks.set(key, args[1]);
       return 1;
     });
   });
@@ -201,8 +208,9 @@ describe("processHistoryItem", () => {
     expect(getMessage).toHaveBeenCalledTimes(2);
   });
 
-  it("should skip if message is already being processed", async () => {
+  it("should skip if message was already processed", async () => {
     vi.mocked(redis.set).mockResolvedValueOnce(null);
+    vi.mocked(redis.get).mockResolvedValueOnce("done");
 
     const options = {
       ...defaultOptions,
@@ -210,6 +218,20 @@ describe("processHistoryItem", () => {
     };
 
     await processHistoryItem(createHistoryItem(), options, logger);
+  });
+
+  it("throws so the history cursor stops when another run still holds the message", async () => {
+    vi.mocked(redis.set).mockResolvedValueOnce(null);
+    vi.mocked(redis.get).mockResolvedValueOnce("other-run-token");
+
+    const options = {
+      ...defaultOptions,
+      emailAccount: getDefaultEmailAccount(),
+    };
+
+    await expect(
+      processHistoryItem(createHistoryItem(), options, logger),
+    ).rejects.toBeInstanceOf(MessageInFlightError);
   });
 
   it("handles outbound message-added events", async () => {

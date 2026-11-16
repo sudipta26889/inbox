@@ -20,6 +20,7 @@ import type { ParsedMessage } from "@/utils/types";
 import prisma from "@/utils/prisma";
 import { callMcpTool } from "@/utils/mcp/call-tool";
 import { createTestLogger } from "@/__tests__/helpers";
+import { executeHomeAssistantAction } from "@/utils/home-assistant";
 import {
   getRemoteAgentUrls,
   resolveA2aEndpoint,
@@ -83,6 +84,9 @@ vi.mock("@/utils/cold-email/send-notification", () => ({
   sendColdEmailNotification: vi.fn().mockResolvedValue({ success: true }),
 }));
 
+vi.mock("@/utils/home-assistant", () => ({
+  executeHomeAssistantAction: vi.fn(),
+}));
 vi.mock("@/utils/a2a-client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/utils/a2a-client")>()),
   getRemoteAgentUrls: vi.fn(() => []),
@@ -420,6 +424,44 @@ describe("runActionFunction", () => {
         messagingMessageStatus: MessagingMessageStatus.FAILED,
       },
     });
+  });
+
+  // Upstream's action options carry no userId; the HA credentials live on the
+  // User, so the owner id must come from emailAccount.userId.
+  it("runs HOME_ASSISTANT actions for the account owner with an object service payload", async () => {
+    const result = await runActionFunction({
+      client: createMockEmailProvider(),
+      email,
+      action: {
+        id: "action-1",
+        type: ActionType.HOME_ASSISTANT,
+        haIntegrationType: "service_call",
+        haServiceDomain: "notify",
+        haServiceName: "mobile_app_phone",
+        haServiceData: ["not", "an", "object"],
+      },
+      emailAccount,
+      executedRule: {
+        id: "executed-rule-1",
+        threadId: "thread-1",
+        emailAccountId: "account-1",
+        ruleId: "rule-1",
+      } as any,
+      logger,
+    });
+
+    expect(result).toEqual({ success: true });
+    expect(executeHomeAssistantAction).toHaveBeenCalledWith(
+      emailAccount.userId,
+      expect.objectContaining({ threadId: email.threadId }),
+      expect.objectContaining({ ruleId: "rule-1" }),
+      expect.anything(),
+      expect.objectContaining({
+        type: "service_call",
+        serviceDomain: "notify",
+        serviceData: undefined,
+      }),
+    );
   });
 
   it("sends NOTIFY_MESSAGING_CHANNEL actions through the messaging notification path", async () => {

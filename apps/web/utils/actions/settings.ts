@@ -10,7 +10,9 @@ import {
   saveDigestScheduleBody,
   updateDigestItemsBody,
   toggleDigestBody,
+  updateMqttSettingsBody,
 } from "@/utils/actions/settings.validation";
+import { updateMqttSettings } from "@/utils/mqtt/settings";
 import { DEFAULT_PROVIDER, Provider } from "@/utils/llms/config";
 import prisma from "@/utils/prisma";
 import {
@@ -85,7 +87,9 @@ export const updateAiSettingsAction = actionClientUser
         nextAiApiKey =
           existingUser.aiProvider === aiProvider ? existingUser.aiApiKey : null;
 
-        if (!nextAiApiKey) {
+        // The LiteLLM gateway can run on the deployment's key, so a blank
+        // per-user key is allowed there.
+        if (!nextAiApiKey && aiProvider !== Provider.LITELLM) {
           throw new SafeError("You must provide an API key for this provider");
         }
       }
@@ -324,6 +328,13 @@ export const toggleDigestAction = actionClient
 
       return { success: true };
     },
+  );
+
+export const updateMqttSettingsAction = actionClient
+  .metadata({ name: "updateMqttSettings" })
+  .inputSchema(updateMqttSettingsBody)
+  .action(async ({ ctx: { emailAccountId }, parsedInput }) =>
+    updateMqttSettings({ emailAccountId }, parsedInput),
   );
 
 // A typo in a custom model name otherwise only shows up later, as failed or

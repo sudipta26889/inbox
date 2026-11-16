@@ -42,6 +42,7 @@ vi.mock("@/utils/oauth/reconnect-target", () => ({
   findReconnectTarget: mockFindReconnectTarget,
 }));
 
+import { parseSignedOAuthState } from "@/utils/oauth/state";
 import { GET } from "./route";
 
 describe("google linking auth-url route", () => {
@@ -70,5 +71,47 @@ describe("google linking auth-url route", () => {
 
     expect(response.status).toBe(200);
     expect(mockGenerateAuthUrl).toHaveBeenCalled();
+  });
+
+  it("links a shared mailbox as its owner so the callback refreshes tokens", async () => {
+    mockFindReconnectTarget.mockResolvedValue({
+      id: "mailbox-1",
+      email: "mailbox@example.com",
+      userId: "owner-1",
+    });
+
+    const response = await GET(
+      new NextRequest(
+        "http://localhost:3000/api/google/linking/auth-url?emailAccountId=mailbox-1",
+      ),
+      {} as never,
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockFindReconnectTarget).toHaveBeenCalledWith({
+      emailAccountId: "mailbox-1",
+      userId: "user-1",
+      provider: "google",
+    });
+    const cookie = response.cookies.get("google_linking_state")?.value;
+    const state = parseSignedOAuthState<{
+      userId: string;
+      reconnectEmailAccountId: string;
+    }>(cookie as string);
+    expect(state.userId).toBe("owner-1");
+    expect(state.reconnectEmailAccountId).toBe("mailbox-1");
+  });
+
+  it("refuses a reconnect for a mailbox the user can't access", async () => {
+    mockFindReconnectTarget.mockResolvedValue(null);
+
+    const response = await GET(
+      new NextRequest(
+        "http://localhost:3000/api/google/linking/auth-url?emailAccountId=mailbox-1",
+      ),
+      {} as never,
+    );
+
+    expect(response.status).toBe(404);
   });
 });

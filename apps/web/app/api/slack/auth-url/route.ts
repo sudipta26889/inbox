@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { env } from "@/env";
 import { withEmailAccount } from "@/utils/middleware";
 import prisma from "@/utils/prisma";
+import { sharedUserRefusal } from "@/utils/email-account-access";
 import { MessagingProvider } from "@/generated/prisma/enums";
 import {
   SLACK_STATE_COOKIE_NAME,
@@ -19,6 +20,9 @@ export type GetSlackAuthUrlResponse = {
 };
 
 export const GET = withEmailAccount("slack/auth-url", async (request) => {
+  const refusal = sharedUserRefusal(request.auth);
+  if (refusal) return refusal;
+
   const { emailAccountId } = request.auth;
 
   if (!env.SLACK_CLIENT_ID || !env.SLACK_CLIENT_SECRET) {
