@@ -402,9 +402,13 @@ export async function revokeAccessToken(
     return false;
   }
 
+  // RFC 7009 accepts either token. The pair shares one row, so revoking it
+  // by whichever jti was presented ends both.
   const result = await prisma.mcpServerAccessToken.updateMany({
     where: {
-      accessToken: payload.jti,
+      ...(payload.token_type === "refresh"
+        ? { refreshToken: payload.jti }
+        : { accessToken: payload.jti }),
       revoked: false,
     },
     data: {
@@ -414,7 +418,10 @@ export async function revokeAccessToken(
     },
   });
 
-  logger.info("Revoked MCP access token", { jti: payload.jti });
+  logger.info("Revoked MCP token", {
+    jti: payload.jti,
+    tokenType: payload.token_type,
+  });
   return result.count > 0;
 }
 

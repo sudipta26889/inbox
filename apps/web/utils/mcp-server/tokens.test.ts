@@ -195,33 +195,57 @@ describe("refreshAccessToken", () => {
 });
 
 describe("revokeAccessToken", () => {
-  it("records that the user revoked it", async () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
     prisma.mcpServerAccessToken.updateMany.mockResolvedValue({ count: 1 });
-    const now = Math.floor(Date.now() / 1000);
-    const token = createJwtToken(
-      {
-        sub: "user-1",
-        email: "user@test.com",
-        email_account_id: "account-1",
-        scope: "email:read",
-        client_id: "client-1",
-        exp: now + 3600,
-        iat: now,
-        jti: "access-jti",
-        token_type: "access",
-      },
-      SECRET,
-    );
+  });
 
-    await revokeAccessToken(token, SECRET);
+  // RFC 7009 accepts either token. The pair shares one row, so revoking that
+  // row ends both: the refresh token can no longer mint access tokens.
+  it.each([
+    ["access", { accessToken: "the-jti" }],
+    ["refresh", { refreshToken: "the-jti" }],
+  ] as const)("revokes the row of a presented %s token, recorded as the user's", async (type, where) => {
+    await revokeAccessToken(revocationToken(type), SECRET);
 
-    expect(prisma.mcpServerAccessToken.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ revokedReason: "user" }),
-      }),
-    );
+    expect(prisma.mcpServerAccessToken.updateMany).toHaveBeenCalledWith({
+      where: { ...where, revoked: false },
+      data: expect.objectContaining({ revoked: true, revokedReason: "user" }),
+    });
+  });
+
+  it("then refuses to refresh with the revoked refresh token", async () => {
+    prisma.mcpServerAccessToken.findFirst.mockResolvedValue({
+      revoked: true,
+      revokedReason: "user",
+      revokedAt: new Date(),
+      grantId: "grant-1",
+    } as any);
+
+    expect(
+      await refreshAccessToken(revocationToken("refresh"), SECRET, "client-1"),
+    ).toBeNull();
+    expect(prisma.mcpServerAccessToken.create).not.toHaveBeenCalled();
   });
 });
+
+function revocationToken(type: "access" | "refresh") {
+  const now = Math.floor(Date.now() / 1000);
+  return createJwtToken(
+    {
+      sub: "user-1",
+      email: "user@test.com",
+      email_account_id: "account-1",
+      scope: "email:read",
+      client_id: "client-1",
+      exp: now + 3600,
+      iat: now,
+      jti: "the-jti",
+      token_type: type,
+    },
+    SECRET,
+  );
+}
 
 function liveRow() {
   return {
