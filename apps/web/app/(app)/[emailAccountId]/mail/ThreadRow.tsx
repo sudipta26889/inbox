@@ -29,6 +29,7 @@ import { decodeSnippet } from "@/utils/gmail/decode";
 import { GmailLabel } from "@/utils/gmail/label";
 import { getConversationSubject } from "@/utils/email/subject";
 import { getThreadOtpCode } from "./otp-code";
+import { TaskpilotBadge } from "@/app/(app)/[emailAccountId]/mail/TaskpilotBadge";
 
 export type ThreadRowProps = {
   thread: ListThread;
@@ -51,6 +52,8 @@ export type ThreadRowProps = {
   rowRef?: Ref<HTMLDivElement>;
   /** This tab, or another, holds an unsent reply for the thread. */
   hasLocalDraft?: boolean;
+  /** The TaskPilot work item created from the thread's last message. */
+  taskpilotLink?: { identifier: string; url: string };
   sentMessageOpen?: {
     firstOpenedAt: string | null;
     lastOpenedAt: string | null;
@@ -76,6 +79,7 @@ export const ThreadRow = memo(function ThreadRow({
   rowRef,
   hasLocalDraft = false,
   sentMessageOpen,
+  taskpilotLink,
 }: ThreadRowProps) {
   const { t, i18n } = useLingui();
   const message = thread.messages.at(-1);
@@ -132,6 +136,12 @@ export const ThreadRow = memo(function ThreadRow({
           ) : null}
           {sentMessageOpen ? (
             <SentMessageOpenStatus compact open={sentMessageOpen} />
+          ) : null}
+          {taskpilotLink ? (
+            <TaskpilotBadge
+              identifier={taskpilotLink.identifier}
+              url={taskpilotLink.url}
+            />
           ) : null}
           <span className="shrink-0 whitespace-nowrap text-muted-foreground text-xs">
             {formatShortDate(internalDateToDate(message.internalDate), {
