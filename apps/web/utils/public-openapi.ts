@@ -23,6 +23,14 @@ import {
   unsubscribeSenderRequestSchema,
   unsubscribeSenderResponseSchema,
 } from "@/app/api/v1/senders/unsubscribe/validation";
+import { accountsResponseSchema } from "@/app/api/v1/accounts/validation";
+import {
+  emailDetailQuerySchema,
+  emailDetailResponseSchema,
+  emailPathParamsSchema,
+  emailsQuerySchema,
+  emailsResponseSchema,
+} from "@/app/api/v1/emails/validation";
 import { API_KEY_HEADER } from "@/utils/api-auth";
 import {
   API_KEY_SCOPE_OPTIONS,
@@ -324,6 +332,58 @@ function createRegistry() {
         },
       },
       ...errorResponses([400, 401, 403, 405, 429, 500]),
+    },
+  });
+
+  registry.registerPath({
+    method: "get",
+    path: "/accounts",
+    operationId: "listAccounts",
+    description:
+      "List every email account the API key's user owns or has been shared. The account the key was bound to is flagged with is_default=true.",
+    security: apiKeySecurity([]),
+    responses: {
+      200: {
+        description: "Successful response",
+        content: { "application/json": { schema: accountsResponseSchema } },
+      },
+      ...errorResponses([401, 403, 429, 500]),
+    },
+  });
+
+  registry.registerPath({
+    method: "get",
+    path: "/emails",
+    operationId: "listEmails",
+    description:
+      "List emails for any account the API key's user can access, filtered by a provider-native query (e.g. Gmail search syntax like 'label:ai-news'). The account parameter selects the account. Pagination via the opaque cursor.",
+    security: apiKeySecurity([]),
+    request: { query: emailsQuerySchema },
+    responses: {
+      200: {
+        description: "Successful response",
+        content: { "application/json": { schema: emailsResponseSchema } },
+      },
+      ...errorResponses([400, 401, 403, 429, 500]),
+    },
+  });
+
+  registry.registerPath({
+    method: "get",
+    path: "/emails/{messageId}",
+    operationId: "getEmail",
+    description:
+      "Fetch a single email with body and attachment metadata. The account parameter selects which accessible account to read from.",
+    security: apiKeySecurity([]),
+    request: { params: emailPathParamsSchema, query: emailDetailQuerySchema },
+    responses: {
+      200: {
+        description: "Successful response",
+        content: {
+          "application/json": { schema: emailDetailResponseSchema },
+        },
+      },
+      ...errorResponses([400, 401, 403, 404, 429, 500]),
     },
   });
 
