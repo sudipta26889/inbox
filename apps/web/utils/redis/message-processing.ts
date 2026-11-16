@@ -1,4 +1,5 @@
 import { createScopedLogger } from "@/utils/logger";
+import { redis } from "@/utils/redis";
 import {
   acquireOwnedLock,
   clearOwnedLock,
@@ -9,21 +10,28 @@ const OUTBOUND_PROCESSING_TTL_SECONDS = 60 * 30;
 const OUTBOUND_PROCESSED_TTL_SECONDS = 60 * 60 * 24 * 30;
 const OUTBOUND_PROCESSED_STATUS = "processed";
 
+const PROCESSING_TTL_SECONDS = 60 * 5;
+const PROCESSING_DONE_STATUS = "done";
+
+// After success the lock is kept, marked done, to dedupe repeat webhooks. A held
+// lock that is not done is still in flight (or its run was killed), so the
+// Gmail webhook must not move its history pointer past that message.
 export async function withMessageProcessingLock(
   { userEmail, messageId }: { userEmail: string; messageId: string },
   fn: () => Promise<unknown>,
-): Promise<{ skipped: boolean }> {
+): Promise<{ skipped: boolean; inFlight: boolean }> {
   const key = `processing-message:${userEmail}:${messageId}`;
   const lockToken = await acquireOwnedLock({
     key,
-    processingTtlSeconds: 60 * 5,
+    processingTtlSeconds: PROCESSING_TTL_SECONDS,
   });
-  if (!lockToken) return { skipped: true };
+  if (!lockToken) {
+    const value = await redis.get<string>(key);
+    return { skipped: true, inFlight: value !== PROCESSING_DONE_STATUS };
+  }
 
   try {
     await fn();
-    // Keep the lock until its TTL expires to dedupe successful processing.
-    return { skipped: false };
   } catch (error) {
     try {
       await clearOwnedLock({ key, lockToken });
@@ -34,6 +42,22 @@ export async function withMessageProcessingLock(
       );
     }
     throw error;
+  }
+
+  // Compare-and-set: a run that outlived the TTL leaves a later holder's lock alone.
+  await markOwnedLockProcessed({
+    key,
+    lockToken,
+    processedStatus: PROCESSING_DONE_STATUS,
+    processedTtlSeconds: PROCESSING_TTL_SECONDS,
+  });
+  return { skipped: false, inFlight: false };
+}
+
+export class MessageInFlightError extends Error {
+  constructor() {
+    super("Message is still being processed by another run");
+    this.name = "MessageInFlightError";
   }
 }
 

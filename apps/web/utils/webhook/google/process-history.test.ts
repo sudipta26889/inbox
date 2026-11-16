@@ -21,6 +21,7 @@ import { saveClassificationFeedback } from "@/utils/rule/classification-feedback
 import { SystemType } from "@/generated/prisma/enums";
 import type { EmailProvider } from "@/utils/email/types";
 import { captureException, SafeError } from "@/utils/error";
+import { MessageInFlightError } from "@/utils/redis/message-processing";
 
 const logger = createTestLogger();
 
@@ -550,6 +551,69 @@ describe("processHistoryForUser - 404 Handling", () => {
       "account-123",
       expect.anything(),
     );
+  });
+
+  it("keeps the cursor before a message another run is still processing", async () => {
+    const email = "user@test.com";
+    const emailAccount = {
+      id: "account-123",
+      email,
+      lastSyncedHistoryId: "1000",
+    };
+
+    vi.mocked(getWebhookEmailAccount).mockResolvedValue(emailAccount as any);
+    vi.mocked(validateWebhookAccount).mockResolvedValue({
+      success: true,
+      data: {
+        emailAccount: {
+          ...emailAccount,
+          account: {
+            access_token: "token",
+            refresh_token: "refresh",
+            expires_at: new Date(Date.now() + 3_600_000),
+          },
+          rules: [],
+        },
+        hasAutomationRules: false,
+        hasAiAccess: false,
+      },
+    } as any);
+    vi.mocked(getHistory).mockResolvedValue({
+      history: [
+        {
+          id: "1100",
+          messagesAdded: [
+            { message: { id: "m1", threadId: "t1", labelIds: ["INBOX"] } },
+          ],
+        },
+        {
+          id: "1200",
+          messagesAdded: [
+            { message: { id: "m2", threadId: "t2", labelIds: ["INBOX"] } },
+          ],
+        },
+        {
+          id: "1300",
+          messagesAdded: [
+            { message: { id: "m3", threadId: "t3", labelIds: ["INBOX"] } },
+          ],
+        },
+      ],
+    } as any);
+    vi.mocked(processHistoryItem)
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new MessageInFlightError());
+
+    await processHistoryForUser(
+      { emailAddress: email, historyId: 1300 },
+      {},
+      logger,
+    );
+
+    expect(processHistoryItem).toHaveBeenCalledTimes(2);
+    expect(prisma.$executeRaw).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(prisma.$executeRaw).mock.calls[0]).toContain("1100");
+    expect(captureException).not.toHaveBeenCalled();
   });
 
   it("uses BigInt math for large Gmail history IDs", async () => {
