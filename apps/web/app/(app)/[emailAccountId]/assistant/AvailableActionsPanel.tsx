@@ -38,11 +38,13 @@ const actionNames: Record<
   [ActionType.DIGEST]: msg`Add to digest`,
   [ActionType.NOTIFY_MESSAGING_CHANNEL]: msg`Notify`,
   [ActionType.NOTIFY_SENDER]: msg`Notify sender`,
+  [ActionType.A2A_NOTIFY]: msg`A2A Notify`,
 };
 
 const actionTooltips: Partial<Record<ActionType, MessageDescriptor>> = {
   [ActionType.CALL_WEBHOOK]: msg`For developers: trigger external integrations by sending email data to a custom URL`,
   [ActionType.DIGEST]: msg`Group emails together and receive them as a daily summary`,
+  [ActionType.A2A_NOTIFY]: msg`Send notification to remote A2A agent`,
 };
 
 export function AvailableActionsPanel() {

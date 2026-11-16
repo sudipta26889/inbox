@@ -201,6 +201,7 @@ export function getActionColor(actionType: ActionType): Color {
     case ActionType.NOTIFY_MESSAGING_CHANNEL:
     case ActionType.NOTIFY_SENDER:
     case ActionType.INTEGRATION:
+    case ActionType.A2A_NOTIFY:
       return "purple";
     default: {
       const exhaustiveCheck: never = actionType;

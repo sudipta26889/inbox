@@ -140,6 +140,7 @@ export const ruleRequestBodySchema = z.object({
 const ruleActionTypeResponseSchema = z.enum([
   ...ruleActionRequestTypeSchema.options,
   ActionType.INTEGRATION,
+  ActionType.A2A_NOTIFY,
 ]);
 
 const ruleActionResponseSchema = z.object({

@@ -38,6 +38,12 @@ import { isMessagingDraftActionType } from "@/utils/actions/draft-reply";
 import { checkHasAccess } from "@/utils/premium/server";
 import { handlePreviousDraftDeletion } from "@/utils/ai/choose-rule/draft-management";
 import { isIntegrationActionEnabledForUserId } from "@/utils/integration-action.server";
+import {
+  buildA2aEmailPayload,
+  getRemoteAgentUrls,
+  resolveA2aEndpoint,
+  sendA2aMessage,
+} from "@/utils/a2a-client";
 
 const MODULE = "ai-actions";
 
@@ -122,6 +128,8 @@ export const runActionFunction = async (options: {
       return notify_sender(opts);
     case ActionType.INTEGRATION:
       return integration(opts);
+    case ActionType.A2A_NOTIFY:
+      return a2a_notify(opts);
     default:
       throw new Error(`Unknown action: ${action}`);
   }
@@ -746,6 +754,53 @@ const notify_sender: ActionFunction<Record<string, unknown>> = async ({
       },
     );
     return { success: false, errorCode };
+  }
+
+  return { success: true };
+};
+
+const a2a_notify: ActionFunction<Record<string, unknown>> = async ({
+  email,
+  executedRule,
+  logger,
+}) => {
+  const agentUrls = getRemoteAgentUrls();
+
+  if (agentUrls.length === 0) {
+    logger.error("No A2A agent URLs configured (A2A_REMOTE_AGENTS is empty)");
+    return { success: false, errorCode: "NO_AGENT_URL" };
+  }
+
+  const payload = buildA2aEmailPayload(
+    {
+      from: email.headers.from,
+      subject: email.headers.subject,
+      snippet: email.snippet || "",
+      threadId: email.threadId,
+      messageId: email.id,
+      receivedAt: email.internalDate
+        ? new Date(Number(email.internalDate))
+        : undefined,
+    },
+    { ruleId: executedRule.ruleId ?? "" },
+  );
+
+  const results = await Promise.allSettled(
+    agentUrls.map(async (agentUrl) => {
+      const endpoint = await resolveA2aEndpoint(agentUrl);
+      return sendA2aMessage(endpoint, payload);
+    }),
+  );
+
+  const anySuccess = results.some(
+    (r) => r.status === "fulfilled" && !r.value.error,
+  );
+
+  if (!anySuccess) {
+    logger.error("All A2A notifications failed", {
+      agentCount: agentUrls.length,
+    });
+    return { success: false, errorCode: "ALL_AGENTS_FAILED" };
   }
 
   return { success: true };

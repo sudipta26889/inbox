@@ -90,6 +90,8 @@ export function getActionDisplayText(
     }
     case ActionType.NOTIFY_SENDER:
       return i18n._(msg`Notify Sender`);
+    case ActionType.A2A_NOTIFY:
+      return i18n._(msg`A2A Notify`);
     case ActionType.INTEGRATION: {
       const label = i18n._(getIntegrationActionLabelMessage(action));
       const displayValue = getIntegrationActionDisplayValue(action);

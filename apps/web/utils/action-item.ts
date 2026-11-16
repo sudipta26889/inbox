@@ -149,6 +149,7 @@ export const actionInputs: Record<
     fields: [],
   },
   [ActionType.INTEGRATION]: { fields: [] },
+  [ActionType.A2A_NOTIFY]: { fields: [] },
 };
 
 export function getActionFields(fields: Action | ExecutedAction | undefined) {
@@ -346,7 +347,8 @@ export function sanitizeActionFields(
         url: action.url ?? null,
       };
     }
-    case ActionType.NOTIFY_SENDER: {
+    case ActionType.NOTIFY_SENDER:
+    case ActionType.A2A_NOTIFY: {
       return base;
     }
     case ActionType.INTEGRATION: {

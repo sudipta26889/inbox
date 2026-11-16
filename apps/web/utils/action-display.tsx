@@ -16,6 +16,7 @@ import {
   FileTextIcon,
   MailIcon,
   NewspaperIcon,
+  RadioTowerIcon,
   SquareCheckBigIcon,
   StarIcon,
   Trash2Icon,
@@ -112,6 +113,8 @@ export function getActionDisplay(
         : "Notify";
     case ActionType.NOTIFY_SENDER:
       return "Notify Sender";
+    case ActionType.A2A_NOTIFY:
+      return "A2A Notify";
     case ActionType.INTEGRATION: {
       const label = getIntegrationActionLabel(action);
       const displayValue = getIntegrationActionDisplayValue(action);
@@ -141,6 +144,7 @@ export const ACTION_TYPE_LABELS = {
   [ActionType.CALL_WEBHOOK]: msg`Call webhook`,
   [ActionType.DIGEST]: msg`Add to digest`,
   [ActionType.NOTIFY_SENDER]: msg`Notify sender`,
+  [ActionType.A2A_NOTIFY]: msg`A2A notify`,
   // ActionType alone cannot name a specific tool; getIntegrationActionLabel
   // gives the precise name when the action is known.
   [ActionType.INTEGRATION]: getIntegrationActionLabelMessage(),
@@ -193,6 +197,8 @@ export function getActionIcon(actionType: ActionType) {
       return BellIcon;
     case ActionType.NOTIFY_SENDER:
       return BellIcon;
+    case ActionType.A2A_NOTIFY:
+      return RadioTowerIcon;
     case ActionType.INTEGRATION:
       return SquareCheckBigIcon;
     default: {
