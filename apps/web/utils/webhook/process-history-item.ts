@@ -1,6 +1,7 @@
 import { after } from "next/server";
 import prisma from "@/utils/prisma";
 import { runRules } from "@/utils/ai/choose-rule/run-rules";
+import { analyzeSenderPattern } from "@/utils/ai/choose-rule/analyze-sender-pattern";
 import { categorizeSender } from "@/utils/categorize/senders/categorize";
 import {
   isFilebotEmail,
@@ -48,7 +49,8 @@ export type SharedProcessHistoryOptions = {
       | "filingPrompt"
       | "filingConfirmationSendEmail"
       | "email"
-    >;
+    > &
+    Partial<Pick<EmailAccount, "autoLearnPatterns">>;
   logger: Logger;
 };
 
@@ -227,6 +229,33 @@ export async function processHistoryItem(
           provider,
           undefined,
           displayName,
+        );
+      }
+    }
+
+    // Fork: autoLearnPatterns learns every new sender's pattern, not only
+    // senders an AI rule matched (upstream's run-rules path).
+    if (emailAccount.autoLearnPatterns && email) {
+      const analyzed = await prisma.newsletter.findFirst({
+        where: {
+          emailAccountId,
+          email: { equals: email, mode: "insensitive" },
+          patternAnalyzed: true,
+        },
+        select: { id: true },
+      });
+
+      if (!analyzed) {
+        after(() =>
+          runWithBackgroundLoggerFlush({
+            logger,
+            task: () =>
+              analyzeSenderPattern(
+                { emailAccountId, from: email.toLowerCase() },
+                logger,
+              ),
+            extra: { operation: "auto-learn-pattern" },
+          }),
         );
       }
     }

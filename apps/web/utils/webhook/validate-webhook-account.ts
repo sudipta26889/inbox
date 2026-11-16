@@ -23,7 +23,7 @@ import {
   isMicrosoftProvider,
 } from "@/utils/email/provider-types";
 
-const webhookEmailAccountSelect = {
+export const webhookEmailAccountSelect = {
   id: true,
   email: true,
   userId: true,
@@ -35,6 +35,7 @@ const webhookEmailAccountSelect = {
   draftReplyConfidence: true,
   lastSyncedHistoryId: true,
   autoCategorizeSenders: true,
+  autoLearnPatterns: true,
   filingEnabled: true,
   filingPrompt: true,
   filingConfirmationSendEmail: true,
