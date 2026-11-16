@@ -79,6 +79,62 @@ describe("POST /mcp-server/register", () => {
     expect(response.status).toBe(201);
     expect((await response.json()).client_id).toBe("mcp_x");
   });
+
+  it("refuses a redirect URI with a scheme no client uses", async () => {
+    const response = await POST(
+      post(JSON.stringify({ redirect_uris: ["ftp://example.com/cb"] })),
+      context,
+    );
+
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toBe("invalid_redirect_uri");
+    expect(prisma.mcpServerClient.create).not.toHaveBeenCalled();
+  });
+
+  it("refuses the whole registration if one redirect URI is bad", async () => {
+    const response = await POST(
+      post(
+        JSON.stringify({
+          redirect_uris: ["http://localhost/cb", "http://evil.example/cb"],
+        }),
+      ),
+      context,
+    );
+
+    expect(response.status).toBe(400);
+    expect(prisma.mcpServerClient.create).not.toHaveBeenCalled();
+  });
+
+  it("accepts a cursor:// redirect URI", async () => {
+    const response = await POST(
+      post(
+        JSON.stringify({
+          redirect_uris: ["cursor://anysphere.cursor-retrieval/oauth/callback"],
+        }),
+      ),
+      context,
+    );
+
+    expect(response.status).toBe(201);
+  });
+
+  it("stores and reports auth method none even when the client asks for a secret", async () => {
+    const response = await POST(
+      post(
+        JSON.stringify({
+          redirect_uris: ["http://localhost/cb"],
+          token_endpoint_auth_method: "client_secret_post",
+        }),
+      ),
+      context,
+    );
+
+    expect(response.status).toBe(201);
+    expect((await response.json()).token_endpoint_auth_method).toBe("none");
+    expect(prisma.mcpServerClient.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ tokenEndpointAuthMethod: "none" }),
+    });
+  });
 });
 
 function post(body: string, headers?: Record<string, string>) {

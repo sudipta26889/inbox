@@ -3,11 +3,20 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import prisma from "@/utils/__mocks__/prisma";
 import { auth } from "@/utils/auth";
 import { BASE, MCP_RESOURCE } from "@/utils/mcp-server/constants";
+import { resolveClientMetadata } from "@/utils/mcp-server/client-metadata";
+import { checkIpRateLimit } from "@/utils/a2a/rate-limit";
 import { GET } from "./route";
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/utils/prisma");
 vi.mock("@/utils/auth", () => ({ auth: vi.fn() }));
+vi.mock("@/utils/mcp-server/client-metadata", () => ({
+  resolveClientMetadata: vi.fn(),
+}));
+vi.mock("@/utils/a2a/rate-limit", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/utils/a2a/rate-limit")>()),
+  checkIpRateLimit: vi.fn(),
+}));
 
 const context = { params: Promise.resolve({}) };
 const REGISTERED = "http://127.0.0.1:3000/callback";
@@ -78,6 +87,57 @@ describe("GET /mcp-server/authorize", () => {
     expect(location.searchParams.get("state")).toBe("st");
     expect(location.searchParams.get("iss")).toBe(BASE);
     expect(prisma.mcpServerAuthorizationCode.create).toHaveBeenCalledTimes(1);
+  });
+
+  describe("a client_id that is a metadata URL", () => {
+    const CIMD = "https://app.example.com/client.json";
+
+    beforeEach(() => {
+      vi.mocked(checkIpRateLimit).mockResolvedValue({
+        allowed: true,
+        limit: 20,
+        remaining: 19,
+        resetAt: new Date(),
+      } as never);
+      vi.mocked(resolveClientMetadata).mockResolvedValue({
+        clientId: CIMD,
+      } as never);
+    });
+
+    it("sends an anonymous user to sign in without fetching or looking anything up", async () => {
+      vi.mocked(auth).mockResolvedValue(null as never);
+
+      const response = await GET(authorize({ client_id: CIMD }), context);
+
+      expect(new URL(response.headers.get("location")!).pathname).toBe(
+        "/login",
+      );
+      expect(resolveClientMetadata).not.toHaveBeenCalled();
+      expect(checkIpRateLimit).not.toHaveBeenCalled();
+      expect(prisma.mcpServerClient.findUnique).not.toHaveBeenCalled();
+    });
+
+    it("resolves the metadata once the user is signed in", async () => {
+      await GET(authorize({ client_id: CIMD }), context);
+
+      expect(resolveClientMetadata).toHaveBeenCalledWith(CIMD, REGISTERED);
+      expect(prisma.mcpServerClient.findUnique).not.toHaveBeenCalled();
+    });
+
+    it("answers 429 and does not fetch when the IP is rate limited", async () => {
+      vi.mocked(checkIpRateLimit).mockResolvedValue({
+        allowed: false,
+        limit: 20,
+        remaining: 0,
+        resetAt: new Date(),
+        retryAfter: 30,
+      } as never);
+
+      const response = await GET(authorize({ client_id: CIMD }), context);
+
+      expect(response.status).toBe(429);
+      expect(resolveClientMetadata).not.toHaveBeenCalled();
+    });
   });
 
   it("sends a user with no prior approval to the consent page, not back to the client", async () => {

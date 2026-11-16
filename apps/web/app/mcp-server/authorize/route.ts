@@ -6,6 +6,12 @@ import {
   isMcpResource,
   issueAuthorizationCode,
 } from "@/utils/mcp-server/authorization-code";
+import {
+  checkIpRateLimit,
+  createRateLimitResponse,
+  getClientIp,
+} from "@/utils/a2a/rate-limit";
+import { resolveClientMetadata } from "@/utils/mcp-server/client-metadata";
 import { validateCodeChallengeMethod } from "@/utils/mcp-server/pkce";
 import {
   redirectUriMatches,
@@ -135,22 +141,28 @@ export const GET = withError(
       throw new SafeError("Invalid scope requested");
     }
 
-    // Verify client exists and redirect URI is registered
-    const client = await prisma.mcpServerClient.findUnique({
-      where: { clientId },
-    });
-
-    if (!client) {
-      logger.warn("Unknown client_id in authorization request", { clientId });
-      throw new SafeError("Unknown client");
-    }
-
     validateRedirectUri(redirectUri);
-    if (!redirectUriMatches(redirectUri, client.redirectUris)) {
-      logger.warn("redirect_uri does not match the client's registration", {
-        clientId,
+
+    // A URL client_id is a metadata-document client. It is fetched only once the
+    // user is signed in, so an anonymous request can't make the server fetch.
+    const isMetadataClient = clientId.startsWith("https://");
+
+    if (!isMetadataClient) {
+      const client = await prisma.mcpServerClient.findUnique({
+        where: { clientId },
       });
-      throw new SafeError("redirect_uri is not registered for this client");
+
+      if (!client) {
+        logger.warn("Unknown client_id in authorization request", { clientId });
+        throw new SafeError("Unknown client");
+      }
+
+      if (!redirectUriMatches(redirectUri, client.redirectUris)) {
+        logger.warn("redirect_uri does not match the client's registration", {
+          clientId,
+        });
+        throw new SafeError("redirect_uri is not registered for this client");
+      }
     }
 
     // Check if user is authenticated
@@ -178,6 +190,15 @@ export const GET = withError(
       const loginUrl = new URL("/login", env.NEXT_PUBLIC_BASE_URL);
       loginUrl.searchParams.set("callbackUrl", callbackUrl);
       return NextResponse.redirect(loginUrl);
+    }
+
+    if (isMetadataClient) {
+      const rateLimit = await checkIpRateLimit(getClientIp(request));
+      if (!rateLimit.allowed) {
+        const { status, headers, body } = createRateLimitResponse(rateLimit);
+        return NextResponse.json(body, { status, headers });
+      }
+      await resolveClientMetadata(clientId, redirectUri);
     }
 
     // Get user's email accounts
