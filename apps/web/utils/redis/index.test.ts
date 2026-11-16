@@ -43,6 +43,9 @@ const REVIEWED_RAW_CLIENTS = [
   "utils/queue/bullmq.ts",
   "utils/redis/index.ts",
   "utils/redis/subscriber.ts",
+  // Upstash REST client, built only when REDIS_HTTP_URL is https; the stacks
+  // set no REDIS_HTTP_URL, so the page buffer stays off.
+  "utils/redis/thread-page-buffer.ts",
   "utils/team-comments/events.ts",
 ];
 
