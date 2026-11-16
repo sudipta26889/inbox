@@ -46,6 +46,9 @@ async function getEmailAccount({
       followUpNeedsReplyDays: true,
       followUpAutoDraftEnabled: true,
       digestSendEmail: true,
+      mqttEnabled: true,
+      mqttTopicSlug: true,
+      mqttIncludeDetail: true,
     },
   });
 

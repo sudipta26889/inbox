@@ -192,6 +192,7 @@
     "lucide-react": "1.70.0",
     "mammoth": "1.13.0",
     "motion": "14.10.1",
+    "mqtt": "5.15.2",
     "next": "16.4.5",
     "next-axiom": "1.10.0",
     "next-safe-action": "8.7.3",

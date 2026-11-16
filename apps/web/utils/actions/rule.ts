@@ -28,6 +28,7 @@ import { accessibleEmailAccountWhere } from "@/utils/email-account-access";
 import { isDuplicateError, isNotFoundError } from "@/utils/prisma-helpers";
 import { flattenConditions } from "@/utils/condition";
 import { ActionType, SystemType } from "@/generated/prisma/enums";
+import type { Prisma } from "@/generated/prisma/client";
 import { sanitizeActionFields } from "@/utils/action-item";
 import {
   deleteRule,
@@ -726,6 +727,13 @@ function mapActionToSanitizedFields(action: {
   integrationName?: string | null;
   integrationToolName?: string | null;
   integrationArgs?: Record<string, string | null | undefined> | null;
+  haIntegrationType?: string | null;
+  haWebhookId?: string | null;
+  haMqttTopic?: string | null;
+  haServiceDomain?: string | null;
+  haServiceName?: string | null;
+  haServiceData?: Prisma.JsonValue | null;
+  haEntityId?: string | null;
 }) {
   const nonEmptyIntegrationArgs = action.integrationArgs
     ? (Object.fromEntries(
@@ -755,6 +763,13 @@ function mapActionToSanitizedFields(action: {
     integrationName: action.integrationName,
     integrationToolName: action.integrationToolName,
     integrationArgs: nonEmptyIntegrationArgs,
+    haIntegrationType: action.haIntegrationType,
+    haWebhookId: action.haWebhookId,
+    haMqttTopic: action.haMqttTopic,
+    haServiceDomain: action.haServiceDomain,
+    haServiceName: action.haServiceName,
+    haServiceData: action.haServiceData,
+    haEntityId: action.haEntityId,
   });
 
   return {
@@ -777,6 +792,13 @@ function mapActionToSanitizedFields(action: {
     integrationName: sanitized.integrationName ?? null,
     integrationToolName: sanitized.integrationToolName ?? null,
     integrationArgs: sanitized.integrationArgs ?? null,
+    haIntegrationType: sanitized.haIntegrationType,
+    haWebhookId: sanitized.haWebhookId,
+    haMqttTopic: sanitized.haMqttTopic,
+    haServiceDomain: sanitized.haServiceDomain,
+    haServiceName: sanitized.haServiceName,
+    haServiceData: sanitized.haServiceData ?? null,
+    haEntityId: sanitized.haEntityId,
   };
 }
 
@@ -1020,6 +1042,15 @@ export const importRulesAction = actionClient
             integrationName: action.integrationName,
             integrationToolName: action.integrationToolName,
             integrationArgs: action.integrationArgs ?? undefined,
+            haIntegrationType: action.haIntegrationType,
+            haWebhookId: action.haWebhookId,
+            haMqttTopic: action.haMqttTopic,
+            haServiceDomain: action.haServiceDomain,
+            haServiceName: action.haServiceName,
+            haServiceData: (action.haServiceData ?? undefined) as
+              | Prisma.InputJsonValue
+              | undefined,
+            haEntityId: action.haEntityId,
           }));
 
           await assertIntegrationActionsConnected(

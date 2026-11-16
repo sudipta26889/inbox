@@ -718,6 +718,13 @@ type MappableAction = CreateOrUpdateRuleSchema["actions"][number] & {
   integrationName?: string | null;
   integrationToolName?: string | null;
   integrationArgs?: Prisma.JsonValue | null;
+  haIntegrationType?: string | null;
+  haWebhookId?: string | null;
+  haMqttTopic?: string | null;
+  haServiceDomain?: string | null;
+  haServiceName?: string | null;
+  haServiceData?: Prisma.JsonValue | null;
+  haEntityId?: string | null;
 };
 
 async function mapActionFields(
@@ -803,6 +810,7 @@ async function mapActionFields(
           (a as { staticAttachments?: AttachmentSourceInput[] | null })
             .staticAttachments ?? undefined,
         ...integrationFields,
+        ...(a.type === ActionType.HOME_ASSISTANT && getHomeAssistantFields(a)),
       };
     },
   );
@@ -827,6 +835,20 @@ function getIntegrationCreateFields(action: MappableAction) {
         integrationToolName,
         fields: action.fields,
       })) as Prisma.InputJsonValue,
+  };
+}
+
+function getHomeAssistantFields(action: MappableAction) {
+  return {
+    haIntegrationType: action.haIntegrationType ?? null,
+    haWebhookId: action.haWebhookId ?? null,
+    haMqttTopic: action.haMqttTopic ?? null,
+    haServiceDomain: action.haServiceDomain ?? null,
+    haServiceName: action.haServiceName ?? null,
+    haServiceData: (action.haServiceData ?? undefined) as
+      | Prisma.InputJsonValue
+      | undefined,
+    haEntityId: action.haEntityId ?? null,
   };
 }
 

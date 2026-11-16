@@ -203,6 +203,7 @@ export function getActionColor(actionType: ActionType): Color {
     case ActionType.NOTIFY_MESSAGING_CHANNEL:
     case ActionType.NOTIFY_SENDER:
     case ActionType.INTEGRATION:
+    case ActionType.HOME_ASSISTANT:
     case ActionType.CREATE_TASK:
       return "purple";
     default: {

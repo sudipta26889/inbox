@@ -2,6 +2,7 @@ import { beforeEach, describe, it, expect, vi } from "vitest";
 import {
   createRuleBody,
   type CreateRuleBody,
+  importRulesBody,
   updateRuleBody,
 } from "./rule.validation";
 import { ActionType } from "@/generated/prisma/enums";
@@ -493,5 +494,38 @@ describe("INTEGRATION action validation", () => {
         "Unsupported integration tool",
       );
     }
+  });
+});
+
+describe("importRulesBody", () => {
+  // Zod strips unknown keys, so an exported HA rule would re-import with no
+  // integration type and fail every run.
+  it("keeps Home Assistant fields on an imported action", () => {
+    const result = importRulesBody.parse({
+      rules: [
+        {
+          name: "Alerts",
+          instructions: "Security alerts",
+          actions: [
+            {
+              type: ActionType.HOME_ASSISTANT,
+              haIntegrationType: "service_call",
+              haServiceDomain: "notify",
+              haServiceName: "mobile_app_phone",
+              haServiceData: { title: "Alert" },
+              haEntityId: "light.hall",
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(result.rules[0].actions[0]).toMatchObject({
+      haIntegrationType: "service_call",
+      haServiceDomain: "notify",
+      haServiceName: "mobile_app_phone",
+      haServiceData: { title: "Alert" },
+      haEntityId: "light.hall",
+    });
   });
 });

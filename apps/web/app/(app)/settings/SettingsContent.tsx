@@ -7,6 +7,7 @@ import { useCallback, useMemo, useState } from "react";
 import {
   ChevronRightIcon,
   CreditCardIcon,
+  HomeIcon,
   ListChecksIcon,
   MailIcon,
   MessageCircleIcon,
@@ -37,6 +38,8 @@ import { OrgAnalyticsConsentSection } from "@/app/(app)/[emailAccountId]/setting
 import { ResetAnalyticsSection } from "@/app/(app)/[emailAccountId]/settings/ResetAnalyticsSection";
 import { ResetLabelColorsSection } from "@/app/(app)/[emailAccountId]/settings/ResetLabelColorsSection";
 import { WebhookSection } from "@/app/(app)/[emailAccountId]/settings/WebhookSection";
+import { HomeAssistantSection } from "@/app/(app)/[emailAccountId]/settings/HomeAssistantSection";
+import { MqttSection } from "@/app/(app)/[emailAccountId]/settings/MqttSection";
 import { CopyRulesSection } from "@/app/(app)/[emailAccountId]/settings/CopyRulesSection";
 import { RuleImportExportSetting } from "@/app/(app)/[emailAccountId]/assistant/settings/RuleImportExportSetting";
 import { ToggleAllRulesSection } from "@/app/(app)/[emailAccountId]/settings/ToggleAllRulesSection";
@@ -211,6 +214,17 @@ export function SettingsContent() {
       >
         <ItemCard>
           <TaskpilotIntegrationSection />
+        </ItemCard>
+      </SettingsGroup>
+
+      <SettingsGroup
+        icon={<HomeIcon className="size-5" />}
+        title={t`Home Assistant`}
+      >
+        <ItemCard>
+          <HomeAssistantSection />
+          <ItemSeparator />
+          <MqttSection />
         </ItemCard>
       </SettingsGroup>
 

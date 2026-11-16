@@ -17,6 +17,9 @@ export type EmailForAction = Pick<
   | "attachments"
   | "internalDate"
   | "rawRecipients"
+  // Home Assistant payloads forward labels; without this the field was always
+  // undefined at the call site.
+  | "labelIds"
 >;
 
 export type ActionItem = {
@@ -39,6 +42,13 @@ export type ActionItem = {
   integrationName?: ExecutedAction["integrationName"];
   integrationToolName?: ExecutedAction["integrationToolName"];
   integrationArgs?: ExecutedAction["integrationArgs"];
+  haIntegrationType?: ExecutedAction["haIntegrationType"];
+  haWebhookId?: ExecutedAction["haWebhookId"];
+  haMqttTopic?: ExecutedAction["haMqttTopic"];
+  haServiceDomain?: ExecutedAction["haServiceDomain"];
+  haServiceName?: ExecutedAction["haServiceName"];
+  haServiceData?: ExecutedAction["haServiceData"];
+  haEntityId?: ExecutedAction["haEntityId"];
 };
 
 export type ActionExecutionEmailAccount = Pick<

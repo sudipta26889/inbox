@@ -15,6 +15,7 @@ import { stopWatchingEmailAccount } from "@/utils/email/watch-manager";
 import type { Logger } from "@/utils/logger";
 import { prepareMemberRemovalNotifications } from "@/utils/team-comments/member-removal";
 import { clearCachedResearchForUser } from "@/utils/redis/research-cache";
+import { clearAccountTopics } from "@/utils/mqtt/events";
 import { releaseAccountRecordings } from "@/utils/meeting-recorder/delete-media";
 import {
   DELETE_ACCOUNT_REQUIRES_OWNER_TRANSFER_ERROR,
@@ -41,6 +42,7 @@ export async function deleteUser({
           id: true,
           email: true,
           watchEmailsSubscriptionId: true,
+          mqttTopicSlug: true,
         },
       },
     },
@@ -122,6 +124,14 @@ export async function deleteUser({
       if (failedRelease) throw failedRelease.reason;
 
       await deleteUserRows({ userId, emailAccountIds, logger });
+
+      // Retained topics outlive the account (see clearAccountTopics), so
+      // deleting the user — a stronger opt-out than disabling the bus — must
+      // clear them too. The slugs were captured before any deletion, above.
+      // clearAccountTopics is fail-soft by construction; no wrapping needed.
+      for (const { mqttTopicSlug } of emailAccounts) {
+        if (mqttTopicSlug) clearAccountTopics(mqttTopicSlug);
+      }
 
       await Promise.allSettled(
         emailAccounts.flatMap(({ email }) => [

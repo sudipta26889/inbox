@@ -96,6 +96,14 @@ describe("getExtraAvailableActionsForRuleEditor", () => {
     expect(actions).toContain(ActionType.CALL_WEBHOOK);
   });
 
+  it("offers the Home Assistant action in the rule editor", () => {
+    const actions = getExtraAvailableActionsForRuleEditor({
+      integrationActionsEnabled: false,
+    });
+
+    expect(actions).toContain(ActionType.HOME_ASSISTANT);
+  });
+
   it("includes the integration action for early access users", () => {
     const actions = getExtraAvailableActionsForRuleEditor({
       integrationActionsEnabled: true,

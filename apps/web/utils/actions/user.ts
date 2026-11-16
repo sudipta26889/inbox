@@ -23,6 +23,7 @@ import {
   updateAIDraftCleanupSettingsBody,
 } from "@/utils/actions/user.validation";
 import { clearLastEmailAccountCookie } from "@/utils/cookies.server";
+import { clearAccountTopics } from "@/utils/mqtt/events";
 import { deleteTinybirdEmailData } from "@inboxzero/tinybird";
 import { aliasPosthogUser } from "@/utils/posthog";
 import {
@@ -141,6 +142,7 @@ export const deleteEmailAccountAction = actionClientUser
           email: true,
           accountId: true,
           watchEmailsSubscriptionId: true,
+          mqttTopicSlug: true,
           account: { select: { provider: true } },
           user: { select: { email: true } },
         },
@@ -271,6 +273,14 @@ export const deleteEmailAccountAction = actionClientUser
           captureException(error);
         }),
       );
+
+      // Retained topics outlive the account (see clearAccountTopics), so
+      // deleting the account — a stronger opt-out than disabling it — must
+      // clear them too. The slug was captured before the delete above.
+      // clearAccountTopics is fail-soft by construction; no wrapping needed.
+      if (emailAccount.mqttTopicSlug) {
+        clearAccountTopics(emailAccount.mqttTopicSlug);
+      }
 
       await notifyConversations();
 
