@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { A2A_SKILL_REGISTRY } from "@/utils/a2a/skill-registry";
 import { MCP_TOOLS, getAllTools, getTool, hasRequiredScope } from "./registry";
+import { TOOL_METADATA } from "./tool-metadata";
 
 const DRAFT_WRITE_TOOLS = ["create_draft", "update_draft", "delete_draft"];
 
@@ -45,15 +46,119 @@ describe("draft/send scope separation", () => {
   });
 });
 
-describe("tool annotations", () => {
-  it("marks read tools read-only and leaves writes at the fail-safe default", () => {
-    const byName = Object.fromEntries(
-      getAllTools().map((tool) => [tool.name, tool]),
+const DESTRUCTIVE_TOOLS = [
+  "send_email",
+  "delete_draft",
+  "delete_calendar_event",
+  "admin_rules_delete",
+  "admin_categories_delete",
+  "admin_groups_delete",
+  "admin_knowledge_delete",
+  "admin_follow_ups_delete",
+  "admin_unsubscribe_request",
+  "admin_cleanup_create_job",
+];
+
+const OPEN_WORLD_TOOLS = [
+  "send_email",
+  "create_calendar_event",
+  "update_calendar_event",
+  "delete_calendar_event",
+  "respond_to_calendar_event",
+  "admin_unsubscribe_request",
+];
+
+describe("tool titles and annotations", () => {
+  const tools = () => getAllTools();
+  const names = (filter: (tool: ReturnType<typeof tools>[number]) => boolean) =>
+    tools()
+      .filter(filter)
+      .map((tool) => tool.name)
+      .sort();
+
+  it("describes every registered tool", () => {
+    expect(
+      tools()
+        .map((tool) => tool.name)
+        .sort(),
+    ).toEqual(Object.keys(MCP_TOOLS).sort());
+  });
+
+  it("has metadata for exactly the registered tools, so none relies on the cautious fallback", () => {
+    expect(Object.keys(TOOL_METADATA).sort()).toEqual(
+      Object.keys(MCP_TOOLS).sort(),
+    );
+  });
+
+  it("gives every tool a non-empty title and four boolean hints", () => {
+    for (const tool of tools()) {
+      expect(tool.title, tool.name).toBeTruthy();
+      for (const hint of [
+        "readOnlyHint",
+        "destructiveHint",
+        "idempotentHint",
+        "openWorldHint",
+      ] as const) {
+        expect(typeof tool.annotations?.[hint], `${tool.name}.${hint}`).toBe(
+          "boolean",
+        );
+      }
+    }
+  });
+
+  it("marks exactly the :read-scoped tools read-only, non-destructive and idempotent", () => {
+    for (const [name, definition] of Object.entries(MCP_TOOLS)) {
+      const annotations = tools().find(
+        (tool) => tool.name === name,
+      )?.annotations;
+      const isRead = definition.requiredScope.endsWith(":read");
+
+      expect(annotations?.readOnlyHint, name).toBe(isRead);
+      if (isRead) {
+        expect(annotations?.destructiveHint, name).toBe(false);
+        expect(annotations?.idempotentHint, name).toBe(true);
+        expect(annotations?.openWorldHint, name).toBe(false);
+      }
+    }
+  });
+
+  it("never lets a read-only tool also be destructive", () => {
+    for (const tool of tools()) {
+      if (tool.annotations?.readOnlyHint) {
+        expect(tool.annotations.destructiveHint, tool.name).toBe(false);
+      }
+    }
+  });
+
+  it("flags exactly the agreed destructive tools", () => {
+    expect(names((tool) => tool.annotations?.destructiveHint === true)).toEqual(
+      [...DESTRUCTIVE_TOOLS].sort(),
+    );
+  });
+
+  it("flags every admin_*_delete tool as destructive", () => {
+    const deletes = Object.keys(MCP_TOOLS).filter((name) =>
+      /^admin_.*_delete$/.test(name),
     );
 
-    expect(byName.search_emails?.annotations?.readOnlyHint).toBe(true);
-    expect(byName.list_drafts?.annotations?.readOnlyHint).toBe(true);
-    expect(byName.send_email?.annotations?.readOnlyHint).toBeUndefined();
+    expect(deletes.length).toBeGreaterThan(0);
+    for (const name of deletes) expect(DESTRUCTIVE_TOOLS).toContain(name);
+  });
+
+  it("flags exactly the agreed open-world tools, drafts included as closed", () => {
+    expect(names((tool) => tool.annotations?.openWorldHint === true)).toEqual(
+      [...OPEN_WORLD_TOOLS].sort(),
+    );
+    const drafts = tools().filter((tool) => tool.name.endsWith("_draft"));
+    for (const tool of drafts) {
+      expect(tool.annotations?.openWorldHint, tool.name).toBe(false);
+    }
+  });
+
+  it("keeps every tool name within 64 characters", () => {
+    for (const name of Object.keys(MCP_TOOLS)) {
+      expect(name.length, name).toBeLessThanOrEqual(64);
+    }
   });
 
   it("offers get_attachment to a read-only token as a read-only tool", () => {
@@ -74,39 +179,6 @@ describe("tool annotations", () => {
     expect(byName.send_email?.annotations?.destructiveHint).toBe(true);
     expect(byName.create_draft?.annotations?.destructiveHint).toBe(false);
     expect(byName.create_draft?.annotations?.openWorldHint).toBe(false);
-  });
-});
-
-describe("admin tool annotations", () => {
-  const byName = () =>
-    Object.fromEntries(getAllTools().map((tool) => [tool.name, tool]));
-
-  it("marks verified read-only admin tools as read-only", () => {
-    const tools = byName();
-    for (const name of [
-      "admin_rules_list",
-      "admin_rules_get",
-      "admin_knowledge_list",
-      "admin_account_get",
-      "admin_digest_get",
-      "admin_unsubscribe_list",
-    ]) {
-      expect(tools[name]?.annotations?.readOnlyHint).toBe(true);
-    }
-  });
-
-  it("leaves mutating admin tools at the fail-safe default", () => {
-    const tools = byName();
-    for (const name of [
-      "admin_rules_delete",
-      "admin_rules_create",
-      "admin_knowledge_delete",
-      "admin_groups_delete",
-      "admin_cleanup_create_job",
-      "admin_unsubscribe_request",
-    ]) {
-      expect(tools[name]?.annotations?.readOnlyHint).toBeUndefined();
-    }
   });
 
   it("never marks a tool read-only that can write", () => {
@@ -137,16 +209,17 @@ describe("calendar tool annotations", () => {
     );
   });
 
-  it("leaves update and delete calendar events at the fail-safe destructive default", () => {
-    // update overwrites fields and can uninvite attendees; delete removes
-    // an event outright — neither may claim destructiveHint: false.
+  it("treats delete as destructive and update as an open-world edit", () => {
+    // delete removes an event outright. update edits one and can notify
+    // attendees, so it is open-world but, per the agreed list, not destructive.
     const tools = byName();
-    expect(tools.update_calendar_event?.annotations?.destructiveHint).not.toBe(
-      false,
-    );
     expect(tools.delete_calendar_event?.annotations?.destructiveHint).toBe(
       true,
     );
+    expect(tools.update_calendar_event?.annotations?.destructiveHint).toBe(
+      false,
+    );
+    expect(tools.update_calendar_event?.annotations?.openWorldHint).toBe(true);
   });
 
   it("does not claim delete_calendar_event is idempotent", () => {
@@ -202,12 +275,10 @@ describe("admin scope split", () => {
     expect(getAllTools(["admin"])).toHaveLength(46);
   });
 
-  it("marks admin reads read-only purely from the scope suffix", () => {
+  it("marks admin reads read-only and admin writes explicitly not", () => {
     const byName = Object.fromEntries(getAllTools().map((t) => [t.name, t]));
     expect(byName.admin_rules_list?.annotations?.readOnlyHint).toBe(true);
-    expect(
-      byName.admin_rules_delete?.annotations?.readOnlyHint,
-    ).toBeUndefined();
+    expect(byName.admin_rules_delete?.annotations?.readOnlyHint).toBe(false);
   });
 });
 
