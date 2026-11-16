@@ -1,5 +1,6 @@
 import { load } from "cheerio";
 import { describe, expect, it, vi } from "vitest";
+import { createReplyContent } from "@/utils/gmail/reply";
 import { convertOutgoingEmailHtmlToText } from "@/utils/mail";
 import {
   cardBodyFromHtml,
@@ -165,15 +166,73 @@ describe("user HTML: what the card marks and refuses", () => {
     ["cssContentEscape", '.x::after{\\63 ontent:"WIRE 5000"}'],
     ["cssImport", "@import url(https://evil.test/a.css);"],
     ["cssLink", "https://evil.test/a.css"],
-  ])("shows the style sheet of %s and refuses a body edit", (name, css) => {
+  ])("shows the style sheet of %s and still allows a body edit", (name, css) => {
     const html = PROBES[name];
     const card = cardBodyFromHtml(html);
 
     expect(
       [card.body, card.quotedHistory, card.signature].join("\n"),
     ).toContain(`[style sheet: ${css}]`);
-    expect(rebuildHtmlWithEditedBody(html, "Hello")).toBeNull();
+    expect(rebuildHtmlWithEditedBody(html, "Hello")).toContain("Hello");
     expect(hasHiddenText(html)).toBe(false);
+  });
+
+  it("keeps the authored part's style sheet after a body edit", () => {
+    const html = rebuildHtmlWithEditedBody(PROBES.cssAfter, "Hello") ?? "";
+
+    expect(html).toContain(
+      '<style>.x::after{content:"WIRE 5000 TO 123"}</style>',
+    );
+    expect(html).toContain("Hello");
+  });
+
+  it("edits an Outlook-desktop draft with a head style sheet, showing the CSS", () => {
+    const head =
+      '<html><head><meta charset="utf-8"><style>p.MsoNormal{margin:0in;font-size:11pt}</style><!--[if gte mso 9]><xml><o:OfficeDocumentSettings><o:AllowPNG/></o:OfficeDocumentSettings></xml><![endif]--></head>';
+    const original = `${head}<body lang=EN-US><div class=WordSection1><p class=MsoNormal>Hello Bob</p></div></body></html>`;
+
+    const card = cardBodyFromHtml(original);
+    const html = rebuildHtmlWithEditedBody(original, "Hello Rob") ?? "";
+
+    expect(card.body).toContain(
+      "[style sheet: p.MsoNormal{margin:0in;font-size:11pt}]",
+    );
+    expect(html.startsWith(head)).toBe(true);
+    expect(html).toContain("Hello Rob");
+  });
+
+  it("edits a reply that quotes a styled newsletter, quote unchanged", () => {
+    const { html: original } = createReplyContent({
+      textContent: "Thanks, noted",
+      message: {
+        headers: {
+          from: "News <news@example.com>",
+          to: "me@example.com",
+          subject: "Weekly",
+          date: "Mon, 2 Nov 2026 10:00:00 +0000",
+        },
+        textPlain: "Big news",
+        textHtml:
+          '<html><head><style>.hero{color:#123;font:14px Arial}</style></head><body><table><tr><td class="hero">Big news</td></tr></table><!--[if mso]><p>Outlook only</p><![endif]--></body></html>',
+      },
+    });
+    const quote = original.slice(original.indexOf('<div class="gmail_quote'));
+
+    const card = cardBodyFromHtml(original);
+    const html = rebuildHtmlWithEditedBody(original, "Thanks, *done*") ?? "";
+
+    expect(card.quotedHistory).toContain("[style sheet: .hero");
+    expect(card.quotedHistory).toContain(
+      "[shown only in Outlook: Outlook only]",
+    );
+    expect(html).toContain("<em>done</em>");
+    expect(html.endsWith(quote)).toBe(true);
+  });
+
+  it("shows hidden text in the signature without blocking a body edit", () => {
+    expect(
+      rebuildHtmlWithEditedBody(PROBES.hiddenInSignature, "Hello"),
+    ).toContain("Hello");
   });
 
   it("shows a style sheet inside the quote under the quoted history", () => {

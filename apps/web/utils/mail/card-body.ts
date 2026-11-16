@@ -47,7 +47,7 @@ export function rebuildHtmlWithEditedBody(
   markdown: string,
 ): string | null {
   const parts = splitOutgoingHtml(html);
-  if (parts.extras.length) return null;
+  if (parts.extras.some((extra) => extra.blocksEdit)) return null;
   const $inner = load(parts.inner, null, false);
   const style = commonTypography($inner);
   if (style === null) return null;
@@ -62,6 +62,10 @@ export function rebuildHtmlWithEditedBody(
   return [
     parts.head,
     parts.prefix,
+    // The authored part's own style sheets stay, ahead of the edited text.
+    ...$inner("style, link")
+      .toArray()
+      .map((element) => $inner.html(element)),
     withBlockStyle(markdownToSafeHtml(markdown, imageSources), style),
     parts.suffix,
     parts.signature,
@@ -93,7 +97,7 @@ const QUOTE_SELECTOR = [
 
 // Markdown can't carry these, so an edit would lose them without a word.
 const UNEDITABLE_SELECTOR =
-  "table, style, link, input, button, textarea, select, form, iframe, object, embed, svg, [background]";
+  "table, input, button, textarea, select, form, iframe, object, embed, svg, [background]";
 // Inline styles an edit can keep by putting them on every edited block.
 const TYPOGRAPHY_PROPERTY =
   /^(font-family|font-size|color|line-height|(margin|padding)(-(top|right|bottom|left))?)$/;
@@ -252,7 +256,10 @@ function splitOutgoingHtml(html: string) {
     innerEnd = authoredEnd;
   }
 
-  // Shown in the field they sit in; any of them refuses a body edit.
+  // Shown in the field they sit in. Only Outlook-only content in the authored
+  // part refuses a body edit: the edit can't reproduce it. Style sheets are
+  // shown in full and kept; the signature and quote are reattached as they
+  // were.
   const fieldAt = (offset: number): Extra["field"] =>
     quoteStart !== undefined && offset >= quotedFrom
       ? "quoted"
@@ -265,6 +272,7 @@ function splitOutgoingHtml(html: string) {
       (match) => ({
         offset: match.index,
         marker: `[shown only in Outlook: ${htmlText(cardHtml(match[1]))}]`,
+        blocksEdit: match.index >= start && match.index < authoredEnd,
       }),
     ),
     // A style sheet can add text (content:, @import, linked CSS), so the
@@ -274,16 +282,22 @@ function splitOutgoingHtml(html: string) {
       .map((element) => ({
         offset: startOf(element) ?? 0,
         marker: `[style sheet: ${$(element).text().trim()}]`,
+        blocksEdit: false,
       })),
     ...$("link[href]")
       .toArray()
       .map((element) => ({
         offset: startOf(element) ?? 0,
         marker: `[style sheet: ${$(element).attr("href")}]`,
+        blocksEdit: false,
       })),
   ]
     .sort((a, b) => a.offset - b.offset)
-    .map(({ offset, marker }) => ({ field: fieldAt(offset), marker }));
+    .map(({ offset, marker, blocksEdit }) => ({
+      field: fieldAt(offset),
+      marker,
+      blocksEdit,
+    }));
 
   return {
     extras,
@@ -489,7 +503,11 @@ function hasVisibleContent(fragment: string) {
   );
 }
 
-type Extra = { field: "body" | "signature" | "quoted"; marker: string };
+type Extra = {
+  field: "body" | "signature" | "quoted";
+  marker: string;
+  blocksEdit: boolean;
+};
 
 /**
  * The HTML a card field is rendered from: things a reader sees that are not

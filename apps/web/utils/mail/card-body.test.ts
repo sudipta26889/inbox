@@ -134,7 +134,6 @@ describe("edits that the Markdown round trip can't carry", () => {
       '<p style="position:relative;top:2px">Hi</p><p style="position:relative;top:2px">Two</p>',
     ],
     ["a font size tag", '<p><font size="4">Hi</font></p>'],
-    ["a style element", "<style>p{color:red}</style><p>Hi</p>"],
   ])("refuses a body edit on %s", (_name, original) => {
     expect(rebuildHtmlWithEditedBody(original, "Changed")).toBeNull();
   });
