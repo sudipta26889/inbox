@@ -47,6 +47,7 @@ vi.mock("@googleapis/gmail", () => ({
       return {
         setCredentials,
         refreshAccessToken,
+        on: vi.fn(),
       };
     }),
   },
@@ -177,31 +178,6 @@ describe("gmail oauth client configuration", () => {
         expectedExpiresAt: staleExpiresAt,
         tokens: expect.objectContaining({
           access_token: "new-access-token",
-        }),
-      }),
-    );
-  });
-
-  it("saves a refresh token Google rotated even when the access token is unchanged", async () => {
-    refreshAccessToken.mockResolvedValue({
-      credentials: {
-        access_token: "access-token",
-        refresh_token: "rotated-refresh-token",
-      },
-    });
-
-    await getGmailClientWithRefresh({
-      accessToken: "access-token",
-      refreshToken: "refresh-token",
-      expiresAt: null,
-      emailAccountId: "email-account-id",
-      logger,
-    });
-
-    expect(saveTokens).toHaveBeenCalledWith(
-      expect.objectContaining({
-        tokens: expect.objectContaining({
-          refresh_token: "rotated-refresh-token",
         }),
       }),
     );

@@ -89,11 +89,17 @@ export const getGmailClientWithRefresh = async ({
 
   // may throw `invalid_grant` error
   try {
+    // Google can rotate the refresh token, and dropping the new one ends in
+    // invalid_grant once the old one is retired. refreshAccessToken() replaces
+    // it with the old token in its result, so read the raw response from the
+    // "tokens" event, which fires before that overwrite.
+    let newRefreshToken: string | undefined;
+    auth.on("tokens", (refreshed) => {
+      if (refreshed.refresh_token && refreshed.refresh_token !== refreshToken)
+        newRefreshToken = refreshed.refresh_token;
+    });
     const tokens = await auth.refreshAccessToken();
     const newAccessToken = tokens.credentials.access_token;
-    // Google can rotate the refresh token; dropping the new one leads to
-    // invalid_grant once the old one is retired.
-    const newRefreshToken = tokens.credentials.refresh_token ?? undefined;
 
     if (newAccessToken !== accessToken || newRefreshToken) {
       await saveTokens({
