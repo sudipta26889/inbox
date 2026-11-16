@@ -1,6 +1,6 @@
 "use server";
 
-import { actionClient } from "@/utils/actions/safe-action";
+import { actionClient, ownerActionClient } from "@/utils/actions/safe-action";
 import {
   updateSlackRouteBody,
   updateMessagingFeatureRouteBody,
@@ -200,7 +200,7 @@ export const disconnectChannelAction = actionClient
     }
   });
 
-export const linkSlackWorkspaceAction = actionClient
+export const linkSlackWorkspaceAction = ownerActionClient
   .metadata({ name: "linkSlackWorkspace" })
   .inputSchema(linkSlackWorkspaceBody)
   .action(
@@ -302,7 +302,7 @@ export const linkSlackWorkspaceAction = actionClient
     },
   );
 
-export const createMessagingLinkCodeAction = actionClient
+export const createMessagingLinkCodeAction = ownerActionClient
   .metadata({ name: "createMessagingLinkCode" })
   .inputSchema(createMessagingLinkCodeBody)
   .action(async ({ ctx: { emailAccountId }, parsedInput: { provider } }) => {

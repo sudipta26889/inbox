@@ -18,12 +18,12 @@ export const GET = withAuth(
       );
     }
 
-    const email = await getEmailAccount({
+    const access = await getEmailAccount({
       userId: request.auth.userId,
       emailAccountId,
     });
 
-    if (!email) {
+    if (!access) {
       return NextResponse.json(
         { error: "Invalid account ID" },
         { status: 403 },
@@ -50,7 +50,7 @@ export const GET = withAuth(
 
     if (!draft) return draftNotFound();
 
-    const draftUrl = getEmailDraftUrl(draft, email, provider);
+    const draftUrl = getEmailDraftUrl(draft, access.email, provider);
     if (!draftUrl) {
       request.logger.warn(
         "Meeting follow-up draft has no id to build a provider link from",

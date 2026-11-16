@@ -1,5 +1,6 @@
 import type { Prisma } from "@/generated/prisma/client";
 import prisma from "@/utils/prisma";
+import { accessibleEmailAccountWhere } from "@/utils/email-account-access";
 import { EMAIL_ACCOUNT_ORDER_BY } from "@/utils/email-account-order";
 
 const mcpEmailAccountSelect = {
@@ -24,7 +25,7 @@ function toMcpEmailAccount(account: McpEmailAccountRow) {
 
 export async function listMcpEmailAccounts(userId: string) {
   const accounts = await prisma.emailAccount.findMany({
-    where: { userId },
+    where: accessibleEmailAccountWhere(userId),
     select: mcpEmailAccountSelect,
     orderBy: EMAIL_ACCOUNT_ORDER_BY,
   });
@@ -45,11 +46,12 @@ export async function resolveMcpEmailAccount({
     throw new Error("Provide either emailAccountId or emailAddress, not both.");
   }
 
+  const accessible = accessibleEmailAccountWhere(userId);
   const where = emailAccountId
-    ? { id: emailAccountId, userId }
+    ? { id: emailAccountId, ...accessible }
     : emailAddress
-      ? { email: emailAddress, userId }
-      : { userId };
+      ? { email: emailAddress, ...accessible }
+      : accessible;
 
   const account = await prisma.emailAccount.findFirst({
     where,

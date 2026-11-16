@@ -2,7 +2,7 @@
 
 import { randomUUID } from "node:crypto";
 import { StreamableHTTPError } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { actionClient } from "@/utils/actions/safe-action";
+import { actionClient, ownerActionClient } from "@/utils/actions/safe-action";
 import {
   createCustomMcpServerBody,
   disconnectMcpConnectionBody,
@@ -117,7 +117,7 @@ export const toggleMcpToolAction = actionClient
     },
   );
 
-export const createCustomMcpServerAction = actionClient
+export const createCustomMcpServerAction = ownerActionClient
   .metadata({ name: "createCustomMcpServer" })
   .inputSchema(createCustomMcpServerBody)
   .action(
@@ -181,7 +181,7 @@ export const createCustomMcpServerAction = actionClient
     },
   );
 
-export const removeCustomMcpServerAction = actionClient
+export const removeCustomMcpServerAction = ownerActionClient
   .metadata({ name: "removeCustomMcpServer" })
   .inputSchema(removeCustomMcpServerBody)
   .action(async ({ ctx: { emailAccountId }, parsedInput: { name } }) => {

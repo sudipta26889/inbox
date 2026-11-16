@@ -1,4 +1,5 @@
 import prisma from "@/utils/prisma";
+import { accessibleEmailAccountWhere } from "@/utils/email-account-access";
 import { EMAIL_ACCOUNT_ORDER_BY } from "@/utils/email-account-order";
 
 export async function getConnectedEmailAccounts({
@@ -14,7 +15,7 @@ export async function getConnectedEmailAccounts({
     where: {
       ...(accountId ? { id: accountId } : {}),
       ...(includeInAllAccounts ? { includeInAllAccounts: true } : {}),
-      userId,
+      ...accessibleEmailAccountWhere(userId),
       account: { disconnectedAt: null },
     },
     select: {

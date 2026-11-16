@@ -1,4 +1,5 @@
 import prisma from "@/utils/prisma";
+import { accessibleEmailAccountWhere } from "@/utils/email-account-access";
 import { MutedText, PageHeading } from "@/components/Typography";
 import {
   Card,
@@ -37,7 +38,7 @@ export default async function RuleHistoryPage(props: {
       // Verify the user has access to this email account
       emailAccount: {
         id: emailAccountId,
-        userId: session.user.id,
+        ...accessibleEmailAccountWhere(session.user.id),
       },
     },
     select: {

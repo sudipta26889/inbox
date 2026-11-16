@@ -74,7 +74,10 @@ describe("POST /api/mobile/all-inboxes/archive", () => {
       expect.objectContaining({
         where: expect.objectContaining({
           id: { in: ["owned-account", "other-account"] },
-          userId: "user-1",
+          OR: [
+            { userId: "user-1" },
+            { shares: { some: { userId: "user-1" } } },
+          ],
         }),
       }),
     );

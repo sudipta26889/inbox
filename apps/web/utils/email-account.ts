@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/utils/auth";
 import prisma from "@/utils/prisma";
+import { accessibleEmailAccountWhere } from "@/utils/email-account-access";
 
 export async function checkUserOwnsEmailAccount({
   emailAccountId,
@@ -12,7 +13,7 @@ export async function checkUserOwnsEmailAccount({
   if (!userId) redirect("/login");
 
   const emailAccount = await prisma.emailAccount.findUnique({
-    where: { id: emailAccountId, userId },
+    where: { id: emailAccountId, ...accessibleEmailAccountWhere(userId) },
     select: { id: true },
   });
 

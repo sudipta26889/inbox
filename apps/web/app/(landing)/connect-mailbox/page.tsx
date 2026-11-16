@@ -6,6 +6,7 @@ import { auth } from "@/utils/auth";
 import { BRAND_NAME, getBrandTitle } from "@/utils/branding";
 import { getConnectMailboxNextPath } from "@/utils/connect-mailbox";
 import prisma from "@/utils/prisma";
+import { accessibleEmailAccountWhere } from "@/utils/email-account-access";
 
 export const metadata: Metadata = {
   title: getBrandTitle("Connect Mailbox"),
@@ -23,7 +24,7 @@ export default async function ConnectMailboxPage(props: {
 
   const nextPath = getConnectMailboxNextPath(searchParams?.next);
   const emailAccount = await prisma.emailAccount.findFirst({
-    where: { userId: session.user.id },
+    where: accessibleEmailAccountWhere(session.user.id),
     select: { id: true },
   });
 
