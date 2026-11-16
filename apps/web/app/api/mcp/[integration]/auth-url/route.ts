@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { env } from "@/env";
 import { withEmailAccount } from "@/utils/middleware";
+import { sharedUserRefusal } from "@/utils/email-account-access";
 import { SafeError } from "@/utils/error";
 import {
   oauthStateCookieOptions,
@@ -19,6 +20,8 @@ export type GetMcpAuthUrlResponse = { url: string };
 export const GET = withEmailAccount(
   "mcp/auth-url",
   async (request, { params }) => {
+    const refusal = sharedUserRefusal(request.auth);
+    if (refusal) return refusal;
     const { integration } = await params;
     const { emailAccountId } = request.auth;
     const userId = request.auth.userId;
