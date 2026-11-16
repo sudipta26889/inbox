@@ -26,6 +26,7 @@ import { sendMobilePushNotification } from "@/utils/mobile-push";
 import { processFilingReply } from "@/utils/drive/handle-filing-reply";
 import { getFilebotEmail } from "@/utils/filebot/is-filebot-email";
 import { SafeError } from "@/utils/error";
+import { analyzeSenderPattern } from "@/utils/ai/choose-rule/analyze-sender-pattern";
 
 vi.mock("@/utils/prisma", () => ({
   default: {
@@ -69,6 +70,14 @@ vi.mock("@/utils/otp-push", () => ({
 
 vi.mock("@/utils/mobile-push", () => ({
   sendMobilePushNotification: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("@/utils/ai/choose-rule/analyze-sender-pattern", () => ({
+  analyzeSenderPattern: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("next/server", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/server")>()),
+  after: vi.fn((task: () => unknown) => task()),
 }));
 
 const logger = createTestLogger();
@@ -848,5 +857,54 @@ describe("Provider Edge Cases", () => {
         }),
       );
     });
+  });
+});
+
+describe("autoLearnPatterns", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const emailAccount = {
+    ...getEmailAccount(),
+    autoCategorizeSenders: false,
+    filingEnabled: false,
+    filingPrompt: null,
+    filingConfirmationSendEmail: true,
+    draftReplyConfidence: DraftReplyConfidence.ALL_EMAILS,
+  };
+
+  async function run(autoLearnPatterns: boolean) {
+    const message = getMockParsedMessage({
+      internalDate: String(Date.now()),
+      headers: {
+        from: "New Sender <New@Sender.com>",
+        to: "user@test.com",
+        subject: "Hi",
+        date: "2024-01-01",
+      },
+    });
+    await processHistoryItem(
+      { messageId: message.id, message },
+      {
+        provider: createMockEmailProvider(),
+        hasAutomationRules: false,
+        hasAiAccess: true,
+        rules: [],
+        emailAccount: { ...emailAccount, autoLearnPatterns },
+        logger,
+      },
+    );
+  }
+
+  it("learns the pattern of a sender not yet analyzed when enabled", async () => {
+    await run(true);
+    expect(analyzeSenderPattern).toHaveBeenCalledWith(
+      { emailAccountId: emailAccount.id, from: "new@sender.com" },
+      expect.anything(),
+    );
+  });
+
+  it("does nothing when disabled", async () => {
+    await run(false);
+    expect(analyzeSenderPattern).not.toHaveBeenCalled();
   });
 });
