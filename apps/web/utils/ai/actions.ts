@@ -355,6 +355,7 @@ const reply: ActionFunction<{
       attachments,
       cc: args.cc ?? undefined,
       bcc: args.bcc ?? undefined,
+      operationId: actionOperationId(executedRule, args),
     },
   );
   return { sentMessageIds: [messageId] };
@@ -386,6 +387,7 @@ const send_email: ActionFunction<{
     subject: args.subject,
     messageText: args.content,
     attachments,
+    operationId: actionOperationId(executedRule, args),
   };
 
   const { messageId } = await client.sendEmail(emailArgs);
@@ -397,7 +399,7 @@ const forward: ActionFunction<{
   to?: string | null;
   cc?: string | null;
   bcc?: string | null;
-}> = async ({ client, email, args, logger }) => {
+}> = async ({ client, email, args, executedRule, logger }) => {
   if (!args.to) return;
 
   const messageParticipants = [
@@ -442,6 +444,7 @@ const forward: ActionFunction<{
   const forwardArgs = {
     messageId: email.id,
     content: args.content ?? undefined,
+    operationId: actionOperationId(executedRule, args),
   };
 
   if (!toRecipients.length && !ccRecipients.length) {
@@ -452,6 +455,8 @@ const forward: ActionFunction<{
       try {
         const { messageId } = await client.forwardEmail(forwardMessage, {
           ...forwardArgs,
+          // One send per BCC recipient, so one approval card each.
+          operationId: `${forwardArgs.operationId}:${recipient}`,
           to: recipient,
         });
         sentMessageIds.push(messageId);
@@ -708,6 +713,8 @@ const integration: ActionFunction<{
 const notify_sender: ActionFunction<Record<string, unknown>> = async ({
   email,
   emailAccount,
+  executedRule,
+  args,
   logger,
 }) => {
   const senderEmail = extractEmailAddress(email.headers.from);
@@ -728,6 +735,8 @@ const notify_sender: ActionFunction<Record<string, unknown>> = async ({
     recipientEmail: emailAccount.email,
     originalSubject: email.headers.subject,
     originalMessageId: email.headers["message-id"],
+    emailAccountId: emailAccount.id,
+    operationId: actionOperationId(executedRule, args),
     logger,
   });
 
@@ -945,4 +954,12 @@ function attachSentMessageIds(error: unknown, sentMessageIds: string[]) {
   }
 
   return Object.assign(new Error(String(error)), { sentMessageIds });
+}
+
+// A rerun of the same rule action asks on the same card, not a second one.
+function actionOperationId(
+  executedRule: ExecutedRuleForAction,
+  action: Pick<ActionItem, "id">,
+) {
+  return `rule_${executedRule.id}_${action.id}`;
 }

@@ -19,8 +19,11 @@ describe("getConnectedEmailAccounts", () => {
     expect(prisma.emailAccount.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
-          userId: "user-1",
           includeInAllAccounts: true,
+          OR: [
+            { userId: "user-1" },
+            { shares: { some: { userId: "user-1" } } },
+          ],
           account: { disconnectedAt: null },
         },
       }),
@@ -37,7 +40,10 @@ describe("getConnectedEmailAccounts", () => {
       expect.objectContaining({
         where: {
           id: "account-1",
-          userId: "user-1",
+          OR: [
+            { userId: "user-1" },
+            { shares: { some: { userId: "user-1" } } },
+          ],
           account: { disconnectedAt: null },
         },
       }),

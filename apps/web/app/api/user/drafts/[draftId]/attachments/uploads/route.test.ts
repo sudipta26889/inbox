@@ -42,7 +42,10 @@ describe("POST /api/user/drafts/[draftId]/attachments/uploads", () => {
     vi.clearAllMocks();
     redisStore.clear();
     authMock.mockResolvedValue({ user: { id: "user-1" } });
-    getEmailAccountMock.mockResolvedValue("developer@example.com");
+    getEmailAccountMock.mockResolvedValue({
+      email: "developer@example.com",
+      ownerUserId: "user-1",
+    });
     prisma.emailAccount.findUnique.mockResolvedValue({
       id: "account-1",
       account: { provider: "google" },

@@ -38,6 +38,25 @@ export async function mergeAccount({
     throw new Error("Source email account not found");
   }
 
+  // Shares were granted by the previous owner; the new owner never agreed to them.
+  const shareHolders = await prisma.emailAccountShare.findMany({
+    where: { emailAccountId: accountBeingMoved.id },
+    select: { userId: true },
+  });
+  const deleteShares = prisma.emailAccountShare.deleteMany({
+    where: { emailAccountId: accountBeingMoved.id },
+  });
+  const clearAccessCache = () =>
+    Promise.all(
+      [sourceUserId, targetUserId, ...shareHolders.map((s) => s.userId)].map(
+        (userId) =>
+          invalidateAccountValidation({
+            userId,
+            emailAccountId: accountBeingMoved.id,
+          }),
+      ),
+    );
+
   if (sourceUserEmailAccounts.length > 1) {
     logger.info(
       "Source user has multiple accounts, reassigning one and updating primary",
@@ -75,18 +94,24 @@ export async function mergeAccount({
         await prisma.$transaction([
           accountUpdate,
           emailAccountUpdate,
+          deleteShares,
           userUpdate,
         ]);
       } else {
-        await prisma.$transaction([accountUpdate, emailAccountUpdate]);
+        await prisma.$transaction([
+          accountUpdate,
+          emailAccountUpdate,
+          deleteShares,
+        ]);
       }
     } else {
-      await prisma.$transaction([accountUpdate, emailAccountUpdate]);
+      await prisma.$transaction([
+        accountUpdate,
+        emailAccountUpdate,
+        deleteShares,
+      ]);
     }
-    await invalidateAccountValidation({
-      userId: sourceUserId,
-      emailAccountId: accountBeingMoved.id,
-    });
+    await clearAccessCache();
     return "partial_reassign";
   }
 
@@ -113,6 +138,7 @@ export async function mergeAccount({
         email,
       },
     }),
+    deleteShares,
     prisma.user.delete({
       where: {
         id: sourceUserId,
@@ -122,10 +148,7 @@ export async function mergeAccount({
     }),
   ]);
 
-  await invalidateAccountValidation({
-    userId: sourceUserId,
-    emailAccountId: accountBeingMoved.id,
-  });
+  await clearAccessCache();
 
   return "full_merge";
 }

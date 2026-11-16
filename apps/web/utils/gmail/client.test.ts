@@ -47,6 +47,7 @@ vi.mock("@googleapis/gmail", () => ({
       return {
         setCredentials,
         refreshAccessToken,
+        on: vi.fn(),
       };
     }),
   },

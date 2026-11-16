@@ -36,7 +36,10 @@ describe("mail v1 split routes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(auth).mockResolvedValue({ user: { id: "user-1" } } as never);
-    vi.mocked(getEmailAccount).mockResolvedValue("user@example.com");
+    vi.mocked(getEmailAccount).mockResolvedValue({
+      email: "user@example.com",
+      ownerUserId: "user-1",
+    });
     prisma.emailAccount.findUnique.mockResolvedValue({
       account: { provider: "google" },
       mailSplits: [saved],

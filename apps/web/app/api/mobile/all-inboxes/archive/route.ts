@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createEmailProvider } from "@/utils/email/provider";
 import { withAuth } from "@/utils/middleware";
 import prisma from "@/utils/prisma";
+import { accessibleEmailAccountWhere } from "@/utils/email-account-access";
 import { mapWithConcurrency } from "@/utils/async";
 
 const ACCOUNT_CONCURRENCY = 4;
@@ -56,7 +57,7 @@ export const POST = withAuth("mobile/all-inboxes/archive", async (request) => {
   const accounts = await prisma.emailAccount.findMany({
     where: {
       id: { in: accountIds },
-      userId: request.auth.userId,
+      ...accessibleEmailAccountWhere(request.auth.userId),
       account: { disconnectedAt: null },
     },
     select: {

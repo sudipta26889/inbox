@@ -23,7 +23,7 @@ import {
   isMicrosoftProvider,
 } from "@/utils/email/provider-types";
 
-const webhookEmailAccountSelect = {
+export const webhookEmailAccountSelect = {
   id: true,
   email: true,
   userId: true,
@@ -35,6 +35,7 @@ const webhookEmailAccountSelect = {
   draftReplyConfidence: true,
   lastSyncedHistoryId: true,
   autoCategorizeSenders: true,
+  autoLearnPatterns: true,
   filingEnabled: true,
   filingPrompt: true,
   filingConfirmationSendEmail: true,
@@ -327,7 +328,7 @@ async function createEmailProviderForWebhookCleanup({
 
   if (isMicrosoftProvider(provider)) {
     const client = await getOutlookClientForEmail({ emailAccountId, logger });
-    return new OutlookProvider(client, logger);
+    return new OutlookProvider(client, logger, emailAccountId);
   }
 
   return null;

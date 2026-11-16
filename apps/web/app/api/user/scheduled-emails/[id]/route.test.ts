@@ -19,7 +19,10 @@ describe("DELETE /api/user/scheduled-emails/[id]", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     authMock.mockResolvedValue({ user: { id: "user-1" } });
-    getEmailAccountMock.mockResolvedValue("developer@example.com");
+    getEmailAccountMock.mockResolvedValue({
+      email: "developer@example.com",
+      ownerUserId: "user-1",
+    });
   });
 
   it("rejects a request without a session", async () => {

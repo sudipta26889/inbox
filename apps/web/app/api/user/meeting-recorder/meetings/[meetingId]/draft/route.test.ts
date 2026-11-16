@@ -39,7 +39,10 @@ const routeContext = { params: Promise.resolve({ meetingId: "meeting-1" }) };
 describe("meeting follow-up draft route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    getEmailAccountMock.mockResolvedValue("user@gmail.com");
+    getEmailAccountMock.mockResolvedValue({
+      email: "user@gmail.com",
+      ownerUserId: "user-1",
+    });
   });
 
   it("opens the related Gmail draft's conversation in Drafts", async () => {
@@ -68,7 +71,10 @@ describe("meeting follow-up draft route", () => {
   // The draft is addressed by what the freshly fetched draft reports, since
   // editing a draft replaces its message id.
   it("opens the related draft within the full Outlook client", async () => {
-    getEmailAccountMock.mockResolvedValue("user@example.com");
+    getEmailAccountMock.mockResolvedValue({
+      email: "user@example.com",
+      ownerUserId: "user-1",
+    });
     prisma.meeting.findFirst.mockResolvedValue({
       followUpDraftId: "draft-resource-123",
       emailAccount: { account: { provider: "microsoft" } },
@@ -89,7 +95,10 @@ describe("meeting follow-up draft route", () => {
   });
 
   it("returns an explicit error when the draft cannot be linked to", async () => {
-    getEmailAccountMock.mockResolvedValue("user@example.com");
+    getEmailAccountMock.mockResolvedValue({
+      email: "user@example.com",
+      ownerUserId: "user-1",
+    });
     prisma.meeting.findFirst.mockResolvedValue({
       followUpDraftId: "draft-resource-123",
       emailAccount: { account: { provider: "microsoft" } },

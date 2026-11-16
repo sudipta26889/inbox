@@ -66,10 +66,6 @@ const organization: Organization = {
     "@type": "ImageObject",
     url: toAbsoluteUrl(BRAND_ICON_URL),
   },
-  sameAs: [
-    "https://x.com/inboxzero_ai",
-    "https://github.com/elie222/inbox-zero",
-  ],
   ...(SUPPORT_EMAIL
     ? {
         contactPoint: {
@@ -81,11 +77,10 @@ const organization: Organization = {
     : {}),
   address: {
     "@type": "PostalAddress",
-    streetAddress: "131 Continental Dr, Suite 305",
-    addressLocality: "Newark",
-    addressRegion: "DE",
-    postalCode: "19713",
-    addressCountry: "US",
+    streetAddress: "Action Area 3, New Town",
+    addressLocality: "Kolkata",
+    addressRegion: "West Bengal",
+    addressCountry: "IN",
   },
 };
 
@@ -93,7 +88,6 @@ const website: WebSite = {
   "@type": "WebSite",
   "@id": websiteId,
   name: BRAND_NAME,
-  alternateName: ["InboxZero", "getinboxzero"],
   url: env.NEXT_PUBLIC_BASE_URL,
   publisher: { "@id": organizationId },
 };

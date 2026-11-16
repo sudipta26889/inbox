@@ -76,7 +76,13 @@ describe("attachment download", () => {
     const response = await GET(request, {} as never);
     expect(prisma.emailAccount.findUnique).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: "account-id", userId: "user-id" },
+        where: {
+          id: "account-id",
+          OR: [
+            { userId: "user-id" },
+            { shares: { some: { userId: "user-id" } } },
+          ],
+        },
       }),
     );
     expect(getAttachmentStream).toHaveBeenCalledWith(
@@ -119,7 +125,13 @@ describe("attachment download", () => {
     const response = await GET(request, {} as never);
     expect(prisma.emailAccount.findUnique).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: "header-account", userId: "user-id" },
+        where: {
+          id: "header-account",
+          OR: [
+            { userId: "user-id" },
+            { shares: { some: { userId: "user-id" } } },
+          ],
+        },
       }),
     );
     expect(response.headers.get("content-disposition")).toContain(

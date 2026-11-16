@@ -25,6 +25,7 @@ type TestAuth = {
 };
 
 type TestEmailAccountAuth = {
+  actorUserId?: string;
   email: string;
   emailAccountId: string;
   userId: string;
@@ -150,7 +151,11 @@ export function addTestEmailAccountAuth<TRequest extends Request>(
     logger?: ReturnType<typeof createTestLogger>;
   } = {},
 ) {
-  return Object.assign(request, { auth, logger });
+  // Tests act as the owner unless they set a different signed-in user.
+  return Object.assign(request, {
+    auth: { actorUserId: auth.userId, ...auth },
+    logger,
+  });
 }
 
 function createAuthTestMiddlewareWrapper(

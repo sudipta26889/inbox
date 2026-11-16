@@ -24,6 +24,7 @@ import {
   importRulesBody,
 } from "@/utils/actions/rule.validation";
 import prisma from "@/utils/prisma";
+import { accessibleEmailAccountWhere } from "@/utils/email-account-access";
 import { isDuplicateError, isNotFoundError } from "@/utils/prisma-helpers";
 import { flattenConditions } from "@/utils/condition";
 import { ActionType, SystemType } from "@/generated/prisma/enums";
@@ -559,10 +560,11 @@ export const copyRulesFromAccountAction = actionClientUser
         throw new SafeError("Source and target accounts must be different");
       }
 
-      // Validate user owns both accounts
+      // Validate user owns, or has been shared, both accounts
+      const accessible = accessibleEmailAccountWhere(userId);
       const [sourceAccount, targetAccount] = await Promise.all([
         prisma.emailAccount.findUnique({
-          where: { id: sourceEmailAccountId },
+          where: { id: sourceEmailAccountId, ...accessible },
           select: {
             id: true,
             email: true,
@@ -570,7 +572,7 @@ export const copyRulesFromAccountAction = actionClientUser
           },
         }),
         prisma.emailAccount.findUnique({
-          where: { id: targetEmailAccountId },
+          where: { id: targetEmailAccountId, ...accessible },
           select: {
             id: true,
             email: true,
@@ -579,10 +581,10 @@ export const copyRulesFromAccountAction = actionClientUser
         }),
       ]);
 
-      if (!sourceAccount || sourceAccount.account.userId !== userId) {
+      if (!sourceAccount) {
         throw new SafeError("Source account not found or unauthorized");
       }
-      if (!targetAccount || targetAccount.account.userId !== userId) {
+      if (!targetAccount) {
         throw new SafeError("Target account not found or unauthorized");
       }
 

@@ -27,7 +27,10 @@ describe("POST /api/user/scheduled-emails", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     authMock.mockResolvedValue({ user: { id: userId } });
-    getEmailAccountMock.mockResolvedValue("developer@example.com");
+    getEmailAccountMock.mockResolvedValue({
+      email: "developer@example.com",
+      ownerUserId: "user-1",
+    });
     processScheduledEmail.mockResolvedValue(undefined);
   });
 

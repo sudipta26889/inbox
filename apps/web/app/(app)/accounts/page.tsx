@@ -31,6 +31,9 @@ import { toastSuccess, toastError } from "@/components/Toast";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { prefixPath } from "@/utils/path";
 import { AddAccount } from "@/app/(app)/accounts/AddAccount";
+import { ShareAccountDialog } from "@/app/(app)/accounts/ShareAccountDialog";
+import { Badge } from "@/components/ui/badge";
+import type { GetEmailAccountsResponse } from "@/app/api/user/email-accounts/route";
 import { getAddAccountBillingText } from "@/app/(app)/premium/config";
 import { usePremium } from "@/hooks/usePremium";
 import { PageHeader } from "@/components/PageHeader";
@@ -90,13 +93,7 @@ function AccountItem({
   emailAccount,
   onAccountDeleted,
 }: {
-  emailAccount: {
-    id: string;
-    name: string | null;
-    email: string;
-    image: string | null;
-    isPrimary: boolean;
-  };
+  emailAccount: AccountListItem;
   onAccountDeleted: () => void;
 }) {
   return (
@@ -115,13 +112,7 @@ function AccountHeader({
   emailAccount,
   onAccountDeleted,
 }: {
-  emailAccount: {
-    id: string;
-    name: string | null;
-    email: string;
-    image: string | null;
-    isPrimary: boolean;
-  };
+  emailAccount: AccountListItem;
   onAccountDeleted: () => void;
 }) {
   return (
@@ -135,6 +126,11 @@ function AccountHeader({
       <div className="flex flex-col space-y-1.5 flex-1">
         <CardTitle>{emailAccount.name}</CardTitle>
         <CardDescription>{emailAccount.email}</CardDescription>
+        {emailAccount.isShared && (
+          <Badge variant="secondary" className="w-fit">
+            <Trans>Shared with you</Trans>
+          </Badge>
+        )}
       </div>
       <div
         onClick={(e: MouseEvent<HTMLDivElement>) => e.stopPropagation()}
@@ -158,11 +154,7 @@ function AccountOptionsDropdown({
   emailAccount,
   onAccountDeleted,
 }: {
-  emailAccount: {
-    id: string;
-    email: string;
-    isPrimary: boolean;
-  };
+  emailAccount: AccountListItem;
   onAccountDeleted: () => void;
 }) {
   const { t } = useLingui();
@@ -217,32 +209,40 @@ function AccountOptionsDropdown({
             <Trans>Setup</Trans>
           </Link>
         </DropdownMenuItem>
-        <ConfirmDialog
-          trigger={
-            <DropdownMenuItem
-              onSelect={(e: Event) => {
-                e?.preventDefault();
-                e?.stopPropagation?.();
-              }}
-              onClick={(e: MouseEvent<HTMLDivElement>) => e.stopPropagation()}
-              className="flex items-center gap-2 text-destructive focus:text-destructive"
-              disabled={isExecuting}
-            >
-              <Trash2 className="size-4" />
-              <Trans>Delete</Trans>
-            </DropdownMenuItem>
-          }
-          title={t`Delete Account`}
-          description={
-            emailAccount.isPrimary
-              ? t`Are you sure you want to delete "${emailAccount.email}"? This is your primary account. You will be logged out and need to log in again. Your oldest remaining account will become your new primary account. All data for "${emailAccount.email}" will be permanently deleted from ${BRAND_NAME}.`
-              : t`Are you sure you want to delete "${emailAccount.email}"? This will delete all data for it on ${BRAND_NAME}.`
-          }
-          confirmText={t`Delete`}
-          onConfirm={() => {
-            execute({ emailAccountId: emailAccount.id });
-          }}
-        />
+        {!emailAccount.isShared && (
+          <ShareAccountDialog
+            emailAccount={emailAccount}
+            onChange={onAccountDeleted}
+          />
+        )}
+        {!emailAccount.isShared && (
+          <ConfirmDialog
+            trigger={
+              <DropdownMenuItem
+                onSelect={(e: Event) => {
+                  e?.preventDefault();
+                  e?.stopPropagation?.();
+                }}
+                onClick={(e: MouseEvent<HTMLDivElement>) => e.stopPropagation()}
+                className="flex items-center gap-2 text-destructive focus:text-destructive"
+                disabled={isExecuting}
+              >
+                <Trash2 className="size-4" />
+                <Trans>Delete</Trans>
+              </DropdownMenuItem>
+            }
+            title={t`Delete Account`}
+            description={
+              emailAccount.isPrimary
+                ? t`Are you sure you want to delete "${emailAccount.email}"? This is your primary account. You will be logged out and need to log in again. Your oldest remaining account will become your new primary account. All data for "${emailAccount.email}" will be permanently deleted from ${BRAND_NAME}.`
+                : t`Are you sure you want to delete "${emailAccount.email}"? This will delete all data for it on ${BRAND_NAME}.`
+            }
+            confirmText={t`Delete`}
+            onConfirm={() => {
+              execute({ emailAccountId: emailAccount.id });
+            }}
+          />
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -315,6 +315,8 @@ function useAccountNotifications() {
 
   return notification;
 }
+
+type AccountListItem = GetEmailAccountsResponse["emailAccounts"][number];
 
 type AccountNotification = {
   title: string;

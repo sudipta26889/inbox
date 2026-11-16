@@ -100,6 +100,7 @@ export async function runRules({
   logger,
   skipArchive,
   skipDraftReplies,
+  queuedSenderPatternAnalyses = new Set<string>(),
 }: {
   provider: EmailProvider;
   message: ParsedMessage;
@@ -110,6 +111,8 @@ export async function runRules({
   logger: Logger;
   skipArchive?: boolean;
   skipDraftReplies?: boolean;
+  // Shared with callers that queue their own analysis, so a sender is analyzed once.
+  queuedSenderPatternAnalyses?: Set<string>;
 }): Promise<RunRulesResult[]> {
   const batchTimestamp = new Date(); // Single timestamp for this batch execution
   const { regularRules, conversationRules } = prepareRulesWithMetaRule(rules);
@@ -229,7 +232,6 @@ export async function runRules({
   }
 
   const executedRules: RunRulesResult[] = [];
-  const queuedSenderPatternAnalyses = new Set<string>();
 
   for (const result of finalMatches) {
     const ruleToExecute = result.rule;
@@ -709,45 +711,60 @@ async function analyzeSenderPatternIfAiMatch({
   queuedSenderPatternAnalyses: Set<string>;
   logger: Logger;
 }) {
-  if (shouldAnalyzeSenderPattern({ isTest, result, emailAccount, modelType })) {
-    const fromAddress = extractEmailAddress(message.headers.from);
-    if (fromAddress) {
-      const normalizedFromAddress = fromAddress.toLowerCase();
-      const analysisKey = `${emailAccount.id}:${normalizedFromAddress}`;
+  if (!shouldAnalyzeSenderPattern({ isTest, result, emailAccount, modelType }))
+    return;
 
-      if (queuedSenderPatternAnalyses.has(analysisKey)) return;
-      queuedSenderPatternAnalyses.add(analysisKey);
+  const fromAddress = extractEmailAddress(message.headers.from);
+  if (!fromAddress) return;
 
-      after(async () => {
-        let senderAlreadyAnalyzed = false;
-        try {
-          senderAlreadyAnalyzed = await isSenderPatternAlreadyAnalyzed({
-            emailAccountId: emailAccount.id,
-            from: normalizedFromAddress,
-          });
-        } catch (error) {
-          logger.error("Failed to check sender pattern analyzed status", {
-            error,
-          });
-        }
+  queueSenderPatternAnalysis({
+    emailAccountId: emailAccount.id,
+    from: fromAddress,
+    queuedSenderPatternAnalyses,
+    logger,
+  });
+}
 
-        if (senderAlreadyAnalyzed) {
-          logger.trace(
-            "Skipping sender pattern analysis; sender already analyzed",
-          );
-          return;
-        }
+export function queueSenderPatternAnalysis({
+  emailAccountId,
+  from,
+  queuedSenderPatternAnalyses,
+  logger,
+}: {
+  emailAccountId: string;
+  from: string;
+  queuedSenderPatternAnalyses: Set<string>;
+  logger: Logger;
+}) {
+  const normalizedFromAddress = from.toLowerCase();
+  const analysisKey = `${emailAccountId}:${normalizedFromAddress}`;
 
-        await analyzeSenderPattern(
-          {
-            emailAccountId: emailAccount.id,
-            from: normalizedFromAddress,
-          },
-          logger,
-        );
+  if (queuedSenderPatternAnalyses.has(analysisKey)) return;
+  queuedSenderPatternAnalyses.add(analysisKey);
+
+  after(async () => {
+    let senderAlreadyAnalyzed = false;
+    try {
+      senderAlreadyAnalyzed = await isSenderPatternAlreadyAnalyzed({
+        emailAccountId,
+        from: normalizedFromAddress,
+      });
+    } catch (error) {
+      logger.error("Failed to check sender pattern analyzed status", {
+        error,
       });
     }
-  }
+
+    if (senderAlreadyAnalyzed) {
+      logger.trace("Skipping sender pattern analysis; sender already analyzed");
+      return;
+    }
+
+    await analyzeSenderPattern(
+      { emailAccountId, from: normalizedFromAddress },
+      logger,
+    );
+  });
 }
 
 function shouldAnalyzeSenderPattern({

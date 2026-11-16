@@ -9,6 +9,13 @@ import {
   withGmailNonIdempotentWriteRetry,
 } from "@/utils/gmail/retry";
 
+import { ensureEmailSendingEnabled } from "@/utils/mail";
+import {
+  approveDraftSend,
+  htmlPreviewText,
+  type SendGate,
+} from "@/utils/mail/send-approval";
+
 const logger = createScopedLogger("gmail/draft");
 const MAX_DRAFT_LOOKUP_PAGES = 10;
 
@@ -129,7 +136,38 @@ function isValidGmailDraftId(draftId: string): boolean {
 export async function sendDraft(
   gmail: gmail_v1.Gmail,
   draftId: string,
+  gate: SendGate = {},
+  /** Writes card edits into the draft, keeping its files. */
+  updateDraft?: Parameters<typeof approveDraftSend>[0]["update"],
 ): Promise<{ messageId: string; threadId: string }> {
+  // Sending a draft is still sending. Without this the drafts API is a way
+  // around the kill switch that guards every other send path.
+  ensureEmailSendingEnabled();
+
+  // Same reasoning for the approval gate, which reads the draft so the
+  // reviewer sees who it goes to rather than an opaque draft id.
+  await approveDraftSend({
+    provider: "gmail",
+    gate,
+    update: updateDraft,
+    read: async () => {
+      const draft = await getDraft(draftId, gmail);
+      return {
+        to: draft?.headers?.to || "unknown",
+        from: draft?.headers?.from || undefined,
+        cc: draft?.headers?.cc || undefined,
+        bcc: draft?.headers?.bcc || undefined,
+        subject: draft?.subject,
+        bodyText: draftBodyText(draft?.textPlain, draft?.textHtml),
+        attachments: (draft?.attachments ?? []).map(({ filename, size }) => ({
+          filename,
+          size,
+        })),
+        threadId: draft?.threadId,
+      };
+    },
+  });
+
   logger.info("Sending draft", { draftId });
 
   const response = await withGmailNonIdempotentWriteRetry(() =>
@@ -206,4 +244,11 @@ export async function deleteDraft(
       throw error;
     }
   }
+}
+
+// An HTML-only draft still shows its text on the card, or failing that its HTML.
+function draftBodyText(text?: string | null, html?: string | null) {
+  if (text?.trim()) return text;
+  if (!html) return;
+  return htmlPreviewText(html)?.trim() || html;
 }

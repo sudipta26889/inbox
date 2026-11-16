@@ -17,7 +17,10 @@ import {
   logOAuthLinkingCallbackValidation,
 } from "@/utils/oauth/linking-audit";
 import { handleAccountLinking } from "@/utils/oauth/account-linking";
-import { isReconnectTargetMismatch } from "@/utils/oauth/reconnect-target";
+import {
+  canLinkForUser,
+  isReconnectTargetMismatch,
+} from "@/utils/oauth/reconnect-target";
 import { mergeAccount } from "@/utils/user/merge-account";
 import { handleOAuthCallbackError } from "@/utils/oauth/error-handler";
 import {
@@ -70,7 +73,13 @@ export const GET = withError("google/linking/callback", async (request) => {
     targetUserId,
   });
 
-  if (!actorUserId || actorUserId !== targetUserId) {
+  if (
+    !(await canLinkForUser({
+      actorUserId,
+      targetUserId,
+      reconnectEmailAccountId,
+    }))
+  ) {
     return createAccountLinkingRedirect({
       query: { error: "invalid_state" },
       stateCookieName: GOOGLE_LINKING_STATE_COOKIE_NAME,

@@ -23,7 +23,7 @@ describe("email send operation route", () => {
 
   it("looks up the client mutation within the authenticated account", async () => {
     prisma.emailSendOperation.findUnique.mockResolvedValue({
-      emailAccount: { account: { userId: "user-1" } },
+      emailAccount: { account: { userId: "user-1" }, shares: [] },
       result: { messageId: "message-1", threadId: "thread-1" },
       status: "SENT",
     });
@@ -45,7 +45,10 @@ describe("email send operation route", () => {
         result: true,
         status: true,
         emailAccount: {
-          select: { account: { select: { userId: true } } },
+          select: {
+            account: { select: { userId: true } },
+            shares: { where: { userId: "user-1" }, select: { id: true } },
+          },
         },
       },
     });
@@ -72,6 +75,16 @@ describe("email send operation route", () => {
 
     await expect(response.json()).resolves.toEqual({ status: "missing" });
   });
+
+  it("shows the operation to a user the account is shared with", async () => {
+    prisma.emailSendOperation.findUnique.mockResolvedValue(
+      operation({ ownerId: "user-2", sharedWithCaller: true, status: "SENT" }),
+    );
+
+    const response = await requestOperation("mutation-1");
+
+    await expect(response.json()).resolves.toMatchObject({ status: "sent" });
+  });
 });
 
 function requestOperation(mutationId: string) {
@@ -85,13 +98,18 @@ function requestOperation(mutationId: string) {
 
 function operation({
   ownerId = "user-1",
+  sharedWithCaller = false,
   status,
 }: {
   ownerId?: string;
+  sharedWithCaller?: boolean;
   status: "SENT" | "PROCESSING" | "UNCERTAIN";
 }) {
   return {
-    emailAccount: { account: { userId: ownerId } },
+    emailAccount: {
+      account: { userId: ownerId },
+      shares: sharedWithCaller ? [{ id: "share-1" }] : [],
+    },
     result:
       status === "SENT"
         ? { messageId: "message-1", threadId: "thread-1" }
