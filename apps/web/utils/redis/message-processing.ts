@@ -45,6 +45,9 @@ export async function withMessageProcessingLock(
   }
 
   // Compare-and-set: a run that outlived the TTL leaves a later holder's lock alone.
+  // ponytail: a Redis failure here escapes and leaves the lock looking in flight
+  // until the 5-minute TTL, so webhooks stop before this message meanwhile. Mail
+  // is delayed, not lost (same as the fork); catch and log it if that bites.
   await markOwnedLockProcessed({
     key,
     lockToken,
