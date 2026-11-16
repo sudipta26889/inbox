@@ -4,6 +4,7 @@ import { cleanupInvalidTokens } from "./cleanup-invalid-tokens";
 import { sendReconnectionEmail } from "@inbox/resend";
 import { createScopedLogger } from "@/utils/logger";
 import { addUserErrorMessage } from "@/utils/error-messages";
+import { notifyMailboxDisconnected } from "@/utils/auth/notify-disconnected";
 
 const logger = createScopedLogger("test");
 
@@ -16,6 +17,9 @@ vi.mock("@/utils/error-messages", () => ({
   ErrorType: {
     ACCOUNT_DISCONNECTED: "Account disconnected",
   },
+}));
+vi.mock("@/utils/auth/notify-disconnected", () => ({
+  notifyMailboxDisconnected: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("@/utils/unsubscribe", () => ({
   createUnsubscribeToken: vi.fn().mockResolvedValue("mock-token"),
@@ -99,6 +103,53 @@ describe("cleanupInvalidTokens", () => {
 
     expect(prisma.account.updateMany).not.toHaveBeenCalled();
     expect(sendReconnectionEmail).not.toHaveBeenCalled();
+  });
+
+  it("alerts once when this call disconnects the account", async () => {
+    prisma.emailAccount.findUnique.mockResolvedValue(mockEmailAccount as any);
+    prisma.account.updateMany.mockResolvedValue({ count: 1 });
+
+    await cleanupInvalidTokens({
+      emailAccountId: "ea_1",
+      reason: "insufficient_permissions",
+      logger,
+    });
+
+    expect(notifyMailboxDisconnected).toHaveBeenCalledTimes(1);
+    expect(notifyMailboxDisconnected).toHaveBeenCalledWith({
+      email: "test@example.com",
+      emailAccountId: "ea_1",
+      reason: "insufficient_permissions",
+      logger,
+    });
+  });
+
+  it("does not alert when the account was already disconnected", async () => {
+    prisma.emailAccount.findUnique.mockResolvedValue({
+      ...mockEmailAccount,
+      account: { disconnectedAt: new Date() },
+    } as any);
+
+    await cleanupInvalidTokens({
+      emailAccountId: "ea_1",
+      reason: "invalid_grant",
+      logger,
+    });
+
+    expect(notifyMailboxDisconnected).not.toHaveBeenCalled();
+  });
+
+  it("does not alert when a concurrent update disconnected it first", async () => {
+    prisma.emailAccount.findUnique.mockResolvedValue(mockEmailAccount as any);
+    prisma.account.updateMany.mockResolvedValue({ count: 0 });
+
+    await cleanupInvalidTokens({
+      emailAccountId: "ea_1",
+      reason: "invalid_grant",
+      logger,
+    });
+
+    expect(notifyMailboxDisconnected).not.toHaveBeenCalled();
   });
 
   it("does not send email for insufficient_permissions", async () => {
