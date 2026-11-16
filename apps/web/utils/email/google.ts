@@ -17,7 +17,11 @@ import chunk from "lodash/chunk";
 import type { Attachment as MailAttachment } from "nodemailer/lib/mailer";
 import { mapWithConcurrency } from "@/utils/async";
 import { toMailerAttachments } from "@/utils/types/mail";
-import type { MessageWithPayload, ParsedMessage } from "@/utils/types";
+import type {
+  DraftStatus,
+  MessageWithPayload,
+  ParsedMessage,
+} from "@/utils/types";
 import { parseMessage } from "@/utils/gmail/message";
 import {
   getMessage,
@@ -92,6 +96,7 @@ import { decodeSnippet } from "@/utils/gmail/decode";
 import {
   getDraft,
   getDraftIdForMessage,
+  getDraftStatus,
   deleteDraft,
   sendDraft,
 } from "@/utils/gmail/draft";
@@ -974,7 +979,15 @@ export class GmailProvider implements EmailProvider {
   }
 
   async getDraft(draftId: string): Promise<ParsedMessage | null> {
-    return getDraft(draftId, this.client);
+    const message = await getDraft(draftId, this.client);
+    return message && { ...message, draftId };
+  }
+
+  async getDraftStatus(
+    draftId: string,
+    threadId?: string,
+  ): Promise<DraftStatus> {
+    return getDraftStatus(this.client, draftId, threadId);
   }
 
   async getDraftReferenceForMessage(messageId: string) {
@@ -1001,7 +1014,9 @@ export class GmailProvider implements EmailProvider {
     messageHtml: string;
     replyToMessageId?: string;
     forwardedMessageId?: string;
-  }): Promise<{ id: string }> {
+    threadId?: string;
+    attachments?: MailAttachment[];
+  }): Promise<{ id: string; threadId?: string }> {
     this.logger.info("Creating Gmail draft", {
       replyToMessageId: params.replyToMessageId,
       forwardedMessageId: params.forwardedMessageId,
@@ -1042,7 +1057,7 @@ export class GmailProvider implements EmailProvider {
       subject: params.subject,
       text: convertEmailHtmlToText({ htmlText: params.messageHtml }),
       html: params.messageHtml,
-      attachments: forwardedAttachments,
+      attachments: [...(params.attachments ?? []), ...forwardedAttachments],
       ...buildThreadingHeaders({
         headerMessageId,
         references: parentReferences,
@@ -1052,12 +1067,15 @@ export class GmailProvider implements EmailProvider {
 
     const result = await uploadGmailDraftMessage(
       this.client,
-      { threadId },
+      { threadId: threadId ?? params.threadId },
       message,
     );
 
     this.logger.info("Gmail draft created", { draftId: result.id });
-    return { id: result.id || "" };
+    return {
+      id: result.id || "",
+      threadId: result.message?.threadId || undefined,
+    };
   }
 
   async updateDraft(
@@ -1636,9 +1654,13 @@ export class GmailProvider implements EmailProvider {
     });
 
     const drafts = response.data.drafts || [];
+    // Gmail's draft id is not the message id; the drafts API needs the former.
     const messagePromises = drafts
       .filter((draft) => draft.message?.id)
-      .map((draft) => this.getMessage(draft.message!.id!));
+      .map(async (draft) => ({
+        ...(await this.getMessage(draft.message!.id!)),
+        draftId: draft.id ?? undefined,
+      }));
 
     return Promise.all(messagePromises);
   }
