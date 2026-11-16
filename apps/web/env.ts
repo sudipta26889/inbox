@@ -51,6 +51,8 @@ const defaultLlmsEnv = z.preprocess(
 );
 
 const parsedEnv = createEnv({
+  // Portainer stacks pass a key missing from the stack Env as "" (${KEY:-}).
+  emptyStringAsUndefined: true,
   server: {
     NODE_ENV: z.enum(["development", "production", "test"]),
     INBOX_ZERO_ENV_FILE: z.string().optional(),
@@ -361,8 +363,8 @@ const parsedEnv = createEnv({
     DEFAULT_DECISION_MODEL: z
       .string()
       .regex(
-        /^(typesafe|openrouter|aigateway|openai):\S+$/,
-        "Expected <typesafe|openrouter|aigateway|openai>:<model>",
+        /^(typesafe|openrouter|aigateway|openai|litellm):\S+$/,
+        "Expected <typesafe|openrouter|aigateway|openai|litellm>:<model>",
       )
       .optional(),
     // Whether users who haven't chosen get the decision model; otherwise opt-in
@@ -667,6 +669,7 @@ if (
 }
 
 const decisionModelApiKeyNames: Record<string, string> = {
+  litellm: "LLM_API_KEY",
   typesafe: "TYPESAFE_API_KEY",
   openrouter: "OPENROUTER_API_KEY",
   aigateway: "AI_GATEWAY_API_KEY",
