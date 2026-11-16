@@ -20,6 +20,8 @@ describe("createPublicOpenApiDocument", () => {
     vi.resetModules();
   });
 
+  // Cold import of the whole route/action graph: ~2 s alone, past the 5 s
+  // default when the full suite runs on shared workers.
   it("includes unique operationIds, scopes, and typed error responses", async () => {
     const { createPublicOpenApiDocument } = await import(
       "@/utils/public-openapi"
@@ -86,7 +88,7 @@ describe("createPublicOpenApiDocument", () => {
       docs.paths?.["/senders/unsubscribe"]?.post?.requestBody?.required,
     ).toBe(true);
     expect(JSON.stringify(docs)).not.toContain('"nullable"');
-  });
+  }, 30_000);
 
   it("only advertises configured servers", async () => {
     const { createPublicOpenApiDocument } = await import(

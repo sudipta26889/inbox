@@ -7,6 +7,8 @@ vi.mock("@/utils/auth", () => ({
 }));
 
 describe("assistant chat server action boundary", () => {
+  // Cold import of the whole route/action graph: ~2 s alone, past the 5 s
+  // default when the full suite runs on shared workers.
   it("only exposes authenticated server actions from the action module", async () => {
     const actions = await import("@/utils/actions/assistant-chat");
 
@@ -16,5 +18,5 @@ describe("assistant chat server action boundary", () => {
     expect(actions).not.toHaveProperty("confirmAssistantEmailActionForAccount");
     expect(actions).not.toHaveProperty("confirmAssistantCreateRuleForAccount");
     expect(actions).not.toHaveProperty("confirmAssistantSaveMemoryForAccount");
-  });
+  }, 30_000);
 });
