@@ -60,6 +60,11 @@ export function rebuildHtmlWithEditedBody(
   ].join("");
 }
 
+/** True when the authored part holds text the reader can't see. */
+export function hasHiddenText(html: string) {
+  return hasHidden(load(splitOutgoingHtml(html).inner, null, false));
+}
+
 // Same boundaries the reader uses (split-email-content.client.ts, which needs
 // a browser DOM), plus the quote block createOutlookReplyContent writes and
 // the headers of Outlook for Mac / new Outlook and old Hotmail.
@@ -288,13 +293,7 @@ function wordHeaderBlock(html: string, element: Element): Element {
  */
 function commonTypography($: CheerioAPI): string | null {
   if ($(UNEDITABLE_SELECTOR).length) return null;
-  if (
-    $("[hidden]").length ||
-    $("[style]")
-      .toArray()
-      .some((element) => isHiddenStyle(element.attribs.style ?? ""))
-  )
-    return null;
+  if (hasHidden($)) return null;
   const declared = new Map<AnyNode, [string, string][]>();
   for (const element of $("[style], font").toArray()) {
     const declarations = styleOf(element);
@@ -343,6 +342,15 @@ function styleOf(element: Element): [string, string][] | null {
     declarations.push([property, value]);
   }
   return declarations;
+}
+
+function hasHidden($: CheerioAPI) {
+  return (
+    $("[hidden]").length > 0 ||
+    $("[style]")
+      .toArray()
+      .some((element) => isHiddenStyle(element.attribs.style ?? ""))
+  );
 }
 
 // Ways to keep text in the email while the reader can't see it.

@@ -10,6 +10,7 @@ import { redis } from "@/utils/redis";
 import { textToHtmlParagraphs } from "@/utils/string";
 import {
   cardBodyFromHtml,
+  hasHiddenText,
   rebuildHtmlWithEditedBody,
 } from "@/utils/mail/card-body";
 import { scheduleEmailBody } from "@/utils/actions/scheduled-email.validation";
@@ -516,7 +517,15 @@ async function askReviewer(request: SendApprovalRequest): Promise<SendEdits> {
     bodyTruncated,
     bodyHtml === undefined
       ? undefined
-      : (markdown) => rebuildHtmlWithEditedBody(bodyHtml, markdown),
+      : (markdown) => {
+          const html = rebuildHtmlWithEditedBody(bodyHtml, markdown);
+          if (html !== null) return html;
+          throw new SendNotApprovedError(
+            hasHiddenText(bodyHtml)
+              ? "Email not sent: this email contains text hidden from the reader (shown on the card as [hidden in the email: …]); edit it in Inbox and resend."
+              : "Email not sent: this email has tables or styled blocks; edit it in Inbox and resend.",
+          );
+        },
   );
 
   logger.info("DharaHIL: outbound send approved", {
@@ -532,7 +541,7 @@ function editsFrom(
   decision: DharaHILDecision,
   bodyTruncated: boolean,
   /** Turns the edited Markdown back into the full HTML, for HTML cards. */
-  rebuildHtml?: (markdown: string) => string | null,
+  rebuildHtml?: (markdown: string) => string,
 ): SendEdits {
   const approved = decision.approvedArgs;
   if (!approved) return {};
@@ -578,14 +587,8 @@ function editsFrom(
       );
     const text = typeof value === "string" ? value : "";
     if (key !== "body") edits[key] = text;
-    else if (rebuildHtml) {
-      const html = rebuildHtml(text);
-      if (html === null)
-        throw new SendNotApprovedError(
-          "Email not sent: this email has tables or styled blocks; edit it in Inbox and resend.",
-        );
-      edits.bodyHtml = html;
-    } else edits.bodyText = text;
+    else if (rebuildHtml) edits.bodyHtml = rebuildHtml(text);
+    else edits.bodyText = text;
   }
   // An edited recipient list that parses to nothing must never fall back to
   // the original recipients. An emptied cc/bcc is a deliberate removal.
