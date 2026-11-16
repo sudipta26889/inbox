@@ -13,7 +13,7 @@ export function buildAppHomeBlocks(): AppHomeView {
         type: "header",
         text: {
           type: "plain_text",
-          text: "Welcome to Inbox Zero",
+          text: "Welcome to Inbox",
           emoji: true,
         },
       },
@@ -67,7 +67,7 @@ export function buildAppHomeBlocks(): AppHomeView {
         type: "header",
         text: {
           type: "plain_text",
-          text: "Chat with Inbox Zero",
+          text: "Chat with Inbox",
           emoji: true,
         },
       },
@@ -91,7 +91,7 @@ export function buildAppHomeBlocks(): AppHomeView {
         type: "section",
         text: {
           type: "mrkdwn",
-          text: "*Meeting Briefs* — Get a briefing on attendees before your meetings, delivered to your chosen Slack channel.\n\n*Attachment Filing* — Inbox Zero can auto-file attachments to Google Drive and notify you here.\n\n*AI Automation* — Set up rules to auto-label, archive, or draft replies. Configure at <https://www.getinboxzero.com|getinboxzero.com>.",
+          text: "*Meeting Briefs* — Get a briefing on attendees before your meetings, delivered to your chosen Slack channel.\n\n*Attachment Filing* — Inbox can auto-file attachments to Google Drive and notify you here.\n\n*AI Automation* — Set up rules to auto-label, archive, or draft replies. Configure at <https://www.getinboxzero.com|getinboxzero.com>.",
         },
       },
       { type: "divider" },

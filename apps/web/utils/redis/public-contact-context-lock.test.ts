@@ -7,8 +7,7 @@ import {
 
 vi.mock("@/env", () => ({
   env: {
-    REDIS_HTTP_URL: "https://redis.example.com",
-    REDIS_HTTP_TOKEN: "token",
+    REDIS_URL: "redis://redis.example.com:6379" as string | undefined,
     EMAIL_ENCRYPT_SALT: "test-hmac-salt",
   },
 }));

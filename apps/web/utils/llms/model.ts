@@ -71,7 +71,7 @@ export function getModel(
   userAi: UserAIFields,
   modelType: ModelType = "default",
 ): SelectModel {
-  const selectedModel = userAi.aiApiKey
+  const selectedModel = usesSavedModel(userAi, modelType)
     ? {
         primaryModel: selectUserModel(userAi, modelType),
         fallbackModels: [],
@@ -90,6 +90,15 @@ export function getModel(
   });
 
   return { ...primaryModel, fallbackModels, hasUserApiKey: !!userAi.aiApiKey };
+}
+
+// Fork (sudipta_main) rule: a user's saved provider wins whether or not they
+// have a key (LiteLLM rows often have none); only a role list configured for
+// this model type overrides it for a keyless user.
+function usesSavedModel(userAi: UserAIFields, modelType: ModelType) {
+  if (userAi.aiApiKey) return true;
+  if (!userAi.aiProvider) return false;
+  return modelType === "default" || !getConfiguredModelListByType(modelType);
 }
 
 function selectModel(
@@ -259,8 +268,8 @@ function selectModel(
       const openrouter = createOpenRouter({
         apiKey: resolveApiKey(aiApiKey, env.OPENROUTER_API_KEY),
         headers: {
-          "HTTP-Referer": "https://www.getinboxzero.com",
-          "X-Title": "Inbox Zero",
+          "HTTP-Referer": "https://inbox.sudiptadhara.in",
+          "X-Title": "Inbox",
         },
       });
       const chatModel = openrouter.chat(modelName, {
@@ -282,8 +291,8 @@ function selectModel(
       const gateway = createGateway({
         apiKey: aiGatewayApiKey,
         headers: {
-          "http-referer": "https://www.getinboxzero.com",
-          "x-title": "Inbox Zero",
+          "http-referer": "https://inbox.sudiptadhara.in",
+          "x-title": "Inbox",
         },
       });
       return {
@@ -320,6 +329,25 @@ function selectModel(
         modelName,
         model: openaiCompatible(modelName),
         providerOptions: getLocalThinkingProviderOptions("openai-compatible"),
+      };
+    }
+    case Provider.LITELLM: {
+      const modelName = aiModel;
+      if (!modelName) throw new SafeError("LLM model name is not set");
+      const litellm = createOpenAICompatible({
+        name: "litellm",
+        baseURL: env.LITELLM_BASE_URL || "http://localhost:4000/v1",
+        apiKey: resolveApiKey(aiApiKey, undefined),
+      });
+      return {
+        provider: Provider.LITELLM,
+        modelName,
+        model: litellm(modelName),
+        // Unbounded <think> output derails multi-step tool chains through the
+        // gateway, so reasoning models get a fixed budget.
+        providerOptions: isLiteLlmReasoningModel(modelName)
+          ? { openaiCompatible: { reasoningEffort: "medium" } }
+          : undefined,
       };
     }
     case Provider.BEDROCK: {
@@ -414,8 +442,10 @@ function selectUserModel(
 ): ResolvedModel {
   const configuredDefault = getFirstSupportedModelListEntry("default");
   const aiProvider = userAi.aiProvider || configuredDefault?.provider;
+  // Fork (sudipta_main): a saved provider without a model uses the deployment
+  // default model rather than failing.
   const aiModel = userAi.aiProvider
-    ? userAi.aiModel || null
+    ? userAi.aiModel || env.DEFAULT_LLM_MODEL || null
     : configuredDefault?.modelName || null;
 
   if (!aiProvider) {
@@ -572,6 +602,7 @@ function getProviderApiKey(provider: string) {
     // when no API key is configured (many OpenAI-compatible servers don't require one)
     [Provider.OPENAI_COMPATIBLE]:
       env.LLM_API_KEY || process.env.LLM_API_KEY || "not-required",
+    [Provider.LITELLM]: resolveApiKey(null, undefined),
   };
 
   return providerApiKeys[provider];
@@ -593,6 +624,20 @@ function resolveApiKey(
   return (
     aiApiKey || providerApiKey || env.LLM_API_KEY || process.env.LLM_API_KEY
   );
+}
+
+// Model families on the LiteLLM gateway that emit reasoning tokens.
+const LITELLM_REASONING_FAMILIES = [
+  "kimi",
+  "gpt-oss",
+  "qwen3",
+  "minimax",
+  "deepseek",
+];
+
+function isLiteLlmReasoningModel(modelName: string) {
+  const name = modelName.toLowerCase();
+  return LITELLM_REASONING_FAMILIES.some((family) => name.includes(family));
 }
 
 function getOpenAiCompatibleBaseUrl() {

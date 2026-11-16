@@ -49,7 +49,7 @@ export function StatsEmailLayout({
                   src={`${baseUrl}/logo-wordmark.png`}
                   width="209"
                   height="25"
-                  alt="Inbox Zero"
+                  alt="Inbox"
                   className="mx-auto my-0"
                 />
               </Link>

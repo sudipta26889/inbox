@@ -1,0 +1,101 @@
+# Staging for the re-fork: Git-backed stack inbox-staging (ref refork/main) on NAS
+# Portainer, host inbox-staging.sudiptadhara.in, on a restored production clone in
+# which every mailbox token but one test mailbox is cleared. It must never act on
+# real people or systems, so:
+# - no cron service: crons are triggered by hand;
+# - production-only integrations and outbound credentials are left out: Pub/Sub
+#   push, Telegram, A2A fan-out and remote agents, MeetEcho, long-memory, MQTT,
+#   ntfy, SMTP, Qdrant, Overmind, Ollama Cloud;
+# - database and Redis come only from STAGING_DATABASE_URL, STAGING_DIRECT_URL and
+#   STAGING_REDIS_URL (required), and start.sh refuses a database that is not
+#   inbox_refork_*;
+# - its own Valkey user and key prefix;
+# - DharaHIL cards are marked staging.
+# A new env key goes here as ${KEY:-} and in the stack Env.
+name: inbox-staging
+services:
+  web:
+    # Always a refork-<short-sha> tag from deploy-staging.yml, never :latest.
+    image: ghcr.io/sudipta26889/inbox-web:${IMAGE_TAG:?set IMAGE_TAG to refork-<short-sha>}
+    ports:
+      - "5501:5500"
+    environment:
+      NODE_ENV: "production"
+      # The upstream image listens on 3000 by default; the 5500 port mapping and INTERNAL_API_URL expect 5500.
+      PORT: "5500"
+      HOSTNAME: "0.0.0.0"
+      # No BullMQ worker is deployed; queued jobs run in-process.
+      QUEUE_BACKEND: "internal"
+      # Node 24 races IPv6/IPv4 with a 250 ms per-attempt budget. IPv6 is
+      # unreachable from this host and Telegram's IPv4 answers slower than that,
+      # so every fetch to api.telegram.org timed out (ETIMEDOUT).
+      NODE_OPTIONS: "--network-family-autoselection-attempt-timeout=2000"
+      INTERNAL_API_URL: "http://web:5500"
+      NEXT_PUBLIC_BASE_URL: "https://inbox-staging.sudiptadhara.in"
+      DHARAHIL_ENVIRONMENT: "staging"
+      # Its own Valkey ACL user, limited to inbox-staging:*.
+      REDIS_KEY_PREFIX: "inbox-staging:"
+      REDIS_URL: ${STAGING_REDIS_URL:?set STAGING_REDIS_URL to the staging Valkey user}
+      # env.ts requires a topic name. This topic does not exist, so no Gmail
+      # watch can register and no push reaches staging.
+      GOOGLE_PUBSUB_TOPIC_NAME: "projects/inbox-staging/topics/disabled"
+      WEBHOOK_ALLOW_PRIVATE_IPS: "false"
+      DHARAHIL_BASE_URL: "https://dharahil-gateway.sudiptadhara.in"
+      DHARAHIL_TENANT_ID: "0ff30ba6-44c0-4c1b-89e6-5936cca0cc29"
+      DHARAHIL_APP_ID: "69938d75-c4e7-4715-b575-0fb29da4b9ce"
+      ADMINS: ${ADMINS:-}
+      API_KEY_SALT: ${API_KEY_SALT:-}
+      AUTH_SECRET: ${AUTH_SECRET:-}
+      CRON_SECRET: ${CRON_SECRET:-}
+      # Own key names, so an Env copied from production cannot satisfy them;
+      # start.sh also refuses any database not named inbox_refork_*.
+      DATABASE_URL: ${STAGING_DATABASE_URL:?set STAGING_DATABASE_URL to the refork clone}
+      DECISION_ESCALATION_MODEL: ${DECISION_ESCALATION_MODEL:-}
+      DECISION_LIVE_AUDIT: ${DECISION_LIVE_AUDIT:-}
+      DECISION_MIN_CONFIDENCE: ${DECISION_MIN_CONFIDENCE:-}
+      DECISION_MODEL_LIVE: ${DECISION_MODEL_LIVE:-}
+      DEFAULT_DECISION_MODEL: ${DEFAULT_DECISION_MODEL:-}
+      DEFAULT_LLM_MODEL: ${DEFAULT_LLM_MODEL:-}
+      DEFAULT_LLM_PROVIDER: ${DEFAULT_LLM_PROVIDER:-}
+      DEFAULT_LLMS: ${DEFAULT_LLMS:-}
+      ECONOMY_LLMS: ${ECONOMY_LLMS:-}
+      CHAT_LLMS: ${CHAT_LLMS:-}
+      NANO_LLMS: ${NANO_LLMS:-}
+      DRAFT_LLMS: ${DRAFT_LLMS:-}
+      DHARAHIL_API_KEY: ${DHARAHIL_API_KEY:-}
+      DIRECT_URL: ${STAGING_DIRECT_URL:?set STAGING_DIRECT_URL to the refork clone}
+      EMAIL_ENCRYPT_SALT: ${EMAIL_ENCRYPT_SALT:-}
+      EMAIL_ENCRYPT_SECRET: ${EMAIL_ENCRYPT_SECRET:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      HEALTH_API_KEY: ${HEALTH_API_KEY:-}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-}
+      LITELLM_BASE_URL: ${LITELLM_BASE_URL:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      NEXT_PUBLIC_BRAND_NAME: ${NEXT_PUBLIC_BRAND_NAME:-}
+      NEXT_PUBLIC_BYPASS_PREMIUM_CHECKS: ${NEXT_PUBLIC_BYPASS_PREMIUM_CHECKS:-}
+      NEXT_PUBLIC_DELETE_EMAIL_ACTION_ENABLED: ${NEXT_PUBLIC_DELETE_EMAIL_ACTION_ENABLED:-}
+      NEXT_PUBLIC_DHARAHIL_ENABLED: ${NEXT_PUBLIC_DHARAHIL_ENABLED:-}
+      NEXT_PUBLIC_DIGEST_ENABLED: ${NEXT_PUBLIC_DIGEST_ENABLED:-}
+      NEXT_PUBLIC_EMAIL_SEND_ENABLED: ${NEXT_PUBLIC_EMAIL_SEND_ENABLED:-}
+      NEXT_PUBLIC_EXTERNAL_API_ENABLED: ${NEXT_PUBLIC_EXTERNAL_API_ENABLED:-}
+      NEXT_PUBLIC_FOLLOW_UP_REMINDERS_ENABLED: ${NEXT_PUBLIC_FOLLOW_UP_REMINDERS_ENABLED:-}
+      NEXT_PUBLIC_MCP_SERVER_ENABLED: ${NEXT_PUBLIC_MCP_SERVER_ENABLED:-}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-}
+      OPENAI_COMPATIBLE_BASE_URL: ${OPENAI_COMPATIBLE_BASE_URL:-}
+      TASKPILOT_DECIDER_FALLBACK_MODEL: ${TASKPILOT_DECIDER_FALLBACK_MODEL:-}
+      TASKPILOT_DECIDER_MAX_TOKENS: ${TASKPILOT_DECIDER_MAX_TOKENS:-}
+      TASKPILOT_DECIDER_MODEL: ${TASKPILOT_DECIDER_MODEL:-}
+      TASKPILOT_DECIDER_REASONING_EFFORT: ${TASKPILOT_DECIDER_REASONING_EFFORT:-}
+      TASKPILOT_DECIDER_TIMEOUT_MS: ${TASKPILOT_DECIDER_TIMEOUT_MS:-}
+      TASKPILOT_DECISIONS_SHADOW: ${TASKPILOT_DECISIONS_SHADOW:-}
+      TASKPILOT_FIELDS_MAX_TOKENS: ${TASKPILOT_FIELDS_MAX_TOKENS:-}
+      TASKPILOT_FIELDS_MODEL: ${TASKPILOT_FIELDS_MODEL:-}
+      TASKPILOT_FIELDS_REASONING_EFFORT: ${TASKPILOT_FIELDS_REASONING_EFFORT:-}
+      TASKPILOT_PREGATE_RECALL_THRESHOLD: ${TASKPILOT_PREGATE_RECALL_THRESHOLD:-}
+    restart: unless-stopped
+    networks:
+      - inbox-staging-network
+
+networks:
+  inbox-staging-network:

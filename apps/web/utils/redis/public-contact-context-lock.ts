@@ -1,7 +1,7 @@
-import { env } from "@/env";
 import { hash } from "@/utils/hash";
 import { createScopedLogger } from "@/utils/logger";
 import { acquireOwnedLock, clearOwnedLock } from "@/utils/redis/owned-lock";
+import { isRedisConfigured } from "@/utils/redis/configured";
 
 const LOCK_KEY_PREFIX = "public-contact-context:v1:lock";
 // This exceeds the route's 60-second execution limit, so a slow request cannot
@@ -42,8 +42,4 @@ export async function releasePublicContactResearchLock(
 
 function getLockKey(email: string) {
   return `${LOCK_KEY_PREFIX}:${hash(email)}`;
-}
-
-function isRedisConfigured() {
-  return Boolean(env.REDIS_HTTP_URL && env.REDIS_HTTP_TOKEN);
 }

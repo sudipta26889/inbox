@@ -279,7 +279,7 @@ export const sendInvitationEmail = async ({
   sendEmail({
     from,
     to,
-    subject: `You're invited to join ${emailProps.organizationName} on Inbox Zero`,
+    subject: `You're invited to join ${emailProps.organizationName} on Inbox`,
     react: <InvitationEmail {...emailProps} />,
     test,
     unsubscribeToken: emailProps.unsubscribeToken,
@@ -571,7 +571,7 @@ export const sendInvoiceEmail = async ({
   sendTransactionalEmail({
     from,
     to,
-    subject: "Your Inbox Zero invoice",
+    subject: "Your Inbox invoice",
     react: <InvoiceEmail {...emailProps} />,
     test,
     attachments: attachmentUrl

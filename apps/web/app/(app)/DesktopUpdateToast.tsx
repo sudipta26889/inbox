@@ -23,7 +23,7 @@ export function DesktopUpdateToast() {
     }
     // Progress keeps arriving after dismissal; don't reopen the same download.
     if (dismissedVersion.current === status.version) return;
-    toast(t`Downloading Inbox Zero ${status.version}`, {
+    toast(t`Downloading Inbox ${status.version}`, {
       id: DESKTOP_UPDATE_TOAST_ID,
       description: (
         <div className="mt-2 flex items-center gap-2">

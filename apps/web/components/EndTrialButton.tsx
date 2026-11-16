@@ -127,9 +127,9 @@ export function EndTrialButton({
                   {trialEndDate && (
                     <p>
                       <Trans>
-                        You do not need to do this to keep using Inbox Zero.
-                        Your trial already includes every paid feature and runs
-                        free until {trialEndDate}, when the same charge happens
+                        You do not need to do this to keep using Inbox. Your
+                        trial already includes every paid feature and runs free
+                        until {trialEndDate}, when the same charge happens
                         automatically.
                       </Trans>
                     </p>

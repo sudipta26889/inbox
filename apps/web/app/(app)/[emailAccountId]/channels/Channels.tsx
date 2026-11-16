@@ -279,7 +279,7 @@ function ChannelsIntro({
       <h2 className="flex items-start gap-2 text-lg font-semibold tracking-tight">
         <BellIcon className="mt-1 size-5 shrink-0 text-blue-600 dark:text-blue-400" />
         <span>
-          <Trans>Inbox Zero where you work.</Trans>
+          <Trans>Inbox where you work.</Trans>
         </span>
       </h2>
       <MutedText className="mt-2 text-sm">
@@ -668,7 +668,7 @@ function LinkCodeDialog({
           </DialogTitle>
           <DialogDescription>
             <Trans>
-              Send this command in a direct message with the Inbox Zero bot on{" "}
+              Send this command in a direct message with the Inbox bot on{" "}
               {providerName}. The code is one-time use and expires in 10
               minutes.
             </Trans>

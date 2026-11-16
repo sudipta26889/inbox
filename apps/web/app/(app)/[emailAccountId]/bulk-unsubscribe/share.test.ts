@@ -19,7 +19,7 @@ describe("buildShareText", () => {
         i18n,
       }),
     ).toBe(
-      "I just unsubscribed from 12 email lists with Inbox Zero. https://www.getinboxzero.com",
+      "I just unsubscribed from 12 email lists with Inbox. https://www.getinboxzero.com",
     );
   });
 
@@ -31,7 +31,7 @@ describe("buildShareText", () => {
         i18n,
       }),
     ).toBe(
-      "I just unsubscribed from 1 email list with Inbox Zero. https://www.getinboxzero.com",
+      "I just unsubscribed from 1 email list with Inbox. https://www.getinboxzero.com",
     );
   });
 
@@ -44,7 +44,7 @@ describe("buildShareText", () => {
         yearlyEmails: 2400,
       }),
     ).toBe(
-      "I just unsubscribed from 12 email lists with Inbox Zero — that's ~2,400 fewer emails a year. https://www.getinboxzero.com",
+      "I just unsubscribed from 12 email lists with Inbox — that's ~2,400 fewer emails a year. https://www.getinboxzero.com",
     );
   });
 
@@ -57,7 +57,7 @@ describe("buildShareText", () => {
         yearlyEmails: 0,
       }),
     ).toBe(
-      "I just unsubscribed from 1 email list with Inbox Zero — that's ~0 fewer emails a year. https://www.getinboxzero.com",
+      "I just unsubscribed from 1 email list with Inbox — that's ~0 fewer emails a year. https://www.getinboxzero.com",
     );
   });
 });

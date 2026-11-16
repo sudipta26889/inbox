@@ -70,7 +70,7 @@ export async function getComposeSignature({
 const PROVIDER_SIGNATURE_TIMEOUT_MS = 5000;
 
 // Mail sent through the API gets no signature from the provider, so an account
-// that never saved one in Inbox Zero signs with the one set in Gmail.
+// that never saved one in Inbox signs with the one set in Gmail.
 async function getProviderDefaultSignature({
   emailAccountId,
   provider,

@@ -273,7 +273,7 @@ describe("trackSentDraftStatus", () => {
     );
   });
 
-  describe("drafts Inbox Zero already deleted", () => {
+  describe("drafts Inbox already deleted", () => {
     // Newest first, as the query orders them.
     function useDraftActions(
       actions: Array<{
@@ -307,7 +307,7 @@ describe("trackSentDraftStatus", () => {
         emailAccountId: "account-1",
         message: createSentMessage(),
         provider: {
-          // The draft is gone because Inbox Zero deleted it.
+          // The draft is gone because Inbox deleted it.
           getDraft: vi.fn().mockResolvedValue(null),
           getMessage: vi.fn().mockResolvedValue(createSourceMessage()),
         } as any,
@@ -638,7 +638,7 @@ describe("trackSentDraftStatus", () => {
 
   it("records body similarity after removing product referral footer text", async () => {
     const draftText =
-      'Generated reply.\n\nDrafted by <a href="https://example.com/ref">Inbox Zero</a>.';
+      'Generated reply.\n\nDrafted by <a href="https://example.com/ref">Inbox</a>.';
     vi.mocked(prisma.executedAction.findFirst).mockResolvedValue({
       id: "action-1",
       draftId: "draft-1",
@@ -654,7 +654,7 @@ describe("trackSentDraftStatus", () => {
       emailAccountId: "account-1",
       message: {
         ...createSentMessage(),
-        textPlain: "Generated reply.\n\nDrafted by Inbox Zero.",
+        textPlain: "Generated reply.\n\nDrafted by Inbox.",
         textHtml: undefined,
       },
       provider: {

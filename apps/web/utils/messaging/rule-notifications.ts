@@ -2736,8 +2736,8 @@ function getLinkedProviderLimitationText({
 
   if (isDraftReplyActionType(actionType)) {
     return provider === MessagingProvider.TEAMS
-      ? "One-click draft editing and sending aren't available in Teams yet. Use Inbox Zero to review or send this draft."
-      : "Draft editing isn't available in Telegram yet. You can send this draft from Telegram or use Inbox Zero to revise it first.";
+      ? "One-click draft editing and sending aren't available in Teams yet. Use Inbox to review or send this draft."
+      : "Draft editing isn't available in Telegram yet. You can send this draft from Telegram or use Inbox to revise it first.";
   }
 
   return `Quick actions like archive and mark read are Slack-only right now, so this ${providerName} message is view-only.`;

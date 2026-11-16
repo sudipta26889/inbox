@@ -437,7 +437,7 @@ interface FolderTarget {
   folderPath: string;
 }
 
-const DEFAULT_NEW_FOLDER_PATH = "Inbox Zero Filed";
+const DEFAULT_NEW_FOLDER_PATH = "Inbox Filed";
 
 type AttachmentFiling = NonNullable<
   Awaited<ReturnType<typeof findAttachmentFiling>>

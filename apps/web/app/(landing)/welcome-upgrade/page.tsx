@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { env } from "@/env";
 import { auth } from "@/utils/auth";
 import { buildLoginRedirectUrl } from "@/utils/redirect";
 import { initLingui } from "@/utils/i18n/server";
@@ -9,6 +10,8 @@ import { WelcomeUpgradePricing } from "@/app/(landing)/welcome-upgrade/WelcomeUp
 import { ContinueWhenSubscribed } from "@/components/ContinueWhenSubscribed";
 
 export default async function WelcomeUpgradePage() {
+  // No billing on this deployment: plans and checkout lead into the app.
+  if (env.NEXT_PUBLIC_BYPASS_PREMIUM_CHECKS) redirect("/welcome-redirect");
   const session = await auth();
   if (!session?.user) redirect(buildLoginRedirectUrl("/welcome-upgrade"));
   await initLingui();

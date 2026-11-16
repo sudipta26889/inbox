@@ -11,8 +11,8 @@ export function Logo({ className }: LogoProps) {
       <Image
         src={BRAND_LOGO_URL}
         alt={`${BRAND_NAME} logo`}
-        width={209}
-        height={25}
+        width={355}
+        height={47}
         className={className}
         unoptimized
       />

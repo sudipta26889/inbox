@@ -28,7 +28,7 @@ export default function RequestAccessPage() {
               <Trans>Mail</Trans>
             </CardTitle>
             <CardDescription>
-              <Trans>Open your inbox in the Inbox Zero mail client.</Trans>
+              <Trans>Open your inbox in the Inbox mail client.</Trans>
             </CardDescription>
           </CardHeader>
           <CardContent>
