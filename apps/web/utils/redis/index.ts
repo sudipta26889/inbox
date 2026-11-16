@@ -145,6 +145,17 @@ export const redis = {
     return ioRedisClient.hincrbyfloat(key, field, increment);
   },
 
+  // --- Set operations ---
+
+  async sadd(key: string, ...members: string[]): Promise<number> {
+    if (members.length === 0) return 0;
+    return ioRedisClient.sadd(key, ...members);
+  },
+
+  async smembers(key: string): Promise<string[]> {
+    return ioRedisClient.smembers(key);
+  },
+
   // --- List operations ---
 
   async rpush(key: string, ...values: string[]): Promise<number> {

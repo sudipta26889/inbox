@@ -70,6 +70,7 @@ export interface TaskDetail {
   labels: Array<{ id: string; name: string }>;
   name: string;
   priority: Priority;
+  sequence_id?: number;
   state: { id: string; name: string; group: StateGroup };
   target_date?: string | null;
 }

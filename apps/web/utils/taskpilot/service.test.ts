@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import prisma from "@/utils/__mocks__/prisma";
 import { TaskpilotClient } from "@/utils/taskpilot/client";
+import { TaskpilotServerError } from "@/utils/taskpilot/errors";
 import { commitTask } from "@/utils/taskpilot/service";
 
 vi.mock("@/utils/prisma");
@@ -104,7 +105,11 @@ describe("commitTask", () => {
         ),
       }),
     );
-    expect(addLink).toHaveBeenCalled();
+    expect(addLink).toHaveBeenCalledWith(
+      "p1",
+      "issue-1",
+      expect.objectContaining({ title: "Inbox thread" }),
+    );
     expect(prisma.emailTaskLink.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         create: expect.objectContaining({
@@ -247,5 +252,60 @@ describe("commitTask", () => {
     expect(result.taskpilotIdentifier).toBe("WEB-42");
     // Link was still written despite addLink failing
     expect(prisma.emailTaskLink.upsert).toHaveBeenCalled();
+  });
+
+  it("logs a failed addLink at error level, with the status when the error has one", async () => {
+    prisma.emailTaskLink.findFirst.mockResolvedValue(null);
+    prisma.emailTaskLink.upsert.mockResolvedValue({
+      id: "link-4",
+      emailAccountId,
+      gmailMessageId: "msg-link-log",
+      threadId: null,
+      workspaceSlug: "acme",
+      projectId: "p1",
+      taskpilotIssueId: "issue-1",
+      taskpilotIdentifier: "WEB-42",
+      source: "MANUAL",
+      ruleId: null,
+      createdAt: new Date(),
+    } as never);
+    vi.spyOn(TaskpilotClient.prototype, "createWorkItem").mockResolvedValue({
+      id: "issue-1",
+      identifier: "WEB-42",
+      sequence_id: 42,
+      alreadyExisted: false,
+    });
+    vi.spyOn(TaskpilotClient.prototype, "addLink").mockRejectedValue(
+      new TaskpilotServerError(502, "bad gateway"),
+    );
+    vi.spyOn(TaskpilotClient.prototype, "listLabels").mockResolvedValue([]);
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
+    const warnLog = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const result = await commitTask({
+      userId,
+      emailAccountId,
+      messageId: "msg-link-log",
+      threadId: null,
+      deepLink: "https://x",
+      draft: {
+        projectId: "p1",
+        title: "Title",
+        description_html: "<p>x</p>",
+        priority: "medium",
+        labelNames: [],
+      },
+      source: "MANUAL",
+    });
+
+    expect(result.taskpilotIdentifier).toBe("WEB-42");
+    const logged = errorLog.mock.calls
+      .map((call) => String(call[0]))
+      .join("\n");
+    expect(logged).toContain("addLink failed");
+    expect(logged).toContain('"status": 502');
+    expect(
+      warnLog.mock.calls.map((call) => String(call[0])).join("\n"),
+    ).not.toContain("addLink failed");
   });
 });

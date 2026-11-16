@@ -58,3 +58,8 @@ export class TaskpilotServerError extends Error {
     this.status = status;
   }
 }
+
+export function errorStatus(err: unknown): number | undefined {
+  const status = (err as { status?: unknown } | null)?.status;
+  return typeof status === "number" ? status : undefined;
+}
