@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useAction } from "next-safe-action/hooks";
+import { useSWRConfig } from "swr";
+import { revalidateTaskpilotLinks } from "@/hooks/useTaskpilotLinks";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -58,6 +60,7 @@ export function TaskpilotConvertModal({
     Record<string, Array<{ id: string; name: string }>>
   >({});
   const [draftError, setDraftError] = useState<string | null>(null);
+  const { mutate } = useSWRConfig();
 
   const draft = useAction(
     convertEmailToTaskpilotTaskDraftAction.bind(null, emailAccountId),
@@ -104,6 +107,7 @@ export function TaskpilotConvertModal({
             ? `Already linked to ${data.taskpilotIdentifier}`
             : `Task ${data.taskpilotIdentifier} created`,
         });
+        revalidateTaskpilotLinks(mutate);
         onOpenChange(false);
       },
       onError: (error) => {

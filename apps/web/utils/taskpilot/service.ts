@@ -172,7 +172,10 @@ export async function getEmailTaskLink(
   };
 }
 
-function buildTaskpilotUrl(workspaceSlug: string, identifier: string): string {
+export function buildTaskpilotUrl(
+  workspaceSlug: string,
+  identifier: string,
+): string {
   return `https://taskpilot.sudiptadhara.in/${workspaceSlug}/browse/${identifier}`;
 }
 

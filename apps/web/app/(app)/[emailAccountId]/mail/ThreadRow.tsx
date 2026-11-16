@@ -52,7 +52,7 @@ export type ThreadRowProps = {
   rowRef?: Ref<HTMLDivElement>;
   /** This tab, or another, holds an unsent reply for the thread. */
   hasLocalDraft?: boolean;
-  /** The TaskPilot work item created from the thread's last message. */
+  /** The TaskPilot work item linked to the thread. */
   taskpilotLink?: { identifier: string; url: string };
   sentMessageOpen?: {
     firstOpenedAt: string | null;
