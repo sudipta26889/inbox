@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { env } from "@/env";
-import { MCP_SCOPES_SUPPORTED } from "@/utils/mcp-server/constants";
+import {
+  BASE,
+  MCP_RESOURCE,
+  MCP_SCOPES_SUPPORTED,
+} from "@/utils/mcp-server/constants";
 
 /**
  * Middleware to handle OAuth 2.1 discovery endpoints for MCP server
@@ -13,16 +16,16 @@ export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // RFC 9728: OAuth 2.0 Protected Resource Metadata
-  if (pathname === "/.well-known/oauth-protected-resource") {
-    const baseUrl = env.NEXT_PUBLIC_BASE_URL;
-
+  if (
+    pathname === "/.well-known/oauth-protected-resource" ||
+    pathname === "/.well-known/oauth-protected-resource/mcp-server"
+  ) {
     const metadata = {
-      resource: `${baseUrl}/mcp-server`,
-      authorization_servers: [baseUrl],
+      resource: MCP_RESOURCE,
+      authorization_servers: [BASE],
       bearer_methods_supported: ["header"],
-      resource_documentation: `${baseUrl}/docs`,
+      resource_documentation: `${BASE}/docs`,
       resource_type: "mcp-server",
-      mcp_protocol_version: "2024-11-05",
       scopes_supported: MCP_SCOPES_SUPPORTED,
       token_types_supported: ["Bearer"],
     };
@@ -39,7 +42,7 @@ export function middleware(request: NextRequest) {
 
   // RFC 8414: OAuth 2.0 Authorization Server Metadata
   if (pathname === "/.well-known/oauth-authorization-server") {
-    const baseUrl = env.NEXT_PUBLIC_BASE_URL;
+    const baseUrl = BASE;
 
     const metadata = {
       issuer: baseUrl,
@@ -51,11 +54,13 @@ export function middleware(request: NextRequest) {
       response_types_supported: ["code"],
       response_modes_supported: ["query"],
       grant_types_supported: ["authorization_code", "refresh_token"],
-      token_endpoint_auth_methods_supported: ["none", "client_secret_post"],
-      code_challenge_methods_supported: ["S256", "plain"],
+      token_endpoint_auth_methods_supported: ["none"],
+      code_challenge_methods_supported: ["S256"],
       token_types_supported: ["Bearer"],
       // RFC 8707: Resource Indicators for OAuth 2.0 (required by MCP spec)
       resource_indicators_supported: true,
+      client_id_metadata_document_supported: true,
+      authorization_response_iss_parameter_supported: true,
       service_documentation: `${baseUrl}/docs/mcp`,
       ui_locales_supported: ["en"],
       claims_supported: [

@@ -7,6 +7,7 @@ import {
   getClientIp,
 } from "@/utils/a2a/rate-limit";
 import { generateSecureToken } from "@/utils/mcp-server/pkce";
+import { validateRedirectUri } from "@/utils/mcp-server/redirect-uri";
 import prisma from "@/utils/prisma";
 import {
   bodyTooLargeResponse,
@@ -66,7 +67,6 @@ export const POST = withError(
       redirect_uris,
       grant_types,
       response_types,
-      token_endpoint_auth_method,
       scope,
       logo_uri,
       tos_uri,
@@ -87,13 +87,22 @@ export const POST = withError(
       );
     }
 
-    // Validate redirect URIs - allow any valid URL scheme
     for (const uri of redirect_uris) {
       try {
-        new URL(uri);
+        if (typeof uri !== "string")
+          throw new SafeError("Invalid redirect URI");
+        validateRedirectUri(uri);
       } catch (error) {
-        if (error instanceof SafeError) throw error;
-        throw new SafeError(`Invalid redirect URI format: ${uri}`);
+        return NextResponse.json(
+          {
+            error: "invalid_redirect_uri",
+            error_description:
+              error instanceof SafeError
+                ? error.message
+                : "Invalid redirect URI",
+          },
+          { status: 400, headers: CORS_HEADERS },
+        );
       }
     }
 
@@ -109,7 +118,6 @@ export const POST = withError(
     }
 
     const clientResponseTypes = response_types || ["code"];
-    const clientAuthMethod = token_endpoint_auth_method || "none";
 
     const clientId = `mcp_${generateSecureToken(16)}`;
 
@@ -121,7 +129,8 @@ export const POST = withError(
         redirectUris: redirect_uris,
         grantTypes: clientGrantTypes,
         responseTypes: clientResponseTypes,
-        tokenEndpointAuthMethod: clientAuthMethod,
+        // Public clients only: PKCE protects the exchange, there is no secret.
+        tokenEndpointAuthMethod: "none",
         scope: scope || "",
         logoUri: logo_uri || null,
         tosUri: tos_uri || null,
@@ -142,7 +151,7 @@ export const POST = withError(
       redirect_uris: client.redirectUris,
       grant_types: client.grantTypes,
       response_types: client.responseTypes,
-      token_endpoint_auth_method: client.tokenEndpointAuthMethod,
+      token_endpoint_auth_method: "none",
     };
 
     if (resolvedClientName !== "MCP Client") {

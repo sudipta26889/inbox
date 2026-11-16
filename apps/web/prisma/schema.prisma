@@ -1525,6 +1525,9 @@ model McpServerAuthorizationCode {
   clientId String
   client   McpServerClient @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
 
+  // Links the tokens minted from this code, so a replayed code can revoke them
+  grantId String?
+
   // Tracking
   used   Boolean   @default(false) // One-time use only
   usedAt DateTime?
@@ -1557,13 +1560,18 @@ model McpServerAccessToken {
   clientId String
   client   McpServerClient @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
 
+  // One authorization grant: shared by every token rotated from the same code
+  grantId String?
+
   // Tracking
-  revoked    Boolean   @default(false)
-  revokedAt  DateTime?
-  lastUsedAt DateTime?
+  revoked       Boolean   @default(false)
+  revokedAt     DateTime?
+  revokedReason String? // rotated | user | reuse | admin
+  lastUsedAt    DateTime?
 
   @@index([accessToken])
   @@index([refreshToken])
+  @@index([grantId])
   @@index([expiresAt])
   @@index([userId])
   @@index([emailAccountId])

@@ -45,12 +45,6 @@ describe("PKCE utilities", () => {
       expect(challenge.length).toBe(43);
     });
 
-    it("should create plain challenge (same as verifier)", () => {
-      const verifier = "test-verifier-12345678901234567890123456789";
-      const challenge = createCodeChallenge(verifier, "plain");
-      expect(challenge).toBe(verifier);
-    });
-
     it("should default to S256 method", () => {
       const verifier = "test-verifier-12345678901234567890123456789";
       const challenge1 = createCodeChallenge(verifier);
@@ -79,11 +73,10 @@ describe("PKCE utilities", () => {
       expect(isValid).toBe(true);
     });
 
-    it("should verify valid plain challenge", () => {
+    it("should not verify a plain challenge", () => {
       const verifier = "test-verifier-12345678901234567890123456789";
-      const challenge = createCodeChallenge(verifier, "plain");
-      const isValid = verifyCodeChallenge(verifier, challenge, "plain");
-      expect(isValid).toBe(true);
+      const isValid = verifyCodeChallenge(verifier, verifier, "plain" as any);
+      expect(isValid).toBe(false);
     });
 
     it("should reject invalid verifier", () => {
@@ -156,8 +149,8 @@ describe("PKCE utilities", () => {
       expect(validateCodeChallengeMethod("S256")).toBe(true);
     });
 
-    it("should accept plain method", () => {
-      expect(validateCodeChallengeMethod("plain")).toBe(true);
+    it("should reject plain method", () => {
+      expect(validateCodeChallengeMethod("plain")).toBe(false);
     });
 
     it("should reject invalid methods", () => {

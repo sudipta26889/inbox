@@ -1,6 +1,31 @@
+import { env } from "@/env";
+
 /**
  * Shared constants for MCP server that can be used in both client and server code
  */
+
+// `.origin` drops any trailing slash or path from the configured URL.
+export const BASE = new URL(env.NEXT_PUBLIC_BASE_URL).origin;
+export const MCP_RESOURCE = `${BASE}/mcp-server`;
+export const PRM_URL = `${BASE}/.well-known/oauth-protected-resource/mcp-server`;
+
+// Newest first: the first entry is what `initialize` falls back to.
+export const SUPPORTED_PROTOCOL_VERSIONS = [
+  "2025-11-25",
+  "2025-06-18",
+  "2025-03-26",
+  "2024-11-05",
+];
+
+// About 20k tokens, under Claude Code's 25k tool-result limit.
+export const MAX_TOOL_TEXT_CHARS = 80_000;
+
+// A retried refresh whose response was lost lands inside this window and must
+// not be mistaken for token theft.
+export const REFRESH_REPLAY_GRACE_SECONDS = 30;
+
+// URL.hostname form, so IPv6 keeps its brackets.
+export const LOOPBACK_HOSTS = ["localhost", "127.0.0.1", "[::1]"];
 
 /**
  * Supported OAuth scopes for MCP server
@@ -51,5 +76,5 @@ export const MCP_SCOPES_SUPPORTED = Object.keys(MCP_SCOPES).filter(
 export const TOKEN_CONFIG = {
   ACCESS_TOKEN_TTL: 60 * 60, // 1 hour in seconds
   REFRESH_TOKEN_TTL: 60 * 60 * 24 * 30, // 30 days in seconds
-  AUTHORIZATION_CODE_TTL: 60 * 10, // 10 minutes in seconds
+  AUTHORIZATION_CODE_TTL: 5 * 60, // 5 minutes in seconds
 } as const;

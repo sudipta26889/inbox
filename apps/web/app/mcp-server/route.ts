@@ -7,8 +7,16 @@ import {
   hasRequiredScope,
 } from "@/utils/mcp-server/tools/registry";
 import { env } from "@/env";
+import {
+  BASE,
+  LOOPBACK_HOSTS,
+  MAX_TOOL_TEXT_CHARS,
+  MCP_RESOURCE,
+  MCP_SCOPES_SUPPORTED,
+  PRM_URL,
+  SUPPORTED_PROTOCOL_VERSIONS,
+} from "@/utils/mcp-server/constants";
 import { createScopedLogger } from "@/utils/logger";
-import { auth } from "@/utils/auth";
 import prisma from "@/utils/prisma";
 import { accessibleEmailAccountWhere } from "@/utils/email-account-access";
 import { buildMcpToolContext } from "@/utils/mcp-server/tool-context";
@@ -23,8 +31,9 @@ const logger = createScopedLogger("mcp-server");
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers":
+    "Content-Type, Authorization, MCP-Protocol-Version, Mcp-Session-Id",
   "Access-Control-Expose-Headers": "WWW-Authenticate",
 };
 
@@ -36,6 +45,16 @@ export async function OPTIONS() {
 }
 
 /**
+ * GET /mcp-server - no SSE stream is offered; POST with JSON responses only
+ */
+export async function GET() {
+  return new NextResponse(null, {
+    status: 405,
+    headers: { ...CORS_HEADERS, Allow: "POST, OPTIONS" },
+  });
+}
+
+/**
  * POST /mcp-server - Handle MCP protocol requests
  */
 export const POST = withError(
@@ -44,93 +63,63 @@ export const POST = withError(
     const reqLogger = request.logger || logger;
 
     try {
-      let userId: string | undefined;
-      let emailAccountId: string | undefined;
-      let clientId: string | undefined;
-      let scopes: string[] = [];
-
-      // Try Bearer token authentication first
-      const authHeader = request.headers.get("Authorization");
-
-      if (authHeader?.startsWith("Bearer ")) {
-        const token = authHeader.substring(7);
-        const jwtSecret = env.AUTH_SECRET || env.NEXTAUTH_SECRET || "";
-        const tokenPayload = await validateAccessToken(token, jwtSecret);
-
-        if (!tokenPayload) {
-          reqLogger.warn("Invalid or expired access token");
-          return NextResponse.json(
-            { detail: "Invalid or expired access token" },
-            {
-              status: 401,
-              headers: {
-                ...CORS_HEADERS,
-                "WWW-Authenticate": `Bearer resource_metadata="${env.NEXT_PUBLIC_BASE_URL}/.well-known/oauth-protected-resource", error="invalid_token"`,
-              },
-            },
-          );
-        }
-
-        userId = tokenPayload.sub;
-        emailAccountId = tokenPayload.email_account_id;
-        clientId = tokenPayload.client_id;
-        scopes = tokenPayload.scope ? tokenPayload.scope.split(" ") : [];
-
-        reqLogger.info("Authenticated MCP request via Bearer token", {
-          userId,
-          clientId,
-        });
-      } else {
-        // Try session-based authentication
-        const session = await auth();
-
-        if (!session?.user?.id) {
-          reqLogger.warn("No Bearer token or valid session found");
-          return NextResponse.json(
-            { detail: "Authorization required" },
-            {
-              status: 401,
-              headers: {
-                ...CORS_HEADERS,
-                "WWW-Authenticate": `Bearer resource_metadata="${env.NEXT_PUBLIC_BASE_URL}/.well-known/oauth-protected-resource"`,
-              },
-            },
-          );
-        }
-
-        userId = session.user.id;
-
-        const primaryEmailAccount = await prisma.emailAccount.findFirst({
-          where: { userId },
-          orderBy: { createdAt: "asc" },
-        });
-
-        if (!primaryEmailAccount) {
-          reqLogger.warn("User has no email account", { userId });
-          return NextResponse.json(
-            { detail: "User has no email account configured" },
-            { status: 400, headers: CORS_HEADERS },
-          );
-        }
-
-        emailAccountId = primaryEmailAccount.id;
-        scopes = [
-          "mcp:read",
-          "mcp:write",
-          "email:read",
-          "email:write",
-          "calendar:read",
-          "calendar:write",
-          "stats:read",
-          "rules:read",
-          "rules:write",
-        ];
-
-        reqLogger.info("Authenticated MCP request via session", {
-          userId,
-          emailAccountId,
-        });
+      if (!isAllowedOrigin(request.headers.get("Origin"))) {
+        reqLogger.warn("Rejected MCP request with disallowed Origin");
+        return NextResponse.json(
+          { detail: "Origin not allowed" },
+          { status: 403, headers: CORS_HEADERS },
+        );
       }
+
+      const protocolVersion = request.headers.get("MCP-Protocol-Version");
+      if (
+        protocolVersion !== null &&
+        !SUPPORTED_PROTOCOL_VERSIONS.includes(protocolVersion)
+      ) {
+        return NextResponse.json(
+          { detail: `Unsupported MCP-Protocol-Version: ${protocolVersion}` },
+          { status: 400, headers: CORS_HEADERS },
+        );
+      }
+
+      const authHeader = request.headers.get("Authorization");
+      if (!authHeader?.startsWith("Bearer ")) {
+        reqLogger.warn("No Bearer token");
+        return unauthorizedResponse("Authorization required");
+      }
+
+      const jwtSecret = env.AUTH_SECRET || env.NEXTAUTH_SECRET || "";
+      const tokenPayload = await validateAccessToken(
+        authHeader.substring(7),
+        jwtSecret,
+      );
+      if (!tokenPayload) {
+        reqLogger.warn("Invalid or expired access token");
+        return unauthorizedResponse(
+          "Invalid or expired access token",
+          "invalid_token",
+        );
+      }
+
+      if (!(await hasAcceptedAudience(tokenPayload))) {
+        reqLogger.warn("Access token has wrong or missing audience", {
+          clientId: tokenPayload.client_id,
+        });
+        return unauthorizedResponse(
+          "Invalid or expired access token",
+          "invalid_token",
+        );
+      }
+
+      const userId = tokenPayload.sub;
+      const emailAccountId = tokenPayload.email_account_id;
+      const clientId = tokenPayload.client_id;
+      const scopes = tokenPayload.scope ? tokenPayload.scope.split(" ") : [];
+
+      reqLogger.info("Authenticated MCP request via Bearer token", {
+        userId,
+        clientId,
+      });
 
       const body = await readJsonWithLimit(request, MCP_BODY_LIMIT);
       if (!body.ok) return createBodyErrorResponse(body.status);
@@ -160,19 +149,17 @@ export const POST = withError(
       // Handle initialize
       if (message.method === "initialize") {
         // Fetch all email accounts for the user to provide context
-        const emailAccounts = userId
-          ? await prisma.emailAccount.findMany({
-              where: accessibleEmailAccountWhere(userId),
-              select: {
-                id: true,
-                email: true,
-                account: {
-                  select: { provider: true },
-                },
-              },
-              orderBy: { createdAt: "asc" },
-            })
-          : [];
+        const emailAccounts = await prisma.emailAccount.findMany({
+          where: accessibleEmailAccountWhere(userId),
+          select: {
+            id: true,
+            email: true,
+            account: {
+              select: { provider: true },
+            },
+          },
+          orderBy: { createdAt: "asc" },
+        });
 
         const accountsList = emailAccounts
           .map((a) => `${a.email} (${a.account?.provider || "unknown"})`)
@@ -201,15 +188,17 @@ export const POST = withError(
             jsonrpc: "2.0",
             id: message.id,
             result: {
-              protocolVersion: "2024-11-05",
+              protocolVersion: negotiateProtocolVersion(
+                message.params?.protocolVersion,
+              ),
               capabilities: {
                 tools: { listChanged: false },
               },
               serverInfo: {
                 name: "Inbox MCP Server",
                 version: "1.0.0",
-                instructions,
               },
+              instructions,
             },
           },
           { headers: CORS_HEADERS },
@@ -270,19 +259,22 @@ export const POST = withError(
         }
 
         if (!hasRequiredScope(tool, scopes)) {
-          return createErrorResponse(
-            message.id,
-            -32_003,
-            `Insufficient permissions. Required scope: ${tool.requiredScope}`,
-          );
-        }
-
-        // At this point, authentication has succeeded so these must be defined
-        if (!userId || !emailAccountId) {
-          return createErrorResponse(
-            message.id,
-            -32_603,
-            "Internal error: missing user context",
+          return NextResponse.json(
+            {
+              jsonrpc: "2.0",
+              id: message.id,
+              error: {
+                code: -32_003,
+                message: `Insufficient permissions. Required scope: ${tool.requiredScope}`,
+              },
+            },
+            {
+              status: 403,
+              headers: {
+                ...CORS_HEADERS,
+                "WWW-Authenticate": `Bearer error="insufficient_scope", scope="${tool.requiredScope}", resource_metadata="${PRM_URL}"`,
+              },
+            },
           );
         }
 
@@ -293,11 +285,15 @@ export const POST = withError(
           scopes,
         });
         if (!toolContext) {
-          return createErrorResponse(
-            message.id,
-            -32_003,
-            "Access to this email account has been revoked. Reconnect and pick another account.",
-          );
+          return toolResultResponse(message.id, {
+            content: [
+              {
+                type: "text",
+                text: "Access to this email account has been revoked. Reconnect and pick another account.",
+              },
+            ],
+            isError: true,
+          });
         }
 
         try {
@@ -306,29 +302,25 @@ export const POST = withError(
             message.params?.arguments || {},
           );
 
-          // Format response as Markdown for better readability
           const formattedText = formatToolResponse(toolName, result);
-
-          return NextResponse.json(
-            {
-              jsonrpc: "2.0",
-              id: message.id,
-              result: {
-                content: [{ type: "text", text: formattedText }],
-              },
-            },
-            { headers: CORS_HEADERS },
+          return toolResultResponse(
+            message.id,
+            buildToolResult(formattedText, result),
           );
         } catch (error: any) {
           reqLogger.error("MCP tool execution failed", {
             tool: toolName,
             error: error.message,
           });
-          return createErrorResponse(
-            message.id,
-            -32_603,
-            `Tool execution failed: ${error.message || "Unknown error"}`,
-          );
+          return toolResultResponse(message.id, {
+            content: [
+              {
+                type: "text",
+                text: `Tool execution failed: ${error.message || "Unknown error"}`,
+              },
+            ],
+            isError: true,
+          });
         }
       }
 
@@ -353,6 +345,86 @@ export const POST = withError(
     }
   },
 );
+
+// A token minted before `aud` existed is only trusted for A2A clients, whose
+// static tokens can't refresh into one.
+async function hasAcceptedAudience(tokenPayload: {
+  aud?: string;
+  client_id: string;
+}): Promise<boolean> {
+  if (tokenPayload.aud) return tokenPayload.aud === MCP_RESOURCE;
+  const client = await prisma.mcpServerClient.findUnique({
+    where: { clientId: tokenPayload.client_id },
+    select: { type: true },
+  });
+  return client?.type === "A2A";
+}
+
+function negotiateProtocolVersion(requested: unknown): string {
+  return typeof requested === "string" &&
+    SUPPORTED_PROTOCOL_VERSIONS.includes(requested)
+    ? requested
+    : SUPPORTED_PROTOCOL_VERSIONS[0];
+}
+
+function buildToolResult(text: string, result: unknown) {
+  if (text.length > MAX_TOOL_TEXT_CHARS) {
+    const omitted = text.length - MAX_TOOL_TEXT_CHARS;
+    return {
+      content: [
+        {
+          type: "text",
+          text: `${text.slice(0, MAX_TOOL_TEXT_CHARS)}\n[truncated: ${omitted} chars omitted]`,
+        },
+      ],
+    };
+  }
+  const isObject =
+    typeof result === "object" && result !== null && !Array.isArray(result);
+  return {
+    content: [{ type: "text", text }],
+    ...(isObject ? { structuredContent: result } : {}),
+  };
+}
+
+function toolResultResponse(id: unknown, result: unknown) {
+  return NextResponse.json(
+    { jsonrpc: "2.0", id, result },
+    { headers: CORS_HEADERS },
+  );
+}
+
+function unauthorizedResponse(detail: string, error?: "invalid_token") {
+  const challenge = [
+    `resource_metadata="${PRM_URL}"`,
+    `scope="${MCP_SCOPES_SUPPORTED.join(" ")}"`,
+    ...(error ? [`error="${error}"`] : []),
+  ].join(", ");
+  return NextResponse.json(
+    { detail },
+    {
+      status: 401,
+      headers: { ...CORS_HEADERS, "WWW-Authenticate": `Bearer ${challenge}` },
+    },
+  );
+}
+
+// A missing Origin is a non-browser client; the literal "null" and anything
+// unparseable are refused.
+function isAllowedOrigin(origin: string | null): boolean {
+  if (origin === null) return true;
+  let url: URL;
+  try {
+    url = new URL(origin);
+  } catch {
+    return false;
+  }
+  if (url.origin === BASE) return true;
+  return (
+    (url.protocol === "http:" || url.protocol === "https:") &&
+    LOOPBACK_HOSTS.includes(url.hostname)
+  );
+}
 
 function createErrorResponse(
   id: any,

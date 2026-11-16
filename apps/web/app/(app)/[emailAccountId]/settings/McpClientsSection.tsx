@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Image from "next/image";
 import {
   Table,
   TableBody,
@@ -24,80 +23,45 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Checkbox } from "@/components/ui/checkbox";
 import { useMcpClients } from "@/hooks/useMcpClients";
 import { LoadingContent } from "@/components/LoadingContent";
-import { useAccount } from "@/providers/EmailAccountProvider";
 import { toastError, toastSuccess } from "@/components/Toast";
 
 export function McpClientsSection() {
-  const { emailAccountId } = useAccount();
   const { data, isLoading, error, mutate } = useMcpClients();
-  const [selectedClientIds, setSelectedClientIds] = useState<Set<string>>(
-    new Set(),
-  );
-  const [isDeleting, setIsDeleting] = useState(false);
+  const [revokingClientId, setRevokingClientId] = useState<string | null>(null);
 
   const clientCount = data?.mcpClients.length ?? 0;
-  const allClientIds = data?.mcpClients.map((c) => c.clientId) ?? [];
 
-  const toggleClient = (clientId: string) => {
-    setSelectedClientIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(clientId)) {
-        next.delete(clientId);
-      } else {
-        next.add(clientId);
-      }
-      return next;
-    });
-  };
-
-  const toggleAll = () => {
-    if (selectedClientIds.size === clientCount) {
-      setSelectedClientIds(new Set());
-    } else {
-      setSelectedClientIds(new Set(allClientIds));
-    }
-  };
-
-  const handleDelete = async () => {
-    if (selectedClientIds.size === 0) return;
-
+  const handleRevoke = async (clientId: string) => {
     try {
-      setIsDeleting(true);
+      setRevokingClientId(clientId);
       const response = await fetch("/api/user/mcp-clients", {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          clientIds: Array.from(selectedClientIds),
-        }),
+        body: JSON.stringify({ clientIds: [clientId] }),
       });
 
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error || "Failed to delete MCP clients");
+        throw new Error(result.error || "Failed to revoke access");
       }
 
-      toastSuccess({
-        description: `Deleted ${result.deleted} MCP client${result.deleted !== 1 ? "s" : ""}`,
-      });
-
-      setSelectedClientIds(new Set());
+      toastSuccess({ description: "Access revoked" });
       mutate();
     } catch (error) {
-      console.error("Failed to delete MCP clients:", error);
+      console.error("Failed to revoke MCP client:", error);
       toastError({
         description:
           error instanceof Error
             ? error.message
-            : "Failed to delete MCP clients. Please try again.",
+            : "Failed to revoke access. Please try again.",
       });
     } finally {
-      setIsDeleting(false);
+      setRevokingClientId(null);
     }
   };
 
@@ -118,87 +82,67 @@ export function McpClientsSection() {
               <DialogTitle>MCP Clients</DialogTitle>
             </DialogHeader>
             <p className="text-sm text-muted-foreground">
-              Manage MCP clients that have been authorized to access your
-              account.
+              Applications you have authorized to access your account. Revoking
+              ends their access right away; they must be authorized again to
+              reconnect.
             </p>
             <LoadingContent loading={isLoading} error={error}>
               {clientCount > 0 ? (
-                <>
-                  <div className="flex items-center justify-between gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={toggleAll}
-                      className="text-xs"
-                    >
-                      {selectedClientIds.size === clientCount
-                        ? "Deselect all"
-                        : "Select all"}
-                    </Button>
-                    {selectedClientIds.size > 0 && (
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={handleDelete}
-                        disabled={isDeleting}
-                        className="text-xs"
-                      >
-                        Delete {selectedClientIds.size} client
-                        {selectedClientIds.size !== 1 ? "s" : ""}
-                      </Button>
-                    )}
-                  </div>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-12" />
-                        <TableHead>Client</TableHead>
-                        <TableHead>Client ID</TableHead>
-                        <TableHead>Tokens</TableHead>
-                        <TableHead>Created</TableHead>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Client</TableHead>
+                      <TableHead>Host</TableHead>
+                      <TableHead>Last used</TableHead>
+                      <TableHead className="w-24" />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {data?.mcpClients.map((client) => (
+                      <TableRow key={client.clientId}>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            {client.logoUri && (
+                              // biome-ignore lint/performance/noImgElement: the logo is a client-supplied URL on any host, which next/image rejects
+                              <img
+                                src={client.logoUri}
+                                alt=""
+                                referrerPolicy="no-referrer"
+                                width={20}
+                                height={20}
+                                className="size-5 rounded"
+                              />
+                            )}
+                            <span className="font-medium">
+                              {client.clientName}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <code className="text-xs text-muted-foreground">
+                            {client.host || "unknown"}
+                          </code>
+                        </TableCell>
+                        <TableCell>
+                          {client.lastUsedAt
+                            ? new Date(client.lastUsedAt).toLocaleString()
+                            : "Never"}
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            className="text-xs"
+                            disabled={revokingClientId === client.clientId}
+                            onClick={() => handleRevoke(client.clientId)}
+                          >
+                            Revoke
+                          </Button>
+                        </TableCell>
                       </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {data?.mcpClients.map((client) => (
-                        <TableRow key={client.id}>
-                          <TableCell>
-                            <Checkbox
-                              checked={selectedClientIds.has(client.clientId)}
-                              onCheckedChange={() =>
-                                toggleClient(client.clientId)
-                              }
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              {client.logoUri && (
-                                <Image
-                                  src={client.logoUri}
-                                  alt={client.clientName}
-                                  width={20}
-                                  height={20}
-                                  className="size-5 rounded"
-                                />
-                              )}
-                              <span className="font-medium">
-                                {client.clientName}
-                              </span>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <code className="text-xs text-muted-foreground">
-                              {client.clientId}
-                            </code>
-                          </TableCell>
-                          <TableCell>{client._count.accessTokens}</TableCell>
-                          <TableCell>
-                            {new Date(client.createdAt).toLocaleString()}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </>
+                    ))}
+                  </TableBody>
+                </Table>
               ) : (
                 <p className="text-sm text-muted-foreground">
                   No MCP clients yet.

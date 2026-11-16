@@ -1,5 +1,6 @@
 import type { Tool } from "@modelcontextprotocol/sdk/types.js";
 import type { McpResult } from "../envelope";
+import { TOOL_METADATA } from "./tool-metadata";
 
 /**
  * MCP Tool Registry
@@ -165,12 +166,6 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       },
       required: ["to", "subject", "body"],
     },
-    annotations: {
-      // Irreversible once it leaves the mailbox.
-      destructiveHint: true,
-      idempotentHint: false,
-      openWorldHint: true,
-    },
     handler: async (context, params) => {
       const { sendEmail } = await import("./email-tools");
       return sendEmail(context, toolParams(params));
@@ -252,12 +247,6 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       },
       required: ["to", "subject", "body"],
     },
-    annotations: {
-      // Additive: nothing leaves the mailbox, and the draft can be deleted.
-      destructiveHint: false,
-      idempotentHint: false,
-      openWorldHint: false,
-    },
     handler: async (context, params) => {
       const { createDraft } = await import("./email-tools");
       return createDraft(context, toolParams(params));
@@ -312,12 +301,6 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
         },
       },
       required: ["draftId"],
-    },
-    annotations: {
-      // Overwrites the draft's current contents, but nothing is sent.
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: false,
     },
     handler: async (context, params) => {
       const { updateDraft } = await import("./email-tools");
@@ -401,11 +384,6 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
         },
       },
       required: ["draftId"],
-    },
-    annotations: {
-      destructiveHint: true,
-      idempotentHint: true,
-      openWorldHint: false,
     },
     handler: async (context, params) => {
       const { deleteDraft } = await import("./email-tools");
@@ -586,12 +564,6 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       },
       required: ["title", "startTime", "endTime"],
     },
-    annotations: {
-      // Genuinely additive: creates a new event, never overwrites one.
-      destructiveHint: false,
-      idempotentHint: false,
-      openWorldHint: true,
-    },
     handler: async (context, params) => {
       const { createCalendarEvent } = await import("./calendar-tools");
       return createCalendarEvent(context, toolParams(params));
@@ -735,10 +707,6 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
       },
       required: ["eventId"],
     },
-    annotations: {
-      idempotentHint: true,
-      openWorldHint: true,
-    },
     handler: async (context, params) => {
       const { updateCalendarEvent } = await import("./calendar-tools");
       return updateCalendarEvent(context, toolParams(params));
@@ -775,10 +743,6 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
         },
       },
       required: ["eventId"],
-    },
-    annotations: {
-      destructiveHint: true,
-      openWorldHint: true,
     },
     handler: async (context, params) => {
       const { deleteCalendarEvent } = await import("./calendar-tools");
@@ -819,11 +783,6 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
         },
       },
       required: ["eventId", "responseStatus"],
-    },
-    annotations: {
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: true,
     },
     handler: async (context, params) => {
       const { respondToCalendarEvent } = await import("./calendar-tools");
@@ -2042,13 +2001,11 @@ const IMPLIED_SCOPES: Record<string, string[]> = {
 export function getAllTools(userScopes?: string[]): Tool[] {
   return Object.values(MCP_TOOLS)
     .filter((tool) => !userScopes || hasRequiredScope(tool, userScopes))
-    .map(({ handler, requiredScope, ...tool }) => ({
-      ...tool,
-      annotations: {
-        ...toolAnnotations(requiredScope),
-        ...tool.annotations,
-      },
-    }));
+    .map(({ handler, requiredScope, ...tool }) => {
+      const { title, ...annotations } =
+        TOOL_METADATA[tool.name] ?? unclassifiedMetadata(tool.name);
+      return { ...tool, title, annotations };
+    });
 }
 
 /**
@@ -2065,12 +2022,14 @@ export function hasRequiredScope(
   );
 }
 
-// MCP annotation defaults are already fail-safe (destructiveHint defaults to
-// true), so only claim something narrower than the default where it's certain.
-// Consumers read these to decide what a human is asked to approve, so a wrong
-// readOnlyHint gets a mutating tool auto-approved. Splitting `admin` into
-// admin:read / admin:write means the scope suffix now carries this for every
-// tool — no per-tool allowlist needed.
-function toolAnnotations(requiredScope: string) {
-  return requiredScope.endsWith(":read") ? { readOnlyHint: true } : {};
+// A tool missing from TOOL_METADATA (the registry test forbids it) is described
+// as the most cautious thing it could be, so a person is asked before it runs.
+function unclassifiedMetadata(name: string) {
+  return {
+    title: name,
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
+    openWorldHint: true,
+  };
 }
