@@ -5,6 +5,7 @@ import { hasCronSecret, hasPostCronSecret } from "@/utils/cron";
 import { captureException } from "@/utils/error";
 import type { Logger } from "@/utils/logger";
 import { enqueueBackgroundJob } from "@/utils/queue/dispatch";
+import { getPremiumUserFilter } from "@/utils/premium";
 
 export const maxDuration = 800;
 
@@ -34,15 +35,17 @@ export const POST = withError("cron/process-emails", async (request) => {
 });
 
 async function enqueueEmailProcessingJobs(logger: Logger) {
-  // Every connected mailbox, with no premium or feature filter: whether one
-  // gets processed is decided per account in process-account, so polling does
-  // not depend on NEXT_PUBLIC_BYPASS_PREMIUM_CHECKS being baked into the image.
+  // Every connected mailbox; the worker's validateWebhookAccount decides the
+  // rest. The premium filter is a no-op with the bypass on (always, per
+  // strip-guard). An image built without it then shows "total: 0" here instead
+  // of the worker unwatching every mailbox each run.
   const emailAccounts = await prisma.emailAccount.findMany({
     where: {
       account: {
         disconnectedAt: null,
         provider: { in: ["google", "microsoft"] },
       },
+      ...getPremiumUserFilter(),
     },
     select: { id: true },
     take: BATCH_SIZE,
