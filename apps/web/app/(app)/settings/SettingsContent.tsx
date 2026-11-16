@@ -23,6 +23,7 @@ import { EmailOtpSection } from "@/app/(app)/settings/EmailOtpSection";
 import { AppearanceSection } from "@/app/(app)/settings/AppearanceSection";
 import { LanguageSection } from "@/app/(app)/settings/LanguageSection";
 import { TeamSection } from "@/app/(app)/settings/TeamSection";
+import { A2aClientsSection } from "@/app/(app)/settings/A2aClientsSection";
 import { BillingSection } from "@/app/(app)/[emailAccountId]/settings/BillingSection";
 import { CleanupDraftsSection } from "@/app/(app)/[emailAccountId]/settings/CleanupDraftsSection";
 import { SentMessageOpenTrackingSetting } from "@/app/(app)/[emailAccountId]/settings/SentMessageOpenTrackingSetting";
@@ -215,6 +216,8 @@ export function SettingsContent() {
             {env.NEXT_PUBLIC_WEBHOOK_ACTION_ENABLED !== false &&
               env.NEXT_PUBLIC_EXTERNAL_API_ENABLED && <ItemSeparator />}
             {env.NEXT_PUBLIC_EXTERNAL_API_ENABLED && <ApiKeysSection />}
+            <ItemSeparator />
+            <A2aClientsSection />
           </ItemCard>
         </SettingsGroup>
       )}
