@@ -178,9 +178,10 @@ async function executeWebhookTrigger(
       sleep(5000),
     ]);
 
-    logger.info("Home Assistant webhook triggered", { webhookId });
+    // The webhook ID is an unauthenticated trigger secret, so it is not logged.
+    logger.info("Home Assistant webhook triggered");
   } catch (error) {
-    logger.error("Home Assistant webhook failed", { error, webhookId });
+    logger.error("Home Assistant webhook failed", { error });
     logger.info("Continuing after Home Assistant webhook timeout/error");
   }
 }

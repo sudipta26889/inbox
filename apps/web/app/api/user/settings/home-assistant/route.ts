@@ -27,11 +27,19 @@ export const POST = withAuth(
     if (!homeAssistantToken) {
       const user = await prisma.user.findUnique({
         where: { id: userId },
-        select: { homeAssistantToken: true },
+        select: { homeAssistantUrl: true, homeAssistantToken: true },
       });
       if (!user?.homeAssistantToken) {
         return NextResponse.json(
           { error: "Access token is required" },
+          { status: 400 },
+        );
+      }
+      // The saved token may only keep going to the host it was entered for;
+      // otherwise a live session could redirect it to a host it controls.
+      if (!isSameOrigin(user.homeAssistantUrl, homeAssistantUrl)) {
+        return NextResponse.json(
+          { error: "Re-enter the access token when changing the URL" },
           { status: 400 },
         );
       }
@@ -60,3 +68,12 @@ export const DELETE = withAuth(
     return NextResponse.json({ success: true });
   },
 );
+
+function isSameOrigin(saved: string | null, next: string) {
+  if (!saved) return false;
+  try {
+    return new URL(saved).origin === new URL(next).origin;
+  } catch {
+    return false;
+  }
+}

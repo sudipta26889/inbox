@@ -62,7 +62,9 @@ export function HomeAssistantSection() {
       return;
     }
 
-    if (!homeAssistantToken.trim() && !hasExistingConfig) {
+    const urlChanged =
+      homeAssistantUrl.trim() !== (data?.homeAssistantUrl || "");
+    if (!homeAssistantToken.trim() && (!hasExistingConfig || urlChanged)) {
       toastError({ description: "Access token is required" });
       return;
     }
@@ -187,7 +189,7 @@ export function HomeAssistantSection() {
                     type="password"
                     placeholder={
                       hasExistingConfig
-                        ? "Leave blank to keep the saved token"
+                        ? "Leave blank to keep the saved token (same URL only)"
                         : "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
                     }
                     value={homeAssistantToken}
