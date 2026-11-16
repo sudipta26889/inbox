@@ -490,11 +490,41 @@ describe("Middleware", () => {
       mockAuth.mockResolvedValue({ user: { id: mockUserId } } as any);
     });
 
+    it("acts as the account owner when access comes through a share", async () => {
+      mockReq = createMockRequest("GET", "http://localhost/api/test", {
+        [EMAIL_ACCOUNT_HEADER]: mockAccountId,
+      });
+      mockGetEmailAccount.mockResolvedValue({
+        email: mockEmail,
+        ownerUserId: "owner-789",
+      });
+
+      const handler = vi.fn(async (_req: RequestWithAuthAndEmail, _ctx: any) =>
+        NextResponse.json({ success: true }),
+      );
+
+      await withEmailAccount(handler)(mockReq, mockContext);
+
+      expect(handler).toHaveBeenCalledWith(
+        expect.objectContaining({
+          auth: {
+            userId: "owner-789",
+            emailAccountId: mockAccountId,
+            email: mockEmail,
+          },
+        }),
+        mockContext,
+      );
+    });
+
     it("should call handler with email account info if header exists and account is valid", async () => {
       mockReq = createMockRequest("GET", "http://localhost/api/test", {
         [EMAIL_ACCOUNT_HEADER]: mockAccountId,
       });
-      mockGetEmailAccount.mockResolvedValue(mockEmail);
+      mockGetEmailAccount.mockResolvedValue({
+        email: mockEmail,
+        ownerUserId: mockUserId,
+      });
 
       const handler = vi.fn(async (_req: RequestWithAuthAndEmail, _ctx: any) =>
         NextResponse.json({ success: true }),
@@ -524,7 +554,10 @@ describe("Middleware", () => {
         [EMAIL_ACCOUNT_HEADER]: mockAccountId,
         cookie: "display=compact",
       });
-      mockGetEmailAccount.mockResolvedValue(mockEmail);
+      mockGetEmailAccount.mockResolvedValue({
+        email: mockEmail,
+        ownerUserId: mockUserId,
+      });
       const handler = vi.fn(async (request: RequestWithEmailAccount) =>
         NextResponse.json({
           pathname: request.nextUrl.pathname,
@@ -603,7 +636,10 @@ describe("Middleware", () => {
           cookie: "display=compact",
         },
       );
-      mockGetEmailAccount.mockResolvedValue(mockEmail);
+      mockGetEmailAccount.mockResolvedValue({
+        email: mockEmail,
+        ownerUserId: mockUserId,
+      });
       mockPrismaEmailAccountFindUnique.mockResolvedValue({
         id: mockAccountId,
         account: { provider: "google" },
@@ -640,7 +676,10 @@ describe("Middleware", () => {
           [EMAIL_ACCOUNT_HEADER]: mockAccountId,
         },
       );
-      mockGetEmailAccount.mockResolvedValue(mockEmail);
+      mockGetEmailAccount.mockResolvedValue({
+        email: mockEmail,
+        ownerUserId: mockUserId,
+      });
       mockPrismaEmailAccountFindUnique.mockResolvedValue({
         id: mockAccountId,
         account: { provider: "google" },
@@ -667,7 +706,10 @@ describe("Middleware", () => {
       mockReq = createMockRequest("GET", "http://localhost/api/labels", {
         [EMAIL_ACCOUNT_HEADER]: mockAccountId,
       });
-      mockGetEmailAccount.mockResolvedValue(mockEmail);
+      mockGetEmailAccount.mockResolvedValue({
+        email: mockEmail,
+        ownerUserId: mockUserId,
+      });
       mockPrismaEmailAccountFindUnique.mockResolvedValue({
         id: mockAccountId,
         account: { provider: "google" },
@@ -709,7 +751,10 @@ describe("Middleware", () => {
       mockReq = createMockRequest("GET", "http://localhost/api/labels", {
         [EMAIL_ACCOUNT_HEADER]: mockAccountId,
       });
-      mockGetEmailAccount.mockResolvedValue(mockEmail);
+      mockGetEmailAccount.mockResolvedValue({
+        email: mockEmail,
+        ownerUserId: mockUserId,
+      });
       mockPrismaEmailAccountFindUnique.mockResolvedValue({
         id: mockAccountId,
         account: { provider },

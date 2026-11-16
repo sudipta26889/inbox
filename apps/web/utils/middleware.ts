@@ -398,11 +398,12 @@ async function emailAccountMiddleware(
 
   try {
     // If account ID is provided, validate and get the email account ID
-    const email = await runTimedMiddlewareStep({
+    const access = await runTimedMiddlewareStep({
       logger: middlewareLogger,
       step: "validate-email-account",
       operation: () => getEmailAccount({ userId, emailAccountId }),
     });
+    const email = access?.email ?? null;
 
     const emailAccountLogger = middlewareLogger.with({ email });
 
@@ -503,8 +504,13 @@ async function emailAccountMiddleware(
     });
 
     const emailAccountReq = authReq as RequestWithEmailAccount;
-    emailAccountReq.auth = { userId, emailAccountId, email };
-    emailAccountReq.logger = emailAccountLogger;
+    // Shared accounts act as the owner so downstream { id, userId } checks hold.
+    const ownerUserId = access?.ownerUserId ?? userId;
+    emailAccountReq.auth = { userId: ownerUserId, emailAccountId, email };
+    emailAccountReq.logger =
+      ownerUserId === userId
+        ? emailAccountLogger
+        : emailAccountLogger.with({ ownerUserId, sharedAccess: true });
 
     return emailAccountReq;
   } finally {

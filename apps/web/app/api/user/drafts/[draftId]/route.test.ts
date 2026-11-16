@@ -28,7 +28,10 @@ describe("/api/user/drafts/[draftId]", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     authMock.mockResolvedValue({ user: { id: "user-1" } });
-    getEmailAccountMock.mockResolvedValue("developer@example.com");
+    getEmailAccountMock.mockResolvedValue({
+      email: "developer@example.com",
+      ownerUserId: "user-1",
+    });
     prisma.emailAccount.findUnique.mockResolvedValue({
       id: emailAccountId,
       account: { provider: "google" },

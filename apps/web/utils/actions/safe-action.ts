@@ -8,6 +8,7 @@ import { auth } from "@/utils/auth";
 import { createScopedLogger } from "@/utils/logger";
 import { flushLoggerSafely } from "@/utils/logger-flush";
 import prisma from "@/utils/prisma";
+import { accessibleEmailAccountWhere } from "@/utils/email-account-access";
 import { isAdmin } from "@/utils/admin";
 import {
   captureException,
@@ -148,9 +149,9 @@ export const actionClient = baseClient
     const emailAccountId = bindArgsClientInputs[0] as string;
     setAuditContext({ actorType: "user", userId });
 
-    // validate user owns this email
+    // validate user owns, or has been shared, this email
     const emailAccount = await prisma.emailAccount.findUnique({
-      where: { id: emailAccountId },
+      where: { id: emailAccountId, ...accessibleEmailAccountWhere(userId) },
       select: {
         email: true,
         account: {
@@ -161,7 +162,7 @@ export const actionClient = baseClient
         },
       },
     });
-    if (!emailAccount || emailAccount?.account.userId !== userId) {
+    if (!emailAccount) {
       // expected with stale client state (e.g. account removed or switched)
       ctx.logger.warn("Unauthorized", metadata);
       throw new SafeError("Unauthorized");
@@ -175,11 +176,15 @@ export const actionClient = baseClient
       userId,
     });
 
+    // Shared accounts act as the owner so downstream { id, userId } checks hold.
+    const ownerUserId = emailAccount.account.userId;
+
     const logger = ctx.logger.with({
       userId,
       userEmail,
       emailAccountId,
       provider: emailAccount.account.provider,
+      ...(ownerUserId !== userId && { ownerUserId, sharedAccess: true }),
     });
 
     return runInstrumentedAction({
@@ -190,7 +195,7 @@ export const actionClient = baseClient
           ctx: {
             ...ctx,
             logger,
-            userId,
+            userId: ownerUserId,
             userEmail,
             session,
             emailAccountId,

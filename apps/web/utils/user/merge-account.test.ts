@@ -152,7 +152,10 @@ describe("mergeAccount", () => {
       const emailAccountId = "email-2";
 
       prisma.emailAccount.findUnique
-        .mockResolvedValueOnce({ email: "secondary@test.com" } as any)
+        .mockResolvedValueOnce({
+          email: "secondary@test.com",
+          userId: "source-user-id",
+        } as any)
         .mockResolvedValueOnce(null);
       prisma.emailAccount.findMany.mockResolvedValue([
         {
@@ -175,7 +178,10 @@ describe("mergeAccount", () => {
 
       await expect(
         getEmailAccount({ userId: sourceUserId, emailAccountId }),
-      ).resolves.toBe("secondary@test.com");
+      ).resolves.toEqual({
+        email: "secondary@test.com",
+        ownerUserId: "source-user-id",
+      });
 
       await mergeAccount({
         sourceAccountId: accountId,
@@ -260,7 +266,10 @@ describe("mergeAccount", () => {
       const emailAccountId = "email-1";
 
       prisma.emailAccount.findUnique
-        .mockResolvedValueOnce({ email: "only@test.com" } as any)
+        .mockResolvedValueOnce({
+          email: "only@test.com",
+          userId: "source-user-id",
+        } as any)
         .mockResolvedValueOnce(null);
       prisma.emailAccount.findMany.mockResolvedValue([
         {
@@ -281,7 +290,10 @@ describe("mergeAccount", () => {
 
       await expect(
         getEmailAccount({ userId: sourceUserId, emailAccountId }),
-      ).resolves.toBe("only@test.com");
+      ).resolves.toEqual({
+        email: "only@test.com",
+        ownerUserId: "source-user-id",
+      });
 
       await mergeAccount({
         sourceAccountId: accountId,
