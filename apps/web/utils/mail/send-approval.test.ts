@@ -395,20 +395,32 @@ describe("the gate fails closed and honours card edits", () => {
     ).rejects.toThrow(/only recipients, subject and body/);
   });
 
-  it("refuses a body edit when the card could only show a preview", async () => {
-    approvedWith({ body: "short" });
-
-    await expect(
-      requireSendApproval({ ...request, bodyText: "x".repeat(100_001) }),
-    ).rejects.toThrow(/too long to edit on the card/);
-  });
-
-  it("sends the full original body when only recipients were edited on a long body", async () => {
+  // The reviewer would approve text the card could not show.
+  it("refuses to send a body too long for the card, without raising one", async () => {
     approvedWith({ to: "right@grihatek.com" });
 
     await expect(
       requireSendApproval({ ...request, bodyText: "x".repeat(100_001) }),
-    ).resolves.toEqual({ to: "right@grihatek.com" });
+    ).rejects.toThrow(/too long to show in full on the approval card/);
+    expect(mockRunApprovalLoop).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [
+      "quoted history",
+      `<p>Hi</p><div class="gmail_quote">${"q".repeat(100_001)} WIRE 5000</div>`,
+    ],
+    [
+      "signature",
+      `<p>Hi</p><div class="gmail_signature">${"s".repeat(100_001)}</div>`,
+    ],
+  ])("refuses to send when the %s is too long for the card", async (_name, bodyHtml) => {
+    mockRunApprovalLoop.mockResolvedValue({ action: "APPROVED" });
+
+    await expect(
+      requireSendApproval({ ...request, bodyText: undefined, bodyHtml }),
+    ).rejects.toThrow(/too long to show in full on the approval card/);
+    expect(mockRunApprovalLoop).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -430,16 +442,6 @@ describe("the gate fails closed and honours card edits", () => {
     await expect(
       requireSendApproval({ ...request, cc: "c@grihatek.com" }),
     ).resolves.toEqual({ cc: "" });
-  });
-
-  it("marks a cut card body so the reviewer knows edits are off", async () => {
-    mockRunApprovalLoop.mockResolvedValue({ action: "APPROVED" });
-
-    await requireSendApproval({ ...request, bodyText: "x".repeat(100_001) });
-
-    expect(mockRunApprovalLoop.mock.calls[0][0].toolArgs.body).toMatch(
-      /^\[preview: full body is 100001 characters; body edits are disabled\]/,
-    );
   });
 
   it("puts the content hash in the idempotency key", async () => {
@@ -639,8 +641,8 @@ describe("body edits keep the email's formatting", () => {
     );
   });
 
-  it("counts only the authored part toward the card limit", async () => {
-    const longQuote = `<div class="gmail_quote"><p>${"q".repeat(100_001)}</p></div>`;
+  it("counts each card field separately toward the card limit", async () => {
+    const longQuote = `<div class="gmail_quote"><p>${"q".repeat(99_000)}</p></div>`;
     mockRunApprovalLoop.mockImplementation(async (call) => ({
       action: "APPROVED",
       approvedArgs: { ...call.toolArgs, body: "Short **reply**" },
@@ -651,9 +653,6 @@ describe("body edits keep the email's formatting", () => {
       bodyHtml: `<p>Short reply</p>${longQuote}`,
     });
 
-    expect(mockRunApprovalLoop.mock.calls[0][0].toolArgs.bodyTruncated).toBe(
-      undefined,
-    );
     expect(edits.bodyHtml).toContain("<strong>reply</strong>");
     expect(edits.bodyHtml?.endsWith(longQuote)).toBe(true);
   });

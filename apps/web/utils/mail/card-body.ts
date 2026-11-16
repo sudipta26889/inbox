@@ -22,8 +22,13 @@ export function cardBodyFromHtml(html: string): CardBody {
   const parts = splitOutgoingHtml(html);
   const signature = htmlText(parts.signature);
   const quotedHistory = htmlText(parts.quoted);
+  const addedText = parts.textAddingStyles.map(
+    (css) => `[hidden in the email: style sheet adds text: ${css}]`,
+  );
   return {
-    body: htmlToMarkdown(parts.inner),
+    body: [htmlToMarkdown(parts.inner), ...addedText]
+      .filter(Boolean)
+      .join("\n\n"),
     ...(signature && { signature }),
     ...(quotedHistory && { quotedHistory }),
   };
@@ -38,6 +43,7 @@ export function rebuildHtmlWithEditedBody(
   markdown: string,
 ): string | null {
   const parts = splitOutgoingHtml(html);
+  if (parts.textAddingStyles.length) return null;
   const $inner = load(parts.inner, null, false);
   const style = commonTypography($inner);
   if (style === null) return null;
@@ -62,7 +68,11 @@ export function rebuildHtmlWithEditedBody(
 
 /** True when the authored part holds text the reader can't see. */
 export function hasHiddenText(html: string) {
-  return hasHidden(load(splitOutgoingHtml(html).inner, null, false));
+  const parts = splitOutgoingHtml(html);
+  return (
+    parts.textAddingStyles.length > 0 ||
+    hasHidden(load(parts.inner, null, false))
+  );
 }
 
 // Same boundaries the reader uses (split-email-content.client.ts, which needs
@@ -147,9 +157,10 @@ function splitOutgoingHtml(html: string) {
     $("head").get(0)?.sourceCodeLocation?.endOffset ??
     0;
   // The last closing tag: a quoted original often carries its own </body>.
+  // Text after it (parsers move it into the body) must stay on the card.
   const closing = isDocument
     ? [lower.lastIndexOf("</body"), lower.lastIndexOf("</html")].find(
-        (index) => index >= start,
+        (index) => index >= start && !hasVisibleContent(html.slice(index)),
       )
     : undefined;
   const quote = findQuote($, html);
@@ -176,10 +187,7 @@ function splitOutgoingHtml(html: string) {
     signature &&
     signatureStart !== undefined &&
     signatureEnd !== undefined &&
-    !load(html.slice(signatureEnd, quotedFrom), null, false)
-      .root()
-      .text()
-      .trim()
+    !hasVisibleContent(html.slice(signatureEnd, quotedFrom))
       ? signature
       : undefined;
 
@@ -227,7 +235,23 @@ function splitOutgoingHtml(html: string) {
     container = only;
   }
 
+  // Kept slices around the body must hold only tags: anything visible in them
+  // would be sent without being on the card.
+  if (
+    hasVisibleContent(html.slice(start, innerStart)) ||
+    hasVisibleContent(html.slice(innerEnd, authoredEnd))
+  ) {
+    innerStart = start;
+    innerEnd = authoredEnd;
+  }
+
+  const textAddingStyles = $("style")
+    .toArray()
+    .map((element) => $(element).text().trim())
+    .filter((css) => /(^|[\s;{])content\s*:/i.test(css));
+
   return {
+    textAddingStyles,
     head: html.slice(0, start),
     prefix: html.slice(start, innerStart),
     inner: html.slice(innerStart, innerEnd),
@@ -419,6 +443,12 @@ function siblingSkippingSpace(
 
 function isBreak(node: Node | null) {
   return node?.nodeName === "BR";
+}
+
+function hasVisibleContent(fragment: string) {
+  if (!fragment.trim()) return false;
+  const $ = load(fragment, null, false);
+  return !!$.root().text().trim() || $("img").length > 0;
 }
 
 function startOf(node: AnyNode | undefined) {

@@ -3,7 +3,12 @@ import { createReplyContent } from "@/utils/gmail/reply";
 import { load } from "cheerio";
 import { renderReplyBodyHtml } from "@/utils/email/reply-body-html";
 import { createOutlookReplyContent } from "@/utils/outlook/reply";
-import { cardBodyFromHtml, rebuildHtmlWithEditedBody } from "./card-body";
+import { convertOutgoingEmailHtmlToText } from "@/utils/mail";
+import {
+  cardBodyFromHtml,
+  hasHiddenText,
+  rebuildHtmlWithEditedBody,
+} from "./card-body";
 
 const SIGNATURE =
   '<div class="gmail_signature" data-smartmail="gmail_signature"><b>Sudipta</b><br><a href="https://grihatek.com">grihatek.com</a></div>';
@@ -331,6 +336,72 @@ describe("Outlook client quote headers", () => {
     expect(rebuildHtmlWithEditedBody(original, "Edited")?.endsWith(quote)).toBe(
       true,
     );
+  });
+});
+
+describe("every word that is sent is on the card", () => {
+  it.each([
+    [
+      "text between the signature and the quote",
+      '<p>Hi Bob</p><div class="gmail_signature">Me</div><p>WIRE 5000 TO ACCT 123</p><div class="gmail_quote">old</div>',
+    ],
+    [
+      "text after the signature inside the wrapper, no quote",
+      '<div dir="ltr">Hi Bob<div class="gmail_signature">Me</div>AFTER SIG TEXT</div>',
+    ],
+    [
+      "text next to a lone wrapper, before the signature's parent",
+      '<div>Hi Bob</div><div>WIRE 5000 TO ACCT 123<div class="gmail_signature">Me</div></div>',
+    ],
+    [
+      "text after the closing html tag",
+      "<html><body><p>Hi Bob</p></body></html>WIRE 5000 TO ACCT 123",
+    ],
+    [
+      "text after the closing html tag with a quote",
+      '<html><body><p>Hi Bob</p><div class="gmail_quote">old</div></body></html>WIRE 5000',
+    ],
+    [
+      "text between two wrappers around the quote",
+      '<div dir="ltr"><div>Hi Bob</div>WIRE 5000<div><div class="gmail_quote">old</div></div></div>',
+    ],
+  ])("%s", (_name, html) => {
+    const card = cardBodyFromHtml(html);
+    const shown = [card.body, card.signature, card.quotedHistory].join("\n");
+
+    for (const word of convertOutgoingEmailHtmlToText(html).split(/\s+/))
+      expect(shown).toContain(word);
+  });
+});
+
+describe("style sheets that add text", () => {
+  it.each([
+    [
+      "in the body",
+      '<style>.x::after{content:"WIRE 5000 TO 123"}</style><p>Hi Bob</p><span class="x"></span>',
+    ],
+    [
+      "in the head",
+      '<html><head><style>.x:before { content: "WIRE 5000 TO 123" }</style></head><body><p>Hi Bob</p><span class="x"></span></body></html>',
+    ],
+    [
+      "in the quote",
+      '<p>Hi Bob</p><div class="gmail_quote"><style>.x::after{content:"WIRE 5000 TO 123"}</style>old</div>',
+    ],
+  ])("shows the CSS marked as hidden and refuses a body edit (%s)", (_name, html) => {
+    const card = cardBodyFromHtml(html);
+
+    expect(card.body).toContain("[hidden in the email: style sheet adds text:");
+    expect(card.body).toContain("WIRE 5000 TO 123");
+    expect(hasHiddenText(html)).toBe(true);
+    expect(rebuildHtmlWithEditedBody(html, "Hi Rob")).toBeNull();
+  });
+
+  it("leaves a style sheet without content: alone", () => {
+    const html =
+      "<html><head><style>p{margin:0}</style></head><body><p>Hi</p></body></html>";
+
+    expect(cardBodyFromHtml(html).body).toBe("Hi");
   });
 });
 
