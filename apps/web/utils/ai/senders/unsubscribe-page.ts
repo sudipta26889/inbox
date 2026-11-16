@@ -96,7 +96,7 @@ ${text}
 
   const result = await generateObject({
     ...modelOptions,
-    system,
+    instructions: system,
     prompt,
     schema: z.object({ state: z.enum(["confirmed", "not_confirmed"]) }),
   });

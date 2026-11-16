@@ -115,7 +115,7 @@ ${replyItems.map((item) => formatReplyLine(item, timeZone)).join("\n") || "(none
 
   const result = await generateObject({
     ...modelOptions,
-    system,
+    instructions: system,
     prompt,
     schema: selectionSchema,
   });
