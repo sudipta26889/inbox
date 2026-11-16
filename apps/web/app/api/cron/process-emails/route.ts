@@ -5,7 +5,6 @@ import { hasCronSecret, hasPostCronSecret } from "@/utils/cron";
 import { captureException } from "@/utils/error";
 import type { Logger } from "@/utils/logger";
 import { enqueueBackgroundJob } from "@/utils/queue/dispatch";
-import { getPremiumUserFilter } from "@/utils/premium";
 
 export const maxDuration = 800;
 
@@ -35,20 +34,15 @@ export const POST = withError("cron/process-emails", async (request) => {
 });
 
 async function enqueueEmailProcessingJobs(logger: Logger) {
-  // ponytail: AI access is checked per account in process-account
-  // (validateWebhookAccount), so it is not repeated here.
+  // Every connected mailbox, with no premium or feature filter: whether one
+  // gets processed is decided per account in process-account, so polling does
+  // not depend on NEXT_PUBLIC_BYPASS_PREMIUM_CHECKS being baked into the image.
   const emailAccounts = await prisma.emailAccount.findMany({
     where: {
       account: {
         disconnectedAt: null,
         provider: { in: ["google", "microsoft"] },
       },
-      ...getPremiumUserFilter(),
-      OR: [
-        { rules: { some: { enabled: true } } },
-        { autoLearnPatterns: true },
-        { autoCategorizeSenders: true },
-      ],
     },
     select: { id: true },
     take: BATCH_SIZE,
