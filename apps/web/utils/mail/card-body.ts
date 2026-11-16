@@ -70,7 +70,7 @@ export function rebuildHtmlWithEditedBody(
   });
 
   const edited = withBlockStyle(
-    markdownToSafeHtml(markdown, imageSources),
+    inOriginalBlocks(markdownToSafeHtml(markdown, imageSources), $inner),
     style,
   );
   if (restylesEditedText(html, $inner, edited)) return null;
@@ -552,6 +552,26 @@ function textNodes(node: AnyNode | undefined): AnyNode[] {
   if (node.type === "text")
     return "data" in node && node.data.trim() ? [node] : [];
   return "children" in node ? node.children.flatMap(textNodes) : [];
+}
+
+/**
+ * Paragraphs take the original authored part's block shape, so the edit adds
+ * no tag a style sheet could target: <p> stays <p> (Outlook), and anything
+ * else (Gmail compose divs, text with <br>) gets Gmail's own shape, a <div>
+ * per paragraph with <div><br></div> between them.
+ */
+function inOriginalBlocks(html: string, $inner: CheerioAPI) {
+  if ($inner("p").length) return html;
+  const $ = load(html, null, false);
+  const blocks = $.root().children().toArray();
+  for (const block of blocks)
+    if (block.name === "p")
+      $(block).replaceWith($("<div>").html($(block).html() ?? ""));
+  return $.root()
+    .children()
+    .toArray()
+    .map((block) => $.html(block))
+    .join("<div><br></div>");
 }
 
 function withBlockStyle(html: string, style: string) {

@@ -94,7 +94,7 @@ describe("rebuildHtmlWithEditedBody", () => {
     const html = rebuildHtmlWithEditedBody(original, "Hello");
 
     expect(html).toBe(
-      `<html><head><meta charset="utf-8"></head><body><div><p>Hello</p></div>${quote}</body></html>`,
+      `<html><head><meta charset="utf-8"></head><body><div><div>Hello</div></div>${quote}</body></html>`,
     );
   });
 });
@@ -164,7 +164,7 @@ describe("edits that the Markdown round trip can't carry", () => {
     const html = rebuildHtmlWithEditedBody(original, edited) ?? "";
 
     expect(html).toBe(
-      '<div dir="ltr"><p style="color:#0b5394;font-family:arial, sans-serif">Hello team, all done.</p></div>',
+      '<div dir="ltr"><div style="color:#0b5394;font-family:arial, sans-serif">Hello team, all done.</div></div>',
     );
   });
 
@@ -177,7 +177,9 @@ describe("edits that the Markdown round trip can't carry", () => {
 
     const html = rebuildHtmlWithEditedBody(original, "Thanks a lot") ?? "";
 
-    expect(html.startsWith(`${wrapper}<p>Thanks a lot</p></div>`)).toBe(true);
+    expect(html.startsWith(`${wrapper}<div>Thanks a lot</div></div>`)).toBe(
+      true,
+    );
   });
 
   it("shows hidden text as a notice, not in the body, and refuses a body edit", () => {
@@ -285,7 +287,7 @@ describe("balanced output", () => {
       "";
 
     expect(html).toBe(
-      "<p>Hi Rob,</p>\n<p>Para two line1<br>line2</p>\n<p>Thanks,<br>Me</p>",
+      "<div>Hi Rob,</div><div><br></div><div>Para two line1<br>line2</div><div><br></div><div>Thanks,<br>Me</div>",
     );
   });
 

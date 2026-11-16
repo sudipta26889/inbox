@@ -308,20 +308,69 @@ describe("user HTML: what the card marks and refuses", () => {
     expect(html.endsWith(quote)).toBe(true);
   });
 
-  // An edit turns <div> into <p>; a style sheet rule for p would then hide or
-  // restyle text that it did not touch before.
+  // An edit that adds a tag (bold, a list, a link) a style sheet has a rule
+  // for would hide or restyle text that rule did not touch before.
   it.each([
     [
       "a head rule",
-      "<html><head><style>p{display:none}</style></head><body><div>Hi Bob</div></body></html>",
+      "<html><head><style>strong{display:none}</style></head><body><div>Hi Bob</div></body></html>",
     ],
-    ["a quoted rule", PROBES.quoteStyleHidesP],
+    [
+      "a quoted rule",
+      '<div dir="ltr">Hi Bob</div><div class="gmail_quote"><style>strong{font-size:0}</style>old</div>',
+    ],
     [
       "a grouped rule",
       "<style>td, strong , em{font-size:0}</style><div>Hi Bob</div>",
     ],
   ])("refuses an edit that a style sheet would restyle (%s)", (_name, html) => {
     expect(rebuildHtmlWithEditedBody(html, "Hi **Rob**")).toBeNull();
+  });
+
+  it("edits a Gmail reply quoting a newsletter with a p rule, sending divs", () => {
+    const { html: original } = createReplyContent({
+      textContent: "Thanks, noted\n\nSee you Monday",
+      message: {
+        headers: {
+          from: "News <news@example.com>",
+          to: "me@example.com",
+          subject: "Weekly",
+          date: "Mon, 2 Nov 2026 10:00:00 +0000",
+        },
+        textPlain: "Big news",
+        textHtml:
+          "<html><head><style>p{color:red}</style></head><body><p>Big news</p></body></html>",
+      },
+    });
+    const card = cardBodyFromHtml(original);
+
+    const html =
+      rebuildHtmlWithEditedBody(original, card.body.replace("noted", "done")) ??
+      "";
+    const authored = html.slice(0, html.indexOf('<div class="gmail_quote'));
+
+    expect(authored).toContain(
+      "<div>Thanks, done</div><div><br></div><div>See you Monday</div>",
+    );
+    expect(authored).not.toContain("<p>");
+  });
+
+  it("keeps <p> blocks for an Outlook (p-based) body", () => {
+    const original =
+      "<style>p{margin:0}</style><p class=MsoNormal>Hi Bob</p><p class=MsoNormal>Thanks</p>";
+
+    expect(rebuildHtmlWithEditedBody(original, "Hi Rob\n\nThanks")).toContain(
+      "<p>Hi Rob</p>\n<p>Thanks</p>",
+    );
+  });
+
+  it("allows a plain edit under a quoted p rule, as divs", () => {
+    const html =
+      rebuildHtmlWithEditedBody(PROBES.quoteStyleHidesP, "Hi Rob") ?? "";
+
+    expect(html.startsWith('<div dir="ltr"><div>Hi Rob</div></div>')).toBe(
+      true,
+    );
   });
 
   it("allows an edit when the style sheet only targets tags already there", () => {
