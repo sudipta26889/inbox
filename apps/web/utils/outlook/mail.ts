@@ -45,12 +45,14 @@ export async function sendEmailWithHtml(
   client: OutlookClient,
   body: MailSendEmailBody,
   logger: Logger,
+  emailAccountId?: string,
 ): Promise<SentEmailResult> {
   ensureEmailSendingEnabled();
 
   await requireSendApproval({
     operation: "send_email",
     provider: "outlook",
+    emailAccountId,
     to: body.to,
     from: body.from,
     cc: body.cc,
@@ -119,9 +121,15 @@ export async function sendEmailWithPlainText(
   client: OutlookClient,
   body: Omit<MailSendEmailBody, "messageHtml"> & { messageText: string },
   logger: Logger,
+  emailAccountId?: string,
 ) {
   const messageHtml = convertTextToHtmlParagraphs(body.messageText);
-  return sendEmailWithHtml(client, { ...body, messageHtml }, logger);
+  return sendEmailWithHtml(
+    client,
+    { ...body, messageHtml },
+    logger,
+    emailAccountId,
+  );
 }
 
 export async function replyToEmail(
@@ -136,12 +144,14 @@ export async function replyToEmail(
     bcc?: string;
     attachments?: Attachment[];
   },
+  emailAccountId?: string,
 ) {
   ensureEmailSendingEnabled();
 
   await requireSendApproval({
     operation: "reply_email",
     provider: "outlook",
+    emailAccountId,
     to: message.headers["reply-to"] || message.headers.from,
     from: options?.from,
     subject: message.headers.subject,
@@ -237,6 +247,7 @@ export async function forwardEmail(
     content?: string;
   },
   logger: Logger,
+  emailAccountId?: string,
 ) {
   ensureEmailSendingEnabled();
 
@@ -245,6 +256,7 @@ export async function forwardEmail(
   await requireSendApproval({
     operation: "forward_email",
     provider: "outlook",
+    emailAccountId,
     to: options.to,
     cc: options.cc,
     bcc: options.bcc,

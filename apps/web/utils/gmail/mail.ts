@@ -134,6 +134,7 @@ export const createRawMailMessage = async ({
 export async function sendEmailWithHtml(
   gmail: gmail_v1.Gmail,
   body: MailSendEmailBody,
+  emailAccountId?: string,
 ) {
   ensureEmailSendingEnabled();
 
@@ -142,6 +143,7 @@ export async function sendEmailWithHtml(
   await requireSendApproval({
     operation: "send_email",
     provider: "gmail",
+    emailAccountId,
     to: body.to,
     from: body.from,
     cc: body.cc,
@@ -169,9 +171,10 @@ export async function sendEmailWithHtml(
 export async function sendEmailWithPlainText(
   gmail: gmail_v1.Gmail,
   body: Omit<MailSendEmailBody, "messageHtml"> & { messageText: string },
+  emailAccountId?: string,
 ) {
   const messageHtml = convertTextToHtmlParagraphs(body.messageText);
-  return sendEmailWithHtml(gmail, { ...body, messageHtml });
+  return sendEmailWithHtml(gmail, { ...body, messageHtml }, emailAccountId);
 }
 
 export async function replyToEmail(
@@ -188,6 +191,7 @@ export async function replyToEmail(
     bcc?: string;
     attachments?: Attachment[];
   },
+  emailAccountId?: string,
 ) {
   ensureEmailSendingEnabled();
 
@@ -205,6 +209,7 @@ export async function replyToEmail(
   await requireSendApproval({
     operation: "reply_email",
     provider: "gmail",
+    emailAccountId,
     to: replyTarget,
     from,
     subject: formatReplySubject(message.headers.subject),
@@ -253,6 +258,7 @@ export async function forwardEmail(
     bcc?: string;
     content?: string;
   },
+  emailAccountId?: string,
 ) {
   ensureEmailSendingEnabled();
 
@@ -265,6 +271,7 @@ export async function forwardEmail(
   await requireSendApproval({
     operation: "forward_email",
     provider: "gmail",
+    emailAccountId,
     to: options.to,
     cc: options.cc,
     bcc: options.bcc,

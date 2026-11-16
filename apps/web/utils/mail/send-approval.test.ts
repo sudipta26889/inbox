@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
+vi.mock("@/utils/prisma");
 
 const { mockEnv, mockRunApprovalLoop, mockWasDenied, mockShouldRevise } =
   vi.hoisted(() => ({
@@ -28,12 +29,14 @@ vi.mock("@/utils/dharahil/client", () => ({
   },
 }));
 
+import prisma from "@/utils/__mocks__/prisma";
 import { isExternalDomain, requireSendApproval } from "./send-approval";
 
 const request = {
   operation: "send_email",
   provider: "gmail" as const,
   to: "someone@example.com",
+  emailAccountId: "acct-1" as string | undefined,
   subject: "hello",
   bodyText: "body",
 };
@@ -46,6 +49,9 @@ describe("requireSendApproval", () => {
     mockRunApprovalLoop.mockResolvedValue({ action: "APPROVED" });
     mockWasDenied.mockReturnValue(false);
     mockShouldRevise.mockReturnValue(false);
+    prisma.emailAccount.findUnique.mockResolvedValue({
+      email: "me@example.com",
+    } as any);
   });
 
   it("resolves when the reviewer approves", async () => {
@@ -120,6 +126,116 @@ describe("requireSendApproval", () => {
     expect(mockRunApprovalLoop.mock.calls[0][0].toolArgs.body).toHaveLength(
       500,
     );
+  });
+});
+
+describe("requireSendApproval sender", () => {
+  const approvalArgs = () => mockRunApprovalLoop.mock.calls[0][0];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockEnv.DHARAHIL_BASE_URL = "https://gateway.test";
+    mockEnv.DHARAHIL_API_KEY = "key";
+    mockRunApprovalLoop.mockResolvedValue({ action: "APPROVED" });
+    mockWasDenied.mockReturnValue(false);
+    mockShouldRevise.mockReturnValue(false);
+    prisma.emailAccount.findUnique.mockResolvedValue({
+      email: "me@example.com",
+    } as any);
+  });
+
+  it("defaults from to the mailbox address and looks it up by id", async () => {
+    await requireSendApproval(request);
+
+    expect(prisma.emailAccount.findUnique).toHaveBeenCalledWith({
+      where: { id: "acct-1" },
+      select: { email: true },
+    });
+    expect(approvalArgs().toolArgs.from).toBe("me@example.com");
+    expect(approvalArgs().toolArgs.mailbox).toBeUndefined();
+    expect(approvalArgs().context.metadata.from).toBe("me@example.com");
+  });
+
+  it("shows an explicit different sender as from, with the account as mailbox", async () => {
+    await requireSendApproval({ ...request, from: "alias@example.com" });
+
+    expect(approvalArgs().toolArgs.from).toBe("alias@example.com");
+    expect(approvalArgs().toolArgs.mailbox).toBe("me@example.com");
+  });
+
+  it("adds no mailbox when the explicit sender is the same address in another case", async () => {
+    await requireSendApproval({ ...request, from: "Me@Example.com" });
+
+    expect(approvalArgs().toolArgs.from).toBe("Me@Example.com");
+    expect(approvalArgs().toolArgs.mailbox).toBeUndefined();
+  });
+
+  it("treats a display-name sender as the same address", async () => {
+    await requireSendApproval({ ...request, from: "Me <me@example.com>" });
+
+    expect(approvalArgs().toolArgs.mailbox).toBeUndefined();
+  });
+
+  it("puts from first in toolArgs, in the agreed order", async () => {
+    await requireSendApproval({
+      ...request,
+      from: "alias@example.com",
+      cc: "c@example.com",
+      bcc: "b@example.com",
+    });
+
+    expect(Object.keys(approvalArgs().toolArgs)).toEqual([
+      "from",
+      "mailbox",
+      "to",
+      "cc",
+      "bcc",
+      "subject",
+      "body",
+      "isReply",
+    ]);
+  });
+
+  it("names the sender in the context summary", async () => {
+    await requireSendApproval(request);
+
+    expect(approvalArgs().context.contextSummary).toBe(
+      "send_email from me@example.com to someone@example.com - Subject: hello",
+    );
+  });
+
+  it("still asks for approval, from unknown, when the mailbox is not found", async () => {
+    prisma.emailAccount.findUnique.mockResolvedValue(null);
+
+    await requireSendApproval(request);
+
+    expect(mockRunApprovalLoop).toHaveBeenCalledTimes(1);
+    expect(approvalArgs().toolArgs.from).toBe("unknown");
+    expect(approvalArgs().context.contextSummary).toContain("from unknown to");
+  });
+
+  it("still asks for approval, from unknown, when there is no account id", async () => {
+    await requireSendApproval({ ...request, emailAccountId: undefined });
+
+    expect(prisma.emailAccount.findUnique).not.toHaveBeenCalled();
+    expect(approvalArgs().toolArgs.from).toBe("unknown");
+  });
+
+  it("still asks for approval when the lookup throws", async () => {
+    prisma.emailAccount.findUnique.mockRejectedValue(new Error("db down"));
+
+    await requireSendApproval(request);
+
+    expect(approvalArgs().toolArgs.from).toBe("unknown");
+  });
+
+  it("does not touch the database when the gate is not required", async () => {
+    mockEnv.DHARAHIL_BASE_URL = undefined;
+    mockEnv.DHARAHIL_API_KEY = undefined;
+
+    await requireSendApproval(request);
+
+    expect(prisma.emailAccount.findUnique).not.toHaveBeenCalled();
   });
 });
 

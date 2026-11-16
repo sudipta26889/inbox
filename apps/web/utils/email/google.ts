@@ -674,7 +674,7 @@ export class GmailProvider implements EmailProvider {
   async sendDraft(
     draftId: string,
   ): Promise<{ messageId: string; threadId: string }> {
-    return sendDraft(this.client, draftId);
+    return sendDraft(this.client, draftId, this.emailAccountId);
   }
 
   async createDraft(params: {
@@ -886,7 +886,14 @@ export class GmailProvider implements EmailProvider {
       attachments?: MailAttachment[];
     },
   ): Promise<void> {
-    await replyToEmail(this.client, email, content, options?.from, options);
+    await replyToEmail(
+      this.client,
+      email,
+      content,
+      options?.from,
+      options,
+      this.emailAccountId,
+    );
   }
 
   async sendEmail(args: {
@@ -897,7 +904,7 @@ export class GmailProvider implements EmailProvider {
     messageText: string;
     attachments?: MailAttachment[];
   }): Promise<void> {
-    await sendEmailWithPlainText(this.client, args);
+    await sendEmailWithPlainText(this.client, args, this.emailAccountId);
   }
 
   async sendEmailWithHtml(body: {
@@ -919,7 +926,11 @@ export class GmailProvider implements EmailProvider {
       contentType: string;
     }>;
   }) {
-    const result = await sendEmailWithHtml(this.client, body);
+    const result = await sendEmailWithHtml(
+      this.client,
+      body,
+      this.emailAccountId,
+    );
     return {
       messageId: result.data.id || "",
       threadId: result.data.threadId || "",
@@ -932,7 +943,7 @@ export class GmailProvider implements EmailProvider {
   ): Promise<void> {
     const parsedMessage = await this.getMessage(email.id);
 
-    await forwardEmail(this.client, parsedMessage, args);
+    await forwardEmail(this.client, parsedMessage, args, this.emailAccountId);
   }
 
   async markSpam(threadId: string): Promise<void> {

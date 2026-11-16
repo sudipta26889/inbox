@@ -89,9 +89,11 @@ export class OutlookProvider implements EmailProvider {
   readonly name = "microsoft";
   private readonly client: OutlookClient;
   private readonly logger: Logger;
+  private readonly emailAccountId?: string;
 
-  constructor(client: OutlookClient, logger?: Logger) {
+  constructor(client: OutlookClient, logger?: Logger, emailAccountId?: string) {
     this.client = client;
+    this.emailAccountId = emailAccountId;
     this.logger = (logger || createScopedLogger("outlook-provider")).with({
       provider: "microsoft",
     });
@@ -539,7 +541,12 @@ export class OutlookProvider implements EmailProvider {
   async sendDraft(
     draftId: string,
   ): Promise<{ messageId: string; threadId: string }> {
-    return sendDraft({ client: this.client, draftId, logger: this.logger });
+    return sendDraft({
+      client: this.client,
+      draftId,
+      logger: this.logger,
+      emailAccountId: this.emailAccountId,
+    });
   }
 
   async createDraft(params: {
@@ -731,7 +738,14 @@ export class OutlookProvider implements EmailProvider {
       attachments?: MailAttachment[];
     },
   ): Promise<void> {
-    await replyToEmail(this.client, email, content, this.logger, options);
+    await replyToEmail(
+      this.client,
+      email,
+      content,
+      this.logger,
+      options,
+      this.emailAccountId,
+    );
   }
 
   async sendEmail(args: {
@@ -742,7 +756,12 @@ export class OutlookProvider implements EmailProvider {
     messageText: string;
     attachments?: MailAttachment[];
   }): Promise<void> {
-    await sendEmailWithPlainText(this.client, args, this.logger);
+    await sendEmailWithPlainText(
+      this.client,
+      args,
+      this.logger,
+      this.emailAccountId,
+    );
   }
 
   async sendEmailWithHtml(body: {
@@ -765,7 +784,12 @@ export class OutlookProvider implements EmailProvider {
       contentType: string;
     }>;
   }) {
-    const result = await sendEmailWithHtml(this.client, body, this.logger);
+    const result = await sendEmailWithHtml(
+      this.client,
+      body,
+      this.logger,
+      this.emailAccountId,
+    );
     return {
       messageId: result.id || "",
       threadId: result.conversationId || "",
@@ -780,6 +804,7 @@ export class OutlookProvider implements EmailProvider {
       this.client,
       { messageId: email.id, ...args },
       this.logger,
+      this.emailAccountId,
     );
   }
 

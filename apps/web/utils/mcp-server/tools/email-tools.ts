@@ -621,13 +621,17 @@ export async function sendEmail(
       logger,
     });
 
-    const result = await gmailSendEmail(gmail, {
-      to: params.to.join(", "),
-      subject: params.subject,
-      messageHtml,
-      cc: params.cc?.join(", "),
-      bcc: params.bcc?.join(", "),
-    });
+    const result = await gmailSendEmail(
+      gmail,
+      {
+        to: params.to.join(", "),
+        subject: params.subject,
+        messageHtml,
+        cc: params.cc?.join(", "),
+        bcc: params.bcc?.join(", "),
+      },
+      emailAccount.id,
+    );
 
     return {
       success: true,
@@ -650,6 +654,7 @@ export async function sendEmail(
         bcc: params.bcc?.join(", "),
       },
       logger,
+      emailAccount.id,
     );
 
     return {

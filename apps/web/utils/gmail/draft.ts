@@ -162,6 +162,7 @@ function isValidGmailDraftId(draftId: string): boolean {
 export async function sendDraft(
   gmail: gmail_v1.Gmail,
   draftId: string,
+  emailAccountId?: string,
 ): Promise<{ messageId: string; threadId: string }> {
   // Sending a draft is still sending. Without this the drafts API is a way
   // around the kill switch that guards every other send path.
@@ -173,7 +174,11 @@ export async function sendDraft(
   await requireSendApproval({
     operation: "send_draft",
     provider: "gmail",
+    emailAccountId,
     to: draft?.headers?.to || "unknown",
+    from: draft?.headers?.from || undefined,
+    cc: draft?.headers?.cc || undefined,
+    bcc: draft?.headers?.bcc || undefined,
     subject: draft?.subject,
     bodyText: draft?.textPlain ?? undefined,
     threadId: draft?.threadId,
