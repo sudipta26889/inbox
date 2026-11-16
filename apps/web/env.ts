@@ -18,6 +18,7 @@ const llmProviderEnum = z.enum([
   "aigateway",
   "ollama",
   "openai-compatible",
+  "litellm",
   "codex-cli",
   "claude-code",
 ]);
@@ -185,6 +186,8 @@ const parsedEnv = createEnv({
     OLLAMA_MODEL: z.string().optional(),
     LOCAL_LLM_THINKING: z.enum(["off", "on", "auto"]).default("auto"),
     OPENAI_COMPATIBLE_BASE_URL: z.string().optional(),
+    LITELLM_BASE_URL: z.string().optional(),
+    GIT_SHA: z.string().optional(),
     OPENAI_COMPATIBLE_MODEL: z.string().optional(),
     OPENAI_COMPATIBLE_AUTH_HEADER: z
       .enum(["authorization", "api-key"])
@@ -217,6 +220,7 @@ const parsedEnv = createEnv({
       .string()
       .optional()
       .transform((value) => value || process.env.KV_URL), // used for subscriptions
+    REDIS_KEY_PREFIX: z.string().min(1).default("inbox:"),
 
     QSTASH_TOKEN: z.string().optional(),
     QSTASH_CURRENT_SIGNING_KEY: z.string().optional(),

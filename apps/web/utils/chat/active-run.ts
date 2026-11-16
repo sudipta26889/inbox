@@ -6,11 +6,13 @@ import {
   type ResumableStreamContext,
 } from "resumable-stream/ioredis";
 import { env } from "@/env";
+import { REDIS_KEY_PREFIX } from "@/utils/redis/key-prefix";
 import { createScopedLogger, type Logger } from "@/utils/logger";
 import prisma from "@/utils/prisma";
 import { sleep } from "@/utils/sleep";
 
-const STOP_CHANNEL = "assistant-chat:stop";
+// Raw ioredis clients: neither channels nor resumable-stream keys get a prefix on their own.
+const STOP_CHANNEL = `${REDIS_KEY_PREFIX}assistant-chat:stop`;
 const SUBSCRIBE_TIMEOUT_MS = 2000;
 // The chat route's maxDuration. A marker older than this belongs to a run whose
 // instance died before it could clear it.
@@ -143,7 +145,7 @@ function getRedis() {
     publisher,
     listening,
     streams: createResumableStreamContext({
-      keyPrefix: "assistant-chat",
+      keyPrefix: `${REDIS_KEY_PREFIX}assistant-chat`,
       waitUntil: after,
       publisher,
       subscriber,
