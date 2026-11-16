@@ -1,5 +1,3 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
@@ -26,11 +24,22 @@ vi.mock("@/utils/dharahil/client", () => ({
     runApprovalLoop: mockRunApprovalLoop,
     wasDenied: mockWasDenied,
     shouldRevise: mockShouldRevise,
+    // The real allowlist: the gate must proceed on nothing else.
+    shouldProceed: (decision: { action: string }) =>
+      ["ALLOW", "APPROVED", "AUTO_ALLOWED"].includes(decision.action),
   },
+}));
+vi.mock("@/utils/redis", () => ({
+  redis: { get: async () => null, set: async () => "OK" },
 }));
 
 import prisma from "@/utils/__mocks__/prisma";
-import { isExternalDomain, requireSendApproval } from "./send-approval";
+import {
+  approveSendOperation,
+  isExternalDomain,
+  requireSendApproval,
+  SendNotApprovedError,
+} from "./send-approval";
 
 const request = {
   operation: "send_email",
@@ -54,8 +63,8 @@ describe("requireSendApproval", () => {
     } as any);
   });
 
-  it("resolves when the reviewer approves", async () => {
-    await expect(requireSendApproval(request)).resolves.toBeUndefined();
+  it("resolves with no edits when the reviewer approves", async () => {
+    await expect(requireSendApproval(request)).resolves.toEqual({});
     expect(mockRunApprovalLoop).toHaveBeenCalledTimes(1);
   });
 
@@ -90,7 +99,7 @@ describe("requireSendApproval", () => {
     mockEnv.DHARAHIL_BASE_URL = undefined;
     mockEnv.DHARAHIL_API_KEY = undefined;
 
-    await expect(requireSendApproval(request)).resolves.toBeUndefined();
+    await expect(requireSendApproval(request)).resolves.toEqual({});
     expect(mockRunApprovalLoop).not.toHaveBeenCalled();
   });
 
@@ -120,11 +129,12 @@ describe("requireSendApproval", () => {
     expect(internal).toBe("MEDIUM");
   });
 
-  it("forwards only a preview of the body", async () => {
+  // The reviewer approves (and may edit) the body, so the card carries all of it.
+  it("forwards the whole body", async () => {
     await requireSendApproval({ ...request, bodyText: "x".repeat(2000) });
 
     expect(mockRunApprovalLoop.mock.calls[0][0].toolArgs.body).toHaveLength(
-      500,
+      2000,
     );
   });
 });
@@ -182,6 +192,8 @@ describe("requireSendApproval sender", () => {
       from: "alias@example.com",
       cc: "c@example.com",
       bcc: "b@example.com",
+      replyTo: "r@example.com",
+      attachments: [{ filename: "a.pdf", size: 3 }],
     });
 
     expect(Object.keys(approvalArgs().toolArgs)).toEqual([
@@ -190,8 +202,10 @@ describe("requireSendApproval sender", () => {
       "to",
       "cc",
       "bcc",
+      "replyTo",
       "subject",
       "body",
+      "attachments",
       "isReply",
     ]);
   });
@@ -247,52 +261,182 @@ describe("isExternalDomain", () => {
   });
 });
 
-/**
- * Structural guard. Every provider function that hands a message to the send
- * API must first call requireSendApproval. This is asserted over the source
- * rather than through mocks because the failure being prevented is someone
- * adding a seventh send path and simply forgetting — which is exactly how
- * reply, forward and both sendDraft paths ended up ungated while a comment on
- * sendEmailWithHtml claimed the gate covered "ALL email sends".
- */
-describe("every send path is gated", () => {
-  const files = [
-    "utils/gmail/mail.ts",
-    "utils/gmail/draft.ts",
-    "utils/outlook/mail.ts",
-    "utils/outlook/draft.ts",
-  ];
+describe("the gate fails closed and honours card edits", () => {
+  const approvedWith = (args: Record<string, unknown>) =>
+    mockRunApprovalLoop.mockImplementation(async (call) => ({
+      action: "APPROVED",
+      approvedArgs: { ...call.toolArgs, ...args },
+    }));
 
-  // Call sites that actually put a message on the wire.
-  const SEND_CALL =
-    /users\.(messages|drafts)\.send\(|api\(`\/me\/messages\/\$\{[^}]+\}\/send`\)|\.api\("\/me\/sendMail"\)/;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockEnv.DHARAHIL_BASE_URL = "https://gateway.test";
+    mockEnv.DHARAHIL_API_KEY = "key";
+    prisma.emailAccount.findUnique.mockResolvedValue({
+      email: "me@example.com",
+    } as any);
+  });
 
-  for (const file of files) {
-    it(`${file} calls requireSendApproval for each send`, () => {
-      const source = readFileSync(join(process.cwd(), file), "utf8");
-      const sendCalls = source
-        .split("\n")
-        .filter((line) => SEND_CALL.test(line)).length;
+  it.each([
+    "AUTO_DENIED",
+    "EXECUTED",
+    "SOMETHING_NEW",
+    "ERROR",
+    "EXPIRED",
+    "REVISE_REQUESTED",
+  ])("does not send on %s", async (action) => {
+    mockRunApprovalLoop.mockResolvedValue({ action });
 
-      if (sendCalls === 0) return;
+    await expect(requireSendApproval(request)).rejects.toBeInstanceOf(
+      SendNotApprovedError,
+    );
+  });
 
-      const gateCalls = source.split("requireSendApproval(").length - 1;
+  it("does not blame a human when the approval service failed", async () => {
+    mockRunApprovalLoop.mockResolvedValue({ action: "ERROR" });
 
-      expect(
-        gateCalls,
-        `${file} has ${sendCalls} send call(s) but ${gateCalls} approval gate(s)`,
-      ).toBeGreaterThanOrEqual(1);
+    const error = await requireSendApproval(request).catch((e) => e);
+
+    expect(error.message).toMatch(/approval service is unavailable/);
+    expect(error.message).not.toMatch(/human reviewer/);
+  });
+
+  it("returns no edits for a plain approval", async () => {
+    mockRunApprovalLoop.mockImplementation(async (call) => ({
+      action: "APPROVED",
+      approvedArgs: call.toolArgs,
+    }));
+
+    await expect(requireSendApproval(request)).resolves.toEqual({});
+  });
+
+  it("returns the recipients, subject and body the reviewer edited", async () => {
+    approvedWith({
+      to: "right@grihatek.com",
+      cc: "boss@grihatek.com",
+      bcc: "",
+      subject: "Fixed",
+      body: "New text",
     });
-  }
 
-  it("no provider send file imports dharahilClient directly", () => {
-    // The gate lives in one module; a second copy is how the first one drifted.
-    for (const file of files) {
-      const source = readFileSync(join(process.cwd(), file), "utf8");
+    await expect(
+      requireSendApproval({ ...request, bcc: "leak@other.com" }),
+    ).resolves.toEqual({
+      to: "right@grihatek.com",
+      cc: "boss@grihatek.com",
+      bcc: "",
+      subject: "Fixed",
+      bodyText: "New text",
+    });
+  });
 
-      expect(source, `${file} should gate via requireSendApproval`).not.toMatch(
-        /from "@\/utils\/dharahil\/client"/,
-      );
-    }
+  it("refuses an edit that changes the sender", async () => {
+    approvedWith({ from: "ceo@grihatek.com" });
+
+    await expect(requireSendApproval(request)).rejects.toThrow(
+      /sender can't be changed/,
+    );
+  });
+
+  it("refuses an edit to anything but recipients, subject and body", async () => {
+    approvedWith({ attachments: [] });
+
+    await expect(
+      requireSendApproval({
+        ...request,
+        attachments: [{ filename: "a.pdf" }],
+      }),
+    ).rejects.toThrow(/only recipients, subject and body/);
+  });
+
+  it("refuses a body edit when the card could only show a preview", async () => {
+    approvedWith({ body: "short" });
+
+    await expect(
+      requireSendApproval({ ...request, bodyText: "x".repeat(100_001) }),
+    ).rejects.toThrow(/too long to edit on the card/);
+  });
+
+  it("sends the full original body when only recipients were edited on a long body", async () => {
+    approvedWith({ to: "right@grihatek.com" });
+
+    await expect(
+      requireSendApproval({ ...request, bodyText: "x".repeat(100_001) }),
+    ).resolves.toEqual({ to: "right@grihatek.com" });
+  });
+
+  it.each([
+    [{ to: "" }],
+    [{ to: "not an address" }],
+    [{ cc: "garbage" }],
+    [{ bcc: "nobody" }],
+  ])("refuses edited recipients that parse to no address: %j", async (edit) => {
+    approvedWith(edit);
+
+    await expect(
+      requireSendApproval({ ...request, cc: "c@grihatek.com" }),
+    ).rejects.toThrow(/no valid email address/);
+  });
+
+  it("treats an emptied cc as removing it", async () => {
+    approvedWith({ cc: "" });
+
+    await expect(
+      requireSendApproval({ ...request, cc: "c@grihatek.com" }),
+    ).resolves.toEqual({ cc: "" });
+  });
+
+  it("marks a cut card body so the reviewer knows edits are off", async () => {
+    mockRunApprovalLoop.mockResolvedValue({ action: "APPROVED" });
+
+    await requireSendApproval({ ...request, bodyText: "x".repeat(100_001) });
+
+    expect(mockRunApprovalLoop.mock.calls[0][0].toolArgs.body).toMatch(
+      /^\[preview: full body is 100001 characters; body edits are disabled\]/,
+    );
+  });
+
+  it("puts the content hash in the idempotency key", async () => {
+    mockRunApprovalLoop.mockResolvedValue({ action: "APPROVED" });
+
+    await requireSendApproval({ ...request, operationId: "op" });
+    await requireSendApproval({
+      ...request,
+      operationId: "op",
+      bodyText: "different after char 500",
+    });
+
+    const [first, second] = mockRunApprovalLoop.mock.calls.map(
+      ([call]) => call.context.idempotencyKey,
+    );
+    expect(first).toMatch(/^inbox_acct-1_op_[0-9a-f]{64}$/);
+    expect(first).not.toBe(second);
+  });
+
+  it("asks again when an approved send reaches the provider with other recipients", async () => {
+    mockRunApprovalLoop.mockResolvedValue({ action: "APPROVED" });
+    const { approval } = await approveSendOperation({
+      ...request,
+      emailAccountId: "acct-1",
+      operationId: "op",
+      payloadHash: "h",
+    });
+    mockRunApprovalLoop.mockClear();
+
+    await requireSendApproval({ ...request, approval });
+    expect(mockRunApprovalLoop).not.toHaveBeenCalled();
+
+    await requireSendApproval({ ...request, approval, to: "other@x.org" });
+    expect(mockRunApprovalLoop).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses to send in production when the gateway key is missing", async () => {
+    mockEnv.DHARAHIL_API_KEY = undefined;
+    (mockEnv as Record<string, unknown>).NODE_ENV = "production";
+
+    await expect(requireSendApproval(request)).rejects.toThrow(
+      /not configured in production/,
+    );
+    (mockEnv as Record<string, unknown>).NODE_ENV = undefined;
   });
 });

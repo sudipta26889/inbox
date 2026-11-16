@@ -56,6 +56,8 @@ vi.mock("@/utils/dharahil/client", () => ({
       ["DENY", "REJECTED", "EXPIRED", "ERROR"].includes(decision.action),
     shouldRevise: (decision: { action: string }) =>
       decision.action === "REVISE_REQUESTED",
+    shouldProceed: (decision: { action: string }) =>
+      ["ALLOW", "APPROVED", "AUTO_ALLOWED"].includes(decision.action),
   },
 }));
 
@@ -106,7 +108,9 @@ describe("DharaHIL gate on durable and scheduled sends", () => {
     expect(outcome.status).toBe("applied");
     expect(mockRunApprovalLoop).toHaveBeenCalledTimes(1);
     const [call] = mockRunApprovalLoop.mock.calls[0];
-    expect(call.context.idempotencyKey).toBe(`inbox_account_${mutationId}`);
+    expect(call.context.idempotencyKey).toMatch(
+      new RegExp(`^inbox_account_${mutationId}_[0-9a-f]{64}$`),
+    );
     expect(
       mockRunApprovalLoop.mock.invocationCallOrder[0] <
         prisma.emailSendOperation.create.mock.invocationCallOrder[0],
@@ -119,6 +123,7 @@ describe("DharaHIL gate on durable and scheduled sends", () => {
       operation: "send_email",
       emailAccountId: "account",
       to: email.to,
+      subject: email.subject,
       approval,
     });
     expect(mockRunApprovalLoop).toHaveBeenCalledTimes(1);
@@ -148,6 +153,54 @@ describe("DharaHIL gate on durable and scheduled sends", () => {
     expect(sendEmailWithHtml).toHaveBeenCalledTimes(2);
   });
 
+  it("commits and sends the version the reviewer edited, and a retry of the original sends nothing more", async () => {
+    mockRunApprovalLoop.mockImplementation(async ({ toolArgs }) => ({
+      action: "APPROVED",
+      approvedArgs: { ...toolArgs, to: "right@grihatek.com", subject: "Fixed" },
+    }));
+    const sendEmailWithHtml = vi
+      .fn()
+      .mockResolvedValue({ messageId: "sent-1", threadId: "thread" });
+    const provider = createMockEmailProvider({ sendEmailWithHtml });
+
+    expect((await sendDurably(provider)).status).toBe("applied");
+    expect(sendEmailWithHtml.mock.calls[0][0]).toMatchObject({
+      to: "right@grihatek.com",
+      subject: "Fixed",
+    });
+    const committedHash = prisma.emailSendOperation.create.mock.calls[0][0].data
+      .payloadHash as string;
+
+    // The client retries with the email it originally sent.
+    prisma.emailSendOperation.findUnique.mockResolvedValue({
+      id: "operation",
+      status: EmailSendOperationStatus.SENT,
+      payloadHash: committedHash,
+      result: { messageId: "sent-1" },
+    } as never);
+    expect((await sendDurably(provider)).status).toBe("already_applied");
+    expect(sendEmailWithHtml).toHaveBeenCalledTimes(1);
+    expect(mockRunApprovalLoop).toHaveBeenCalledTimes(1);
+  });
+
+  it("stores the edited version of a scheduled email", async () => {
+    mockRunApprovalLoop.mockImplementation(async ({ toolArgs }) => ({
+      action: "APPROVED",
+      approvedArgs: { ...toolArgs, body: "Edited" },
+    }));
+    const input = scheduledInput(
+      new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+    );
+    prisma.scheduledEmail.create.mockResolvedValue(scheduledRow(input));
+
+    await scheduleEmail("account", input);
+
+    const { data } = prisma.scheduledEmail.create.mock.calls[0][0];
+    expect(
+      (data.payload as { email: { messageHtml: string } }).email.messageHtml,
+    ).toBe("<p>Edited</p>");
+  });
+
   it("asks again when the same operation id carries a different email", async () => {
     await approveSendOperation({
       operation: "send_email",
@@ -172,7 +225,11 @@ describe("DharaHIL gate on durable and scheduled sends", () => {
       operation: "send_email",
       emailAccountId: "account",
       to: email.to,
-      approval: { emailAccountId: "account", operationId: mutationId },
+      approval: {
+        emailAccountId: "account",
+        operationId: mutationId,
+        fingerprint: "copied",
+      },
     });
 
     expect(mockRunApprovalLoop).toHaveBeenCalledTimes(1);
@@ -224,6 +281,18 @@ describe("DharaHIL gate on durable and scheduled sends", () => {
     await processScheduledEmail("id", logger, sendAt);
 
     expect(provider.sendEmailWithHtml).toHaveBeenCalledTimes(1);
+    expect(mockRunApprovalLoop).toHaveBeenCalledTimes(1);
+
+    // The approval reaches the real provider gate, which then asks nobody.
+    const { approval } = vi.mocked(provider.sendEmailWithHtml).mock
+      .calls[0][1] as { approval: SendApproval };
+    await requireSendApproval({
+      operation: "send_email",
+      emailAccountId: "account",
+      to: email.to,
+      subject: email.subject,
+      approval,
+    });
     expect(mockRunApprovalLoop).toHaveBeenCalledTimes(1);
   });
 

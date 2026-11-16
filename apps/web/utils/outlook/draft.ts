@@ -2,7 +2,11 @@ import type { Message } from "@microsoft/microsoft-graph-types";
 import type { OutlookClient } from "@/utils/outlook/client";
 import type { Logger } from "@/utils/logger";
 import { ensureEmailSendingEnabled } from "@/utils/mail";
-import { requireSendApproval, type SendGate } from "@/utils/mail/send-approval";
+import {
+  approveDraftSend,
+  htmlPreviewText,
+  type SendGate,
+} from "@/utils/mail/send-approval";
 import {
   isNotFoundError,
   isPreconditionFailedError,
@@ -74,46 +78,74 @@ export async function sendDraft({
   draftId,
   logger,
   gate = {},
+  updateDraft,
 }: {
   client: OutlookClient;
   draftId: string;
   logger: Logger;
   gate?: SendGate;
+  /** Writes card edits into the draft, keeping its files. */
+  updateDraft?: Parameters<typeof approveDraftSend>[0]["update"];
 }): Promise<{ messageId: string; threadId: string }> {
   // Sending a draft is still sending: kill switch and approval gate apply.
   ensureEmailSendingEnabled();
 
   // Graph may return 404 while moving a sent draft to Sent Items. Capture the
   // conversation ID before sending so that metadata reads cannot fail a send.
-  // The recipients are read too, so the reviewer sees who the draft goes to.
-  const draft = await withMicrosoftGraphRetry(
-    () =>
-      client
-        .getClient()
-        .api(`/me/messages/${draftId}`)
-        .select(
-          "conversationId,toRecipients,ccRecipients,bccRecipients,from,subject,bodyPreview",
-        )
-        .get() as Promise<Message>,
-    logger,
-  );
-
-  await requireSendApproval({
-    operation: "send_draft",
+  // The gate reads the rest, so the reviewer sees what the draft sends.
+  const approved = await approveDraftSend({
     provider: "outlook",
-    ...gate,
-    to: joinRecipients(draft.toRecipients) || "unknown",
-    from: draft.from?.emailAddress?.address || undefined,
-    cc: joinRecipients(draft.ccRecipients),
-    bcc: joinRecipients(draft.bccRecipients),
-    subject: draft.subject ?? undefined,
-    bodyText: draft.bodyPreview ?? undefined,
-    threadId: draft.conversationId ?? undefined,
+    gate,
+    update: updateDraft,
+    read: async () => {
+      const draft = (await withMicrosoftGraphRetry(
+        () =>
+          client
+            .getClient()
+            .api(`/me/messages/${draftId}`)
+            .select(
+              "conversationId,toRecipients,ccRecipients,bccRecipients,from,subject,body",
+            )
+            .expand("attachments($select=name,size)")
+            .get() as Promise<Message>,
+        logger,
+      )) as Message;
+      const content = draft.body?.content ?? "";
+      return {
+        to: joinRecipients(draft.toRecipients) || "unknown",
+        from: draft.from?.emailAddress?.address || undefined,
+        cc: joinRecipients(draft.ccRecipients),
+        bcc: joinRecipients(draft.bccRecipients),
+        subject: draft.subject ?? undefined,
+        bodyText:
+          draft.body?.contentType === "html"
+            ? htmlPreviewText(content)
+            : content,
+        attachments: (draft.attachments ?? []).map((attachment) => ({
+          filename: attachment.name ?? "",
+          size: attachment.size ?? undefined,
+        })),
+        threadId: draft.conversationId ?? undefined,
+      };
+    },
   });
+
+  const threadId =
+    approved?.threadId ??
+    (
+      (await withMicrosoftGraphRetry(
+        () =>
+          client
+            .getClient()
+            .api(`/me/messages/${draftId}`)
+            .select("conversationId")
+            .get() as Promise<Message>,
+        logger,
+      )) as Message
+    ).conversationId;
 
   logger.info("Sending draft", { draftId });
 
-  const threadId = draft.conversationId;
   if (!threadId) {
     throw new Error("Failed to get threadId from draft");
   }

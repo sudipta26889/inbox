@@ -103,7 +103,7 @@ import type {
   SendEmailOptions,
   DraftAttachmentUploadStart,
 } from "@/utils/email/types";
-import type { SendGate } from "@/utils/mail/send-approval";
+import type { SendApproval, SendGate } from "@/utils/mail/send-approval";
 import type { SendAsAddress } from "@/utils/email/send-as";
 import type { DraftAttachmentMetadata } from "@/utils/actions/draft-attachments.validation";
 import { assertDraftAttachmentLimits } from "@/utils/email/draft-attachment-upload";
@@ -179,8 +179,15 @@ export class OutlookProvider implements EmailProvider {
     return { name: this.name, type: "OutlookProvider" };
   }
 
-  private sendGate(options?: Pick<SendEmailOptions, "approval">): SendGate {
-    return { emailAccountId: this.emailAccountId, approval: options?.approval };
+  private sendGate(options?: {
+    approval?: SendApproval;
+    operationId?: string;
+  }): SendGate {
+    return {
+      emailAccountId: this.emailAccountId,
+      approval: options?.approval,
+      operationId: options?.operationId,
+    };
   }
 
   async countMessages({
@@ -735,6 +742,7 @@ export class OutlookProvider implements EmailProvider {
       draftId,
       logger: this.logger,
       gate: this.sendGate(options),
+      updateDraft: (changes) => this.updateDraft(draftId, changes),
     });
   }
 
@@ -985,6 +993,7 @@ export class OutlookProvider implements EmailProvider {
       cc?: string;
       bcc?: string;
       attachments?: MailAttachment[];
+      operationId?: string;
     },
   ): Promise<{ messageId: string }> {
     const result = await replyToEmail(
@@ -993,7 +1002,7 @@ export class OutlookProvider implements EmailProvider {
       content,
       this.logger,
       options,
-      this.sendGate(),
+      this.sendGate(options),
     );
     return { messageId: requireSentMessageId(result.id) };
   }
@@ -1005,12 +1014,13 @@ export class OutlookProvider implements EmailProvider {
     subject: string;
     messageText: string;
     attachments?: MailAttachment[];
+    operationId?: string;
   }): Promise<{ messageId: string }> {
     const result = await sendEmailWithPlainText(
       this.client,
       args,
       this.logger,
-      this.sendGate(),
+      this.sendGate(args),
     );
     return { messageId: requireSentMessageId(result.id) };
   }
@@ -1040,13 +1050,14 @@ export class OutlookProvider implements EmailProvider {
       bcc?: string;
       content?: string;
       from?: string;
+      operationId?: string;
     },
   ): Promise<{ messageId: string }> {
     const result = await forwardEmail(
       this.client,
       { messageId: email.id, ...args },
       this.logger,
-      this.sendGate(),
+      this.sendGate(args),
     );
     return { messageId: requireSentMessageId(result.id) };
   }

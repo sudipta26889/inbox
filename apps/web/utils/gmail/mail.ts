@@ -28,7 +28,12 @@ import {
 import { formatReplySubject } from "@/utils/email/subject";
 import { buildThreadingHeaders } from "@/utils/email/threading";
 import { ensureEmailSendingEnabled } from "@/utils/mail";
-import { requireSendApproval, type SendGate } from "@/utils/mail/send-approval";
+import {
+  applySendEdits,
+  type AttachmentInfo,
+  requireSendApproval,
+  type SendGate,
+} from "@/utils/mail/send-approval";
 import { getMessage } from "@/utils/gmail/message";
 import {
   getGmailAttachment,
@@ -110,11 +115,42 @@ const createRawMailMessage = async ({
 // https://www.labnol.org/google-api-service-account-220405
 export async function sendEmailWithHtml(
   gmail: gmail_v1.Gmail,
-  body: MailSendEmailBody,
+  proposed: MailSendEmailBody,
   sendLogger: Logger = logger,
   gate: SendGate = {},
 ) {
   ensureEmailSendingEnabled();
+
+  // Fetched before the gate so the card lists the files the forward carries.
+  const forwardedAttachments = proposed.replyToEmail?.forwardedMessageId
+    ? (
+        await getForwardedMessage(
+          gmail,
+          proposed.replyToEmail.forwardedMessageId,
+        )
+      ).attachments
+    : [];
+
+  const edits = await requireSendApproval({
+    operation: proposed.replyToEmail?.forwardedMessageId
+      ? "forward_email"
+      : "send_email",
+    provider: "gmail",
+    ...gate,
+    to: proposed.to,
+    from: proposed.from,
+    cc: proposed.cc,
+    bcc: proposed.bcc,
+    replyTo: proposed.replyTo,
+    subject: proposed.subject,
+    bodyText: toPlainText(proposed.messageHtml, sendLogger),
+    attachments: mailerAttachmentInfo(proposed.attachments),
+    forwardedAttachments: mailerAttachmentInfo(forwardedAttachments),
+    threadId: proposed.replyToEmail?.threadId,
+    isReply: !!proposed.replyToEmail?.messageId,
+  });
+  // The reviewer may have corrected recipients, subject or body on the card.
+  const body = applySendEdits(proposed, edits);
 
   let messageText: string;
 
@@ -124,27 +160,6 @@ export async function sendEmailWithHtml(
     sendLogger.error("Error converting email html to text", { error });
     messageText = stripHtmlTagsForPlainText(body.messageHtml).trim();
   }
-
-  await requireSendApproval({
-    operation: body.replyToEmail?.forwardedMessageId
-      ? "forward_email"
-      : "send_email",
-    provider: "gmail",
-    ...gate,
-    to: body.to,
-    from: body.from,
-    cc: body.cc,
-    bcc: body.bcc,
-    subject: body.subject,
-    bodyText: messageText,
-    threadId: body.replyToEmail?.threadId,
-    isReply: !!body.replyToEmail?.messageId,
-  });
-
-  const forwardedAttachments = body.replyToEmail?.forwardedMessageId
-    ? (await getForwardedMessage(gmail, body.replyToEmail.forwardedMessageId))
-        .attachments
-    : [];
 
   const raw = await createRawMailMessage({
     ...body,
@@ -235,38 +250,44 @@ export async function replyToEmail(
 ) {
   ensureEmailSendingEnabled();
 
-  const { html } = createReplyContent({
-    textContent: reply,
-    htmlContent: renderReplyBodyHtml(reply),
-    message,
-  });
-  const messageText = buildReplyMessageText({
-    textContent: reply,
-    message,
-  });
-
-  await requireSendApproval({
+  // Only replying to the original sender
+  const proposed = {
+    to: message.headers["reply-to"] || message.headers.from,
+    cc: options?.cc,
+    bcc: options?.bcc,
+    subject: formatReplySubject(message.headers.subject),
+  };
+  const edits = await requireSendApproval({
     operation: "reply_email",
     provider: "gmail",
     ...gate,
-    to: message.headers["reply-to"] || message.headers.from,
+    ...proposed,
     from,
-    cc: options?.cc,
-    bcc: options?.bcc,
-    subject: formatReplySubject(message.headers.subject),
+    replyTo: options?.replyTo,
     bodyText: reply,
+    attachments: mailerAttachmentInfo(options?.attachments),
     threadId: message.threadId,
     isReply: true,
   });
+  const replyText = edits.bodyText ?? reply;
 
-  // Only replying to the original sender
+  const { html } = createReplyContent({
+    textContent: replyText,
+    htmlContent: renderReplyBodyHtml(replyText),
+    message,
+  });
+  const messageText = buildReplyMessageText({
+    textContent: replyText,
+    message,
+  });
+
   const raw = await createRawMailMessage({
-    to: message.headers["reply-to"] || message.headers.from,
+    to: edits.to ?? proposed.to,
     from,
-    cc: options?.cc,
-    bcc: options?.bcc,
+    cc: edits.cc ?? proposed.cc,
+    bcc: edits.bcc ?? proposed.bcc,
     replyTo: options?.replyTo,
-    subject: formatReplySubject(message.headers.subject),
+    subject: edits.subject ?? proposed.subject,
     messageText,
     messageHtml: html,
     attachments: options?.attachments,
@@ -310,7 +331,11 @@ export async function forwardEmail(
     );
   }
 
-  await requireSendApproval({
+  const forwardText = forwardEmailText({
+    content: options.content ?? "",
+    message,
+  });
+  const edits = await requireSendApproval({
     operation: "forward_email",
     provider: "gmail",
     ...gate,
@@ -319,7 +344,11 @@ export async function forwardEmail(
     cc: options.cc,
     bcc: options.bcc,
     subject: forwardEmailSubject(message.headers.subject),
-    bodyText: forwardEmailText({ content: options.content ?? "", message }),
+    bodyText: forwardText,
+    forwardedAttachments: [
+      ...(message.attachments ?? []),
+      ...(message.inline ?? []),
+    ].map(({ filename, size }) => ({ filename, size })),
     threadId: message.threadId,
   });
 
@@ -353,13 +382,17 @@ export async function forwardEmail(
   );
 
   const raw = await createRawMailMessage({
-    to: options.to,
+    to: edits.to ?? options.to,
     from: options.from,
-    cc: options.cc,
-    bcc: options.bcc,
-    subject: forwardEmailSubject(message.headers.subject),
-    messageText: forwardEmailText({ content: options.content ?? "", message }),
-    messageHtml: forwardEmailHtml({ content: options.content ?? "", message }),
+    cc: edits.cc ?? options.cc,
+    bcc: edits.bcc ?? options.bcc,
+    subject: edits.subject ?? forwardEmailSubject(message.headers.subject),
+    // An edited forward sends exactly the text the reviewer approved.
+    messageText: edits.bodyText ?? forwardText,
+    messageHtml:
+      edits.bodyText !== undefined
+        ? textToHtmlParagraphs(edits.bodyText)
+        : forwardEmailHtml({ content: options.content ?? "", message }),
     replyToEmail: {
       threadId: message.threadId || "",
       references: "",
@@ -622,4 +655,25 @@ function getGmailSendMetadata(raw: string, body: MailSendEmailBody) {
     mimeBytes: mime.length,
     attachmentCount: body.attachments?.length ?? 0,
   };
+}
+
+function toPlainText(html: string, sendLogger: Logger) {
+  try {
+    return convertOutgoingEmailHtmlToText(html);
+  } catch (error) {
+    sendLogger.error("Error converting email html to text", { error });
+    return stripHtmlTagsForPlainText(html).trim();
+  }
+}
+
+function mailerAttachmentInfo(
+  attachments: Attachment[] | undefined,
+): AttachmentInfo[] {
+  return (attachments ?? []).map((attachment) => ({
+    filename:
+      typeof attachment.filename === "string" ? attachment.filename : "",
+    size: Buffer.isBuffer(attachment.content)
+      ? attachment.content.length
+      : undefined,
+  }));
 }

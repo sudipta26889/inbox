@@ -9,13 +9,18 @@ import { scheduleEmailBody } from "@/utils/actions/scheduled-email.validation";
 import { executeDurableEmailSend } from "@/utils/email/durable-email-send";
 import { createEmailProvider } from "@/utils/email/provider";
 import type { EmailProvider } from "@/utils/email/types";
-import type { Logger } from "@/utils/logger";
+import { createScopedLogger, type Logger } from "@/utils/logger";
 import { isSameEmailAddress } from "@/utils/email";
 import { getMessageTimestamp } from "@/utils/email/message-timestamp";
 import { publishToQstashAt } from "@/utils/upstash";
 import {
+  applySendEdits,
   approveSendOperation,
+  attachmentsForCard,
+  hasSendEdits,
   htmlPreviewText,
+  recallSendApproval,
+  rememberApprovedPayload,
 } from "@/utils/mail/send-approval";
 
 const LEASE_MS = 5 * 60 * 1000;
@@ -26,13 +31,15 @@ export async function scheduleEmail(
   input: z.infer<typeof scheduleEmailBody>,
   now = new Date(),
 ) {
-  const payloadHash = hashPayload(input);
   const existing = await findScheduledEmail(
     emailAccountId,
     input.clientMutationId,
   );
   if (existing) {
-    assertReusableRequest(existing, payloadHash);
+    assertReusableRequest(
+      existing,
+      await storedPayloadHash(emailAccountId, input, existing),
+    );
     return existing;
   }
   const sendAt = input.sendAt ? new Date(input.sendAt) : now;
@@ -46,15 +53,17 @@ export async function scheduleEmail(
     input.email.replyToEmail.threadId !== input.threadId
   )
     throw new SafeError("The reply belongs to a different conversation.");
-  // Asked now, not when the cron sends it: the row is the approval record.
-  await approveScheduledSend(emailAccountId, input, payloadHash);
+  // Asked now, not when the cron sends it: the row is the approval record,
+  // and it stores the version the reviewer approved (edits included).
+  const approved = await approveScheduledSend(emailAccountId, input);
+  const payloadHash = hashPayload(approved);
   try {
     return await prisma.scheduledEmail.create({
       data: {
         emailAccountId,
         clientMutationId: input.clientMutationId,
         payloadHash,
-        payload: input,
+        payload: approved,
         draftMessageIds: input.draftMessageIds ?? [],
         threadId: input.threadId,
         sendAt,
@@ -98,20 +107,23 @@ export async function holdEmailForUndo({
   );
   if (existing) {
     if (existing.status !== "CANCELLED")
-      assertReusableRequest(existing, hashPayload(input));
+      assertReusableRequest(
+        existing,
+        await storedPayloadHash(emailAccountId, input, existing),
+      );
     return existing;
   }
   // Approved before the hold is committed. Undo still works while the card is
   // open: a cancel records a CANCELLED row, and the hold then never sends.
-  await approveScheduledSend(emailAccountId, input, hashPayload(input));
+  const approved = await approveScheduledSend(emailAccountId, input);
   let row: ScheduledEmail;
   try {
     row = await prisma.scheduledEmail.create({
       data: {
         emailAccountId,
         clientMutationId: input.clientMutationId,
-        payloadHash: hashPayload(input),
-        payload: input,
+        payloadHash: hashPayload(approved),
+        payload: approved,
         threadId: input.threadId,
         sendAt,
         heldForUndo: true,
@@ -128,7 +140,7 @@ export async function holdEmailForUndo({
       },
     });
     if (duplicate.status !== "CANCELLED")
-      assertReusableRequest(duplicate, hashPayload(input));
+      assertReusableRequest(duplicate, hashPayload(approved));
     return duplicate;
   }
   if (row.status === "CANCELLED") return row;
@@ -541,10 +553,26 @@ function getSentThreadId(result: unknown) {
 async function approveScheduledSend(
   emailAccountId: string,
   input: z.infer<typeof scheduleEmailBody>,
-  payloadHash: string,
-) {
+): Promise<z.infer<typeof scheduleEmailBody>> {
   const { email } = input;
-  await approveSendOperation({
+  const proposedHash = hashPayload(input);
+  let provider: Promise<EmailProvider> | undefined;
+  const getProvider = () => {
+    provider ??= prisma.emailAccount
+      .findUniqueOrThrow({
+        where: { id: emailAccountId },
+        select: { account: { select: { provider: true } } },
+      })
+      .then((account) =>
+        createEmailProvider({
+          emailAccountId,
+          provider: account.account.provider,
+          logger: createScopedLogger("scheduled-email-approval"),
+        }),
+      );
+    return provider;
+  };
+  const { edits, attachments } = await approveSendOperation({
     operation: input.sendAt
       ? "schedule_email"
       : email.replyToEmail
@@ -552,17 +580,48 @@ async function approveScheduledSend(
         : "send_email",
     emailAccountId,
     operationId: input.clientMutationId,
-    payloadHash,
+    payloadHash: proposedHash,
     to: email.to,
     from: email.from,
     cc: email.cc,
     bcc: email.bcc,
+    replyTo: email.replyTo,
     subject: email.subject,
     bodyText: htmlPreviewText(email.messageHtml),
+    loadAttachments: () => attachmentsForCard(email, getProvider),
     threadId: input.threadId ?? undefined,
     isReply: !!email.replyToEmail,
     sendAt: input.sendAt ?? undefined,
   });
+  if (!hasSendEdits(edits)) return input;
+
+  const approved = { ...input, email: applySendEdits(email, edits) };
+  // The row stores the edited payload; send time finds the approval by it.
+  await rememberApprovedPayload(
+    emailAccountId,
+    input.clientMutationId,
+    hashPayload(approved),
+    { edits: {}, attachments },
+  );
+  return approved;
+}
+
+// A retried request carries the original; the row may hold its edited version.
+async function storedPayloadHash(
+  emailAccountId: string,
+  input: z.infer<typeof scheduleEmailBody>,
+  existing: Pick<ScheduledEmail, "payloadHash">,
+) {
+  const proposedHash = hashPayload(input);
+  if (existing.payloadHash === proposedHash) return proposedHash;
+  const memo = await recallSendApproval(
+    emailAccountId,
+    input.clientMutationId,
+    proposedHash,
+  );
+  return memo && hasSendEdits(memo.edits)
+    ? hashPayload({ ...input, email: applySendEdits(input.email, memo.edits) })
+    : proposedHash;
 }
 
 function hashPayload(input: z.infer<typeof scheduleEmailBody>) {

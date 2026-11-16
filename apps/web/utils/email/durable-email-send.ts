@@ -11,12 +11,17 @@ import type { Logger } from "@/utils/logger";
 import { isDuplicateError } from "@/utils/prisma-helpers";
 import { sendHtmlEmailWithOpenTracking } from "@/utils/email/sent-message-open/sent-message-open.server";
 import {
+  applySendEdits,
+  attachmentsForCard,
   approvalFromScheduledEmail,
   approveSendOperation,
+  hasSendEdits,
   htmlPreviewText,
+  recallSendApproval,
   SendNotApprovedError,
   type SendApproval,
 } from "@/utils/mail/send-approval";
+import type { SendEmailBody } from "@/utils/types/mail";
 import type { DurableEmailSendBody } from "./durable-email-send.validation";
 
 const PROCESSING_LEASE_MS = 2 * 60 * 1000;
@@ -36,17 +41,35 @@ export async function executeDurableEmailSend({
   provider: string;
 }) {
   logger = logger.with({ mutationId: input.mutationId });
-  const payloadHash = createHash("sha256")
-    .update(
-      JSON.stringify({
-        threadId: input.threadId,
-        messageIds: input.messageIds,
-        email: input.email,
-        queuedAt: input.queuedAt,
-      }),
-    )
-    .digest("hex");
+  const hashPayload = (email: SendEmailBody) =>
+    createHash("sha256")
+      .update(
+        JSON.stringify({
+          threadId: input.threadId,
+          messageIds: input.messageIds,
+          email,
+          queuedAt: input.queuedAt,
+        }),
+      )
+      .digest("hex");
+  const proposedHash = hashPayload(input.email);
+  // What is committed and sent: the proposal, or the reviewer's edit of it.
+  let email = input.email;
+  let payloadHash = proposedHash;
   const found = await findEmailSendOperation(emailAccountId, input.mutationId);
+  if (found && found.payloadHash !== proposedHash) {
+    // A retry of an edited send replays the original; the stored operation is
+    // the edited version the reviewer approved.
+    const memo = await recallSendApproval(
+      emailAccountId,
+      input.mutationId,
+      proposedHash,
+    );
+    if (memo && hasSendEdits(memo.edits)) {
+      email = applySendEdits(input.email, memo.edits);
+      payloadHash = hashPayload(email);
+    }
+  }
   if (!found && input.queuedAt < Date.now() - MAIL_MUTATION_RETRY_WINDOW_MS) {
     return {
       status: "rejected" as const,
@@ -64,23 +87,32 @@ export async function executeDurableEmailSend({
           emailAccountId,
           mutationId: input.mutationId,
           threadId: input.threadId,
-          email: input.email,
-        })) ??
-        (await approveSendOperation({
-          operation: input.email.replyToEmail ? "reply_email" : "send_email",
+          email,
+        })) ?? undefined;
+      if (!approval) {
+        const approved = await approveSendOperation({
+          operation: email.replyToEmail ? "reply_email" : "send_email",
           provider: provider === "google" ? "gmail" : "outlook",
           emailAccountId,
           operationId: input.mutationId,
           payloadHash,
-          to: input.email.to,
-          from: input.email.from,
-          cc: input.email.cc,
-          bcc: input.email.bcc,
-          subject: input.email.subject,
-          bodyText: htmlPreviewText(input.email.messageHtml),
+          to: email.to,
+          from: email.from,
+          cc: email.cc,
+          bcc: email.bcc,
+          replyTo: email.replyTo,
+          subject: email.subject,
+          bodyText: htmlPreviewText(email.messageHtml),
+          loadAttachments: () => attachmentsForCard(email, getEmailProvider),
           threadId: input.threadId ?? undefined,
-          isReply: !!input.email.replyToEmail,
-        }));
+          isReply: !!email.replyToEmail,
+        });
+        approval = approved.approval;
+        if (hasSendEdits(approved.edits)) {
+          email = applySendEdits(email, approved.edits);
+          payloadHash = hashPayload(email);
+        }
+      }
     } catch (error) {
       if (!(error instanceof SendNotApprovedError)) throw error;
       logger.warn("Email send was not approved", { error });
@@ -134,7 +166,7 @@ export async function executeDurableEmailSend({
     const result = await sendHtmlEmailWithOpenTracking({
       emailAccountId,
       threadId: input.threadId,
-      email: input.email,
+      email,
       emailProvider,
       logger,
       approval,

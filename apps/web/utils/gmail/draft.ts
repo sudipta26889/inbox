@@ -10,7 +10,7 @@ import {
 } from "@/utils/gmail/retry";
 
 import { ensureEmailSendingEnabled } from "@/utils/mail";
-import { requireSendApproval, type SendGate } from "@/utils/mail/send-approval";
+import { approveDraftSend, type SendGate } from "@/utils/mail/send-approval";
 
 const logger = createScopedLogger("gmail/draft");
 const MAX_DRAFT_LOOKUP_PAGES = 10;
@@ -133,25 +133,35 @@ export async function sendDraft(
   gmail: gmail_v1.Gmail,
   draftId: string,
   gate: SendGate = {},
+  /** Writes card edits into the draft, keeping its files. */
+  updateDraft?: Parameters<typeof approveDraftSend>[0]["update"],
 ): Promise<{ messageId: string; threadId: string }> {
   // Sending a draft is still sending. Without this the drafts API is a way
   // around the kill switch that guards every other send path.
   ensureEmailSendingEnabled();
 
-  // Same reasoning for the approval gate. Read the draft first so the reviewer
-  // sees who it goes to rather than an opaque draft id.
-  const draft = gate.approval ? null : await getDraft(draftId, gmail);
-  await requireSendApproval({
-    operation: "send_draft",
+  // Same reasoning for the approval gate, which reads the draft so the
+  // reviewer sees who it goes to rather than an opaque draft id.
+  await approveDraftSend({
     provider: "gmail",
-    ...gate,
-    to: draft?.headers?.to || "unknown",
-    from: draft?.headers?.from || undefined,
-    cc: draft?.headers?.cc || undefined,
-    bcc: draft?.headers?.bcc || undefined,
-    subject: draft?.subject,
-    bodyText: draft?.textPlain ?? undefined,
-    threadId: draft?.threadId,
+    gate,
+    update: updateDraft,
+    read: async () => {
+      const draft = await getDraft(draftId, gmail);
+      return {
+        to: draft?.headers?.to || "unknown",
+        from: draft?.headers?.from || undefined,
+        cc: draft?.headers?.cc || undefined,
+        bcc: draft?.headers?.bcc || undefined,
+        subject: draft?.subject,
+        bodyText: draft?.textPlain ?? undefined,
+        attachments: (draft?.attachments ?? []).map(({ filename, size }) => ({
+          filename,
+          size,
+        })),
+        threadId: draft?.threadId,
+      };
+    },
   });
 
   logger.info("Sending draft", { draftId });

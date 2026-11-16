@@ -268,6 +268,8 @@ export interface EmailProvider {
       bcc?: string;
       content?: string;
       from?: string;
+      /** Stable id, so a retried send joins its open approval card. */
+      operationId?: string;
     },
   ): Promise<{ messageId: string }>;
   getAccessToken(): string;
@@ -450,6 +452,8 @@ export interface EmailProvider {
       cc?: string;
       bcc?: string;
       attachments?: MailAttachment[];
+      /** Stable id, so a retried send joins its open approval card. */
+      operationId?: string;
     },
   ): Promise<{ messageId: string }>;
   searchContacts(query: string): Promise<EmailContact[]>;
@@ -496,6 +500,8 @@ export interface EmailProvider {
     subject: string;
     messageText: string;
     attachments?: MailAttachment[];
+    /** Stable id, so a retried send joins its open approval card. */
+    operationId?: string;
   }): Promise<{ messageId: string }>;
   sendEmailWithHtml(
     body: SendEmailBody,

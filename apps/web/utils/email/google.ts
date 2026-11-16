@@ -124,7 +124,7 @@ import type {
   DraftAttachmentUploadStart,
   SendEmailOptions,
 } from "@/utils/email/types";
-import type { SendGate } from "@/utils/mail/send-approval";
+import type { SendApproval, SendGate } from "@/utils/mail/send-approval";
 import type { DraftAttachmentMetadata } from "@/utils/actions/draft-attachments.validation";
 import {
   buildGmailDraftUploadTemplate,
@@ -180,8 +180,15 @@ export class GmailProvider implements EmailProvider {
     return { name: this.name, type: "GmailProvider" };
   }
 
-  private sendGate(options?: Pick<SendEmailOptions, "approval">): SendGate {
-    return { emailAccountId: this.emailAccountId, approval: options?.approval };
+  private sendGate(options?: {
+    approval?: SendApproval;
+    operationId?: string;
+  }): SendGate {
+    return {
+      emailAccountId: this.emailAccountId,
+      approval: options?.approval,
+      operationId: options?.operationId,
+    };
   }
 
   async countMessages({
@@ -996,7 +1003,9 @@ export class GmailProvider implements EmailProvider {
     draftId: string,
     options?: Pick<SendEmailOptions, "approval">,
   ): Promise<{ messageId: string; threadId: string }> {
-    return sendDraft(this.client, draftId, this.sendGate(options));
+    return sendDraft(this.client, draftId, this.sendGate(options), (changes) =>
+      this.updateDraft(draftId, changes),
+    );
   }
 
   async createDraft(params: {
@@ -1197,6 +1206,7 @@ export class GmailProvider implements EmailProvider {
       cc?: string;
       bcc?: string;
       attachments?: MailAttachment[];
+      operationId?: string;
     },
   ): Promise<{ messageId: string }> {
     const result = await replyToEmail(
@@ -1205,7 +1215,7 @@ export class GmailProvider implements EmailProvider {
       content,
       options?.from ?? (await this.getReplyFromAddress(email)),
       options,
-      this.sendGate(),
+      this.sendGate(options),
     );
     return { messageId: requireSentMessageId(result.data.id) };
   }
@@ -1217,11 +1227,12 @@ export class GmailProvider implements EmailProvider {
     subject: string;
     messageText: string;
     attachments?: MailAttachment[];
+    operationId?: string;
   }): Promise<{ messageId: string }> {
     const result = await sendEmailWithPlainText(
       this.client,
       args,
-      this.sendGate(),
+      this.sendGate(args),
     );
     return { messageId: requireSentMessageId(result.data.id) };
   }
@@ -1250,6 +1261,7 @@ export class GmailProvider implements EmailProvider {
       bcc?: string;
       content?: string;
       from?: string;
+      operationId?: string;
     },
   ): Promise<{ messageId: string }> {
     const parsedMessage = await this.getMessage(email.id);
@@ -1258,7 +1270,7 @@ export class GmailProvider implements EmailProvider {
       this.client,
       parsedMessage,
       args,
-      this.sendGate(),
+      this.sendGate(args),
     );
     return { messageId: requireSentMessageId(result.data.id) };
   }
