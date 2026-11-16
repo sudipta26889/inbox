@@ -104,21 +104,6 @@ const nextConfig: NextConfig = {
       },
     ];
   },
-  // ANALYTICS & PAYMENT PROXIES DISABLED FOR PRIVACY
-  async rewrites() {
-    return [
-      // MCP OAuth 2.1 Discovery Endpoints (RFC 8414 / RFC 9728)
-      // Rewrite .well-known paths to regular API routes (dots cause routing issues)
-      {
-        source: "/.well-known/oauth-authorization-server",
-        destination: "/api/well-known-oauth/authorization-server",
-      },
-      {
-        source: "/.well-known/oauth-protected-resource",
-        destination: "/api/well-known-oauth/protected-resource",
-      },
-    ];
-  },
   // Security headers: https://nextjs.org/docs/app/building-your-application/configuring/progressive-web-apps#8-securing-your-application
   async headers() {
     const securityHeaders = [

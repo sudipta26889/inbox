@@ -1,9 +1,13 @@
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { auth } from "@/utils/auth";
 import { buildMcpToolContext } from "@/utils/mcp-server/tool-context";
 import { validateAccessToken } from "@/utils/mcp-server/tokens";
-import { POST } from "./route";
+import {
+  BASE,
+  MCP_SCOPES_SUPPORTED,
+  PRM_URL,
+} from "@/utils/mcp-server/constants";
+import { GET, POST } from "./route";
 
 const { toolHandler } = vi.hoisted(() => ({ toolHandler: vi.fn() }));
 
@@ -11,7 +15,6 @@ vi.mock("server-only", () => ({}));
 vi.mock("@/utils/prisma", () => ({
   default: { emailAccount: { findMany: vi.fn(() => []) } },
 }));
-vi.mock("@/utils/auth", () => ({ auth: vi.fn() }));
 vi.mock("@/utils/mcp-server/tokens", () => ({
   validateAccessToken: vi.fn(),
 }));
@@ -30,7 +33,6 @@ const METHOD_MARKER = "marker/method-value";
 describe("POST /mcp-server", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(auth).mockResolvedValue(null as never);
     vi.mocked(validateAccessToken).mockResolvedValue({
       sub: "user-1",
       email_account_id: "account-1",
@@ -48,9 +50,26 @@ describe("POST /mcp-server", () => {
     const response = await POST(request, context);
 
     expect(response.status).toBe(401);
-    expect(response.headers.get("www-authenticate")).toContain("Bearer");
+    const challenge = response.headers.get("www-authenticate");
+    expect(challenge).toContain(`resource_metadata="${PRM_URL}"`);
+    expect(challenge).toContain(`scope="${MCP_SCOPES_SUPPORTED.join(" ")}"`);
+    expect(challenge).not.toContain("invalid_token");
     expect(request.bodyUsed).toBe(false);
     expect(JSON.stringify(log.mock.calls)).not.toContain(METHOD_MARKER);
+  });
+
+  it("does not fall back to a browser session", async () => {
+    const response = await POST(
+      new NextRequest("http://localhost/mcp-server", {
+        method: "POST",
+        body: "{}",
+        headers: { Cookie: "authjs.session-token=abc" },
+      }),
+      context,
+    );
+
+    expect(response.status).toBe(401);
+    expect(validateAccessToken).not.toHaveBeenCalled();
   });
 
   it("returns 401 for an invalid token, without reading the body", async () => {
@@ -63,10 +82,89 @@ describe("POST /mcp-server", () => {
     const response = await POST(request, context);
 
     expect(response.status).toBe(401);
-    expect(response.headers.get("www-authenticate")).toContain(
-      'error="invalid_token"',
-    );
+    const challenge = response.headers.get("www-authenticate");
+    expect(challenge).toContain('error="invalid_token"');
+    expect(challenge).toContain(`resource_metadata="${PRM_URL}"`);
+    expect(challenge).toContain("scope=");
     expect(request.bodyUsed).toBe(false);
+  });
+
+  describe("Origin", () => {
+    it.each([
+      ["absent", undefined],
+      ["the server's own origin", BASE],
+      ["localhost with a port", "http://localhost:6274"],
+      ["IPv6 loopback with a port", "http://[::1]:1234"],
+    ])("allows %s", async (_name, origin) => {
+      const response = await POST(
+        post({ jsonrpc: "2.0", id: 1, method: "ping" }, "good-token", {
+          origin,
+        }),
+        context,
+      );
+
+      expect(response.status).toBe(200);
+    });
+
+    it.each([
+      ["a foreign site", "https://evil.example"],
+      ["the literal null", "null"],
+      ["an unparseable value", "not a url"],
+    ])("rejects %s with 403 before authenticating", async (_name, origin) => {
+      const response = await POST(
+        post({ jsonrpc: "2.0", id: 1, method: "ping" }, "good-token", {
+          origin,
+        }),
+        context,
+      );
+
+      expect(response.status).toBe(403);
+      expect(validateAccessToken).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("MCP-Protocol-Version", () => {
+    it.each([
+      ["absent", undefined],
+      ["supported", "2025-06-18"],
+    ])("allows %s", async (_name, version) => {
+      const response = await POST(
+        post({ jsonrpc: "2.0", id: 1, method: "ping" }, "good-token", {
+          "mcp-protocol-version": version,
+        }),
+        context,
+      );
+
+      expect(response.status).toBe(200);
+    });
+
+    it("rejects an unsupported version with 400", async () => {
+      const response = await POST(
+        post({ jsonrpc: "2.0", id: 1, method: "ping" }, "good-token", {
+          "mcp-protocol-version": "1999-01-01",
+        }),
+        context,
+      );
+
+      expect(response.status).toBe(400);
+    });
+
+    it("lets browsers send the version and session headers", async () => {
+      const { OPTIONS } = await import("./route");
+      const allowed = (await OPTIONS()).headers.get(
+        "access-control-allow-headers",
+      );
+
+      expect(allowed).toContain("MCP-Protocol-Version");
+      expect(allowed).toContain("Mcp-Session-Id");
+    });
+  });
+
+  it("answers GET with 405 and the allowed methods", async () => {
+    const response = await GET();
+
+    expect(response.status).toBe(405);
+    expect(response.headers.get("allow")).toBe("POST, OPTIONS");
   });
 
   it("answers an authenticated initialize", async () => {
@@ -146,10 +244,20 @@ describe("POST /mcp-server", () => {
   });
 });
 
-function post(body: unknown, token?: string) {
+function post(
+  body: unknown,
+  token?: string,
+  extraHeaders: Record<string, string | undefined> = {},
+) {
+  const headers: Record<string, string> = token
+    ? { Authorization: `Bearer ${token}` }
+    : {};
+  for (const [name, value] of Object.entries(extraHeaders)) {
+    if (value !== undefined) headers[name] = value;
+  }
   return new NextRequest("http://localhost/mcp-server", {
     method: "POST",
     body: JSON.stringify(body),
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    headers,
   });
 }

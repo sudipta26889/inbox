@@ -2,7 +2,12 @@ import crypto from "node:crypto";
 import { generateSecureToken } from "./pkce";
 import prisma from "@/utils/prisma";
 import { createScopedLogger } from "@/utils/logger";
-import { MCP_SCOPES, TOKEN_CONFIG, type McpScope } from "./constants";
+import {
+  MCP_RESOURCE,
+  MCP_SCOPES,
+  TOKEN_CONFIG,
+  type McpScope,
+} from "./constants";
 
 const logger = createScopedLogger("mcp-server-tokens");
 
@@ -13,6 +18,7 @@ export { MCP_SCOPES, type McpScope };
  * JWT token payload structure
  */
 export interface McpTokenPayload {
+  aud?: string; // Audience: the MCP resource URL (RFC 8707); absent on tokens minted before it was added
   client_id: string; // Client ID
   email: string; // User email
   email_account_id: string; // Email account ID
@@ -143,6 +149,7 @@ export async function generateAccessToken({
 
   // Create access token payload
   const accessTokenPayload: McpTokenPayload = {
+    aud: MCP_RESOURCE,
     sub: userId,
     email: user.email,
     email_account_id: emailAccountId,

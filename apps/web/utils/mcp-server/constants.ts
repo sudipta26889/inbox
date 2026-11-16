@@ -1,6 +1,24 @@
+import { env } from "@/env";
+
 /**
  * Shared constants for MCP server that can be used in both client and server code
  */
+
+// `.origin` drops any trailing slash or path from the configured URL.
+export const BASE = new URL(env.NEXT_PUBLIC_BASE_URL).origin;
+export const MCP_RESOURCE = `${BASE}/mcp-server`;
+export const PRM_URL = `${BASE}/.well-known/oauth-protected-resource/mcp-server`;
+
+// Newest first: the first entry is what `initialize` falls back to.
+export const SUPPORTED_PROTOCOL_VERSIONS = [
+  "2025-11-25",
+  "2025-06-18",
+  "2025-03-26",
+  "2024-11-05",
+];
+
+// URL.hostname form, so IPv6 keeps its brackets.
+export const LOOPBACK_HOSTS = ["localhost", "127.0.0.1", "[::1]"];
 
 /**
  * Supported OAuth scopes for MCP server

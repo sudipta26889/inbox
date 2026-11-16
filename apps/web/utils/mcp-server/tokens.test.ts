@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import prisma from "@/utils/__mocks__/prisma";
-import { createJwtToken, refreshAccessToken } from "./tokens";
+import {
+  createJwtToken,
+  generateAccessToken,
+  refreshAccessToken,
+  verifyJwtToken,
+} from "./tokens";
+import { MCP_RESOURCE } from "./constants";
 
 vi.mock("@/utils/prisma");
 
@@ -73,3 +79,20 @@ function makeRefreshToken(jti = "refresh-jti") {
     SECRET,
   );
 }
+
+describe("generateAccessToken", () => {
+  it("stamps the MCP resource as audience on both the access and refresh token", async () => {
+    prisma.user.findUnique.mockResolvedValue({ email: "user@test.com" } as any);
+
+    const { accessToken, refreshToken } = await generateAccessToken({
+      userId: "user-1",
+      emailAccountId: "account-1",
+      clientId: "client-1",
+      scope: "email:read",
+      jwtSecret: SECRET,
+    });
+
+    expect(verifyJwtToken(accessToken, SECRET)?.aud).toBe(MCP_RESOURCE);
+    expect(verifyJwtToken(refreshToken, SECRET)?.aud).toBe(MCP_RESOURCE);
+  });
+});
