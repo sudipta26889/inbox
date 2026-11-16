@@ -1,4 +1,5 @@
 import { ActionType } from "@/generated/prisma/enums";
+import type { Prisma } from "@/generated/prisma/client";
 import { sanitizeActionFields } from "@/utils/action-item";
 import { createEmailProvider } from "@/utils/email/provider";
 import { isGoogleProvider } from "@/utils/email/provider-types";
@@ -25,6 +26,13 @@ export function mapActionToSanitizedFields(action: {
   folderId?: { value?: string | null } | null;
   delayInMinutes?: number | null;
   staticAttachments?: AttachmentSourceInput[] | null;
+  haIntegrationType?: string | null;
+  haWebhookId?: string | null;
+  haMqttTopic?: string | null;
+  haServiceDomain?: string | null;
+  haServiceName?: string | null;
+  haServiceData?: Prisma.JsonValue | null;
+  haEntityId?: string | null;
 }) {
   const sanitized = sanitizeActionFields({
     type: action.type,
@@ -42,6 +50,13 @@ export function mapActionToSanitizedFields(action: {
     staticAttachments: action.staticAttachments?.length
       ? action.staticAttachments
       : undefined,
+    haIntegrationType: action.haIntegrationType,
+    haWebhookId: action.haWebhookId,
+    haMqttTopic: action.haMqttTopic,
+    haServiceDomain: action.haServiceDomain,
+    haServiceName: action.haServiceName,
+    haServiceData: action.haServiceData,
+    haEntityId: action.haEntityId,
   });
 
   return {
@@ -60,6 +75,13 @@ export function mapActionToSanitizedFields(action: {
     folderId: sanitized.folderId ?? null,
     delayInMinutes: sanitized.delayInMinutes ?? null,
     staticAttachments: sanitized.staticAttachments ?? null,
+    haIntegrationType: sanitized.haIntegrationType,
+    haWebhookId: sanitized.haWebhookId,
+    haMqttTopic: sanitized.haMqttTopic,
+    haServiceDomain: sanitized.haServiceDomain,
+    haServiceName: sanitized.haServiceName,
+    haServiceData: sanitized.haServiceData ?? null,
+    haEntityId: sanitized.haEntityId,
   };
 }
 

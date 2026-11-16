@@ -160,6 +160,19 @@ describe("adminRulesGet", () => {
   });
 });
 
+const homeAssistantAction = {
+  type: "HOME_ASSISTANT",
+  haIntegrationType: "mqtt",
+  haMqttTopic: "inbox/alerts",
+  haServiceData: { priority: "high" },
+};
+
+function expectHomeAssistantSaved(data: unknown) {
+  expect(JSON.stringify(data)).toContain('"haIntegrationType":"mqtt"');
+  expect(JSON.stringify(data)).toContain('"haMqttTopic":"inbox/alerts"');
+  expect(JSON.stringify(data)).toContain('"priority":"high"');
+}
+
 describe("adminRulesCreate", () => {
   it("creates a rule via the domain function and returns its data", async () => {
     prisma.emailAccount.findUnique.mockResolvedValue(
@@ -198,6 +211,26 @@ describe("adminRulesCreate", () => {
     const outData = expectMcpData(out);
     expect((outData as any).rule.id).toBe("r_new");
     expect(prisma.rule.create).toHaveBeenCalled();
+  });
+
+  // An HA action without its integration fields fails every run with
+  // MISSING_INTEGRATION_TYPE, so create must keep them.
+  it("keeps Home Assistant settings when creating a rule", async () => {
+    prisma.emailAccount.findUnique.mockResolvedValue(
+      partialRow<EmailAccountWithAccount>({ account: { provider: "google" } }),
+    );
+    prisma.rule.create.mockResolvedValue(
+      partialRow<RuleWithRelations>({ id: "r_ha", actions: [], group: null }),
+    );
+
+    const out = await adminRulesCreate(ctx, {
+      name: "HA rule",
+      actions: [homeAssistantAction],
+      conditions: [{ type: "AI", instructions: "match alerts" }],
+    });
+
+    expectMcpData(out);
+    expectHomeAssistantSaved(prisma.rule.create.mock.calls[0][0]);
   });
 
   it("returns VALIDATION_ERROR when the body fails Zod validation", async () => {
@@ -249,6 +282,35 @@ describe("adminRulesUpdate", () => {
 
     const outData = expectMcpData(out);
     expect((outData as any).rule.id).toBe("r_1");
+  });
+
+  // Update replaces the rule's actions, so dropping the ha* fields here would
+  // wipe an existing rule's HA config on any edit.
+  it("keeps Home Assistant settings when updating a rule", async () => {
+    prisma.rule.findFirst.mockResolvedValue(
+      partialRow<Rule>({ id: "r_1", emailAccountId: "ea_1" }),
+    );
+    prisma.emailAccount.findUnique.mockResolvedValue(
+      partialRow<EmailAccountWithAccount>({ account: { provider: "google" } }),
+    );
+    prisma.rule.update.mockResolvedValue(
+      partialRow<RuleWithRelations>({ id: "r_1", actions: [], group: null }),
+    );
+
+    const out = await adminRulesUpdate(ctx, {
+      id: "r_1",
+      name: "HA rule",
+      actions: [homeAssistantAction],
+      conditions: [{ type: "AI", instructions: "match alerts" }],
+    });
+
+    expectMcpData(out);
+    expectHomeAssistantSaved([
+      prisma.rule.update.mock.calls,
+      prisma.action.createMany.mock.calls,
+      prisma.action.create.mock.calls,
+      prisma.$transaction.mock.calls,
+    ]);
   });
 
   it("returns NOT_FOUND when the rule does not belong to the account", async () => {
