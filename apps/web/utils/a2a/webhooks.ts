@@ -280,10 +280,17 @@ export async function deliverWebhook(deliveryId: string): Promise<boolean> {
     });
 
     if (response.blocked) {
-      logger.warn("Webhook delivery blocked: destination not allowed", {
-        deliveryId,
-        taskId: delivery.taskId,
-      });
+      // Error, not warn: an owner webhook to a LAN service that worked on the
+      // fork lands here after cut-over, and must be visible.
+      logger.error(
+        "A2A webhook delivery refused: destination is not public https or a configured A2A_REMOTE_AGENTS origin",
+        {
+          deliveryId,
+          taskId: delivery.taskId,
+          clientId: delivery.clientId,
+          destinationOrigin: safeOrigin(delivery.url),
+        },
+      );
       await prisma.a2aWebhookDelivery.update({
         where: { id: deliveryId },
         data: {
@@ -656,4 +663,12 @@ export async function cleanupOrphanedTaskWebhookConfigs(): Promise<number> {
   });
 
   return result.count;
+}
+
+function safeOrigin(url: string) {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return "invalid-url";
+  }
 }

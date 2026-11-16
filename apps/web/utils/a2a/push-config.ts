@@ -208,8 +208,9 @@ async function assertDeliverableUrl(url: string) {
 
   // We sign each payload, but the signature does not protect the payload in
   // transit — task input and results go over this wire. Required in every
-  // environment, unlike validateWebhookUrlFormat's dev-only http allowance.
-  if (parsed.protocol !== "https:") {
+  // environment, except for an operator-configured A2A_REMOTE_AGENTS origin
+  // (Mitra on the LAN), which isAllowedA2aDestination below admits.
+  if (parsed.protocol !== "https:" && !(await isAllowedA2aDestination(url))) {
     throw new Error("pushNotificationConfig.url must use https");
   }
 

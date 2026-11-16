@@ -2,6 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { lookupMock } = vi.hoisted(() => ({ lookupMock: vi.fn() }));
 vi.mock("node:dns/promises", () => ({ lookup: lookupMock }));
+vi.mock("@/env", () => ({
+  env: { A2A_REMOTE_AGENTS: "http://dharabot.lan:12345" },
+}));
 
 import { isAllowedA2aDestination } from "./safe-destination";
 
@@ -36,6 +39,20 @@ describe("isAllowedA2aDestination", () => {
     ["a private IPv4 literal", "https://192.168.10.252/hook"],
     ["plain http", "http://peer.example/hook"],
     ["a name that does not resolve", "https://nope.example/hook"],
+  ])("refuses %s", async (_label, url) => {
+    expect(await isAllowedA2aDestination(url)).toBe(false);
+  });
+
+  it("allows the configured agent's exact LAN http origin", async () => {
+    expect(
+      await isAllowedA2aDestination("http://dharabot.lan:12345/a2a/push"),
+    ).toBe(true);
+  });
+
+  it.each([
+    ["another port on the agent's host", "http://dharabot.lan:12346/x"],
+    ["the agent's host over https", "https://dharabot.lan:12345/x"],
+    ["another LAN host", "http://db.lan:12345/x"],
   ])("refuses %s", async (_label, url) => {
     expect(await isAllowedA2aDestination(url)).toBe(false);
   });

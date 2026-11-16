@@ -19,6 +19,9 @@ vi.mock("node:dns/promises", () => ({
   }),
 }));
 vi.mock("@/utils/prisma");
+vi.mock("@/utils/a2a-client", () => ({
+  getRemoteAgentUrls: () => ["http://dharabot.lan:12345"],
+}));
 
 const authContext = {
   userId: "user_1",
@@ -287,6 +290,51 @@ describe("push notification config", () => {
         pushNotificationConfig: { url },
       }),
     ).rejects.toThrow(/not an allowed webhook destination/i);
+    expect(prisma.a2aWebhookConfig.upsert).not.toHaveBeenCalled();
+  });
+
+  it("accepts the configured agent's LAN http origin (Mitra's callbacks)", async () => {
+    prisma.a2aTask.findUnique.mockResolvedValue({ taskId: "task_1" } as any);
+    prisma.a2aWebhookConfig.findFirst.mockResolvedValue(null);
+    prisma.a2aWebhookConfig.upsert.mockResolvedValue({
+      id: "cfg_1",
+      clientId: "client_1",
+      taskId: "task_1",
+      url: "http://dharabot.lan:12345/a2a/push",
+      enabled: true,
+      events: [],
+      token: null,
+    } as any);
+    prisma.a2aWebhookConfig.create.mockResolvedValue({
+      id: "cfg_1",
+      clientId: "client_1",
+      taskId: "task_1",
+      url: "http://dharabot.lan:12345/a2a/push",
+      enabled: true,
+      events: [],
+      token: null,
+    } as any);
+
+    await expect(
+      handlePushConfigSet(authContext, {
+        taskId: "task_1",
+        pushNotificationConfig: { url: "http://dharabot.lan:12345/a2a/push" },
+      }),
+    ).resolves.toBeDefined();
+  });
+
+  it.each([
+    "http://dharabot.lan:12346/x",
+    "https://db.lan/hook",
+  ])("still refuses %s next to the configured agent", async (url) => {
+    prisma.a2aTask.findUnique.mockResolvedValue({ taskId: "task_1" } as any);
+
+    await expect(
+      handlePushConfigSet(authContext, {
+        taskId: "task_1",
+        pushNotificationConfig: { url },
+      }),
+    ).rejects.toThrow();
     expect(prisma.a2aWebhookConfig.upsert).not.toHaveBeenCalled();
   });
 
