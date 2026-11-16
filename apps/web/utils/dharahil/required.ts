@@ -18,5 +18,17 @@ import { env } from "@/env";
  * gate, same behaviour as before.
  */
 export function isApprovalGateRequired(): boolean {
-  return Boolean(env.DHARAHIL_BASE_URL && env.DHARAHIL_API_KEY);
+  const status = approvalGateStatus();
+  // Production must never send ungated because a key fell out of the stack
+  // Env: refuse instead of skipping, and say so on /api/health.
+  if (status === "misconfigured")
+    throw new Error(
+      "The approval gateway is not configured in production, so nothing can be sent.",
+    );
+  return status === "on";
+}
+
+export function approvalGateStatus(): "on" | "off" | "misconfigured" {
+  if (env.DHARAHIL_BASE_URL && env.DHARAHIL_API_KEY) return "on";
+  return env.NODE_ENV === "production" ? "misconfigured" : "off";
 }

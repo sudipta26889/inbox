@@ -7,7 +7,7 @@ const { mockEnv } = vi.hoisted(() => ({
 }));
 vi.mock("@/env", () => ({ env: mockEnv }));
 
-import { isApprovalGateRequired } from "./required";
+import { approvalGateStatus, isApprovalGateRequired } from "./required";
 
 function setEnv(values: Record<string, unknown>) {
   for (const key of Object.keys(mockEnv)) delete mockEnv[key];
@@ -51,5 +51,21 @@ describe("approval gate requirement", () => {
     setEnv({ DHARAHIL_BASE_URL: "https://gateway" });
 
     expect(isApprovalGateRequired()).toBe(false);
+  });
+
+  // A production stack whose key fell out must refuse, not send ungated.
+  it("refuses in production when the gateway is not configured", () => {
+    setEnv({ NODE_ENV: "production", DHARAHIL_BASE_URL: "https://gateway" });
+
+    expect(() => isApprovalGateRequired()).toThrow(/not configured/);
+    expect(approvalGateStatus()).toBe("misconfigured");
+  });
+
+  it("reports on and off for health checks", () => {
+    setEnv({ DHARAHIL_BASE_URL: "https://gateway", DHARAHIL_API_KEY: "key" });
+    expect(approvalGateStatus()).toBe("on");
+
+    setEnv({ NODE_ENV: "development" });
+    expect(approvalGateStatus()).toBe("off");
   });
 });

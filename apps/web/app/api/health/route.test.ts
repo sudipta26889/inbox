@@ -8,6 +8,9 @@ const { healthEnv } = vi.hoisted(() => ({
   healthEnv: {
     HEALTH_API_KEY: "health-secret",
     GIT_SHA: undefined as string | undefined,
+    NODE_ENV: "test" as string,
+    DHARAHIL_BASE_URL: undefined as string | undefined,
+    DHARAHIL_API_KEY: undefined as string | undefined,
   },
 }));
 
@@ -45,8 +48,26 @@ describe("health route", () => {
     );
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ status: "ok" });
+    await expect(response.json()).resolves.toEqual({
+      status: "ok",
+      approvalGate: "off",
+    });
     expect(prisma.$queryRaw).not.toHaveBeenCalled();
+  });
+
+  // Monitoring alerts on this: production sends would otherwise be refused
+  // (or, before the fail-closed fix, go out ungated) with nothing reporting it.
+  it("reports a production deploy whose approval gateway is not configured", async () => {
+    healthEnv.NODE_ENV = "production";
+
+    const response = await GET(
+      new NextRequest("http://localhost:3000/api/health"),
+    );
+
+    await expect(response.json()).resolves.toMatchObject({
+      approvalGate: "misconfigured",
+    });
+    healthEnv.NODE_ENV = "test";
   });
 
   it("reports the image's commit so deploys can wait for it", async () => {
@@ -59,6 +80,7 @@ describe("health route", () => {
     await expect(response.json()).resolves.toEqual({
       status: "ok",
       version: "abc1234",
+      approvalGate: "off",
     });
     healthEnv.GIT_SHA = undefined;
   });
@@ -76,6 +98,7 @@ describe("health route", () => {
     await expect(response.json()).resolves.toEqual({
       status: "healthy",
       timestamp: FIXED_DATE.toISOString(),
+      approvalGate: "off",
       database: {
         status: "healthy",
       },
