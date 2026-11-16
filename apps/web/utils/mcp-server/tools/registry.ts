@@ -1,5 +1,6 @@
 import type { Tool } from "@modelcontextprotocol/sdk/types.js";
 import type { McpResult } from "../envelope";
+import { MCP_SCOPES } from "../constants";
 import { TOOL_METADATA } from "./tool-metadata";
 
 /**
@@ -2020,6 +2021,19 @@ export function hasRequiredScope(
       scope === tool.requiredScope ||
       IMPLIED_SCOPES[scope]?.includes(tool.requiredScope),
   );
+}
+
+/**
+ * The scope list for an insufficient_scope challenge: what the token already
+ * has plus what the call needs. A client re-consents to exactly this string,
+ * so naming only the missing scope would make it drop the ones it had.
+ * Ordered like MCP_SCOPES so the string is stable.
+ */
+export function challengeScopes(granted: string[], required: string): string {
+  const wanted = new Set([...granted, required].filter(Boolean));
+  const known = Object.keys(MCP_SCOPES).filter((scope) => wanted.has(scope));
+  const unknown = [...wanted].filter((scope) => !(scope in MCP_SCOPES));
+  return [...known, ...unknown].join(" ");
 }
 
 // A tool missing from TOOL_METADATA (the registry test forbids it) is described

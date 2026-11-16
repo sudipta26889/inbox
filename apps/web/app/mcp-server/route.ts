@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { withError, type RequestWithLogger } from "@/utils/middleware";
 import { validateAccessToken } from "@/utils/mcp-server/tokens";
 import {
+  challengeScopes,
   getAllTools,
   getTool,
   hasRequiredScope,
@@ -272,7 +273,7 @@ export const POST = withError(
               status: 403,
               headers: {
                 ...CORS_HEADERS,
-                "WWW-Authenticate": `Bearer error="insufficient_scope", scope="${tool.requiredScope}", resource_metadata="${PRM_URL}"`,
+                "WWW-Authenticate": `Bearer error="insufficient_scope", scope="${challengeScopes(scopes, tool.requiredScope)}", resource_metadata="${PRM_URL}"`,
               },
             },
           );

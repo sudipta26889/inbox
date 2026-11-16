@@ -28,10 +28,14 @@ vi.mock("@/utils/mcp-server/tokens", () => ({
 vi.mock("@/utils/mcp-server/tool-context", () => ({
   buildMcpToolContext: vi.fn(),
 }));
-vi.mock("@/utils/mcp-server/tools/registry", () => ({
+vi.mock("@/utils/mcp-server/tools/registry", async (importOriginal) => ({
   getAllTools: vi.fn(() => []),
   getTool: vi.fn(() => ({ handler: toolHandler })),
   hasRequiredScope: vi.fn(() => true),
+  // Pure, so the route's real challenge wording is what gets tested.
+  challengeScopes: (
+    await importOriginal<typeof import("@/utils/mcp-server/tools/registry")>()
+  ).challengeScopes,
 }));
 
 const context = { params: Promise.resolve({}) };
@@ -297,31 +301,76 @@ describe("POST /mcp-server", () => {
     });
   });
 
-  it("answers a call missing its scope with 403 and an insufficient_scope challenge", async () => {
-    vi.mocked(getTool).mockReturnValue({
-      handler: toolHandler,
-      requiredScope: "email:write",
-    } as never);
-    vi.mocked(hasRequiredScope).mockReturnValue(false);
+  describe("a call missing its scope", () => {
+    const callSendEmail = () =>
+      POST(
+        post(
+          {
+            jsonrpc: "2.0",
+            id: 3,
+            method: "tools/call",
+            params: { name: "send_email", arguments: {} },
+          },
+          "good-token",
+        ),
+        context,
+      );
 
-    const response = await POST(
-      post(
-        {
-          jsonrpc: "2.0",
-          id: 3,
-          method: "tools/call",
-          params: { name: "send_email", arguments: {} },
-        },
-        "good-token",
-      ),
-      context,
-    );
+    const grantScopes = (scope: string) => {
+      vi.mocked(validateAccessToken).mockResolvedValue({
+        aud: MCP_RESOURCE,
+        sub: "user-1",
+        email_account_id: "account-1",
+        client_id: "client-1",
+        scope,
+      } as never);
+      vi.mocked(getTool).mockReturnValue({
+        handler: toolHandler,
+        requiredScope: "email:write",
+      } as never);
+      vi.mocked(hasRequiredScope).mockReturnValue(false);
+    };
 
-    expect(response.status).toBe(403);
-    expect(response.headers.get("www-authenticate")).toBe(
-      `Bearer error="insufficient_scope", scope="email:write", resource_metadata="${PRM_URL}"`,
-    );
-    expect(toolHandler).not.toHaveBeenCalled();
+    it("gets 403 naming what the token has plus what is missing, in list order", async () => {
+      grantScopes("email:read");
+
+      const response = await callSendEmail();
+
+      expect(response.status).toBe(403);
+      expect(response.headers.get("www-authenticate")).toBe(
+        `Bearer error="insufficient_scope", scope="email:read email:write", resource_metadata="${PRM_URL}"`,
+      );
+      expect(toolHandler).not.toHaveBeenCalled();
+    });
+
+    it("keeps the JSON-RPC error body", async () => {
+      grantScopes("email:read");
+
+      const payload = await (await callSendEmail()).json();
+
+      expect(payload.error.code).toBe(-32_003);
+      expect(payload.error.message).toContain("email:write");
+    });
+
+    it("names only the required scope when the token has none", async () => {
+      grantScopes("");
+
+      const response = await callSendEmail();
+
+      expect(response.headers.get("www-authenticate")).toContain(
+        'scope="email:write"',
+      );
+    });
+
+    it("does not repeat a scope the token already lists", async () => {
+      grantScopes("calendar:read email:read email:read email:write");
+
+      const response = await callSendEmail();
+
+      expect(response.headers.get("www-authenticate")).toContain(
+        'scope="email:read email:write calendar:read"',
+      );
+    });
   });
 
   describe("initialize", () => {

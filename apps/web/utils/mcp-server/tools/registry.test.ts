@@ -1,6 +1,12 @@
 import { describe, it, expect } from "vitest";
 import { A2A_SKILL_REGISTRY } from "@/utils/a2a/skill-registry";
-import { MCP_TOOLS, getAllTools, getTool, hasRequiredScope } from "./registry";
+import {
+  MCP_TOOLS,
+  challengeScopes,
+  getAllTools,
+  getTool,
+  hasRequiredScope,
+} from "./registry";
 import { TOOL_METADATA } from "./tool-metadata";
 
 const DRAFT_WRITE_TOOLS = ["create_draft", "update_draft", "delete_draft"];
@@ -306,5 +312,36 @@ describe("A2A skill registry", () => {
         `skill ${skill} scope mismatch`,
       ).toBe(definition.requiredScope);
     }
+  });
+});
+
+describe("challengeScopes", () => {
+  it("lists the granted scopes plus the missing one, in the supported-scope order", () => {
+    expect(challengeScopes(["email:read"], "email:write")).toBe(
+      "email:read email:write",
+    );
+    expect(
+      challengeScopes(["calendar:read", "email:read"], "email:write"),
+    ).toBe("email:read email:write calendar:read");
+  });
+
+  it("names only the required scope when nothing is granted", () => {
+    expect(challengeScopes([], "email:write")).toBe("email:write");
+    expect(challengeScopes([""], "email:write")).toBe("email:write");
+  });
+
+  it("does not repeat a scope", () => {
+    expect(
+      challengeScopes(
+        ["email:read", "email:read", "email:write"],
+        "email:write",
+      ),
+    ).toBe("email:read email:write");
+  });
+
+  it("keeps a granted legacy scope rather than dropping it", () => {
+    expect(challengeScopes(["mcp:write"], "email:read")).toBe(
+      "email:read mcp:write",
+    );
   });
 });
