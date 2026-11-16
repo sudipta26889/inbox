@@ -3,8 +3,12 @@
 # which every mailbox token but one test mailbox is cleared. It must never act on
 # real people or systems, so:
 # - no cron service: crons are triggered by hand;
-# - production-only integrations are left out: Pub/Sub push, Telegram, A2A fan-out
-#   and remote agents, MeetEcho, long-memory, MQTT, ntfy;
+# - production-only integrations and outbound credentials are left out: Pub/Sub
+#   push, Telegram, A2A fan-out and remote agents, MeetEcho, long-memory, MQTT,
+#   ntfy, SMTP, Qdrant, Overmind, Ollama Cloud;
+# - database and Redis come only from STAGING_DATABASE_URL, STAGING_DIRECT_URL and
+#   STAGING_REDIS_URL (required), and start.sh refuses a database that is not
+#   inbox_refork_*;
 # - its own Valkey user and key prefix;
 # - DharaHIL cards are marked staging.
 # A new env key goes here as ${KEY:-} and in the stack Env.
@@ -31,7 +35,7 @@ services:
       DHARAHIL_ENVIRONMENT: "staging"
       # Its own Valkey ACL user, limited to inbox-staging:*.
       REDIS_KEY_PREFIX: "inbox-staging:"
-      REDIS_URL: ${REDIS_URL:-}
+      REDIS_URL: ${STAGING_REDIS_URL:?set STAGING_REDIS_URL to the staging Valkey user}
       # env.ts requires a topic name. This topic does not exist, so no Gmail
       # watch can register and no push reaches staging.
       GOOGLE_PUBSUB_TOPIC_NAME: "projects/inbox-staging/topics/disabled"
@@ -43,7 +47,9 @@ services:
       API_KEY_SALT: ${API_KEY_SALT:-}
       AUTH_SECRET: ${AUTH_SECRET:-}
       CRON_SECRET: ${CRON_SECRET:-}
-      DATABASE_URL: ${DATABASE_URL:-}
+      # Own key names, so an Env copied from production cannot satisfy them;
+      # start.sh also refuses any database not named inbox_refork_*.
+      DATABASE_URL: ${STAGING_DATABASE_URL:?set STAGING_DATABASE_URL to the refork clone}
       DECISION_ESCALATION_MODEL: ${DECISION_ESCALATION_MODEL:-}
       DECISION_LIVE_AUDIT: ${DECISION_LIVE_AUDIT:-}
       DECISION_MIN_CONFIDENCE: ${DECISION_MIN_CONFIDENCE:-}
@@ -57,7 +63,7 @@ services:
       NANO_LLMS: ${NANO_LLMS:-}
       DRAFT_LLMS: ${DRAFT_LLMS:-}
       DHARAHIL_API_KEY: ${DHARAHIL_API_KEY:-}
-      DIRECT_URL: ${DIRECT_URL:-}
+      DIRECT_URL: ${STAGING_DIRECT_URL:?set STAGING_DIRECT_URL to the refork clone}
       EMAIL_ENCRYPT_SALT: ${EMAIL_ENCRYPT_SALT:-}
       EMAIL_ENCRYPT_SECRET: ${EMAIL_ENCRYPT_SECRET:-}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
@@ -76,19 +82,7 @@ services:
       NEXT_PUBLIC_FOLLOW_UP_REMINDERS_ENABLED: ${NEXT_PUBLIC_FOLLOW_UP_REMINDERS_ENABLED:-}
       NEXT_PUBLIC_MCP_SERVER_ENABLED: ${NEXT_PUBLIC_MCP_SERVER_ENABLED:-}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-}
-      OLLAMA_CLOUD_API_KEY: ${OLLAMA_CLOUD_API_KEY:-}
-      OLLAMA_CLOUD_BASE_URL: ${OLLAMA_CLOUD_BASE_URL:-}
       OPENAI_COMPATIBLE_BASE_URL: ${OPENAI_COMPATIBLE_BASE_URL:-}
-      OVERMIND_API_KEY: ${OVERMIND_API_KEY:-}
-      OVERMIND_API_URL: ${OVERMIND_API_URL:-}
-      QDRANT_API_KEY: ${QDRANT_API_KEY:-}
-      QDRANT_URL: ${QDRANT_URL:-}
-      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-}
-      SMTP_HOST: ${SMTP_HOST:-}
-      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
-      SMTP_PORT: ${SMTP_PORT:-}
-      SMTP_SECURE: ${SMTP_SECURE:-}
-      SMTP_USER: ${SMTP_USER:-}
       TASKPILOT_DECIDER_FALLBACK_MODEL: ${TASKPILOT_DECIDER_FALLBACK_MODEL:-}
       TASKPILOT_DECIDER_MAX_TOKENS: ${TASKPILOT_DECIDER_MAX_TOKENS:-}
       TASKPILOT_DECIDER_MODEL: ${TASKPILOT_DECIDER_MODEL:-}

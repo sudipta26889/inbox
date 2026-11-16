@@ -10,6 +10,8 @@ echo "🚀 Starting Inbox..."
 
 /app/docker/scripts/replace-next-public-placeholders.sh
 
+/app/docker/scripts/staging-db-guard.sh
+
 if [ "${SKIP_DB_MIGRATIONS:-false}" = "true" ]; then
     echo "Skipping database migrations during web startup."
 else
