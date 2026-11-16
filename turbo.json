@@ -233,6 +233,13 @@
         "TEAMS_BOT_APP_TENANT_ID",
         "TELEGRAM_BOT_TOKEN",
         "TELEGRAM_BOT_SECRET_TOKEN",
+        "MQTT_HOST",
+        "MQTT_PORT",
+        "MQTT_USERNAME",
+        "MQTT_PASSWORD",
+        "NTFY_BASE_URL",
+        "NTFY_TOPIC",
+        "NTFY_TOKEN",
         "NEXT_PUBLIC_EXTERNAL_API_ENABLED",
 
         "STRIPE_API_BASE_URL",
