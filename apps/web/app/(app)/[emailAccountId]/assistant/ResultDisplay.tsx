@@ -440,6 +440,13 @@ const ACTION_FAILURE_MESSAGES: Partial<
       INTEGRATION_CALL_FAILED: msg`The integration action could not be completed.`,
     },
   },
+  [ActionType.HOME_ASSISTANT]: {
+    fallback: msg`The Home Assistant action could not be completed.`,
+    codes: {
+      MISSING_INTEGRATION_TYPE: msg`The Home Assistant action needs an integration type.`,
+      EXECUTION_FAILED: msg`The Home Assistant action failed. Check the Home Assistant connection in settings.`,
+    },
+  },
 };
 
 function getActionFailureMessage(
