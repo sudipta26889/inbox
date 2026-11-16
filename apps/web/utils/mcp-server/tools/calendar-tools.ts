@@ -9,7 +9,7 @@ import type {
   ManagedCalendarEvent,
   RecurrenceScope,
 } from "@/utils/calendar/event-manager-types";
-import { dharahilClient } from "@/utils/dharahil/client";
+import { dharahilClient, type DharaHILDecision } from "@/utils/dharahil/client";
 import { isApprovalGateRequired } from "@/utils/dharahil/required";
 import {
   canonicalActionKey,
@@ -406,6 +406,8 @@ export async function createCalendarEvent(
       );
     }
 
+    assertApprovedUnedited(decision);
+
     logger.info("DharaHIL: Calendar event creation approved", {
       action: decision.action,
     });
@@ -601,6 +603,8 @@ export async function updateCalendarEvent(
       );
     }
 
+    assertApprovedUnedited(decision);
+
     logger.info("DharaHIL: Calendar event update approved", {
       eventId,
       action: decision.action,
@@ -742,6 +746,8 @@ export async function deleteCalendarEvent(
       );
     }
 
+    assertApprovedUnedited(decision);
+
     logger.info("DharaHIL: Calendar event deletion approved", {
       eventId,
       action: decision.action,
@@ -820,6 +826,8 @@ export async function respondToCalendarEvent(
         `Calendar RSVP revision requested: ${decision.revise_input || "No specific instructions provided"}`,
       );
     }
+
+    assertApprovedUnedited(decision);
   }
 
   await providers[0]!.respondToEvent(eventId, {
@@ -968,4 +976,18 @@ function resolveTimeZone(
     );
   }
   return zone;
+}
+
+// The calendar gate cannot apply args edited on the approval card, so an
+// edited approval is refused, never run with the original args. Anything
+// short of a plain approval fails closed.
+function assertApprovedUnedited(decision: DharaHILDecision) {
+  if (decision.edited) {
+    throw new Error(
+      "Not changed: calendar edits on the card aren't supported; change it and retry.",
+    );
+  }
+  if (!dharahilClient.shouldProceedUnedited(decision)) {
+    throw new Error(`Calendar change not approved: ${decision.action}`);
+  }
 }

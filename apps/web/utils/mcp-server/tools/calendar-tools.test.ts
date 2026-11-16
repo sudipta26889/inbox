@@ -22,6 +22,12 @@ vi.mock("@/utils/dharahil/client", () => ({
     runApprovalLoop: vi.fn(),
     wasDenied: vi.fn(() => false),
     shouldRevise: vi.fn(() => false),
+    // Same rule as the real client: only a plain, unedited approval proceeds.
+    shouldProceedUnedited: vi.fn(
+      (decision: { action: string; edited?: boolean }) =>
+        ["ALLOW", "APPROVED", "AUTO_ALLOWED"].includes(decision.action) &&
+        !decision.edited,
+    ),
   },
 }));
 
@@ -978,6 +984,90 @@ describe("respond_to_calendar_event approval gate", () => {
       }),
     ).rejects.toThrow("denied");
     expect(provider.respondToEvent).not.toHaveBeenCalled();
+    vi.mocked(dharahilClient.wasDenied).mockReturnValue(false);
+  });
+});
+
+describe("an approval edited on the card", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // clearAllMocks keeps implementations; an earlier denial test set this.
+    vi.mocked(dharahilClient.wasDenied).mockReturnValue(false);
+    vi.mocked(prisma.a2aApproval.updateMany).mockResolvedValue({ count: 0 });
+    resolve.mockResolvedValue({
+      account: { id: "acct-1", email: "me@x.com", timezone: "Asia/Kolkata" },
+      providers: [provider],
+    });
+    for (const method of [
+      "createEvent",
+      "updateEvent",
+      "deleteEvent",
+      "respondToEvent",
+    ] as const) {
+      provider[method] = vi.fn().mockResolvedValue({
+        id: "evt-1",
+        title: "T",
+        startTime: new Date(),
+        endTime: new Date(),
+        attendees: [],
+      });
+    }
+    vi.mocked(dharahilClient.runApprovalLoop).mockResolvedValue({
+      action: "APPROVED",
+      edited: true,
+      approvedArgs: { title: "Changed on the card" },
+    });
+    setDharahilEnabled(true);
+  });
+
+  afterEach(() => setDharahilEnabled(false));
+
+  const EDIT_REFUSAL =
+    "calendar edits on the card aren't supported; change it and retry";
+
+  it.each([
+    [
+      "create",
+      () =>
+        createCalendarEvent(context, {
+          title: "Review",
+          startTime: "2026-09-20T09:00:00Z",
+          endTime: "2026-09-20T10:00:00Z",
+        }),
+      "createEvent",
+    ],
+    [
+      "update",
+      () => updateCalendarEvent(context, { eventId: "evt-1", title: "New" }),
+      "updateEvent",
+    ],
+    [
+      "delete",
+      () => deleteCalendarEvent(context, { eventId: "evt-1" }),
+      "deleteEvent",
+    ],
+    [
+      "respond",
+      () =>
+        respondToCalendarEvent(context, {
+          eventId: "evt-1",
+          responseStatus: "accepted",
+        }),
+      "respondToEvent",
+    ],
+  ] as const)("is refused on %s, and nothing reaches the calendar", async (_name, call, method) => {
+    await expect(call()).rejects.toThrow(EDIT_REFUSAL);
+    expect(provider[method]).not.toHaveBeenCalled();
+  });
+
+  it("still runs a plain approval", async () => {
+    vi.mocked(dharahilClient.runApprovalLoop).mockResolvedValue({
+      action: "APPROVED",
+    });
+
+    await deleteCalendarEvent(context, { eventId: "evt-1" });
+
+    expect(provider.deleteEvent).toHaveBeenCalledTimes(1);
   });
 });
 
