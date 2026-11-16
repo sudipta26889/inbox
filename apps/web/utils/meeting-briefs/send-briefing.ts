@@ -372,7 +372,7 @@ function formatMeetingBriefingText({
   }
 
   sections.push(
-    "AI-generated briefing from Inbox Zero. May contain inaccuracies.",
+    "AI-generated briefing from Inbox. May contain inaccuracies.",
   );
 
   return sections.join("\n\n");

@@ -260,7 +260,7 @@ function selectModel(
         apiKey: resolveApiKey(aiApiKey, env.OPENROUTER_API_KEY),
         headers: {
           "HTTP-Referer": "https://www.getinboxzero.com",
-          "X-Title": "Inbox Zero",
+          "X-Title": "Inbox",
         },
       });
       const chatModel = openrouter.chat(modelName, {
@@ -283,7 +283,7 @@ function selectModel(
         apiKey: aiGatewayApiKey,
         headers: {
           "http-referer": "https://www.getinboxzero.com",
-          "x-title": "Inbox Zero",
+          "x-title": "Inbox",
         },
       });
       return {

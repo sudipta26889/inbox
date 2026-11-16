@@ -113,7 +113,7 @@ export function DeleteSection() {
         </ItemTitle>
         <ItemDescription>
           <Trans>
-            Removes your Inbox Zero data. Your emails aren't affected.
+            Removes your Inbox data. Your emails aren't affected.
           </Trans>
         </ItemDescription>
       </ItemContent>
@@ -129,7 +129,7 @@ export function DeleteSection() {
               <AlertDialogTitle>
                 {shouldBlockDeletion
                   ? t`Cancel subscription first`
-                  : t`Delete your Inbox Zero account?`}
+                  : t`Delete your Inbox account?`}
               </AlertDialogTitle>
               <AlertDialogDescription asChild>
                 <div>
@@ -177,7 +177,7 @@ export function DeleteSection() {
                       >
                         <p>
                           <Trans>
-                            This permanently deletes your Inbox Zero data and
+                            This permanently deletes your Inbox data and
                             disconnects {connectedEmailList}. Your emails aren't
                             affected.
                           </Trans>

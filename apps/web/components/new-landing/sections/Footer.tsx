@@ -81,7 +81,7 @@ export function Footer({ className, variant = "default" }: FooterProps) {
                 rel="noopener noreferrer"
                 className="hover:text-gray-900"
               >
-                Inbox Zero
+                Inbox
               </Link>
             </Trans>
           </p>

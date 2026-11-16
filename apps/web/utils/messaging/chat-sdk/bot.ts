@@ -516,7 +516,7 @@ function registerMessagingHandlers({
           channelId,
           threadTs,
           SLACK_ASSISTANT_SUGGESTED_PROMPTS,
-          "Try asking Inbox Zero",
+          "Try asking Inbox",
         );
       } catch (error) {
         logger.warn("Failed to set Slack assistant suggested prompts", {
@@ -1825,7 +1825,7 @@ async function handleMessagingLinkCommand({
 
   if (!linkedCode) {
     await thread.post(
-      "That connect code is invalid or expired. Generate a new code in Inbox Zero settings and try again.",
+      "That connect code is invalid or expired. Generate a new code in Inbox settings and try again.",
     );
     return true;
   }
@@ -1837,7 +1837,7 @@ async function handleMessagingLinkCommand({
 
   if (!emailAccount) {
     await thread.post(
-      "This connect code is no longer valid. Generate a new code in Inbox Zero settings and try again.",
+      "This connect code is no longer valid. Generate a new code in Inbox settings and try again.",
     );
     return true;
   }
@@ -1889,7 +1889,7 @@ async function handleMessagingLinkCommand({
   await postMessagingThreadMessage({
     thread,
     logger,
-    message: `Connected successfully. You can now chat with your Inbox Zero assistant in this ${provider === "teams" ? "Microsoft Teams" : "Telegram"} direct message. Type \`/help\` to see what I can do.`,
+    message: `Connected successfully. You can now chat with your Inbox assistant in this ${provider === "teams" ? "Microsoft Teams" : "Telegram"} direct message. Type \`/help\` to see what I can do.`,
     errorLogMessage: "Failed to send messaging link confirmation",
     logMeta: {
       provider,
@@ -2622,7 +2622,7 @@ async function sendUnauthorizedMessage({
     thread,
     logger,
     message:
-      "To use this bot, connect your Inbox Zero account to this workspace from your settings page.",
+      "To use this bot, connect your Inbox account to this workspace from your settings page.",
     errorLogMessage: "Failed to send unauthorized messaging message",
     logMeta: { teamId },
   });
@@ -2648,8 +2648,8 @@ async function sendLinkRequiredMessage({
     thread,
     logger,
     message: [
-      `Welcome to Inbox Zero for ${providerName}. I can help you summarize, organize, and draft replies to email from this chat.`,
-      "An active Inbox Zero account is required.",
+      `Welcome to Inbox for ${providerName}. I can help you summarize, organize, and draft replies to email from this chat.`,
+      "An active Inbox account is required.",
       "",
       "To get started:",
       `1. Sign in or create an account at ${baseUrl}.`,
@@ -2694,7 +2694,7 @@ async function sendUnlinkedChannelMessage({
     thread,
     logger,
     message:
-      "This channel isn't linked to an email account. Set one up in your Inbox Zero settings.",
+      "This channel isn't linked to an email account. Set one up in your Inbox settings.",
     errorLogMessage: "Failed to send unlinked channel message",
   });
 }

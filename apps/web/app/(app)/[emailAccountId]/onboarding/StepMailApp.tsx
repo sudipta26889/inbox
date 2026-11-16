@@ -15,7 +15,7 @@ export function StepMailApp({ onNext }: { onNext: () => void }) {
           <AnnouncementVideo
             playbackId={EMAIL_CLIENT_LAUNCH_VIDEO_ID}
             thumbnailTime={1.5}
-            title={t`Meet the Inbox Zero email app`}
+            title={t`Meet the Inbox email app`}
           />
         </div>
       }

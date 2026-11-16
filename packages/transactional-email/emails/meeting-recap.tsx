@@ -54,7 +54,7 @@ function renderBulletSection(title: string, items: string[]) {
 }
 
 export default function MeetingRecapEmail({
-  baseUrl = "https://www.getinboxzero.com",
+  baseUrl = "https://inbox.sudiptadhara.in",
   emailAccountId,
   meetingTitle,
   formattedTime,
@@ -112,7 +112,7 @@ export default function MeetingRecapEmail({
             <Section className="px-8 pb-8">
               <Text className="text-xs text-gray-500 mt-0 mb-2">
                 You're receiving these notes because you enabled the notetaker
-                in your Inbox Zero settings.
+                in your Inbox settings.
               </Text>
               <Text className="text-xs text-gray-500 mt-0 mb-0">
                 <Link
@@ -131,7 +131,7 @@ export default function MeetingRecapEmail({
 }
 
 MeetingRecapEmail.PreviewProps = {
-  baseUrl: "https://www.getinboxzero.com",
+  baseUrl: "https://inbox.sudiptadhara.in",
   unsubscribeToken: "test-token",
   emailAccountId: "test-account",
   meetingTitle: "Product Strategy Review with Acme Corp",

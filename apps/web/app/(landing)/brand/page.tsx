@@ -21,12 +21,12 @@ import { getLandingMessages, initLandingLingui } from "@/utils/i18n/server";
 export const metadata: Metadata = {
   title: getBrandTitle("Brand Kit"),
   description:
-    "Logos, colors, and guidelines for presenting the Inbox Zero brand consistently.",
+    "Logos, colors, and guidelines for presenting the Inbox brand consistently.",
   alternates: { canonical: "/brand" },
 };
 
 const BOILERPLATE =
-  "Inbox Zero is an open source AI email assistant and Superhuman alternative. It organizes your inbox, drafts replies in your voice, and helps you reach inbox zero fast, with a full email client for Gmail and Outlook.";
+  "Inbox is an open source AI email assistant and Superhuman alternative. It organizes your inbox, drafts replies in your voice, and helps you reach inbox zero fast, with a full email client for Gmail and Outlook.";
 
 const SCREENSHOT_SRC = "/images/new-landing/inbox-zero-mail.webp";
 
@@ -91,7 +91,7 @@ export default function BrandPage() {
             <PageHeading>Brand Kit</PageHeading>
           </div>
           <Paragraph className="mt-4" size="lg">
-            Guidelines and assets for presenting the Inbox Zero brand
+            Guidelines and assets for presenting the Inbox brand
             consistently.
           </Paragraph>
           <div className="mt-8">
@@ -105,7 +105,7 @@ export default function BrandPage() {
 
         <BrandSection title="Naming">
           <BrandText>
-            “Inbox Zero” is the brand name. It is always two words, each
+            “Inbox” is the brand name. It is always two words, each
             starting with a capital letter.
           </BrandText>
           <BrandText>
@@ -190,7 +190,7 @@ export default function BrandPage() {
 
         <BrandSection title="Screenshots">
           <BrandText>
-            Use this product screenshot when presenting Inbox Zero. It uses demo
+            Use this product screenshot when presenting Inbox. It uses demo
             data, so no real inbox is shown.
           </BrandText>
           <a
@@ -200,7 +200,7 @@ export default function BrandPage() {
           >
             <Image
               src={SCREENSHOT_SRC}
-              alt="Inbox Zero Mail on desktop and mobile"
+              alt="Inbox Mail on desktop and mobile"
               width={2540}
               height={1520}
               className="h-auto w-full"
@@ -226,7 +226,7 @@ export default function BrandPage() {
               contact us
             </a>{" "}
             if you need additional assets or have questions about using the
-            Inbox Zero brand.
+            Inbox brand.
           </BrandText>
         </BrandSection>
       </div>
@@ -264,7 +264,7 @@ function AppIcon({ size }: { size: number }) {
   return (
     <Image
       src="/brand/inbox-zero-icon.png"
-      alt="Inbox Zero app icon"
+      alt="Inbox app icon"
       width={size}
       height={size}
     />

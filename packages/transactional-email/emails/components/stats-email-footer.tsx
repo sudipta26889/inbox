@@ -10,7 +10,7 @@ export function StatsEmailFooter({
   return (
     <Section>
       <Text>
-        You're receiving this email because you're subscribed to Inbox Zero
+        You're receiving this email because you're subscribed to Inbox
         stats updates. You can change this in your{" "}
         <Link
           href={`${baseUrl}/settings#email-updates`}

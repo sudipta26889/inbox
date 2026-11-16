@@ -349,7 +349,7 @@ export function MeetingDetail({
               <AlertDialogDescription>
                 <Trans>
                   The summary and transcript will be permanently deleted from
-                  Inbox Zero. Recap emails already sent and follow-up drafts in
+                  Inbox. Recap emails already sent and follow-up drafts in
                   your mailbox will remain.
                 </Trans>
               </AlertDialogDescription>

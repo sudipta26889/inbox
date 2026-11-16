@@ -70,7 +70,7 @@ export function ResetLabelColorsSection({
           </ItemTitle>
           <ItemDescription>
             <Trans>
-              Restore the default colors for Inbox Zero labels like To Reply and
+              Restore the default colors for Inbox labels like To Reply and
               Newsletter
             </Trans>
           </ItemDescription>

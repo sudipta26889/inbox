@@ -128,7 +128,7 @@ export function buildDisputeEvidence({
   ].filter(Boolean);
 
   const rebuttal = [
-    `This charge on ${formatDate(facts.chargedAt)} is a renewal of the customer's active Inbox Zero subscription (${facts.subscriptionId}).`,
+    `This charge on ${formatDate(facts.chargedAt)} is a renewal of the customer's active Inbox subscription (${facts.subscriptionId}).`,
     "The subscription had not been canceled when it renewed.",
     cancellationLine,
     "The customer kept using the service after the charge:",
@@ -137,7 +137,7 @@ export function buildDisputeEvidence({
 
   return {
     product_description:
-      "Inbox Zero is a subscription web app (AI email assistant) that organizes, labels, and drafts replies to the customer's email. It renews automatically each billing period until canceled.",
+      "Inbox is a subscription web app (AI email assistant) that organizes, labels, and drafts replies to the customer's email. It renews automatically each billing period until canceled.",
     customer_email_address: facts.customerEmail ?? undefined,
     service_date: facts.servicePeriod
       ? `${formatDate(facts.servicePeriod.start)} to ${formatDate(facts.servicePeriod.end)}`

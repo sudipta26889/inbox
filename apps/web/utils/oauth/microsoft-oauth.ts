@@ -42,7 +42,7 @@ export function classifyMicrosoftOAuthError(
       errorCode: "invalid_scope_configuration",
       aadstsCode,
       userMessage:
-        "Microsoft rejected the requested permissions for this app. Please ask your admin to verify the Inbox Zero app registration, delegated Microsoft Graph permissions, and redirect URLs, then try again.",
+        "Microsoft rejected the requested permissions for this app. Please ask your admin to verify the Inbox app registration, delegated Microsoft Graph permissions, and redirect URLs, then try again.",
     };
   }
 
@@ -88,7 +88,7 @@ export function classifyMicrosoftOAuthCallbackError(params: {
       errorCode: "consent_declined",
       aadstsCode,
       userMessage:
-        "Microsoft denied the request before Inbox Zero could connect your account. Please try again and complete the consent screen.",
+        "Microsoft denied the request before Inbox could connect your account. Please try again and complete the consent screen.",
     };
   }
 

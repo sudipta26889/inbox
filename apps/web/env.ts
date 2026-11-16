@@ -323,7 +323,7 @@ const parsedEnv = createEnv({
     RESEND_FROM_EMAIL: z
       .string()
       .optional()
-      .default("Inbox Zero <updates@transactional.getinboxzero.com>"),
+      .default("Inbox <updates@transactional.inbox.sudiptadhara.in>"),
     CRON_SECRET: z.string().optional(),
     BLOG_SYNC_WEBHOOK_SECRET: z.string().min(1).optional(),
     BLOG_SYNC_SANITY_AUTHOR_ID: z.string().min(1).optional(),
@@ -463,10 +463,13 @@ const parsedEnv = createEnv({
     NEXT_PUBLIC_IMAGE_PROXY_USE_APP_ROUTE: booleanString
       .optional()
       .default(false),
-    NEXT_PUBLIC_BRAND_NAME: z.string().trim().min(1).default("Inbox Zero"),
-    NEXT_PUBLIC_BRAND_LOGO_URL: z.string().optional(),
+    NEXT_PUBLIC_BRAND_NAME: z.string().trim().min(1).default("Inbox"),
+    NEXT_PUBLIC_BRAND_LOGO_URL: z
+      .string()
+      .optional()
+      .default("/images/logos/email-agent-logo.png"),
     NEXT_PUBLIC_BRAND_ICON_URL: z.string().optional().default("/icon.png"),
-    NEXT_PUBLIC_SLACK_BOT_NAME: z.string().trim().min(1).default("Inbox Zero"),
+    NEXT_PUBLIC_SLACK_BOT_NAME: z.string().trim().min(1).default("Inbox"),
     NEXT_PUBLIC_SELF_HOSTED_LOGIN_FOOTER_TEXT: z.string().optional(),
     NEXT_PUBLIC_CONTACTS_ENABLED: booleanString.optional().default(false),
     NEXT_PUBLIC_COOKIE_CONSENT_ENABLED: booleanString.optional().default(false),
@@ -482,7 +485,7 @@ const parsedEnv = createEnv({
     NEXT_PUBLIC_SUPPORT_EMAIL: z
       .string()
       .optional()
-      .default("support@getinboxzero.com"),
+      .default("elie@inbox.sudiptadhara.in"),
     NEXT_PUBLIC_GTM_ID: z.string().optional(),
     NEXT_PUBLIC_CONVERSION_ANALYTICS_SCRIPT_URL: z.string().optional(),
     NEXT_PUBLIC_CRISP_WEBSITE_ID: z.string().optional(),
@@ -498,7 +501,7 @@ const parsedEnv = createEnv({
     NEXT_PUBLIC_DUB_REFER_DOMAIN: z.string().optional(),
     NEXT_PUBLIC_DISABLE_REFERRAL_SIGNATURE: booleanString
       .optional()
-      .default(false),
+      .default(true),
     NEXT_PUBLIC_USE_AEONIK_FONT: booleanString.optional().default(false),
     NEXT_PUBLIC_BYPASS_PREMIUM_CHECKS: booleanString.optional(),
     NEXT_PUBLIC_DIGEST_ENABLED: booleanString.optional(),
