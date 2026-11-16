@@ -122,6 +122,9 @@ backups/
 .claude/HANDOVER-from-NUC.md
 .claude/stash-*.patch
 .claude/rr-cache-from-NUC.tgz
+.claude/state/
+.claude/dev-tasks/
+.claude/worktrees/
 
 # Local Codex link only: Portainer refuses repos containing symlinks
 .agents/
