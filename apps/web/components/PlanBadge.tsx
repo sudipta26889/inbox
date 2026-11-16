@@ -201,6 +201,7 @@ export function getActionColor(actionType: ActionType): Color {
     case ActionType.NOTIFY_MESSAGING_CHANNEL:
     case ActionType.NOTIFY_SENDER:
     case ActionType.INTEGRATION:
+    case ActionType.HOME_ASSISTANT:
       return "purple";
     default: {
       const exhaustiveCheck: never = actionType;

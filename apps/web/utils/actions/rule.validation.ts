@@ -54,6 +54,7 @@ const zodActionType = z.enum([
   ActionType.MOVE_FOLDER,
   ActionType.NOTIFY_SENDER,
   ActionType.INTEGRATION,
+  ActionType.HOME_ASSISTANT,
 ]);
 
 // Arg keys are owned and validated by the selected tool spec below.
@@ -124,6 +125,16 @@ const zodAction = z
     integrationName: z.string().nullish(),
     integrationToolName: z.string().nullish(),
     integrationArgs: zodIntegrationArgs,
+    haIntegrationType: z.string().nullish(),
+    haWebhookId: z.string().nullish(),
+    haMqttTopic: z.string().nullish(),
+    haServiceDomain: z.string().nullish(),
+    haServiceName: z.string().nullish(),
+    // haServiceData is a Json column, so any JSON value is accepted
+    // here. Home Assistant needs an object to spread; that is enforced at
+    // execution time (toServiceData in utils/ai/actions.ts).
+    haServiceData: z.any().nullish(),
+    haEntityId: z.string().nullish(),
   })
   .superRefine((data, ctx) => {
     if (
@@ -173,6 +184,45 @@ const zodAction = z
         message: "Please enter a webhook URL",
         path: ["url"],
       });
+    }
+
+    if (data.type === ActionType.HOME_ASSISTANT) {
+      const integrationType = data.haIntegrationType;
+
+      if (!integrationType) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Please select an integration type",
+          path: ["haIntegrationType"],
+        });
+      } else if (integrationType === "webhook" && !data.haWebhookId?.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Please enter a webhook ID",
+          path: ["haWebhookId"],
+        });
+      } else if (integrationType === "mqtt" && !data.haMqttTopic?.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Please enter an MQTT topic",
+          path: ["haMqttTopic"],
+        });
+      } else if (integrationType === "service_call") {
+        if (!data.haServiceDomain?.trim()) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Please enter a service domain",
+            path: ["haServiceDomain"],
+          });
+        }
+        if (!data.haServiceName?.trim()) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Please enter a service name",
+            path: ["haServiceName"],
+          });
+        }
+      }
     }
 
     if (

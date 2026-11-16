@@ -90,6 +90,8 @@ export function getActionDisplayText(
     }
     case ActionType.NOTIFY_SENDER:
       return i18n._(msg`Notify Sender`);
+    case ActionType.HOME_ASSISTANT:
+      return i18n._(msg`Home Assistant`);
     case ActionType.INTEGRATION: {
       const label = i18n._(getIntegrationActionLabelMessage(action));
       const displayValue = getIntegrationActionDisplayValue(action);
