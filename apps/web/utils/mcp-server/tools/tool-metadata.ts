@@ -128,6 +128,7 @@ export const TOOL_METADATA: Record<string, ToolMetadata> = {
   admin_ai_update_model: write("Update AI model", { idempotent: true }),
   admin_account_get: read("Get account settings"),
   admin_account_update: write("Update account settings", { idempotent: true }),
+  convert_to_taskpilot_task: write("Convert email to TaskPilot task"),
 
   // Admin: cleanup and unsubscribe
   admin_cleanup_list_jobs: read("List cleanup jobs"),
