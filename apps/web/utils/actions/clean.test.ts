@@ -94,4 +94,31 @@ describe("cleanInboxAction", () => {
       );
     expect(publishedThreadIds).toEqual(["thread-1", "thread-2"]);
   });
+
+  it("never queues more threads than maxEmails, and skips conversations by default", async () => {
+    mockGetThreadsWithQuery
+      .mockResolvedValueOnce({
+        threads: Array.from({ length: 100 }, (_, i) => ({ id: `t-${i}` })),
+        nextPageToken: "page-2",
+      })
+      .mockResolvedValueOnce({
+        threads: Array.from({ length: 50 }, (_, i) => ({ id: `u-${i}` })),
+      });
+
+    await cleanInboxAction("account-1", {
+      action: CleanAction.ARCHIVE,
+      daysOld: 0,
+      instructions: "",
+      maxEmails: 150,
+      skips: {},
+    });
+    await Promise.all(pendingWork);
+
+    expect(mockGetThreadsWithQuery.mock.calls[1][0].maxResults).toBe(50);
+    expect(prisma.cleanupJob.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ skipConversation: true }),
+      }),
+    );
+  });
 });
