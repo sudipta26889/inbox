@@ -1,7 +1,10 @@
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { authenticateA2aRequest } from "@/utils/a2a/auth";
-import { checkIpRateLimit } from "@/utils/a2a/rate-limit";
+import {
+  checkA2aRequestRateLimit,
+  checkIpRateLimit,
+} from "@/utils/a2a/rate-limit";
 import { POST } from "./route";
 
 vi.mock("server-only", () => ({}));
@@ -18,8 +21,14 @@ vi.mock("@/utils/a2a/auth", () => ({
 vi.mock("@/utils/a2a/rate-limit", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/utils/a2a/rate-limit")>()),
   checkIpRateLimit: vi.fn(),
+  checkA2aRequestRateLimit: vi.fn(),
 }));
-vi.mock("@/utils/a2a/protocol-handler", () => ({}));
+const { mockHandleTaskGet } = vi.hoisted(() => ({
+  mockHandleTaskGet: vi.fn(),
+}));
+vi.mock("@/utils/a2a/protocol-handler", () => ({
+  handleTaskGet: mockHandleTaskGet,
+}));
 vi.mock("@/utils/a2a/push-config", () => ({}));
 
 const context = { params: Promise.resolve({}) };
@@ -98,6 +107,43 @@ describe("POST /a2a", () => {
 
     expect(response.status).toBe(413);
     expect(response.headers.get("connection")).toBe("close");
+  });
+
+  it.each([
+    [
+      "a database error",
+      Object.assign(new TypeError("relation a2a_tasks: column x"), {
+        clientVersion: "7",
+      }),
+      "Handler error: Internal error",
+    ],
+    [
+      "a handler's own message",
+      new Error("Task not found: t1"),
+      "Handler error: Task not found: t1",
+    ],
+  ])("tells the peer only what is meant for it on %s", async (_label, error, message) => {
+    vi.mocked(authenticateA2aRequest).mockResolvedValue({
+      userId: "u",
+      clientId: "c",
+    } as never);
+    vi.mocked(checkA2aRequestRateLimit).mockResolvedValue(allowed as never);
+    mockHandleTaskGet.mockRejectedValue(error);
+
+    const response = await POST(
+      post(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: 2,
+          method: "tasks/get",
+          params: { taskId: "t1" },
+        }),
+        { Authorization: "Bearer good-token" },
+      ),
+      context,
+    );
+
+    expect((await response.json()).error.message).toBe(message);
   });
 
   it("returns a JSON-RPC parse error for invalid JSON", async () => {

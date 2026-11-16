@@ -306,7 +306,7 @@ export const POST = withError("a2a", async (request: RequestWithLogger) => {
       return createJsonRpcErrorResponse(
         message.id,
         -32_603,
-        `Handler error: ${handlerError instanceof Error ? handlerError.message : String(handlerError)}`,
+        `Handler error: ${peerErrorMessage(handlerError)}`,
       );
     }
   } catch (error) {
@@ -318,10 +318,7 @@ export const POST = withError("a2a", async (request: RequestWithLogger) => {
         id: null,
         error: {
           code: -32_700,
-          message:
-            "Parse error: " +
-            ((error instanceof Error ? error.message : String(error)) ||
-              "Invalid JSON"),
+          message: "Parse error: Invalid JSON",
         },
       },
       { status: 400, headers: CORS_HEADERS },
@@ -375,4 +372,14 @@ function createBodyErrorResponse(status: 400 | 413): Response {
     },
     { status, headers: CORS_HEADERS },
   );
+}
+
+// Handlers throw plain Errors with messages written for the peer ("Task not
+// found", "contextId is required"). Anything else (Prisma, TypeError, a
+// library) can carry internal detail, so the peer gets a generic message and
+// the detail stays in the log above.
+function peerErrorMessage(error: unknown) {
+  return error instanceof Error && error.constructor === Error
+    ? error.message
+    : "Internal error";
 }

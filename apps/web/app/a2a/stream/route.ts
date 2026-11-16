@@ -2,6 +2,7 @@ import { type A2aAuthContext, withA2aAuth } from "@/utils/a2a/auth";
 import prisma from "@/utils/prisma";
 import { createScopedLogger } from "@/utils/logger";
 import { A2aTaskState } from "@/generated/prisma/enums";
+import { checkA2aRequestRateLimit } from "@/utils/a2a/rate-limit";
 import { taskScope } from "@/utils/a2a/task-scope";
 import { toWireState } from "@/utils/a2a/wire-state";
 
@@ -42,6 +43,19 @@ export async function GET(request: Request) {
   } catch (authResponse) {
     if (authResponse instanceof Response) return authResponse;
     throw authResponse;
+  }
+
+  // Each stream polls the DB for up to maxDuration, so opening streams counts
+  // against the same per-client budget as any other request.
+  const rateLimit = await checkA2aRequestRateLimit(authResult, "request");
+  if (!rateLimit.allowed) {
+    return new Response("Rate limit exceeded", {
+      status: 429,
+      headers: {
+        "Content-Type": "text/plain",
+        "Retry-After": String(rateLimit.retryAfter ?? 60),
+      },
+    });
   }
 
   const { searchParams } = new URL(request.url);
