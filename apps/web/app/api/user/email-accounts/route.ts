@@ -9,6 +9,7 @@ import {
 } from "@/utils/cookies";
 import { withAuth } from "@/utils/middleware";
 import { EMAIL_ACCOUNT_ORDER_BY } from "@/utils/email-account-order";
+import { accessibleEmailAccountWhere } from "@/utils/email-account-access";
 
 export type GetEmailAccountsResponse = Awaited<
   ReturnType<typeof getEmailAccounts>
@@ -22,9 +23,10 @@ async function getEmailAccounts({ userId }: { userId: string }) {
   });
 
   const emailAccounts = await prisma.emailAccount.findMany({
-    where: { userId },
+    where: accessibleEmailAccountWhere(userId),
     select: {
       id: true,
+      userId: true,
       email: true,
       accountId: true,
       name: true,
@@ -42,6 +44,10 @@ async function getEmailAccounts({ userId }: { userId: string }) {
           image: true,
           email: true,
         },
+      },
+      shares: {
+        select: { user: { select: { id: true, email: true, name: true } } },
+        orderBy: { createdAt: "asc" },
       },
     },
     orderBy: EMAIL_ACCOUNT_ORDER_BY,
@@ -70,19 +76,27 @@ async function getEmailAccounts({ userId }: { userId: string }) {
     }),
   );
 
-  const accountsWithNames = accountsWithRateLimits.map((account) => {
-    // Old accounts don't have a name attached, so use the name from the user
-    if (account.user.email === account.email) {
-      return {
-        ...account,
-        name: account.name || account.user.name,
-        image: account.image || account.user.image,
-        isPrimary: true,
-      };
-    }
+  const accountsWithNames = accountsWithRateLimits.map(
+    ({ userId: ownerUserId, shares, ...account }) => {
+      const isShared = ownerUserId !== userId;
+      // Only the owner may see or manage who else has access.
+      const sharedWith = isShared ? [] : shares.map((share) => share.user);
 
-    return { ...account, isPrimary: false };
-  });
+      // Old accounts don't have a name attached, so use the name from the user
+      if (account.user.email === account.email) {
+        return {
+          ...account,
+          name: account.name || account.user.name,
+          image: account.image || account.user.image,
+          isPrimary: !isShared,
+          isShared,
+          sharedWith,
+        };
+      }
+
+      return { ...account, isPrimary: false, isShared, sharedWith };
+    },
+  );
 
   return {
     emailAccounts: accountsWithNames,
