@@ -23,6 +23,7 @@ import {
 import { validateScopes } from "@/utils/mcp-server/tokens";
 import prisma from "@/utils/prisma";
 import { auth } from "@/utils/auth";
+import { buildLoginRedirectUrl } from "@/utils/redirect";
 import { EMAIL_OTP_REFUSAL } from "@/utils/mcp-server/constants";
 
 const CORS_HEADERS = {
@@ -195,11 +196,15 @@ export const GET = withError(
       const encodedState = Buffer.from(oauthParams.toString()).toString(
         "base64url",
       );
-      const callbackUrl = `${env.NEXT_PUBLIC_BASE_URL}/mcp-server/authorize?oauth_state=${encodedState}`;
-
-      const loginUrl = new URL("/login", env.NEXT_PUBLIC_BASE_URL);
-      loginUrl.searchParams.set("callbackUrl", callbackUrl);
-      return NextResponse.redirect(loginUrl);
+      // The login page resumes at `next`, which must be a relative path.
+      return NextResponse.redirect(
+        new URL(
+          buildLoginRedirectUrl(
+            `/mcp-server/authorize?oauth_state=${encodedState}`,
+          ),
+          env.NEXT_PUBLIC_BASE_URL,
+        ),
+      );
     }
 
     // Upstream's invariant: an email-code session cannot authorize apps.

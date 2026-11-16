@@ -124,9 +124,20 @@ describe("GET /mcp-server/authorize", () => {
 
       const response = await GET(authorize({ client_id: CIMD }), context);
 
-      expect(new URL(response.headers.get("location")!).pathname).toBe(
-        "/login",
+      const login = new URL(response.headers.get("location")!);
+      expect(login.pathname).toBe("/login");
+      expect(login.searchParams.has("callbackUrl")).toBe(false);
+      // The login page reads `next` and accepts only a relative path.
+      const next = login.searchParams.get("next")!;
+      expect(next.startsWith("/mcp-server/authorize?oauth_state=")).toBe(true);
+      const resumed = new URLSearchParams(
+        Buffer.from(
+          new URLSearchParams(next.split("?")[1]).get("oauth_state")!,
+          "base64url",
+        ).toString(),
       );
+      expect(resumed.get("client_id")).toBe(CIMD);
+      expect(resumed.get("state")).toBe("st");
       expect(resolveClientMetadata).not.toHaveBeenCalled();
       expect(checkIpRateLimit).not.toHaveBeenCalled();
       expect(prisma.mcpServerClient.findUnique).not.toHaveBeenCalled();
