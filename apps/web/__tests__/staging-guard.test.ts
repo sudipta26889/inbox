@@ -61,7 +61,10 @@ describe("staging database guard", () => {
   });
 
   it("runs in start.sh before migrations", () => {
-    const start = readFileSync(join(REPO_ROOT, "docker/scripts/start.sh"), "utf8");
+    const start = readFileSync(
+      join(REPO_ROOT, "docker/scripts/start.sh"),
+      "utf8",
+    );
 
     expect(start.indexOf("staging-db-guard.sh")).toBeGreaterThan(-1);
     expect(start.indexOf("staging-db-guard.sh")).toBeLessThan(
@@ -71,7 +74,10 @@ describe("staging database guard", () => {
 });
 
 describe("staging stack", () => {
-  const stack = readFileSync(join(REPO_ROOT, "deploy/stack.staging.yml"), "utf8");
+  const stack = readFileSync(
+    join(REPO_ROOT, "deploy/stack.staging.yml"),
+    "utf8",
+  );
 
   it.each([
     ["DATABASE_URL", "STAGING_DATABASE_URL"],
