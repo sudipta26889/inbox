@@ -39,14 +39,16 @@ describe("hasDraftPlaceholder", () => {
     expect(hasDraftPlaceholder(reply)).toBe(expected);
   });
 
-  it.each(["[EXTERNAL]", "[external]", "[SPAM]", "[Suspicious]"])(
-    "ignores the mail tag %s",
-    (tag) => {
-      expect(hasDraftPlaceholder(`Re: ${tag} Invoice. Thanks, received.`)).toBe(
-        false,
-      );
-    },
-  );
+  it.each([
+    "[EXTERNAL]",
+    "[external]",
+    "[SPAM]",
+    "[Suspicious]",
+  ])("ignores the mail tag %s", (tag) => {
+    expect(hasDraftPlaceholder(`Re: ${tag} Invoice. Thanks, received.`)).toBe(
+      false,
+    );
+  });
 
   it("still finds a placeholder next to a mail tag", () => {
     expect(hasDraftPlaceholder("[EXTERNAL] noted. [confirm: ok?]")).toBe(true);
