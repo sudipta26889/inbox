@@ -251,7 +251,18 @@ async function handleDharaHILDecision(
     reason: decision.reason,
   });
 
-  if (dharahilClient.shouldProceed(decision)) {
+  if (dharahilClient.shouldProceed(decision) && decision.edited) {
+    // The task runs with the peer's original input; it cannot apply args the
+    // human edited on the card, so running it would ignore the edit.
+    logger.warn("Edited DharaHIL approval refused for A2A task", {
+      taskId: task.taskId,
+    });
+    await rejectTask(
+      taskInternalId,
+      "dharahil_gateway",
+      "Not run: edits on the card aren't supported for this action; send the task again with the change.",
+    );
+  } else if (dharahilClient.shouldProceedUnedited(decision)) {
     // APPROVED - Execute the task
     logger.info("Task approved via DharaHIL", { taskId: task.taskId });
 

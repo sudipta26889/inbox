@@ -5,6 +5,7 @@ vi.mock("server-only", () => ({}));
 const {
   mockPrisma,
   mockBeforeExecute,
+  mockPollForDecision,
   mockApproveTask,
   mockRejectTask,
   mockPublishPendingApprovalsUpdate,
@@ -15,6 +16,7 @@ const {
     a2aApproval: { update: vi.fn() },
   },
   mockBeforeExecute: vi.fn(),
+  mockPollForDecision: vi.fn(),
   mockApproveTask: vi.fn().mockResolvedValue(undefined),
   mockRejectTask: vi.fn().mockResolvedValue(undefined),
   mockPublishPendingApprovalsUpdate: vi.fn().mockResolvedValue(undefined),
@@ -40,24 +42,26 @@ vi.mock("./protocol-handler", () => ({
 // wasDenied) is exercised for real here rather than re-stubbed, since the
 // whole point of the fix is that the integration reuses it instead of
 // string-matching a second set of literals.
-vi.mock("@/utils/dharahil/client", () => ({
-  dharahilClient: {
-    beforeExecute: mockBeforeExecute,
-    shouldProceed: (decision: { action?: string }) =>
-      decision.action === "ALLOW" ||
-      decision.action === "APPROVED" ||
-      decision.action === "AUTO_ALLOWED",
-    shouldRevise: (decision: { action?: string }) =>
-      decision.action === "REVISE_REQUESTED",
-    wasDenied: (decision: { action?: string }) =>
-      decision.action === "DENY" ||
-      decision.action === "REJECTED" ||
-      decision.action === "EXPIRED" ||
-      decision.action === "ERROR",
-  },
-}));
+vi.mock("@/utils/dharahil/client", async (importOriginal) => {
+  const { dharahilClient } =
+    await importOriginal<typeof import("@/utils/dharahil/client")>();
+  return {
+    dharahilClient: {
+      beforeExecute: mockBeforeExecute,
+      pollForDecision: mockPollForDecision,
+      shouldProceed: dharahilClient.shouldProceed.bind(dharahilClient),
+      shouldProceedUnedited:
+        dharahilClient.shouldProceedUnedited.bind(dharahilClient),
+      shouldRevise: dharahilClient.shouldRevise.bind(dharahilClient),
+      wasDenied: dharahilClient.wasDenied.bind(dharahilClient),
+    },
+  };
+});
 
-import { requestApprovalViaDharaHIL } from "./dharahil-integration";
+import {
+  pollForApprovalDecision,
+  requestApprovalViaDharaHIL,
+} from "./dharahil-integration";
 
 const mockTask = {
   id: "task-internal-1",
@@ -194,5 +198,43 @@ describe("requestApprovalViaDharaHIL", () => {
         data: expect.objectContaining({ dharahilRequestId: "req-1" }),
       }),
     );
+  });
+});
+
+describe("pollForApprovalDecision", () => {
+  beforeEach(() => {
+    mockPrisma.a2aTask.findUnique.mockResolvedValue({
+      ...mockTask,
+      approval: {
+        dharahilRequestId: "req-1",
+        expiresAt: new Date("2026-11-17T00:00:00Z"),
+      },
+    });
+  });
+
+  it("refuses an approval the human edited on the card", async () => {
+    mockPollForDecision.mockResolvedValue({ action: "APPROVED", edited: true });
+
+    await pollForApprovalDecision("task-internal-1");
+
+    expect(mockApproveTask).not.toHaveBeenCalled();
+    expect(mockRejectTask).toHaveBeenCalledWith(
+      "task-internal-1",
+      "dharahil_gateway",
+      expect.stringContaining("edits on the card aren't supported"),
+    );
+  });
+
+  it("runs an unedited approval", async () => {
+    mockPollForDecision.mockResolvedValue({ action: "APPROVED" });
+
+    await pollForApprovalDecision("task-internal-1");
+
+    expect(mockApproveTask).toHaveBeenCalledWith(
+      "task-internal-1",
+      "dharahil_gateway",
+      expect.objectContaining({ action: "APPROVED" }),
+    );
+    expect(mockRejectTask).not.toHaveBeenCalled();
   });
 });
