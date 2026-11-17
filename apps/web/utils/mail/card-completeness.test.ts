@@ -281,7 +281,10 @@ describe("user HTML: what the card marks and refuses", () => {
     expect(card.notices).toContain(
       "[style sheet: p.MsoNormal{margin:0in;font-size:11pt}]",
     );
-    expect(html.startsWith(head)).toBe(true);
+    // The edited send carries no style sheet or Outlook-only block.
+    expect(html.startsWith('<html><head><meta charset="utf-8"></head>')).toBe(
+      true,
+    );
     expect(html).toContain("Hello Rob");
     expect(html).not.toMatch(MARKERS);
   });
@@ -315,7 +318,14 @@ describe("user HTML: what the card marks and refuses", () => {
       "[shown only in Outlook: Outlook only]",
     );
     expect(html).toContain("<em>done</em>");
-    expect(html.endsWith(quote)).toBe(true);
+    // The quote is kept as it was, minus its style sheet and Outlook-only block.
+    expect(
+      html.endsWith(
+        quote
+          .replace(/<style>[\s\S]*?<\/style>/, "")
+          .replace(/<!--\[if mso\]>[\s\S]*?<!\[endif\]-->/, ""),
+      ),
+    ).toBe(true);
   });
 
   // Style sheets apply to the whole email and may match the edit's new
@@ -358,25 +368,55 @@ describe("user HTML: what the card marks and refuses", () => {
     }
   });
 
-  it("keeps Outlook's own style sheet after an edit", () => {
-    const sheet =
-      '<style><!--\n/* Font Definitions */\n@font-face\n\t{font-family:"Cambria Math";}\n/* Style Definitions */\np.MsoNormal, li.MsoNormal, div.MsoNormal\n\t{margin:0in;font-size:11.0pt;font-family:"Calibri",sans-serif;}\na:link, span.MsoHyperlink\n\t{color:#0563C1;text-decoration:underline;}\nspan.EmailStyle17\n\t{font-family:"Calibri",sans-serif;}\n.MsoChpDefault\n\t{font-size:10.0pt;}\n@page WordSection1\n\t{size:8.5in 11.0in;}\ndiv.WordSection1\n\t{page:WordSection1;}\n@media screen { p.MsoNormal { margin:0 } }\n--></style>';
-    const original = `<html><head>${sheet}</head><body><div class=WordSection1><p class=MsoNormal>Hi Bob</p><p class=MsoNormal>Thanks</p></div></body></html>`;
+  it.each([
+    [
+      "a nested rule",
+      "<style>.WordSection1{ strong{display:none} }</style><div class=WordSection1><p class=MsoNormal>Hi Bob</p></div>",
+      "Hi **Rob**",
+      "<strong>Rob</strong>",
+    ],
+    [
+      "a rule on Gmail's class",
+      '<style>.gmail_default{display:none}</style><div dir="ltr"><div class="gmail_default">Hi Bob</div></div>',
+      "Hi Rob",
+      "Hi Rob",
+    ],
+    [
+      "a remote font",
+      "<style>@font-face{font-family:Spy;src:url(https://e.test/f.woff)} p{font-family:Spy}</style><p>Hi Bob</p>",
+      "Hi Rob",
+      "Hi Rob",
+    ],
+  ])("an edited send with %s carries no style sheet or copied class", (_name, original, edit, text) => {
+    const sent = rebuildHtmlWithEditedBody(original, edit) ?? "";
 
-    const sent = rebuildHtmlWithEditedBody(original, "Hi Rob\n\nThanks") ?? "";
-
-    expect(sent).toContain(sheet);
-    expect(sent).toContain('<p class="MsoNormal">Hi Rob</p>');
+    expect(sent).toContain(text);
+    expect(sent).not.toMatch(/<style|@font-face|<link|class=/i);
   });
 
-  it("keeps Gmail's class on edited blocks", () => {
-    const original =
-      '<style>.gmail_default{font-family:verdana}</style><div dir="ltr"><div class="gmail_default">Hi Bob</div><div class="gmail_default">Thanks</div></div>';
+  it("keeps an Outlook draft's font on edited blocks as an inline style", () => {
+    const sheet =
+      '<style><!--\n@font-face\n\t{font-family:"Cambria Math";}\np.MsoNormal, li.MsoNormal, div.MsoNormal\n\t{margin:0in;font-size:11.0pt;font-family:"Calibri",sans-serif;}\n--></style>';
+    const original = `<html><head>${sheet}<!--[if gte mso 9]><xml>x</xml><![endif]--></head><body><div class=WordSection1><p class=MsoNormal>Hi Bob</p><p class=MsoNormal>Thanks</p></div></body></html>`;
 
     const sent = rebuildHtmlWithEditedBody(original, "Hi Rob\n\nThanks") ?? "";
+    const $ = load(sent);
 
-    expect(sent).toContain(".gmail_default{font-family:verdana}");
-    expect(sent).toContain('<div class="gmail_default">Hi Rob</div>');
+    expect(sent).not.toMatch(/<style|<!--|class="MsoNormal">Hi Rob/);
+    expect($("p").first().text()).toBe("Hi Rob");
+    expect($("p").first().attr("style")).toBe(
+      'margin:0in;font-size:11.0pt;font-family:"Calibri",sans-serif',
+    );
+  });
+
+  it("keeps Gmail's class font on edited blocks as an inline style", () => {
+    const original =
+      '<style>.gmail_default{font-family:verdana}</style><div dir="ltr"><div class="gmail_default">Hi Bob</div></div>';
+
+    const sent = rebuildHtmlWithEditedBody(original, "Hi Rob") ?? "";
+
+    expect(sent).toContain('<div style="font-family:verdana">Hi Rob</div>');
+    expect(sent).not.toContain("<style");
   });
 
   it("leaves an unedited send untouched by the style sheet rule", () => {

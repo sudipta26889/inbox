@@ -69,21 +69,17 @@ export function rebuildHtmlWithEditedBody(
     imageSources.set(encodeURI(src), src);
   });
 
-  const edited = withOriginalClass(
-    withBlockStyle(
-      inOriginalBlocks(markdownToSafeHtml(markdown, imageSources), $inner),
-      style,
-    ),
-    $inner,
+  // The edit carries no style sheet, so the original's typography (its class
+  // rules and common inline style, through the typography allowlist) goes
+  // inline on every edited block instead.
+  const edited = withBlockStyle(
+    inOriginalBlocks(markdownToSafeHtml(markdown, imageSources), $inner),
+    mergeStyles(classTypography(html, $inner), style),
   );
 
   const rebuilt = [
     parts.head,
     parts.prefix,
-    // The authored part's own style sheets stay, ahead of the edited text.
-    ...$inner("style, link")
-      .toArray()
-      .map((element) => $inner.html(element)),
     edited,
     parts.suffix,
     parts.signature,
@@ -91,138 +87,9 @@ export function rebuildHtmlWithEditedBody(
     parts.tail,
   ].join("");
   // Style sheets apply to the whole email and can match the edit's new
-  // structure. Unless every selector is a plain one, the edited send carries
-  // none: formatting may go, but no edited word can be hidden.
-  return styleSheetsAllowEdit(html, addedTags($inner, edited))
-    ? rebuilt
-    : withoutStyleSheets(rebuilt);
-}
-
-function addedTags($inner: CheerioAPI, editedHtml: string) {
-  const before = new Set(
-    $inner("*")
-      .toArray()
-      .map((element) => element.name),
-  );
-  const $edited = load(editedHtml, null, false);
-  return new Set(
-    $edited("*")
-      .toArray()
-      .map((element) => element.name)
-      .filter((tag) => !before.has(tag)),
-  );
-}
-
-/**
- * True when every style sheet in the email (Outlook-only ones included) uses
- * only selectors that can't newly match edited text: .class, #id, tag.class,
- * tag#id, a type selector of a tag the edit doesn't add, and a:link/visited/
- * hover. No escapes, combinators, attribute selectors or other pseudo-classes,
- * no @import and no linked sheet.
- */
-function styleSheetsAllowEdit(html: string, added: Set<string>) {
-  const $ = load(html);
-  if ($("link").length) return false;
-  const sheets = [
-    ...$("style")
-      .toArray()
-      .map((element) => $(element).text()),
-    ...commentNodes($.root().get(0))
-      .filter((node) => /^\s*\[\s*if\b/i.test(node.data))
-      .flatMap((node) => {
-        const $comment = load(node.data, null, false);
-        return $comment("style")
-          .toArray()
-          .map((element) => $comment(element).text());
-      }),
-  ];
-  return sheets.every((css) => {
-    const source = css
-      .replace(/\/\*[\s\S]*?\*\//g, " ")
-      .replace(/<!--|-->/g, " ");
-    return !source.includes("\\") && rulesAllowEdit(source, added);
-  });
-}
-
-function rulesAllowEdit(css: string, added: Set<string>): boolean {
-  let index = 0;
-  while (index < css.length) {
-    const open = indexOutsideStrings(css, "{", index);
-    if (open < 0) return !css.slice(index).trim();
-    const close = matchingBrace(css, open);
-    if (close < 0) return false;
-    const prelude = css.slice(index, open).trim();
-    const block = css.slice(open + 1, close);
-    index = close + 1;
-
-    // Statements before the rule (@charset is harmless; @import is not).
-    const statements = prelude.split(";");
-    const selectorText = statements.pop()?.trim() ?? "";
-    if (
-      statements.some(
-        (statement) =>
-          statement.trim() && !/^@charset\b/i.test(statement.trim()),
-      )
-    )
-      return false;
-
-    const atRule = selectorText.match(/^@([\w-]+)/)?.[1]?.toLowerCase();
-    if (atRule) {
-      if (atRule === "media" || atRule === "supports") {
-        if (!rulesAllowEdit(block, added)) return false;
-      } else if (!["font-face", "page", "list"].includes(atRule)) return false;
-      continue;
-    }
-    if (
-      !selectorText
-        .split(",")
-        .every((selector) => selectorAllowed(selector, added))
-    )
-      return false;
-  }
-  return true;
-}
-
-function selectorAllowed(selector: string, added: Set<string>) {
-  const match = selector
-    .trim()
-    .toLowerCase()
-    .match(
-      /^([a-z][a-z0-9]*)?((?:[.#][a-z_][\w-]*)*)(:(?:link|visited|hover))?$/,
-    );
-  if (!match) return false;
-  const [, tag, qualifiers, pseudo] = match;
-  if (!tag && !qualifiers) return false;
-  if (pseudo && tag !== "a") return false;
-  // A bare type selector (or a:link) must not reach a tag the edit adds.
-  if (tag && !qualifiers && added.has(tag)) return false;
-  return true;
-}
-
-function indexOutsideStrings(css: string, char: string, from: number) {
-  let quote: string | null = null;
-  for (let index = from; index < css.length; index++) {
-    const current = css[index];
-    if (quote) {
-      if (current === quote) quote = null;
-    } else if (current === '"' || current === "'") quote = current;
-    else if (current === char) return index;
-  }
-  return -1;
-}
-
-function matchingBrace(css: string, open: number) {
-  let depth = 0;
-  let quote: string | null = null;
-  for (let index = open; index < css.length; index++) {
-    const current = css[index];
-    if (quote) {
-      if (current === quote) quote = null;
-    } else if (current === '"' || current === "'") quote = current;
-    else if (current === "{") depth++;
-    else if (current === "}" && --depth === 0) return index;
-  }
-  return -1;
+  // structure, so an edited send carries none: formatting may go, but no
+  // edited word can be hidden.
+  return withoutStyleSheets(rebuilt);
 }
 
 /** The HTML with every style sheet, linked sheet and Outlook-only block cut out. */
@@ -246,17 +113,52 @@ function withoutStyleSheets(html: string) {
 }
 
 /**
- * Edited blocks take the class of the original's first classed block
- * (MsoNormal, gmail_default), so class-based fonts survive the edit.
+ * Typography the original's first classed block gets from style sheet rules
+ * for its class (Outlook's p.MsoNormal, Gmail's .gmail_default), read through
+ * the typography allowlist. Only innermost rules with a plain .class or
+ * tag.class selector count; nothing here can hide text.
  */
-function withOriginalClass(html: string, $inner: CheerioAPI) {
-  const original = $inner("p[class], div[class]").first();
-  const className = original.attr("class");
-  const tag = original.get(0)?.name;
-  if (!className || !tag) return html;
-  const $ = load(html, null, false);
-  $.root().children(tag).attr("class", className);
-  return $.root().html() ?? html;
+function classTypography(html: string, $inner: CheerioAPI) {
+  const block = $inner("p[class], div[class]").first();
+  const tag = block.get(0)?.name;
+  const classes = (block.attr("class") ?? "").toLowerCase().split(/\s+/);
+  if (!tag || !classes[0]) return "";
+  const wanted = new Set(
+    classes.flatMap((name) => [`.${name}`, `${tag}.${name}`]),
+  );
+  const $ = load(html);
+  const css = $("style")
+    .toArray()
+    .map((element) => $(element).text())
+    .join("\n")
+    .replace(/\/\*[\s\S]*?\*\//g, " ")
+    .replace(/<!--|-->/g, " ");
+  return [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+    .filter(([, selectors]) =>
+      selectors
+        .split(",")
+        .some((selector) => wanted.has(selector.trim().toLowerCase())),
+    )
+    .map(([, , declarations]) => typographyOnly(declarations))
+    .filter(Boolean)
+    .join(";");
+}
+
+// Later declarations win, as in CSS.
+function mergeStyles(...styles: string[]) {
+  const merged = new Map<string, string>();
+  for (const style of styles)
+    for (const declaration of style.split(";")) {
+      const colon = declaration.indexOf(":");
+      if (colon > 0)
+        merged.set(
+          declaration.slice(0, colon).trim(),
+          declaration.slice(colon + 1).trim(),
+        );
+    }
+  return [...merged]
+    .map(([property, value]) => `${property}:${value}`)
+    .join(";");
 }
 
 /** True when the authored part holds text the reader can't see. */
