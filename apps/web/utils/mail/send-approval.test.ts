@@ -680,6 +680,21 @@ describe("body edits keep the email's formatting", () => {
     expect(edits).toEqual({ to: "alice@example.com" });
   });
 
+  it("puts the notices right after the body, before the files", async () => {
+    mockRunApprovalLoop.mockResolvedValue({ action: "APPROVED" });
+
+    await requireSendApproval({
+      ...htmlRequest,
+      bodyHtml:
+        '<style>p{margin:0}</style><p>Hi</p><div class="gmail_quote">old</div>',
+      attachments: [{ filename: "a.pdf" }],
+    });
+
+    const keys = Object.keys(mockRunApprovalLoop.mock.calls[0][0].toolArgs);
+    expect(keys.indexOf("notices")).toBe(keys.indexOf("body") + 1);
+    expect(keys.indexOf("notices")).toBeLessThan(keys.indexOf("attachments"));
+  });
+
   it("lists the files before the signature and quoted history", async () => {
     mockRunApprovalLoop.mockResolvedValue({ action: "APPROVED" });
 

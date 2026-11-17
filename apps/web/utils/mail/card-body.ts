@@ -69,13 +69,15 @@ export function rebuildHtmlWithEditedBody(
     imageSources.set(encodeURI(src), src);
   });
 
-  const edited = withBlockStyle(
-    inOriginalBlocks(markdownToSafeHtml(markdown, imageSources), $inner),
-    style,
+  const edited = withOriginalClass(
+    withBlockStyle(
+      inOriginalBlocks(markdownToSafeHtml(markdown, imageSources), $inner),
+      style,
+    ),
+    $inner,
   );
-  if (restylesEditedText(html, $inner, edited)) return null;
 
-  return [
+  const rebuilt = [
     parts.head,
     parts.prefix,
     // The authored part's own style sheets stay, ahead of the edited text.
@@ -88,49 +90,173 @@ export function rebuildHtmlWithEditedBody(
     parts.quoted,
     parts.tail,
   ].join("");
+  // Style sheets apply to the whole email and can match the edit's new
+  // structure. Unless every selector is a plain one, the edited send carries
+  // none: formatting may go, but no edited word can be hidden.
+  return styleSheetsAllowEdit(html, addedTags($inner, edited))
+    ? rebuilt
+    : withoutStyleSheets(rebuilt);
 }
 
-/**
- * Style sheets apply to the whole email. An edit turns the authored part's
- * markup into p/strong/li…; a rule for a tag the original authored part did
- * not use would then restyle, or hide, text it never touched. A linked
- * sheet or @import can't be read, so any new tag counts.
- */
-function restylesEditedText(
-  html: string,
-  $inner: CheerioAPI,
-  editedHtml: string,
-) {
+function addedTags($inner: CheerioAPI, editedHtml: string) {
   const before = new Set(
     $inner("*")
       .toArray()
       .map((element) => element.name),
   );
   const $edited = load(editedHtml, null, false);
-  const added = [
-    ...new Set(
-      $edited("*")
-        .toArray()
-        .map((element) => element.name),
-    ),
-  ].filter((tag) => !before.has(tag));
-  if (!added.length) return false;
-
-  const $ = load(html);
-  if ($("link").length) return true;
-  const css = $("style")
-    .toArray()
-    .map((element) => $(element).text())
-    .join("\n");
-  if (/@import/i.test(css)) return true;
-  // Selectors only: drop the declaration blocks, comments and escapes.
-  const selectors = css
-    .replace(/\/\*[\s\S]*?\*\//g, " ")
-    .replace(/\{[^{}]*\}/g, " ")
-    .toLowerCase();
-  return added.some((tag) =>
-    new RegExp(`(^|[^\\w.#:\\[-])${tag}(?![\\w-])`).test(selectors),
+  return new Set(
+    $edited("*")
+      .toArray()
+      .map((element) => element.name)
+      .filter((tag) => !before.has(tag)),
   );
+}
+
+/**
+ * True when every style sheet in the email (Outlook-only ones included) uses
+ * only selectors that can't newly match edited text: .class, #id, tag.class,
+ * tag#id, a type selector of a tag the edit doesn't add, and a:link/visited/
+ * hover. No escapes, combinators, attribute selectors or other pseudo-classes,
+ * no @import and no linked sheet.
+ */
+function styleSheetsAllowEdit(html: string, added: Set<string>) {
+  const $ = load(html);
+  if ($("link").length) return false;
+  const sheets = [
+    ...$("style")
+      .toArray()
+      .map((element) => $(element).text()),
+    ...commentNodes($.root().get(0))
+      .filter((node) => /^\s*\[\s*if\b/i.test(node.data))
+      .flatMap((node) => {
+        const $comment = load(node.data, null, false);
+        return $comment("style")
+          .toArray()
+          .map((element) => $comment(element).text());
+      }),
+  ];
+  return sheets.every((css) => {
+    const source = css
+      .replace(/\/\*[\s\S]*?\*\//g, " ")
+      .replace(/<!--|-->/g, " ");
+    return !source.includes("\\") && rulesAllowEdit(source, added);
+  });
+}
+
+function rulesAllowEdit(css: string, added: Set<string>): boolean {
+  let index = 0;
+  while (index < css.length) {
+    const open = indexOutsideStrings(css, "{", index);
+    if (open < 0) return !css.slice(index).trim();
+    const close = matchingBrace(css, open);
+    if (close < 0) return false;
+    const prelude = css.slice(index, open).trim();
+    const block = css.slice(open + 1, close);
+    index = close + 1;
+
+    // Statements before the rule (@charset is harmless; @import is not).
+    const statements = prelude.split(";");
+    const selectorText = statements.pop()?.trim() ?? "";
+    if (
+      statements.some(
+        (statement) =>
+          statement.trim() && !/^@charset\b/i.test(statement.trim()),
+      )
+    )
+      return false;
+
+    const atRule = selectorText.match(/^@([\w-]+)/)?.[1]?.toLowerCase();
+    if (atRule) {
+      if (atRule === "media" || atRule === "supports") {
+        if (!rulesAllowEdit(block, added)) return false;
+      } else if (!["font-face", "page", "list"].includes(atRule)) return false;
+      continue;
+    }
+    if (
+      !selectorText
+        .split(",")
+        .every((selector) => selectorAllowed(selector, added))
+    )
+      return false;
+  }
+  return true;
+}
+
+function selectorAllowed(selector: string, added: Set<string>) {
+  const match = selector
+    .trim()
+    .toLowerCase()
+    .match(
+      /^([a-z][a-z0-9]*)?((?:[.#][a-z_][\w-]*)*)(:(?:link|visited|hover))?$/,
+    );
+  if (!match) return false;
+  const [, tag, qualifiers, pseudo] = match;
+  if (!tag && !qualifiers) return false;
+  if (pseudo && tag !== "a") return false;
+  // A bare type selector (or a:link) must not reach a tag the edit adds.
+  if (tag && !qualifiers && added.has(tag)) return false;
+  return true;
+}
+
+function indexOutsideStrings(css: string, char: string, from: number) {
+  let quote: string | null = null;
+  for (let index = from; index < css.length; index++) {
+    const current = css[index];
+    if (quote) {
+      if (current === quote) quote = null;
+    } else if (current === '"' || current === "'") quote = current;
+    else if (current === char) return index;
+  }
+  return -1;
+}
+
+function matchingBrace(css: string, open: number) {
+  let depth = 0;
+  let quote: string | null = null;
+  for (let index = open; index < css.length; index++) {
+    const current = css[index];
+    if (quote) {
+      if (current === quote) quote = null;
+    } else if (current === '"' || current === "'") quote = current;
+    else if (current === "{") depth++;
+    else if (current === "}" && --depth === 0) return index;
+  }
+  return -1;
+}
+
+/** The HTML with every style sheet, linked sheet and Outlook-only block cut out. */
+function withoutStyleSheets(html: string) {
+  const isDocument = /<(?:html|head|body)[\s>]/i.test(html);
+  const $ = load(html, { sourceCodeLocationInfo: true }, isDocument);
+  const ranges = [
+    ...$("style, link").toArray(),
+    ...commentNodes($.root().get(0)).filter((node) =>
+      /^\s*\[\s*if\b/i.test(node.data),
+    ),
+  ]
+    .map((node) => node.sourceCodeLocation)
+    .filter((location) => !!location)
+    .map((location) => [location.startOffset, location.endOffset] as const)
+    .sort((a, b) => b[0] - a[0]);
+  let result = html;
+  for (const [from, to] of ranges)
+    result = result.slice(0, from) + result.slice(to);
+  return result;
+}
+
+/**
+ * Edited blocks take the class of the original's first classed block
+ * (MsoNormal, gmail_default), so class-based fonts survive the edit.
+ */
+function withOriginalClass(html: string, $inner: CheerioAPI) {
+  const original = $inner("p[class], div[class]").first();
+  const className = original.attr("class");
+  const tag = original.get(0)?.name;
+  if (!className || !tag) return html;
+  const $ = load(html, null, false);
+  $.root().children(tag).attr("class", className);
+  return $.root().html() ?? html;
 }
 
 /** True when the authored part holds text the reader can't see. */

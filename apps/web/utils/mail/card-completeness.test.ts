@@ -88,6 +88,16 @@ const PROBES = Object.fromEntries(
     html.replaceAll("@S@", sentinel(name)),
   ]),
 );
+// Bodies a reviewer must be able to edit on the card.
+const EDITABLE = [
+  "middle",
+  "cssAfter",
+  "cssImport",
+  "cssLink",
+  "quoteStyleHidesP",
+  "gmailWebSignature",
+  "outlookDesktop",
+];
 const MARKERS =
   /\[(style sheet|shown only in Outlook|hidden in the email|image|form field|embedded page|background image):/;
 
@@ -117,11 +127,13 @@ describe("an edit made on the card sends only what the card shows", () => {
     ["agent", name, sanitizeAgentHtml(PROBES[name])],
   ]);
 
-  it.each(paths)("%s HTML: %s", (_path, _name, html) => {
+  it.each(paths)("%s HTML: %s", (path, name, html) => {
     const card = cardBodyFromHtml(html);
     const edited = card.body.replace(/[A-Za-z]{2,}/, "Yo");
 
     const sent = rebuildHtmlWithEditedBody(html, edited);
+    if (path === "user" && EDITABLE.includes(name))
+      expect(sent, `${name} must stay editable`).not.toBeNull();
     if (sent === null) return; // refused: nothing is sent
 
     expect(sent).not.toMatch(MARKERS);
@@ -242,7 +254,7 @@ describe("user HTML: what the card marks and refuses", () => {
     expect(hasHiddenText(PROBES[name])).toBe(false);
   });
 
-  it("keeps the authored part's style sheet after a body edit, without the notice", () => {
+  it("drops a text-adding style sheet from an edited send, without the notice", () => {
     const card = cardBodyFromHtml(PROBES.cssAfter);
     const html =
       rebuildHtmlWithEditedBody(
@@ -250,9 +262,7 @@ describe("user HTML: what the card marks and refuses", () => {
         card.body.replace("Hi", "Yo"),
       ) ?? "";
 
-    expect(html).toContain(
-      `<style>.x::after{content:"${sentinel("cssAfter")}"}</style>`,
-    );
+    expect(html).not.toContain("<style");
     expect(html).toContain("Yo Bob");
     expect(html).not.toMatch(MARKERS);
   });
@@ -308,60 +318,73 @@ describe("user HTML: what the card marks and refuses", () => {
     expect(html.endsWith(quote)).toBe(true);
   });
 
-  // An edit that adds a tag (bold, a list, a link) a style sheet has a rule
-  // for would hide or restyle text that rule did not touch before.
+  // Style sheets apply to the whole email and may match the edit's new
+  // structure. Unless every selector is a plain one, an edited send carries
+  // no style sheet at all: formatting may go, text never gets hidden.
   it.each([
     [
-      "a head rule",
-      "<html><head><style>strong{display:none}</style></head><body><div>Hi Bob</div></body></html>",
+      "an attribute and child combinator",
+      "<style>[dir] > *{display:none}</style>",
+      "Hi Rob",
+    ],
+    ["a CSS escape", "<style>d\\69 v{display:none}</style>", "Hi Rob"],
+    ["a child combinator", "<style>p > *{display:none}</style>", "Hi **Rob**"],
+    [
+      "a :not() selector",
+      "<style>p:not(.MsoNormal){display:none}</style>",
+      "Hi Rob",
     ],
     [
-      "a quoted rule",
-      '<div dir="ltr">Hi Bob</div><div class="gmail_quote"><style>strong{font-size:0}</style>old</div>',
+      "a rule for a tag the edit adds",
+      "<style>strong{display:none}</style>",
+      "Hi **Rob**",
     ],
+    ["@import", "<style>@import url(https://e.test/a.css);</style>", "Hi Rob"],
     [
-      "a grouped rule",
-      "<style>td, strong , em{font-size:0}</style><div>Hi Bob</div>",
+      "a linked sheet",
+      '<link rel="stylesheet" href="https://e.test/a.css">',
+      "Hi Rob",
     ],
-  ])("refuses an edit that a style sheet would restyle (%s)", (_name, html) => {
-    expect(rebuildHtmlWithEditedBody(html, "Hi **Rob**")).toBeNull();
+  ])("drops every style sheet from an edited send with %s", (_name, sheet, edit) => {
+    const quote = `<div class="gmail_quote">${sheet}<p class="MsoNormal">old</p></div>`;
+    for (const original of [
+      `<div dir="ltr">Hi Bob</div>${quote}`,
+      `<html><head>${sheet}</head><body><p class="MsoNormal">Hi Bob</p></body></html>`,
+    ]) {
+      const sent = rebuildHtmlWithEditedBody(original, edit) ?? "";
+
+      expect(sent).toContain("Rob");
+      expect(sent).not.toMatch(/<style|<link/i);
+    }
   });
 
-  it("edits a Gmail reply quoting a newsletter with a p rule, sending divs", () => {
-    const { html: original } = createReplyContent({
-      textContent: "Thanks, noted\n\nSee you Monday",
-      message: {
-        headers: {
-          from: "News <news@example.com>",
-          to: "me@example.com",
-          subject: "Weekly",
-          date: "Mon, 2 Nov 2026 10:00:00 +0000",
-        },
-        textPlain: "Big news",
-        textHtml:
-          "<html><head><style>p{color:red}</style></head><body><p>Big news</p></body></html>",
-      },
-    });
-    const card = cardBodyFromHtml(original);
+  it("keeps Outlook's own style sheet after an edit", () => {
+    const sheet =
+      '<style><!--\n/* Font Definitions */\n@font-face\n\t{font-family:"Cambria Math";}\n/* Style Definitions */\np.MsoNormal, li.MsoNormal, div.MsoNormal\n\t{margin:0in;font-size:11.0pt;font-family:"Calibri",sans-serif;}\na:link, span.MsoHyperlink\n\t{color:#0563C1;text-decoration:underline;}\nspan.EmailStyle17\n\t{font-family:"Calibri",sans-serif;}\n.MsoChpDefault\n\t{font-size:10.0pt;}\n@page WordSection1\n\t{size:8.5in 11.0in;}\ndiv.WordSection1\n\t{page:WordSection1;}\n@media screen { p.MsoNormal { margin:0 } }\n--></style>';
+    const original = `<html><head>${sheet}</head><body><div class=WordSection1><p class=MsoNormal>Hi Bob</p><p class=MsoNormal>Thanks</p></div></body></html>`;
 
-    const html =
-      rebuildHtmlWithEditedBody(original, card.body.replace("noted", "done")) ??
-      "";
-    const authored = html.slice(0, html.indexOf('<div class="gmail_quote'));
+    const sent = rebuildHtmlWithEditedBody(original, "Hi Rob\n\nThanks") ?? "";
 
-    expect(authored).toContain(
-      "<div>Thanks, done</div><div><br></div><div>See you Monday</div>",
-    );
-    expect(authored).not.toContain("<p>");
+    expect(sent).toContain(sheet);
+    expect(sent).toContain('<p class="MsoNormal">Hi Rob</p>');
   });
 
-  it("keeps <p> blocks for an Outlook (p-based) body", () => {
+  it("keeps Gmail's class on edited blocks", () => {
     const original =
-      "<style>p{margin:0}</style><p class=MsoNormal>Hi Bob</p><p class=MsoNormal>Thanks</p>";
+      '<style>.gmail_default{font-family:verdana}</style><div dir="ltr"><div class="gmail_default">Hi Bob</div><div class="gmail_default">Thanks</div></div>';
 
-    expect(rebuildHtmlWithEditedBody(original, "Hi Rob\n\nThanks")).toContain(
-      "<p>Hi Rob</p>\n<p>Thanks</p>",
-    );
+    const sent = rebuildHtmlWithEditedBody(original, "Hi Rob\n\nThanks") ?? "";
+
+    expect(sent).toContain(".gmail_default{font-family:verdana}");
+    expect(sent).toContain('<div class="gmail_default">Hi Rob</div>');
+  });
+
+  it("leaves an unedited send untouched by the style sheet rule", () => {
+    // Nothing is rebuilt when the body is unchanged: the gate sends the
+    // original HTML, sheets and all (tested in send-approval.test.ts).
+    expect(
+      cardBodyFromHtml("<style>[dir]>*{color:red}</style><p>Hi</p>").body,
+    ).toBe("Hi");
   });
 
   it("allows a plain edit under a quoted p rule, as divs", () => {

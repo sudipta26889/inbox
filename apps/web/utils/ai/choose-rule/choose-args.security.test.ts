@@ -145,6 +145,29 @@ describe("mergeTemplateWithVars Safety", () => {
   });
 });
 
+describe("AI-filled reply values are cleaned", () => {
+  it("cleans the model's value while the user's template HTML is kept", () => {
+    const action = getAction({
+      id: "action-1",
+      type: ActionType.REPLY,
+      content: "<p><b>Thanks</b> {{short reply}}</p>",
+    });
+    const aiArgs = {
+      [`${ActionType.REPLY}-action-1`]: {
+        content: {
+          var1: "<style>p{display:none}</style><!--[if mso]>WIRE<![endif]-->ok \u202Eacct\u202C",
+        },
+      },
+    };
+
+    const [result] = combineActionsWithAiArgs([action], aiArgs);
+
+    expect(result.content?.startsWith("<p><b>Thanks</b> ")).toBe(true);
+    expect(result.content).not.toMatch(/<style|<!--|[\u202A-\u202E]/);
+    expect(result.content).toContain("ok acct");
+  });
+});
+
 describe("getParameterFieldsForAction Scoping", () => {
   it("returns parameters only for fields containing template variables", () => {
     const action = getAction({

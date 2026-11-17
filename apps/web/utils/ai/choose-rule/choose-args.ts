@@ -29,6 +29,7 @@ import {
 } from "@/utils/mcp/tool-specs";
 import type { SelectedAttachment } from "@/utils/attachments/source-schema";
 import { escapeHtml } from "@/utils/string";
+import { sanitizeAgentHtml } from "@/utils/mail/sanitize-agent-html";
 
 const MODULE = "choose-args";
 
@@ -522,6 +523,9 @@ export function mergeTemplateWithVars(
 // AI-filled values are untrusted; the user's own template text is kept as written.
 function escapeTemplateVars(vars: Record<`var${number}`, string>) {
   return Object.fromEntries(
-    Object.entries(vars).map(([key, value]) => [key, escapeHtml(value)]),
+    Object.entries(vars).map(([key, value]) => [
+      key,
+      sanitizeAgentHtml(escapeHtml(value)),
+    ]),
   ) as Record<`var${number}`, string>;
 }

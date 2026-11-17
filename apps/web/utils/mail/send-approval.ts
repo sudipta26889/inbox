@@ -473,6 +473,8 @@ async function askReviewer(request: SendApprovalRequest): Promise<SendEdits> {
     replyTo: request.replyTo,
     subject,
     body,
+    // Right after the body: Slack shows only the first six long fields.
+    ...(card.notices && { notices: card.notices }),
     ...(request.attachments?.length && { attachments: request.attachments }),
     ...(request.forwardedAttachments?.length && {
       forwardedAttachments: request.forwardedAttachments,
@@ -481,7 +483,6 @@ async function askReviewer(request: SendApprovalRequest): Promise<SendEdits> {
     // files must never be the ones cut.
     ...(card.signature && { signature: card.signature }),
     ...(card.quotedHistory && { quoted_history: card.quotedHistory }),
-    ...(card.notices && { notices: card.notices }),
     isReply: !!request.isReply,
     ...(request.sendAt && { sendAt: request.sendAt }),
   };
