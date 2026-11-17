@@ -6,8 +6,49 @@ export const LOCAL_BYPASS_PROVIDER = "google";
 export const LOCAL_BYPASS_PROVIDER_ACCOUNT_PREFIX = "local-bypass:";
 export const LOCAL_BYPASS_ACCESS_TOKEN = "local-bypass-access-token";
 
+/**
+ * The one gate for the dev login bypass. Open in either of two ways:
+ *  (a) NODE_ENV=development with LOCAL_AUTH_BYPASS_ENABLED, or
+ *  (b) a LAN preview build: LOCAL_AUTH_BYPASS_ENABLED and LOCAL_PREVIEW, a
+ *      database named inbox_refork_*, and a base URL on localhost or *.lan.
+ * Production cannot satisfy (b): its database is not inbox_refork_*, and its
+ * base URL is a public https host.
+ */
 export function isLocalAuthBypassEnabled() {
-  return env.NODE_ENV === "development" && env.LOCAL_AUTH_BYPASS_ENABLED;
+  if (!env.LOCAL_AUTH_BYPASS_ENABLED) return false;
+  if (env.NODE_ENV === "development") return true;
+
+  return isLocalPreview();
+}
+
+function isLocalPreview() {
+  return (
+    env.LOCAL_PREVIEW === true &&
+    PREVIEW_DATABASE_NAME.test(databaseName(env.DATABASE_URL)) &&
+    isLanHost(hostName(env.NEXT_PUBLIC_BASE_URL))
+  );
+}
+
+const PREVIEW_DATABASE_NAME = /^inbox_refork_/;
+
+function databaseName(url: string | undefined): string {
+  try {
+    return decodeURIComponent(new URL(url ?? "").pathname.replace(/^\//, ""));
+  } catch {
+    return "";
+  }
+}
+
+function hostName(url: string | undefined): string {
+  try {
+    return new URL(url ?? "").hostname.toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+function isLanHost(host: string): boolean {
+  return host === "localhost" || host === "127.0.0.1" || host.endsWith(".lan");
 }
 
 /**
@@ -16,7 +57,7 @@ export function isLocalAuthBypassEnabled() {
  * always undefined.
  */
 export function getLocalBypassTargetEmail(): string | undefined {
-  if (!isLocalAuthBypassEnabled()) return undefined;
+  if (!isLocalAuthBypassEnabled()) return;
 
   return env.LOCAL_AUTH_BYPASS_USER_EMAIL?.trim() || undefined;
 }

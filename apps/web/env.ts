@@ -409,6 +409,10 @@ const parsedEnv = createEnv({
     LOCAL_AUTH_BYPASS_ENABLED: booleanString.optional().default(false),
     // Dev only, and only with the bypass above: sign in as this EXISTING user
     // (a staging clone) instead of the mock test user. Never set in a deploy file.
+    // Dev only: lets the bypass work in a production build (next start) that
+    // serves a LAN preview. Needs a database named inbox_refork_* and a
+    // localhost or *.lan base URL as well. Never set in a deploy file.
+    LOCAL_PREVIEW: booleanString.optional().default(false),
     LOCAL_AUTH_BYPASS_USER_EMAIL: z.string().trim().email().optional(),
     // Optional provider:model for structured decisions, e.g. openrouter:typesafe/jev-1.13
     DEFAULT_DECISION_MODEL: z

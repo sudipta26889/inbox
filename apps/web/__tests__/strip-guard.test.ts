@@ -221,11 +221,23 @@ describe("strip guard", () => {
     "deploy/stack.staging.yml",
     ".github/workflows/deploy.yml",
     ".github/workflows/deploy-staging.yml",
+  ])("%s has no dev login bypass setting at all", (file) => {
+    expect(readFileSync(join(REPO_ROOT, file), "utf8")).not.toMatch(
+      /LOCAL_AUTH_BYPASS|LOCAL_PREVIEW/,
+    );
+  });
+
+  it.each([
+    "deploy/stack.yml",
+    "deploy/stack.staging.yml",
+    ".github/workflows/deploy.yml",
+    ".github/workflows/deploy-staging.yml",
     ".github/workflows/local-bypass-smoke.yml",
-  ])("%s does not set LOCAL_AUTH_BYPASS_USER_EMAIL", (file) => {
+  ])("%s sets neither the bypass user email nor the preview flag", (file) => {
     const content = readFileSync(join(REPO_ROOT, file), "utf8");
 
     expect(content).not.toContain("LOCAL_AUTH_BYPASS_USER_EMAIL");
+    expect(content).not.toContain("LOCAL_PREVIEW");
   });
 
   it.each([
