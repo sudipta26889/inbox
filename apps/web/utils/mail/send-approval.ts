@@ -95,16 +95,28 @@ export async function requireSendApproval(
     },
   });
 
-  if (dharahilClient.wasDenied(decision)) {
-    throw new Error(
-      `Email sending denied by human reviewer: ${decision.action}${decision.reason ? ` - ${decision.reason}` : ""}`,
-    );
-  }
+  // Allowlist: only an explicit approval sends. Anything else, including a
+  // status this code does not know, stops the send.
+  if (!dharahilClient.shouldProceed(decision)) {
+    if (decision.edited) {
+      throw new Error(
+        "Email not sent: the approval card was edited. Card edits aren't applied yet; change the email in Inbox and resend.",
+      );
+    }
 
-  if (dharahilClient.shouldRevise(decision)) {
-    throw new Error(
-      `Email revision requested: ${decision.revise_input || "No specific instructions provided"}`,
-    );
+    if (dharahilClient.wasDenied(decision)) {
+      throw new Error(
+        `Email sending denied by human reviewer: ${decision.action}${decision.reason ? ` - ${decision.reason}` : ""}`,
+      );
+    }
+
+    if (dharahilClient.shouldRevise(decision)) {
+      throw new Error(
+        `Email revision requested: ${decision.revise_input || "No specific instructions provided"}`,
+      );
+    }
+
+    throw new Error(`Email not sent: approval returned ${decision.action}`);
   }
 
   logger.info("DharaHIL: outbound send approved", {

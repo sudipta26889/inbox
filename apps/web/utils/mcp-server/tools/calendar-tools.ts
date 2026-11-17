@@ -406,6 +406,12 @@ export async function createCalendarEvent(
       );
     }
 
+    if (!dharahilClient.shouldProceed(decision)) {
+      throw new Error(
+        `Calendar change not made: approval returned ${decision.action}`,
+      );
+    }
+
     logger.info("DharaHIL: Calendar event creation approved", {
       action: decision.action,
     });
@@ -601,6 +607,12 @@ export async function updateCalendarEvent(
       );
     }
 
+    if (!dharahilClient.shouldProceed(decision)) {
+      throw new Error(
+        `Calendar change not made: approval returned ${decision.action}`,
+      );
+    }
+
     logger.info("DharaHIL: Calendar event update approved", {
       eventId,
       action: decision.action,
@@ -739,6 +751,12 @@ export async function deleteCalendarEvent(
     if (dharahilClient.shouldRevise(decision)) {
       throw new Error(
         `Calendar event deletion revision requested: ${decision.revise_input || "No specific instructions provided"}`,
+      );
+    }
+
+    if (!dharahilClient.shouldProceed(decision)) {
+      throw new Error(
+        `Calendar change not made: approval returned ${decision.action}`,
       );
     }
 

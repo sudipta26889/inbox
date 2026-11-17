@@ -42,6 +42,8 @@ export interface DharaHILResponse {
 
 export interface DharaHILDecision {
   action: DharaHILAction;
+  /** The reviewer edited the card. Edits are not applied, so nothing may go. */
+  edited?: boolean;
   reason?: string;
   revise_input?: string;
 }
@@ -193,7 +195,7 @@ export class DharaHILClient {
             fullResponse: JSON.stringify(data),
           });
 
-          return data;
+          return { ...data, action: toImmediateAction(immediate) };
         }
 
         logger.error("DharaHIL: Invalid response from gateway", {
@@ -266,6 +268,7 @@ export class DharaHILClient {
 
     return {
       action: toDharaHILAction(data),
+      ...(isEditedApproval(data) ? { edited: true } : {}),
       revise_input: data.last_decision_revise_input,
       reason: data.last_decision_note,
     };
@@ -335,7 +338,7 @@ export class DharaHILClient {
       // There is nothing to poll for in that case.
       if (!(response.request_id && response.expires_at) && response.action) {
         return {
-          action: response.action,
+          action: toImmediateAction(response.action),
           reason: (response as { reason?: string }).reason,
         };
       }
@@ -407,15 +410,42 @@ function toDharaHILAction(data: {
   status?: string;
   last_decision?: string;
 }): DharaHILAction {
-  if (data.status === "APPROVED" || data.last_decision === "approve") {
-    return "APPROVED";
+  // Decide on status alone: last_decision survives later status changes, and an
+  // EXECUTED request still reads last_decision "approve".
+  if (data.status === "APPROVED") {
+    // The gateway sent the edited card back as APPROVED. Edits are not applied
+    // yet, so sending would send the ORIGINAL: hold it as a revision request.
+    return isEditedApproval(data) ? "REVISE_REQUESTED" : "APPROVED";
   }
 
-  if (data.status === "REJECTED" || data.last_decision === "reject") {
+  if (data.status === "REJECTED" || data.status === "AUTO_DENIED") {
     return "REJECTED";
   }
 
-  if (data.last_decision === "revise") return "REVISE_REQUESTED";
+  return "ERROR";
+}
 
-  return data.status as DharaHILAction;
+function isEditedApproval(data: { status?: string; last_decision?: string }) {
+  return data.status === "APPROVED" && data.last_decision === "edit";
+}
+
+/**
+ * Map an action the gateway gave on submission (auto-allow / auto-deny
+ * policies). Same allowlist: anything it does not name is ERROR.
+ */
+function toImmediateAction(action: unknown): DharaHILAction {
+  switch (action) {
+    case "ALLOW":
+    case "APPROVED":
+    case "AUTO_ALLOWED":
+    case "DENY":
+    case "REJECTED":
+    case "REVISE_REQUESTED":
+    case "EXPIRED":
+      return action;
+    case "AUTO_DENIED":
+      return "REJECTED";
+    default:
+      return "ERROR";
+  }
 }
