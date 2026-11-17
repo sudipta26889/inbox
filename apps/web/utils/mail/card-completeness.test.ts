@@ -221,6 +221,10 @@ describe("sanitizeAgentHtml", () => {
     ["a colour with alpha", "color:rgba(0, 0, 0, 0.5)"],
     ["an 8-digit hex colour", "color:#000000aa"],
     ["an unknown colour name", "color:notacolour"],
+    ["light grey under 2:1 contrast", "color:#e3e3e3"],
+    ["yellow", "color:yellow"],
+    ["pale yellow", "color:#ffff80"],
+    ["light hsl in space syntax", "color:hsl(0 0% 89%)"],
     ["an !important size", "font-size:12px !important"],
     ["a size keyword", "font-size:small"],
     ["a size below 8px", "font-size:7px"],
@@ -240,6 +244,7 @@ describe("sanitizeAgentHtml", () => {
     "color:rgb(0, 0, 0)",
     "color:hsl(210, 50%, 40%)",
     "color:navy",
+    "color:#555555",
     "line-height:1.5",
     "margin:0in 0in 8pt",
   ])("keeps %s", (declaration) => {

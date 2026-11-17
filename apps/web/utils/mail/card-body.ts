@@ -551,8 +551,8 @@ function lengthInPixels(value: string, unitless: boolean) {
   return size * perUnit[unit];
 }
 
-// #rgb/#rrggbb, rgb() or hsl() without alpha, or a known colour name, and
-// not so light (HSL lightness >= 90%) that it vanishes on white.
+// #rgb/#rrggbb, rgb() or hsl() without alpha, or a known colour name, with
+// at least 2:1 WCAG contrast against white so it can't vanish on white.
 function isVisibleColor(value: string) {
   const lower = value.toLowerCase();
   let rgb: number[] | null = null;
@@ -577,14 +577,47 @@ function isVisibleColor(value: string) {
           ? (Number.parseFloat(part) / 100) * 255
           : Number.parseFloat(part),
       );
-  if (rgb) {
-    if (rgb.some((channel) => channel > 255)) return false;
-    return (Math.max(...rgb) + Math.min(...rgb)) / 2 / 255 < 0.9;
-  }
   const hsl = lower.match(
-    /^hsl\(\s*\d+(?:\.\d+)?(?:deg)?\s*[,\s]\s*\d+(?:\.\d+)?%\s*[,\s]\s*(\d+(?:\.\d+)?)%\s*\)$/,
+    /^hsl\(\s*(\d+(?:\.\d+)?)(?:deg)?\s*[,\s]\s*(\d+(?:\.\d+)?)%\s*[,\s]\s*(\d+(?:\.\d+)?)%\s*\)$/,
   );
-  return !!hsl && Number.parseFloat(hsl[1]) < 90;
+  if (hsl)
+    rgb = hslToRgb(
+      Number.parseFloat(hsl[1]),
+      Number.parseFloat(hsl[2]) / 100,
+      Number.parseFloat(hsl[3]) / 100,
+    );
+  if (!rgb || rgb.some((channel) => channel > 255)) return false;
+  return contrastWithWhite(rgb) >= 2;
+}
+
+// WCAG 2 contrast ratio between the colour and white.
+function contrastWithWhite(rgb: number[]) {
+  const [r, g, b] = rgb.map((channel) => {
+    const value = channel / 255;
+    return value <= 0.039_28 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  });
+  const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return 1.05 / (luminance + 0.05);
+}
+
+function hslToRgb(hue: number, saturation: number, lightness: number) {
+  const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation;
+  const section = (hue % 360) / 60;
+  const second = chroma * (1 - Math.abs((section % 2) - 1));
+  const [r, g, b] =
+    section < 1
+      ? [chroma, second, 0]
+      : section < 2
+        ? [second, chroma, 0]
+        : section < 3
+          ? [0, chroma, second]
+          : section < 4
+            ? [0, second, chroma]
+            : section < 5
+              ? [second, 0, chroma]
+              : [chroma, 0, second];
+  const offset = lightness - chroma / 2;
+  return [r, g, b].map((channel) => (channel + offset) * 255);
 }
 
 // ponytail: common names only; an unlisted name is refused (fails closed).
