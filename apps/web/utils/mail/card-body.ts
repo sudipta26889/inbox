@@ -69,12 +69,11 @@ export function rebuildHtmlWithEditedBody(
     imageSources.set(encodeURI(src), src);
   });
 
-  // The edit carries no style sheet, so the original's typography (its class
-  // rules and common inline style, through the typography allowlist) goes
-  // inline on every edited block instead.
+  // The edit carries no style sheet; edited blocks get only the inline
+  // typography every original authored block shares.
   const edited = withBlockStyle(
     inOriginalBlocks(markdownToSafeHtml(markdown, imageSources), $inner),
-    mergeStyles(classTypography(html, $inner), style),
+    style,
   );
 
   const rebuilt = [
@@ -110,55 +109,6 @@ function withoutStyleSheets(html: string) {
   for (const [from, to] of ranges)
     result = result.slice(0, from) + result.slice(to);
   return result;
-}
-
-/**
- * Typography the original's first classed block gets from style sheet rules
- * for its class (Outlook's p.MsoNormal, Gmail's .gmail_default), read through
- * the typography allowlist. Only innermost rules with a plain .class or
- * tag.class selector count; nothing here can hide text.
- */
-function classTypography(html: string, $inner: CheerioAPI) {
-  const block = $inner("p[class], div[class]").first();
-  const tag = block.get(0)?.name;
-  const classes = (block.attr("class") ?? "").toLowerCase().split(/\s+/);
-  if (!tag || !classes[0]) return "";
-  const wanted = new Set(
-    classes.flatMap((name) => [`.${name}`, `${tag}.${name}`]),
-  );
-  const $ = load(html);
-  const css = $("style")
-    .toArray()
-    .map((element) => $(element).text())
-    .join("\n")
-    .replace(/\/\*[\s\S]*?\*\//g, " ")
-    .replace(/<!--|-->/g, " ");
-  return [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
-    .filter(([, selectors]) =>
-      selectors
-        .split(",")
-        .some((selector) => wanted.has(selector.trim().toLowerCase())),
-    )
-    .map(([, , declarations]) => typographyOnly(declarations))
-    .filter(Boolean)
-    .join(";");
-}
-
-// Later declarations win, as in CSS.
-function mergeStyles(...styles: string[]) {
-  const merged = new Map<string, string>();
-  for (const style of styles)
-    for (const declaration of style.split(";")) {
-      const colon = declaration.indexOf(":");
-      if (colon > 0)
-        merged.set(
-          declaration.slice(0, colon).trim(),
-          declaration.slice(colon + 1).trim(),
-        );
-    }
-  return [...merged]
-    .map(([property, value]) => `${property}:${value}`)
-    .join(";");
 }
 
 /** True when the authored part holds text the reader can't see. */
@@ -499,11 +449,15 @@ function styleOf(element: Element): [string, string][] | null {
   if (element.name === "font") {
     const { color, face, ...other } = element.attribs;
     if (Object.keys(other).length) return null;
-    if ([color, face].some((value) => value && !isSafeStyleValue(value)))
-      return null;
+    // Mail clients ignore a value that isn't a clean colour or font name,
+    // so such a value brings nothing to the edited text.
     return [
-      ...(color ? ([["color", color]] as [string, string][]) : []),
-      ...(face ? ([["font-family", face]] as [string, string][]) : []),
+      ...(color && isAcceptableDeclaration("color", color)
+        ? ([["color", color.trim()]] as [string, string][])
+        : []),
+      ...(face && isAcceptableDeclaration("font-family", face)
+        ? ([["font-family", face.trim()]] as [string, string][])
+        : []),
     ];
   }
   if (!STYLABLE_TAGS.has(element.name)) return null;
@@ -549,40 +503,132 @@ function isHiddenStyle(style: string) {
 }
 
 // A typography value that can't be used to hide text or inject anything.
+// A strict grammar for the typography an edit may carry, shared by user and
+// agent HTML: nothing in it can hide text, inject a declaration or load
+// anything.
 function isAcceptableDeclaration(property: string, value: string) {
-  if (!isSafeStyleValue(value)) return false;
-  if (/calc\(|var\(|\d\s*(vw|vh|vmin|vmax)\b/i.test(value)) return false;
-  if (property === "font-size") return !isTinyFontSize(value);
-  if (property === "color")
-    return !/transparent|(rgba?|hsla?)\(\s*[^,)]+,\s*[^,)]+,\s*[^,)]+,\s*0*(\.0*)?%?\s*\)|\/\s*0*(\.0*)?%?\s*\)/i.test(
-      value,
+  const text = value.trim();
+  if (!text || /[!;:{}\\]|url/i.test(text)) return false;
+  if (property === "color") return isVisibleColor(text);
+  if (text.includes("(")) return false;
+  if (property === "font-family") return /^[\w\s,"'-]+$/.test(text);
+  if (property === "font-size") {
+    const size = lengthInPixels(text, false);
+    return size !== null && size >= 8;
+  }
+  if (property === "line-height") {
+    const height = lengthInPixels(text, true);
+    return height !== null && height > 0 && height <= 200;
+  }
+  if (/^(margin|padding)/.test(property)) {
+    const parts = text.split(/\s+/);
+    return (
+      parts.length <= 4 &&
+      parts.every((part) => {
+        const size = lengthInPixels(part, true);
+        return size !== null && size <= 200;
+      })
     );
-  if (property === "line-height") return !/^0*(\.0*)?[a-z%]*$/i.test(value);
-  if (/^(margin|padding)/.test(property))
-    return [...value.matchAll(/([\d.]+)\s*(px|pt|em|rem)?/gi)].every(
-      ([, size, unit]) => toPixels(Number.parseFloat(size), unit) <= 200,
-    );
-  return true;
+  }
+  return false;
 }
 
-function toPixels(size: number, unit = "px") {
-  const lower = unit.toLowerCase();
-  if (lower === "pt") return (size * 4) / 3;
-  if (lower === "em" || lower === "rem") return size * 16;
-  if (lower === "%") return (size / 100) * 16;
-  return size;
+// A non-negative number with a unit (a bare number when unitless is true, as
+// for line-height or 0), in pixels; null when it isn't one.
+function lengthInPixels(value: string, unitless: boolean) {
+  const match = value.match(/^(\d+(?:\.\d+)?)(px|pt|em|rem|%|in|cm|mm)?$/i);
+  if (!match) return null;
+  const size = Number.parseFloat(match[1]);
+  const unit = match[2]?.toLowerCase();
+  if (!unit) return unitless || size === 0 ? size * 16 : null;
+  const perUnit: Record<string, number> = {
+    px: 1,
+    pt: 4 / 3,
+    em: 16,
+    rem: 16,
+    "%": 0.16,
+    in: 96,
+    cm: 96 / 2.54,
+    mm: 96 / 25.4,
+  };
+  return size * perUnit[unit];
 }
 
-function isSafeStyleValue(value: string) {
-  return !/url\(|expression|\/\*|\\|(^|[\s,(])-[\d.]/i.test(value);
+// #rgb/#rrggbb, rgb() or hsl() without alpha, or a known colour name, and
+// not so light (HSL lightness >= 90%) that it vanishes on white.
+function isVisibleColor(value: string) {
+  const lower = value.toLowerCase();
+  let rgb: number[] | null = null;
+  const hex = (NAMED_COLORS[lower] ?? lower).match(
+    /^#([0-9a-f]{3}|[0-9a-f]{6})$/,
+  );
+  if (hex) {
+    const digits =
+      hex[1].length === 3
+        ? [...hex[1]].map((digit) => digit + digit)
+        : (hex[1].match(/../g) ?? []);
+    rgb = digits.map((pair) => Number.parseInt(pair, 16));
+  }
+  const rgbMatch = lower.match(
+    /^rgb\(\s*(\d+%?)\s*[,\s]\s*(\d+%?)\s*[,\s]\s*(\d+%?)\s*\)$/,
+  );
+  if (rgbMatch)
+    rgb = rgbMatch
+      .slice(1)
+      .map((part) =>
+        part.endsWith("%")
+          ? (Number.parseFloat(part) / 100) * 255
+          : Number.parseFloat(part),
+      );
+  if (rgb) {
+    if (rgb.some((channel) => channel > 255)) return false;
+    return (Math.max(...rgb) + Math.min(...rgb)) / 2 / 255 < 0.9;
+  }
+  const hsl = lower.match(
+    /^hsl\(\s*\d+(?:\.\d+)?(?:deg)?\s*[,\s]\s*\d+(?:\.\d+)?%\s*[,\s]\s*(\d+(?:\.\d+)?)%\s*\)$/,
+  );
+  return !!hsl && Number.parseFloat(hsl[1]) < 90;
 }
 
-// Below 8px text is unreadable on purpose; px, pt, em/rem and % are checked.
-function isTinyFontSize(value: string) {
-  const match = value.trim().match(/^([\d.]+)(px|pt|em|rem|%)?$/i);
-  if (!match) return false;
-  return toPixels(Number.parseFloat(match[1]), match[2]) < 8;
-}
+// ponytail: common names only; an unlisted name is refused (fails closed).
+const NAMED_COLORS: Record<string, string> = {
+  black: "#000000",
+  white: "#ffffff",
+  red: "#ff0000",
+  darkred: "#8b0000",
+  maroon: "#800000",
+  crimson: "#dc143c",
+  green: "#008000",
+  darkgreen: "#006400",
+  lime: "#00ff00",
+  olive: "#808000",
+  blue: "#0000ff",
+  darkblue: "#00008b",
+  navy: "#000080",
+  royalblue: "#4169e1",
+  teal: "#008080",
+  aqua: "#00ffff",
+  cyan: "#00ffff",
+  purple: "#800080",
+  indigo: "#4b0082",
+  fuchsia: "#ff00ff",
+  magenta: "#ff00ff",
+  orange: "#ffa500",
+  darkorange: "#ff8c00",
+  gold: "#ffd700",
+  yellow: "#ffff00",
+  brown: "#a52a2a",
+  gray: "#808080",
+  grey: "#808080",
+  darkgray: "#a9a9a9",
+  darkgrey: "#a9a9a9",
+  dimgray: "#696969",
+  dimgrey: "#696969",
+  silver: "#c0c0c0",
+  lightgray: "#d3d3d3",
+  lightgrey: "#d3d3d3",
+  pink: "#ffc0cb",
+};
 
 function textNodes(node: AnyNode | undefined): AnyNode[] {
   if (!node) return [];

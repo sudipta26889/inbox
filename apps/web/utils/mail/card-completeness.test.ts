@@ -212,6 +212,44 @@ describe("sanitizeAgentHtml", () => {
     expect(sanitizeAgentHtml(html)).not.toMatch(unsafe);
   });
 
+  it.each([
+    ["a font list with a function", "font-family:x(1)"],
+    ["a near-white colour", "color:#fefefe"],
+    ["white by name", "color:white"],
+    ["near-white rgb", "color:rgb(250, 250, 250)"],
+    ["light hsl", "color:hsl(0, 0%, 95%)"],
+    ["a colour with alpha", "color:rgba(0, 0, 0, 0.5)"],
+    ["an 8-digit hex colour", "color:#000000aa"],
+    ["an unknown colour name", "color:notacolour"],
+    ["an !important size", "font-size:12px !important"],
+    ["a size keyword", "font-size:small"],
+    ["a size below 8px", "font-size:7px"],
+    ["a zero line height", "line-height:0"],
+    ["a negative margin", "margin:-4px"],
+    ["a margin over 200px", "margin:0 0 0 300px"],
+  ])("drops %s", (_name, declaration) => {
+    expect(sanitizeAgentHtml(`<p style="${declaration}">x</p>`)).toBe(
+      "<p>x</p>",
+    );
+  });
+
+  it.each([
+    'font-family:Aptos, Aptos_EmbeddedFont, "Segoe UI", sans-serif',
+    "font-size:11pt",
+    "color:#1f1f1f",
+    "color:rgb(0, 0, 0)",
+    "color:hsl(210, 50%, 40%)",
+    "color:navy",
+    "line-height:1.5",
+    "margin:0in 0in 8pt",
+  ])("keeps %s", (declaration) => {
+    expect(
+      load(sanitizeAgentHtml(`<p style='${declaration}'>x</p>`))("p").attr(
+        "style",
+      ),
+    ).toBe(declaration.replace(/\s*:\s*/, ":"));
+  });
+
   it("keeps only the typography part of a mixed style", () => {
     expect(
       sanitizeAgentHtml(
@@ -407,29 +445,46 @@ describe("user HTML: what the card marks and refuses", () => {
     expect(sent).not.toMatch(/<style|@font-face|<link|class=/i);
   });
 
-  it("keeps an Outlook draft's font on edited blocks as an inline style", () => {
-    const sheet =
-      '<style><!--\n@font-face\n\t{font-family:"Cambria Math";}\np.MsoNormal, li.MsoNormal, div.MsoNormal\n\t{margin:0in;font-size:11.0pt;font-family:"Calibri",sans-serif;}\n--></style>';
-    const original = `<html><head>${sheet}<!--[if gte mso 9]><xml>x</xml><![endif]--></head><body><div class=WordSection1><p class=MsoNormal>Hi Bob</p><p class=MsoNormal>Thanks</p></div></body></html>`;
+  // Nothing from a style sheet is ever taken onto edited text, and an
+  // attribute value that is not a clean colour or font name brings nothing.
+  it.each([
+    [
+      "a font colour that injects a declaration",
+      '<p><font color="red;font-size:0">Hi Bob</font></p>',
+    ],
+    [
+      "a font face that injects a declaration",
+      '<p><font face="arial;display:none">Hi Bob</font></p>',
+    ],
+    [
+      "a print-only white class rule",
+      "<style>@media print{ .MsoNormal{color:#ffffff} }</style><p class=MsoNormal>Hi Bob</p>",
+    ],
+    [
+      "a class rule on the first block only",
+      "<style>.MsoNormal{color:#ffffff}</style><p class=MsoNormal>intro</p><p>Hi Bob visible</p>",
+    ],
+    [
+      "an !important zero size in a class rule",
+      "<style>.MsoNormal{color:red;font-size:0 !important}</style><p class=MsoNormal>Hi Bob</p>",
+    ],
+  ])("an edit of %s sends visible text with no hiding style", (_name, original) => {
+    const card = cardBodyFromHtml(original);
+    const sent =
+      rebuildHtmlWithEditedBody(original, card.body.replace("Bob", "Rob")) ??
+      "";
 
-    const sent = rebuildHtmlWithEditedBody(original, "Hi Rob\n\nThanks") ?? "";
-    const $ = load(sent);
-
-    expect(sent).not.toMatch(/<style|<!--|class="MsoNormal">Hi Rob/);
-    expect($("p").first().text()).toBe("Hi Rob");
-    expect($("p").first().attr("style")).toBe(
-      'margin:0in;font-size:11.0pt;font-family:"Calibri",sans-serif',
-    );
+    expect(sent).toContain("Rob");
+    expect(sent).not.toMatch(/font-size:0|display:none|#fff|style=|class=/i);
   });
 
-  it("keeps Gmail's class font on edited blocks as an inline style", () => {
+  it("keeps a font colour and face that are clean", () => {
     const original =
-      '<style>.gmail_default{font-family:verdana}</style><div dir="ltr"><div class="gmail_default">Hi Bob</div></div>';
+      '<div dir="ltr"><font color="#0b5394" face="arial, sans-serif">Hello team</font></div>';
 
-    const sent = rebuildHtmlWithEditedBody(original, "Hi Rob") ?? "";
-
-    expect(sent).toContain('<div style="font-family:verdana">Hi Rob</div>');
-    expect(sent).not.toContain("<style");
+    expect(rebuildHtmlWithEditedBody(original, "Hi team")).toContain(
+      'style="color:#0b5394;font-family:arial, sans-serif"',
+    );
   });
 
   it("leaves an unedited send untouched by the style sheet rule", () => {
