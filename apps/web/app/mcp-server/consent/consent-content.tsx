@@ -1,5 +1,6 @@
 "use client";
 
+import { redirectToSafeUrl } from "@/utils/redirect";
 import { useState } from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
@@ -52,7 +53,11 @@ export default function ConsentContent({
       }
 
       if (data.redirectUrl) {
-        window.location.href = data.redirectUrl;
+        // The server only returns a redirect_uri registered by this OAuth client.
+        redirectToSafeUrl(data.redirectUrl, {
+          allowExternal: true,
+          allowNativeOAuthRedirect: true,
+        });
       } else {
         throw new Error("No redirect URL received");
       }

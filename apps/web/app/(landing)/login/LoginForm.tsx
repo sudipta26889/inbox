@@ -70,7 +70,7 @@ export function LoginForm({
       if (!response.ok) throw new Error("Local bypass login failed");
 
       const result: { callbackURL?: string } = await response.json();
-      window.location.assign(
+      redirectToSafeUrl(
         normalizeInternalPath(result.callbackURL) ?? callbackURL,
       );
     } catch (error) {

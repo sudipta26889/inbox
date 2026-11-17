@@ -142,6 +142,8 @@ jobs:
 
   electron:
     name: Electron mail runtime
+    # ponytail: the desktop app is not shipped (re-fork decision 3); re-enable if it ever is.
+    if: false
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
