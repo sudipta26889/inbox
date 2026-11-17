@@ -20,6 +20,7 @@ vi.mock("@/env", () => ({ env: {} }));
 vi.mock("@/utils/dharahil/client", () => ({
   dharahilClient: {
     runApprovalLoop: vi.fn(),
+    shouldProceed: vi.fn(() => true),
     wasDenied: vi.fn(() => false),
     shouldRevise: vi.fn(() => false),
   },
@@ -820,6 +821,31 @@ describe("DharaHIL approval gate content", () => {
     });
 
     expect(dharahilClient.runApprovalLoop).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ["an unknown action", { action: "SOMETHING_NEW" }],
+    ["an edited approval", { action: "REVISE_REQUESTED", edited: true }],
+  ])("creates nothing on %s", async (_name, decision) => {
+    setDharahilEnabled(true);
+    vi.mocked(prisma.a2aApproval.updateMany).mockResolvedValue({ count: 0 });
+    (
+      dharahilClient.runApprovalLoop as ReturnType<typeof vi.fn>
+    ).mockResolvedValue(decision);
+    (dharahilClient.shouldProceed as ReturnType<typeof vi.fn>).mockReturnValueOnce(
+      false,
+    );
+    provider.createEvent = vi.fn();
+
+    await expect(
+      createCalendarEvent(context, {
+        title: "Quarterly review",
+        startTime: "2026-09-20T09:00:00Z",
+        endTime: "2026-09-20T10:00:00Z",
+      }),
+    ).rejects.toThrow();
+
+    expect(provider.createEvent).not.toHaveBeenCalled();
   });
 
   it("shows the resolved scope and notify default, not raw undefined, on update", async () => {

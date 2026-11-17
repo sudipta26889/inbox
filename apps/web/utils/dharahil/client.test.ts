@@ -137,7 +137,8 @@ describe("dharahilClient.fetchDecision", () => {
     expect(dharahilClient.wasDenied(decision!)).toBe(true);
   });
 
-  it("maps a revision request so callers can branch on it", async () => {
+  // A status this code does not know is an error, not a go: status alone decides.
+  it("blocks a revision request, carrying the reviewer's note", async () => {
     gatewayReturns({
       status: "RESOLVED",
       last_decision: "revise",
@@ -146,8 +147,8 @@ describe("dharahilClient.fetchDecision", () => {
 
     const decision = await dharahilClient.fetchDecision("req-1");
 
-    expect(dharahilClient.shouldRevise(decision!)).toBe(true);
     expect(dharahilClient.shouldProceed(decision!)).toBe(false);
+    expect(dharahilClient.wasDenied(decision!)).toBe(true);
     expect(decision?.revise_input).toBe("soften the tone");
   });
 
@@ -172,5 +173,105 @@ describe("dharahilClient.fetchDecision", () => {
         `no predicate matched ${JSON.stringify(body)} -> ${decision?.action}`,
       ).toBe(true);
     }
+  });
+});
+
+describe("fail-closed decision mapping", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it.each([
+    ["AUTO_DENIED", { status: "AUTO_DENIED" }],
+    ["EXECUTED", { status: "EXECUTED" }],
+    ["EXECUTED after an approval", { status: "EXECUTED", last_decision: "approve" }],
+    ["an unknown status", { status: "SOMETHING_NEW" }],
+    ["a resolved approval", { status: "RESOLVED", last_decision: "approve" }],
+    ["an edited approval", { status: "APPROVED", last_decision: "edit" }],
+    ["an edit after execution", { status: "EXECUTED", last_decision: "edit" }],
+  ])("polled %s does not proceed", async (_name, body) => {
+    gatewayReturns(body);
+
+    const decision = await dharahilClient.fetchDecision("req-1");
+
+    expect(dharahilClient.shouldProceed(decision!)).toBe(false);
+  });
+
+  it("a polled response with no status keeps polling", async () => {
+    gatewayReturns({ last_decision: "approve" });
+
+    expect(await dharahilClient.fetchDecision("req-1")).toBeNull();
+  });
+
+  it("maps statuses: AUTO_DENIED rejects, EXECUTED and unknown are errors", async () => {
+    for (const [status, action] of [
+      ["AUTO_DENIED", "REJECTED"],
+      ["EXECUTED", "ERROR"],
+      ["SOMETHING_NEW", "ERROR"],
+    ]) {
+      gatewayReturns({ status });
+      expect((await dharahilClient.fetchDecision("req-1"))?.action).toBe(action);
+    }
+  });
+
+  it("an edited approval is held as a revision request and marked edited", async () => {
+    gatewayReturns({ status: "APPROVED", last_decision: "edit" });
+
+    const decision = await dharahilClient.fetchDecision("req-1");
+
+    expect(decision?.action).toBe("REVISE_REQUESTED");
+    expect(decision?.edited).toBe(true);
+  });
+
+  it("a plain APPROVED still proceeds", async () => {
+    gatewayReturns({ status: "APPROVED", last_decision: "approve" });
+
+    const decision = await dharahilClient.fetchDecision("req-1");
+
+    expect(dharahilClient.shouldProceed(decision!)).toBe(true);
+    expect(decision?.edited).toBeUndefined();
+  });
+});
+
+describe("fail-closed immediate decisions", () => {
+  const request = {
+    toolName: "send_email",
+    toolArgs: {},
+    context: {
+      agentId: "test",
+      runId: "r1",
+      contextSummary: "test",
+      riskLevel: "MEDIUM" as const,
+    },
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it.each(["AUTO_DENIED", "EXECUTED", "SOMETHING_NEW"])(
+    "an immediate %s does not proceed",
+    async (action) => {
+      gatewayReturns({ action, request_id: null, status: "RESOLVED" });
+
+      const decision = await dharahilClient.runApprovalLoop(request);
+
+      expect(dharahilClient.shouldProceed(decision)).toBe(false);
+      expect(dharahilClient.wasDenied(decision)).toBe(true);
+    },
+  );
+
+  it.each(["ALLOW", "AUTO_ALLOWED"])("an immediate %s still proceeds", async (action) => {
+    gatewayReturns({ action, request_id: null, status: "RESOLVED" });
+
+    const decision = await dharahilClient.runApprovalLoop(request);
+
+    expect(dharahilClient.shouldProceed(decision)).toBe(true);
+  });
+
+  it("beforeExecute normalizes an immediate action too", async () => {
+    gatewayReturns({ action: "AUTO_DENIED", request_id: null });
+
+    expect((await dharahilClient.beforeExecute(request)).action).toBe("REJECTED");
   });
 });

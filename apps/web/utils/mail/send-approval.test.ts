@@ -5,29 +5,35 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 vi.mock("@/utils/prisma");
 
-const { mockEnv, mockRunApprovalLoop, mockWasDenied, mockShouldRevise } =
-  vi.hoisted(() => ({
-    // Credentials present is what arms the gate. The client-visible flag is
-    // deliberately false here: enforcement must not depend on it, because it
-    // used to, and setting it false silently let every send through unapproved.
-    mockEnv: {
-      DHARAHIL_BASE_URL: "https://gateway.test" as string | undefined,
-      DHARAHIL_API_KEY: "key" as string | undefined,
-      NEXT_PUBLIC_DHARAHIL_ENABLED: false,
-    },
-    mockRunApprovalLoop: vi.fn(),
-    mockWasDenied: vi.fn(() => false),
-    mockShouldRevise: vi.fn(() => false),
-  }));
+const { mockEnv, mockRunApprovalLoop } = vi.hoisted(() => ({
+  // Credentials present is what arms the gate. The client-visible flag is
+  // deliberately false here: enforcement must not depend on it, because it
+  // used to, and setting it false silently let every send through unapproved.
+  mockEnv: {
+    DHARAHIL_BASE_URL: "https://gateway.test" as string | undefined,
+    DHARAHIL_API_KEY: "key" as string | undefined,
+    NEXT_PUBLIC_DHARAHIL_ENABLED: false,
+  },
+  mockRunApprovalLoop: vi.fn(),
+}));
 
 vi.mock("@/env", () => ({ env: mockEnv }));
-vi.mock("@/utils/dharahil/client", () => ({
-  dharahilClient: {
-    runApprovalLoop: mockRunApprovalLoop,
-    wasDenied: mockWasDenied,
-    shouldRevise: mockShouldRevise,
-  },
-}));
+// The decision predicates are the real ones: this gate is only as safe as
+// they are, so stubbing them would test nothing.
+vi.mock("@/utils/dharahil/client", async () => {
+  const { DharaHILClient } = await vi.importActual<
+    typeof import("@/utils/dharahil/client")
+  >("@/utils/dharahil/client");
+  const real = new DharaHILClient();
+  return {
+    dharahilClient: {
+      runApprovalLoop: mockRunApprovalLoop,
+      shouldProceed: real.shouldProceed.bind(real),
+      shouldRevise: real.shouldRevise.bind(real),
+      wasDenied: real.wasDenied.bind(real),
+    },
+  };
+});
 
 import prisma from "@/utils/__mocks__/prisma";
 import { isExternalDomain, requireSendApproval } from "./send-approval";
@@ -47,8 +53,6 @@ describe("requireSendApproval", () => {
     mockEnv.DHARAHIL_BASE_URL = "https://gateway.test";
     mockEnv.DHARAHIL_API_KEY = "key";
     mockRunApprovalLoop.mockResolvedValue({ action: "APPROVED" });
-    mockWasDenied.mockReturnValue(false);
-    mockShouldRevise.mockReturnValue(false);
     prisma.emailAccount.findUnique.mockResolvedValue({
       email: "me@example.com",
     } as any);
@@ -61,7 +65,6 @@ describe("requireSendApproval", () => {
 
   // The whole point: a denial must stop the send, not fall through.
   it("throws when the reviewer denies", async () => {
-    mockWasDenied.mockReturnValue(true);
     mockRunApprovalLoop.mockResolvedValue({
       action: "REJECTED",
       reason: "not now",
@@ -72,8 +75,43 @@ describe("requireSendApproval", () => {
     );
   });
 
+  it.each(["AUTO_DENIED", "EXECUTED", "SOMETHING_NEW", undefined, "PENDING"])(
+    "blocks the send when the decision action is %s",
+    async (action) => {
+      mockRunApprovalLoop.mockResolvedValue({ action });
+
+      await expect(requireSendApproval(request)).rejects.toThrow();
+    },
+  );
+
+  it("explains an unrecognised decision", async () => {
+    mockRunApprovalLoop.mockResolvedValue({ action: "EXECUTED" });
+
+    await expect(requireSendApproval(request)).rejects.toThrow(
+      "Email not sent: approval returned EXECUTED",
+    );
+  });
+
+  it("holds an edited card and says card edits are not applied", async () => {
+    mockRunApprovalLoop.mockResolvedValue({
+      action: "REVISE_REQUESTED",
+      edited: true,
+    });
+
+    await expect(requireSendApproval(request)).rejects.toThrow(
+      "Email not sent: the approval card was edited. Card edits aren't applied yet; change the email in Inbox and resend.",
+    );
+  });
+
+  it("sends on ALLOW, APPROVED and AUTO_ALLOWED", async () => {
+    for (const action of ["ALLOW", "APPROVED", "AUTO_ALLOWED"]) {
+      mockRunApprovalLoop.mockResolvedValue({ action });
+
+      await expect(requireSendApproval(request)).resolves.toBeUndefined();
+    }
+  });
+
   it("throws when the reviewer asks for revisions", async () => {
-    mockShouldRevise.mockReturnValue(true);
     mockRunApprovalLoop.mockResolvedValue({
       action: "REVISE_REQUESTED",
       revise_input: "soften it",
@@ -137,8 +175,6 @@ describe("requireSendApproval sender", () => {
     mockEnv.DHARAHIL_BASE_URL = "https://gateway.test";
     mockEnv.DHARAHIL_API_KEY = "key";
     mockRunApprovalLoop.mockResolvedValue({ action: "APPROVED" });
-    mockWasDenied.mockReturnValue(false);
-    mockShouldRevise.mockReturnValue(false);
     prisma.emailAccount.findUnique.mockResolvedValue({
       email: "me@example.com",
     } as any);

@@ -12,6 +12,7 @@ vi.mock("server-only", () => ({}));
 vi.mock("@/utils/dharahil/client", () => ({
   dharahilClient: {
     runApprovalLoop: vi.fn(async () => ({ action: "APPROVE" })),
+    shouldProceed: vi.fn(() => true),
     wasDenied: vi.fn(() => false),
     shouldRevise: vi.fn(() => false),
   },
