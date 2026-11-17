@@ -23,6 +23,16 @@ const RAW_PROBES: Record<string, string> = {
   besideLoneWrapper:
     '<div>Hi Bob</div><div>@S@ TO ACCT 123<div class="gmail_signature">Me</div></div>',
   afterHtml: "<html><body><p>Hi Bob</p></body></html>@S@ TO ACCT 123",
+  afterHtmlStyle:
+    '<html><body><p>Hi Bob</p></body></html><style>body::after{content:"@S@"}</style>',
+  afterHtmlLink:
+    '<html><body><p>Hi Bob</p></body></html><link rel="stylesheet" href="https://evil.test/@S@.css">',
+  afterHtmlConditional:
+    "<html><body><p>Hi Bob</p></body></html><!--[if mso]><p>@S@</p><![endif]-->",
+  bodyBackground:
+    '<html><body background="https://x.test/@S@.png"><p>Hi Bob</p></body></html>',
+  bodyBackgroundStyle:
+    '<html><body style="background-image:url(https://x.test/@S@.png)"><p>Hi Bob</p></body></html>',
   afterHtmlWithQuote:
     '<html><body><p>Hi Bob</p><div class="gmail_quote">old</div></body></html>@S@',
   betweenWrappers:
@@ -90,6 +100,9 @@ const PROBES = Object.fromEntries(
 );
 // Bodies a reviewer must be able to edit on the card.
 const EDITABLE = [
+  "afterHtmlStyle",
+  "afterHtmlLink",
+  "afterHtmlConditional",
   "middle",
   "cssAfter",
   "cssImport",
@@ -475,6 +488,42 @@ describe("user HTML: what the card marks and refuses", () => {
     expect(card.notices).toContain(marker);
     expect(card.body).not.toMatch(MARKERS);
     expect(rebuildHtmlWithEditedBody(PROBES[name], "Hello")).toBeNull();
+  });
+
+  it.each([
+    "afterHtmlStyle",
+    "afterHtmlLink",
+    "afterHtmlConditional",
+  ])("shows what follows </html> (%s) and strips it from an edited send", (name) => {
+    const card = cardBodyFromHtml(PROBES[name]);
+    const sent =
+      rebuildHtmlWithEditedBody(
+        PROBES[name],
+        card.body.replace("Bob", "Rob"),
+      ) ?? "";
+
+    expect(card.notices).toContain(sentinel(name));
+    expect(sent).toContain("Hi Rob");
+    expect(sent).not.toContain(sentinel(name));
+  });
+
+  it.each([
+    "bodyBackground",
+    "bodyBackgroundStyle",
+  ])("shows the body's background image (%s) as a notice", (name) => {
+    expect(cardBodyFromHtml(PROBES[name]).notices).toContain(
+      `[background image: https://x.test/${sentinel(name)}.png]`,
+    );
+  });
+
+  it.each([
+    ["a text field", '<p>Hi</p><input type="text" name="acct">'],
+    ["a textarea", "<p>Hi</p><textarea>x</textarea>"],
+    ["a select", "<p>Hi</p><select><option>x</option></select>"],
+    ["a form", '<form action="https://e.test"><p>Hi</p></form>'],
+    ["an iframe", '<p>Hi</p><iframe src="https://e.test"></iframe>'],
+  ])("refuses a body edit when the authored part has %s", (_name, html) => {
+    expect(rebuildHtmlWithEditedBody(html, "Hello")).toBeNull();
   });
 
   it("keeps title, template and head out of the plain-text part", () => {

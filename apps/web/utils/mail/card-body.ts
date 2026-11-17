@@ -379,6 +379,15 @@ function splitOutgoingHtml(html: string) {
         marker: `[style sheet: ${$(element).text().trim()}]`,
         blocksEdit: false,
       })),
+    // The page background is outside every card field's slice.
+    ...$("html, body")
+      .toArray()
+      .flatMap((element) => backgroundUrls($(element)))
+      .map((url) => ({
+        offset: 0,
+        marker: `[background image: ${url}]`,
+        blocksEdit: false,
+      })),
     ...$("link[href]")
       .toArray()
       .map((element) => ({
@@ -669,18 +678,19 @@ function cardHtml(fragment: string, markImages = true) {
     );
   });
   $("[background], [style*='url(']").each((_index, element) => {
-    const urls = [
-      $(element).attr("background"),
-      ...[
-        ...($(element).attr("style") ?? "").matchAll(
-          /url\(\s*['"]?([^'")]+)/gi,
-        ),
-      ].map((match) => match[1]),
-    ].filter(Boolean);
-    for (const url of urls)
+    for (const url of backgroundUrls($(element)))
       $(element).prepend(marker(`[background image: ${url}]`));
   });
   return $.root().html() ?? fragment;
+}
+
+function backgroundUrls(element: ReturnType<CheerioAPI>): string[] {
+  return [
+    element.attr("background"),
+    ...[
+      ...(element.attr("style") ?? "").matchAll(/url\(\s*['"]?([^'")]+)/gi),
+    ].map((match) => match[1]),
+  ].filter((url): url is string => !!url);
 }
 
 /** The typography part of an inline style ("" when none is kept). */
