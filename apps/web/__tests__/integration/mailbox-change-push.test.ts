@@ -69,8 +69,16 @@ vi.mock("@/utils/redis", () => ({
     exists: (key: string) => redisState.client!.exists(key),
     get: (key: string) => redisState.client!.get(key),
     del: (key: string) => redisState.client!.del(key),
-    publish: (channel: string, message: string) =>
-      redisState.client!.publish(channel, message),
+    // Fork rule: channels live under the inbox: prefix (utils/redis publish adds
+    // it, mail-stream subscribes to the prefixed name). Keys stay unprefixed
+    // here because this mock and the assertions both use the raw client.
+    publish: async (channel: string, message: string) => {
+      const { REDIS_KEY_PREFIX } = await import("@/utils/redis/key-prefix");
+      return redisState.client!.publish(
+        `${REDIS_KEY_PREFIX}${channel}`,
+        message,
+      );
+    },
     set: (
       key: string,
       value: string,
