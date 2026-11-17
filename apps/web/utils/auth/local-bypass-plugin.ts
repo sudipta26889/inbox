@@ -7,6 +7,7 @@ import {
   LOCAL_BYPASS_USER_EMAIL,
   LOCAL_BYPASS_USER_NAME,
   getLocalBypassProviderAccountId,
+  getLocalBypassTargetEmail,
   isLocalAuthBypassEnabled,
 } from "@/utils/auth/local-bypass-config";
 import { WELCOME_PATH } from "@/utils/config";
@@ -38,23 +39,7 @@ export function localBypassAuthPlugin() {
           }
 
           const { internalAdapter } = ctx.context;
-          const user =
-            (await internalAdapter.findUserByEmail(LOCAL_BYPASS_USER_EMAIL))
-              ?.user ??
-            (await internalAdapter.createUser(
-              {
-                email: LOCAL_BYPASS_USER_EMAIL,
-                name: LOCAL_BYPASS_USER_NAME,
-                emailVerified: true,
-              },
-              { method: "local-bypass" },
-            ));
-          if (!user) {
-            throw new APIError("INTERNAL_SERVER_ERROR", {
-              message: "Failed to create local bypass user",
-            });
-          }
-          await ensureLocalBypassAccount(user);
+          const user = await resolveBypassUser(internalAdapter);
 
           const session = await ctx.context.internalAdapter.createSession(
             user.id,
@@ -83,6 +68,55 @@ export function localBypassAuthPlugin() {
       ),
     },
   };
+}
+
+type BypassAdapter<U extends LocalBypassUser> = {
+  findUserByEmail(email: string): Promise<{ user: U } | null | undefined>;
+  createUser(
+    data: { email: string; name: string; emailVerified: boolean },
+    context?: { method: string },
+  ): Promise<U | null | undefined>;
+};
+
+/**
+ * With LOCAL_AUTH_BYPASS_USER_EMAIL set (and the bypass active), the EXISTING
+ * user with that email: nothing is created and no mock mailbox is attached.
+ * Otherwise the separate local test user with a mock mailbox, as before.
+ */
+export async function resolveBypassUser<U extends LocalBypassUser>(
+  internalAdapter: BypassAdapter<U>,
+): Promise<U> {
+  const targetEmail = getLocalBypassTargetEmail();
+
+  if (targetEmail) {
+    const existing = (await internalAdapter.findUserByEmail(targetEmail))?.user;
+    if (!existing) {
+      throw new APIError("BAD_REQUEST", {
+        message: `LOCAL_AUTH_BYPASS_USER_EMAIL is set, but no user has the email ${targetEmail}.`,
+      });
+    }
+
+    return existing;
+  }
+
+  const user =
+    (await internalAdapter.findUserByEmail(LOCAL_BYPASS_USER_EMAIL))?.user ??
+    (await internalAdapter.createUser(
+      {
+        email: LOCAL_BYPASS_USER_EMAIL,
+        name: LOCAL_BYPASS_USER_NAME,
+        emailVerified: true,
+      },
+      { method: "local-bypass" },
+    ));
+  if (!user) {
+    throw new APIError("INTERNAL_SERVER_ERROR", {
+      message: "Failed to create local bypass user",
+    });
+  }
+  await ensureLocalBypassAccount(user);
+
+  return user;
 }
 
 async function ensureLocalBypassAccount(user: LocalBypassUser) {

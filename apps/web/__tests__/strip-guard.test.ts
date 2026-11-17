@@ -214,6 +214,20 @@ describe("strip guard", () => {
     expect(content).not.toMatch(/NEXT_PUBLIC_BYPASS_PREMIUM_CHECKS:\s*"?false/);
   });
 
+  // The dev bypass can sign in as a real user. It must never be configurable
+  // anywhere a deployed instance reads its environment from.
+  it.each([
+    "deploy/stack.yml",
+    "deploy/stack.staging.yml",
+    ".github/workflows/deploy.yml",
+    ".github/workflows/deploy-staging.yml",
+    ".github/workflows/local-bypass-smoke.yml",
+  ])("%s does not set LOCAL_AUTH_BYPASS_USER_EMAIL", (file) => {
+    const content = readFileSync(join(REPO_ROOT, file), "utf8");
+
+    expect(content).not.toContain("LOCAL_AUTH_BYPASS_USER_EMAIL");
+  });
+
   it.each([
     ".github/workflows/deploy.yml",
     ".github/workflows/deploy-staging.yml",

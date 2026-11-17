@@ -407,6 +407,9 @@ const parsedEnv = createEnv({
     // Dev only: a "Bypass login" button on /login signs in a separate local
     // test user with a mock mailbox. Ignored unless NODE_ENV=development.
     LOCAL_AUTH_BYPASS_ENABLED: booleanString.optional().default(false),
+    // Dev only, and only with the bypass above: sign in as this EXISTING user
+    // (a staging clone) instead of the mock test user. Never set in a deploy file.
+    LOCAL_AUTH_BYPASS_USER_EMAIL: z.string().trim().email().optional(),
     // Optional provider:model for structured decisions, e.g. openrouter:typesafe/jev-1.13
     DEFAULT_DECISION_MODEL: z
       .string()

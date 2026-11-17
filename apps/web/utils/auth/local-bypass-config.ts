@@ -10,6 +10,17 @@ export function isLocalAuthBypassEnabled() {
   return env.NODE_ENV === "development" && env.LOCAL_AUTH_BYPASS_ENABLED;
 }
 
+/**
+ * The existing user the bypass should sign in as, if one is configured. It sits
+ * behind the same gate as the bypass itself, so outside development it is
+ * always undefined.
+ */
+export function getLocalBypassTargetEmail(): string | undefined {
+  if (!isLocalAuthBypassEnabled()) return undefined;
+
+  return env.LOCAL_AUTH_BYPASS_USER_EMAIL?.trim() || undefined;
+}
+
 export function getLocalBypassProviderAccountId(userId: string) {
   return `${LOCAL_BYPASS_PROVIDER_ACCOUNT_PREFIX}${userId}`;
 }
