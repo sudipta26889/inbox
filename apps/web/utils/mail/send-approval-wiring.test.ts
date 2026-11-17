@@ -315,7 +315,7 @@ describe("every provider send asks first and sends what was approved", () => {
       const fullDocument = {
         ...message,
         textHtml:
-          "<html><head><style>p{}</style></head><body><p>Original text</p></body></html>",
+          "<html><head><title>Original</title></head><body><p>Original text</p></body></html>",
       } as ParsedMessage;
       editBody(() => "My *new* sentence");
       const gmail = fakeGmail();

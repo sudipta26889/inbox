@@ -44,6 +44,27 @@ describe("buildDraftReplyBody", () => {
     ).toHaveLength(1);
   });
 
+  // The model's text is cleaned before the trusted signature is appended,
+  // so the signature keeps its own formatting.
+  it("cleans the model's text but keeps the signature's formatting", async () => {
+    const signature =
+      '<table><tbody><tr><td style="background:#eee">Example Person</td></tr></tbody></table>';
+    prisma.emailAccount.findUnique.mockResolvedValue({
+      allowHiddenAiDraftLinks: false,
+      includeReferralSignature: false,
+      signature,
+    } as never);
+
+    const body = await buildDraftReplyBody({
+      text: "Pay \u202Eacct 321\u202C today",
+      emailAccountId: "account",
+      userId: "user",
+    });
+
+    expect(body).toContain("Pay acct 321 today");
+    expect(body).toContain(signature);
+  });
+
   it("keeps line breaks in a plain-text signature", async () => {
     prisma.emailAccount.findUnique.mockResolvedValue({
       allowHiddenAiDraftLinks: false,

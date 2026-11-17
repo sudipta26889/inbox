@@ -695,6 +695,34 @@ describe("runActionFunction", () => {
     );
   });
 
+  // Rule reply content comes from buildDraftReplyBody (model text already
+  // cleaned) or a user template; the user's signature HTML must survive.
+  it("passes rule reply content with its signature HTML unchanged", async () => {
+    const client = createMockEmailProvider();
+    const content =
+      'Thanks\n\n<div class="gmail_signature"><table><tr><td style="background:#eee">Me</td></tr></table></div>';
+
+    await runActionFunction({
+      client,
+      email,
+      action: { id: "action-1", type: ActionType.REPLY, content },
+      emailAccount,
+      executedRule: {
+        id: "executed-rule-1",
+        threadId: "thread-1",
+        emailAccountId: "account-1",
+        ruleId: "rule-1",
+      } as any,
+      logger,
+    });
+
+    expect(client.replyToEmail).toHaveBeenCalledWith(
+      expect.anything(),
+      content,
+      expect.anything(),
+    );
+  });
+
   it("passes static attachments into sent emails", async () => {
     const client = createMockEmailProvider();
 

@@ -9,6 +9,7 @@ import prisma from "@/utils/prisma";
 import { redis } from "@/utils/redis";
 import { textToHtmlParagraphs } from "@/utils/string";
 import {
+  type CardBody,
   cardBodyFromHtml,
   hasHiddenText,
   rebuildHtmlWithEditedBody,
@@ -114,8 +115,8 @@ export class SendNotApprovedError extends SafeError {}
 
 const issuedApprovals = new WeakSet<SendApproval>();
 
-// The gateway has no size limit on tool args; this only bounds a pathological
-// payload. Above it the card shows a preview and refuses body edits.
+// The gateway has no size limit on tool args; this bounds each card field.
+// Above it the send is refused, since the card can't show it in full.
 const CARD_BODY_MAX_CHARS = 100_000;
 // The gateway rejects metadata values over 500 characters.
 const METADATA_VALUE_MAX_CHARS = 500;
@@ -447,13 +448,21 @@ async function askReviewer(request: SendApprovalRequest): Promise<SendEdits> {
   logger.trace("DharaHIL: send details", { to, subject });
 
   const external = isExternalDomain(to);
-  const card =
+  const card: CardBody =
     request.bodyHtml !== undefined
       ? cardBodyFromHtml(request.bodyHtml)
       : { body: request.bodyText ?? "" };
-  // The cap counts only what the user wrote, not the signature or quote.
   const body = card.body;
-  const bodyTruncated = body.length > CARD_BODY_MAX_CHARS;
+  // A cut field would let the reviewer approve text they never saw, so an
+  // email too long for the card is not sent at all.
+  if (
+    [body, card.signature, card.quotedHistory, card.notices].some(
+      (field) => (field?.length ?? 0) > CARD_BODY_MAX_CHARS,
+    )
+  )
+    throw new SendNotApprovedError(
+      "Email not sent: it is too long to show in full on the approval card (over 100,000 characters in the body, signature, quoted messages or notices).",
+    );
 
   const toolArgs = {
     from,
@@ -463,10 +472,9 @@ async function askReviewer(request: SendApprovalRequest): Promise<SendEdits> {
     bcc: request.bcc,
     replyTo: request.replyTo,
     subject,
-    body: bodyTruncated
-      ? `[preview: full body is ${body.length} characters; body edits are disabled]\n\n${body.slice(0, CARD_BODY_MAX_CHARS)}`
-      : body,
-    ...(bodyTruncated && { bodyTruncated: true, bodyLength: body.length }),
+    body,
+    // Right after the body: Slack shows only the first six long fields.
+    ...(card.notices && { notices: card.notices }),
     ...(request.attachments?.length && { attachments: request.attachments }),
     ...(request.forwardedAttachments?.length && {
       forwardedAttachments: request.forwardedAttachments,
@@ -514,7 +522,6 @@ async function askReviewer(request: SendApprovalRequest): Promise<SendEdits> {
   const edits = editsFrom(
     toolArgs,
     decision,
-    bodyTruncated,
     bodyHtml === undefined
       ? undefined
       : (markdown) => {
@@ -539,7 +546,6 @@ async function askReviewer(request: SendApprovalRequest): Promise<SendEdits> {
 function editsFrom(
   proposed: Record<string, unknown>,
   decision: DharaHILDecision,
-  bodyTruncated: boolean,
   /** Turns the edited Markdown back into the full HTML, for HTML cards. */
   rebuildHtml?: (markdown: string) => string,
 ): SendEdits {
@@ -557,6 +563,10 @@ function editsFrom(
     throw new SendNotApprovedError(
       "Email not sent: the sender can't be changed on the approval card.",
     );
+  if (changed("notices"))
+    throw new SendNotApprovedError(
+      "Email not sent: the notices on the card can't be edited.",
+    );
   if (changed("signature") || changed("quoted_history"))
     throw new SendNotApprovedError(
       "Email not sent: the signature and quoted messages can't be edited on the card.",
@@ -571,10 +581,6 @@ function editsFrom(
   if (other.length)
     throw new SendNotApprovedError(
       `Email not sent: only recipients, subject and body can be edited on the approval card (changed: ${other.join(", ")}).`,
-    );
-  if (bodyTruncated && changed("body"))
-    throw new SendNotApprovedError(
-      "Email not sent: the body is too long to edit on the card. Edit it in Inbox and send it again.",
     );
 
   const edits: SendEdits = {};

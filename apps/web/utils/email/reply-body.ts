@@ -1,5 +1,6 @@
 import { env } from "@/env";
 import prisma from "@/utils/prisma";
+import { sanitizeAgentHtml } from "@/utils/mail/sanitize-agent-html";
 import { renderEmailTextWithSafeLinks } from "@/utils/email/render-safe-links";
 import { renderReplyBodyHtml } from "@/utils/email/reply-body-html";
 import { getOrCreateReferralCode } from "@/utils/referral/referral-code";
@@ -26,9 +27,13 @@ export async function buildDraftReplyBody({
     },
   });
 
-  let body = renderEmailTextWithSafeLinks(text, {
-    allowHiddenLinks: emailAccount?.allowHiddenAiDraftLinks ?? false,
-  });
+  // The model's part is cleaned before the user's trusted signature is
+  // appended, so the signature keeps its formatting.
+  let body = sanitizeAgentHtml(
+    renderEmailTextWithSafeLinks(text, {
+      allowHiddenLinks: emailAccount?.allowHiddenAiDraftLinks ?? false,
+    }),
+  );
 
   if (emailAccount?.signature) {
     // The marker lets the composer separate the signature again even when a

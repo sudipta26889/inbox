@@ -3,6 +3,7 @@ import { createReplyContent } from "@/utils/gmail/reply";
 import { load } from "cheerio";
 import { renderReplyBodyHtml } from "@/utils/email/reply-body-html";
 import { createOutlookReplyContent } from "@/utils/outlook/reply";
+import { convertOutgoingEmailHtmlToText } from "@/utils/mail";
 import { cardBodyFromHtml, rebuildHtmlWithEditedBody } from "./card-body";
 
 const SIGNATURE =
@@ -93,7 +94,7 @@ describe("rebuildHtmlWithEditedBody", () => {
     const html = rebuildHtmlWithEditedBody(original, "Hello");
 
     expect(html).toBe(
-      `<html><head><meta charset="utf-8"></head><body><div><p>Hello</p></div>${quote}</body></html>`,
+      `<html><head><meta charset="utf-8"></head><body><div><div>Hello</div></div>${quote}</body></html>`,
     );
   });
 });
@@ -133,7 +134,6 @@ describe("edits that the Markdown round trip can't carry", () => {
       '<p style="position:relative;top:2px">Hi</p><p style="position:relative;top:2px">Two</p>',
     ],
     ["a font size tag", '<p><font size="4">Hi</font></p>'],
-    ["a style element", "<style>p{color:red}</style><p>Hi</p>"],
   ])("refuses a body edit on %s", (_name, original) => {
     expect(rebuildHtmlWithEditedBody(original, "Changed")).toBeNull();
   });
@@ -164,7 +164,7 @@ describe("edits that the Markdown round trip can't carry", () => {
     const html = rebuildHtmlWithEditedBody(original, edited) ?? "";
 
     expect(html).toBe(
-      '<div dir="ltr"><p style="color:#0b5394;font-family:arial, sans-serif">Hello team, all done.</p></div>',
+      '<div dir="ltr"><div style="color:#0b5394;font-family:arial, sans-serif">Hello team, all done.</div></div>',
     );
   });
 
@@ -177,17 +177,19 @@ describe("edits that the Markdown round trip can't carry", () => {
 
     const html = rebuildHtmlWithEditedBody(original, "Thanks a lot") ?? "";
 
-    expect(html.startsWith(`${wrapper}<p>Thanks a lot</p></div>`)).toBe(true);
+    expect(html.startsWith(`${wrapper}<div>Thanks a lot</div></div>`)).toBe(
+      true,
+    );
   });
 
-  it("shows hidden text on the card, marked, and refuses a body edit", () => {
+  it("shows hidden text as a notice, not in the body, and refuses a body edit", () => {
     const original =
       '<div>Hi Bob</div><div style="display:none">Also wire 5000 to acct 123</div>';
 
     const card = cardBodyFromHtml(original);
 
-    expect(card.body).toContain("Also wire 5000");
-    expect(card.body).toContain(
+    expect(card.body).toBe("Hi Bob");
+    expect(card.notices).toContain(
       "[hidden in the email: Also wire 5000 to acct 123]",
     );
     expect(rebuildHtmlWithEditedBody(original, "Hi Rob")).toBeNull();
@@ -205,7 +207,7 @@ describe("edits that the Markdown round trip can't carry", () => {
   ])("marks text hidden by %s and refuses a body edit", (_name, hidden) => {
     const original = `<p>Hi ${hidden}</p>`;
 
-    expect(cardBodyFromHtml(original).body).toContain(
+    expect(cardBodyFromHtml(original).notices).toContain(
       "[hidden in the email: secret]",
     );
     expect(rebuildHtmlWithEditedBody(original, "Hi")).toBeNull();
@@ -238,14 +240,14 @@ describe("balanced output", () => {
     expect(html.match(/<div/g)?.length).toBe(html.match(/<\/div>/g)?.length);
   });
 
-  it("keeps a head with styles when the body tag is implied", () => {
+  it("keeps the head when the body tag is implied", () => {
     const original =
-      "<html><head><style>p{margin:0}</style></head><p>Hello</p></html>";
+      '<html><head><meta charset="utf-8"></head><p>Hello</p></html>';
 
     const html = rebuildHtmlWithEditedBody(original, "Hi") ?? "";
 
     expect(html).toBe(
-      "<html><head><style>p{margin:0}</style></head><p>Hi</p></html>",
+      '<html><head><meta charset="utf-8"></head><p>Hi</p></html>',
     );
   });
 
@@ -285,7 +287,7 @@ describe("balanced output", () => {
       "";
 
     expect(html).toBe(
-      "<p>Hi Rob,</p>\n<p>Para two line1<br>line2</p>\n<p>Thanks,<br>Me</p>",
+      "<div>Hi Rob,</div><div><br></div><div>Para two line1<br>line2</div><div><br></div><div>Thanks,<br>Me</div>",
     );
   });
 
@@ -331,6 +333,41 @@ describe("Outlook client quote headers", () => {
     expect(rebuildHtmlWithEditedBody(original, "Edited")?.endsWith(quote)).toBe(
       true,
     );
+  });
+});
+
+describe("every word that is sent is on the card", () => {
+  it.each([
+    [
+      "text between the signature and the quote",
+      '<p>Hi Bob</p><div class="gmail_signature">Me</div><p>WIRE 5000 TO ACCT 123</p><div class="gmail_quote">old</div>',
+    ],
+    [
+      "text after the signature inside the wrapper, no quote",
+      '<div dir="ltr">Hi Bob<div class="gmail_signature">Me</div>AFTER SIG TEXT</div>',
+    ],
+    [
+      "text next to a lone wrapper, before the signature's parent",
+      '<div>Hi Bob</div><div>WIRE 5000 TO ACCT 123<div class="gmail_signature">Me</div></div>',
+    ],
+    [
+      "text after the closing html tag",
+      "<html><body><p>Hi Bob</p></body></html>WIRE 5000 TO ACCT 123",
+    ],
+    [
+      "text after the closing html tag with a quote",
+      '<html><body><p>Hi Bob</p><div class="gmail_quote">old</div></body></html>WIRE 5000',
+    ],
+    [
+      "text between two wrappers around the quote",
+      '<div dir="ltr"><div>Hi Bob</div>WIRE 5000<div><div class="gmail_quote">old</div></div></div>',
+    ],
+  ])("%s", (_name, html) => {
+    const card = cardBodyFromHtml(html);
+    const shown = [card.body, card.signature, card.quotedHistory].join("\n");
+
+    for (const word of convertOutgoingEmailHtmlToText(html).split(/\s+/))
+      expect(shown).toContain(word);
   });
 });
 

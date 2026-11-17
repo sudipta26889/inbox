@@ -105,6 +105,23 @@ describe("MCP email tools", () => {
     expect(result.messages[0]?.content).toContain("latest question");
   });
 
+  it("cleans agent HTML before the draft is created", async () => {
+    const createDraft = vi.fn().mockResolvedValue({ id: "draft-1" });
+    vi.mocked(createEmailProvider).mockResolvedValue({ createDraft } as never);
+
+    await createDraftForMcp({
+      userId: "user_1",
+      to: "contact@example.com",
+      subject: "Thursday",
+      body: '<style>p::after{content:"WIRE"}</style><p>See you</p><!--[if mso]>WIRE<![endif]-->',
+      logger,
+    });
+
+    expect(createDraft).toHaveBeenCalledWith(
+      expect.objectContaining({ messageHtml: "<p>See you</p>" }),
+    );
+  });
+
   it("creates a mailbox draft and does not send", async () => {
     const createDraft = vi.fn().mockResolvedValue({ id: "draft-1" });
     const sendEmail = vi.fn();
