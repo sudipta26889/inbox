@@ -4,11 +4,9 @@ import { withError } from "@/utils/middleware";
 import { hasCronSecret, hasPostCronSecret } from "@/utils/cron";
 import { captureException } from "@/utils/error";
 import type { Logger } from "@/utils/logger";
-import { getInboxStatsForChatContext } from "@/utils/ai/assistant/get-inbox-stats-for-chat-context";
-import { isMqttConfigured } from "@/utils/mqtt/client";
-import { publishUnread } from "@/utils/mqtt/events";
 import { enqueueBackgroundJob } from "@/utils/queue/dispatch";
 import { getPremiumUserFilter } from "@/utils/premium";
+import { publishUnreadStats } from "@/app/api/cron/process-emails/publish-unread-stats";
 
 export const maxDuration = 800;
 
@@ -91,42 +89,4 @@ async function enqueueEmailProcessingJobs(logger: Logger) {
   const result = { total: emailAccounts.length, queued, failed };
   logger.info("Finished enqueueing email accounts for processing", result);
   return result;
-}
-
-/**
- * Best-effort MQTT publish for one account's unread count.
- *
- * Exported so this can be tested in isolation: this call site runs inside the
- * same per-account try/catch as `enqueueBackgroundJob` and the `queued`
- * counter above — a throw here would double-count the account as both queued
- * and failed, logged under a misleading label. Every exit is fail-soft on
- * purpose; nothing here may reject.
- */
-export async function publishUnreadStats({
-  emailAccountId,
-  provider,
-  logger,
-}: {
-  emailAccountId: string;
-  provider: string;
-  logger: Logger;
-}): Promise<void> {
-  // Skip the provider round trip entirely when MQTT isn't configured on this
-  // instance at all — no point paying for inbox stats nobody can consume.
-  // Per-account consent is still resolved inside publishUnread.
-  if (!isMqttConfigured()) return;
-
-  const stats = await getInboxStatsForChatContext({
-    emailAccountId,
-    provider,
-    logger,
-  });
-
-  if (!stats) return;
-
-  await publishUnread({
-    emailAccountId,
-    unread: stats.unread,
-    total: stats.total,
-  }).catch(() => {});
 }

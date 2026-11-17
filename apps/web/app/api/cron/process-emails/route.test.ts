@@ -2,8 +2,7 @@ import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import prisma from "@/utils/__mocks__/prisma";
 import { enqueueBackgroundJob } from "@/utils/queue/dispatch";
-import { createScopedLogger } from "@/utils/logger";
-import { GET, publishUnreadStats } from "./route";
+import { GET } from "./route";
 
 const { CRON_SECRET, mockEnv } = vi.hoisted(() => ({
   CRON_SECRET: "cron-secret",
@@ -89,49 +88,16 @@ describe("GET /api/cron/process-emails", () => {
   });
 });
 
-describe("publishUnreadStats", () => {
-  const logger = createScopedLogger("test");
-
+describe("unread stats from the cron", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-  });
-
-  // Runs inside the per-account try/catch that counts an account as queued:
-  // a rejection here would double-count it as both queued and failed.
-  it("does not throw when publishUnread rejects", async () => {
-    mockIsMqttConfigured.mockReturnValue(true);
-    mockGetInboxStats.mockResolvedValue({ unread: 3, total: 10 });
-    mockPublishUnread.mockRejectedValue(new Error("broker unreachable"));
-
-    await expect(
-      publishUnreadStats({ emailAccountId: "a1", provider: "google", logger }),
-    ).resolves.toBeUndefined();
-    expect(mockPublishUnread).toHaveBeenCalledWith({
-      emailAccountId: "a1",
-      unread: 3,
-      total: 10,
-    });
-  });
-
-  // The gate avoids a provider API call per account when nothing on the
-  // instance can consume it.
-  it("does not read inbox stats when MQTT isn't configured", async () => {
-    mockIsMqttConfigured.mockReturnValue(false);
-
-    await publishUnreadStats({
-      emailAccountId: "a1",
-      provider: "google",
-      logger,
-    });
-
-    expect(mockGetInboxStats).not.toHaveBeenCalled();
-    expect(mockPublishUnread).not.toHaveBeenCalled();
   });
 
   it("publishes each queued mailbox's unread count from the cron", async () => {
     mockEnv.NEXT_PUBLIC_BYPASS_PREMIUM_CHECKS = true;
     mockIsMqttConfigured.mockReturnValue(true);
     mockGetInboxStats.mockResolvedValue({ unread: 1, total: 2 });
+    mockPublishUnread.mockResolvedValue(undefined);
     prisma.emailAccount.findMany.mockResolvedValue([
       { id: "ea-1", account: { provider: "microsoft" } },
     ] as never);
