@@ -23,6 +23,23 @@
 - For core bug-fix tasks, default to TDD when practical (red/green/refactor); AI prompt improvements should generally be backed by evals too, and TDD is often useful there as well.
 - When adding a new workspace package, add its `package.json` COPY line to `docker/Dockerfile.prod` and `docker/Dockerfile.local`.
 
+## Dev and deploy
+- Develop on the Mac mini (`/Volumes/Storage/Workspace/inbox`), never on the NUC. Dev uses only `apps/web/.env.local`; production values live in the Portainer stack.
+- Dev runs directly on the Mac, by owner exception to the Docker-only rule, and only during active work: `cd apps/web && PATH=/opt/homebrew/opt/node@24/bin:$PATH NODE_OPTIONS=--max-old-space-size=3072 INTERNAL_API_URL=http://localhost:5500 pnpm exec next dev --turbopack --port 5500 --hostname 0.0.0.0`, served at http://dharabot.lan:5500 with `.env.local` and the dev database and Valkey user on `db.lan`. Keep no `.env` in `apps/web`: Next loads it automatically and production keys would reach dev. Install with `HUSKY=0 pnpm install` so husky does not replace local git hooks. Run migrations against dev with the values from `.env.local`.
+- Do not run `next dev` in the shared OrbStack VM, which also hosts another production app: a cold start reaches about 5 GB of its 8 GB, and on 2026-11-04 an OOM kill at that limit coincided with the VM filesystem going read-only. Production image builds run in CI, not in this VM.
+- Dev login is the bypass button on `/login` (`LOCAL_AUTH_BYPASS_ENABLED`, a separate test user, active only when `NODE_ENV=development`).
+- Since the re-fork (2026-11-17) `next dev --turbopack` cannot resolve the pnpm global store. For a LAN preview use `next build --webpack` then `next start -p 5501` with `LOCAL_PREVIEW` (bypass also needs a DB named `inbox_refork_*` and a LAN/localhost base URL). Stop it when done: anyone on the LAN is signed in.
+- Rollback after a migration is a database restore, not an image pin (the pre-re-fork image fails on the new schema).
+- Deploy = push to `sudipta_main` (not `main`, which stays as it is): `.github/workflows/deploy.yml` tests, builds `ghcr.io/sudipta26889/inbox-web`, and calls the Portainer webhook for stack `inbox-prod` (NAS Portainer, endpoint 11, on the NUC, `deploy/stack.yml`).
+- Production is Git-backed stack `inbox-prod`, id 209, on NAS Portainer endpoint 11, ref `refs/heads/sudipta_main`. Every non-docs push to `sudipta_main` deploys to production. Rollback: set `IMAGE_TAG=<sha>` in the stack 209 Env (the stack image is `inbox-web:${IMAGE_TAG:-latest}`) and redeploy, or `git revert` and push. While a pin is set, `deploy.yml`'s version poll fails on new pushes, so clear `IMAGE_TAG` afterwards.
+- A merge is done only when `https://inbox.sudiptadhara.in/api/health` reports its short SHA. GitHub can switch off Actions on this fork without notice (it did on 2026-11-08), and then merges silently stop deploying: re-enable from the banner on the repository's Actions page. Only `deploy.yml`, `test.yml`, `build-check.yml` and `local-bypass-smoke.yml` stay enabled; the other inherited upstream workflows are disabled on purpose, because the ones on schedules waste compute here. GuardianAI alerts when production lags `sudipta_main`.
+- New env key: also add it to `deploy/stack.yml` as `${KEY:-}` and to the stack Env. New `NEXT_PUBLIC_*`: add it as a build arg in `deploy.yml` and an `ARG`/`ENV` in `docker/Dockerfile.prod`.
+- No symlinks in the repo: Portainer refuses to clone them.
+- One homelab, one database server: every database, including dev, lives on `db.lan` (PostgreSQL, MariaDB, Valkey, Qdrant, Neo4j, RabbitMQ; see http://db.lan). Dev gets its own database and user there. Never add a local database container.
+
+## MCP
+To add this system in claude code user need to use `claude mcp add --transport http EmailCalendar https://inbox.sudiptadhara.in/mcp-server --scope user`
+
 ## Code Style
 - Install packages in `apps/web`, not root: `cd apps/web && pnpm add ...`
 - Lodash: import specific functions (`import groupBy from "lodash/groupBy"`)
