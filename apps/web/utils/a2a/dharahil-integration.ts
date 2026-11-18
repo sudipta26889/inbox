@@ -153,7 +153,7 @@ export async function requestApprovalViaDharaHIL(
 
     logger.info("DharaHIL approval request submitted successfully", {
       taskId: task.taskId,
-      requestId: response.request_id,
+      dharahilRequestId: response.request_id,
       expiresAt: response.expires_at,
     });
 
@@ -217,7 +217,7 @@ export async function pollForApprovalDecision(
 
   logger.info("Polling for DharaHIL decision", {
     taskId: task.taskId,
-    requestId,
+    dharahilRequestId: requestId,
     expiresAt,
   });
 
@@ -360,7 +360,7 @@ export async function processPendingDharaHILApprovals(): Promise<void> {
       if (decision) {
         logger.info("DharaHIL decision received", {
           taskId: approval.taskId,
-          requestId,
+          dharahilRequestId: requestId,
           decision: decision.action,
         });
 
@@ -412,7 +412,7 @@ export async function processExpiredDharaHILApprovals(): Promise<void> {
 
       logger.info("Marked expired approval as rejected", {
         taskId: approval.taskId,
-        requestId: approval.dharahilRequestId,
+        dharahilRequestId: approval.dharahilRequestId,
       });
     } catch (error) {
       logger.error("Failed to reject expired approval", {

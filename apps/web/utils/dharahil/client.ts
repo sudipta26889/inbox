@@ -173,7 +173,7 @@ export class DharaHILClient {
         }
 
         logger.error("DharaHIL: Invalid response from gateway", {
-          requestId: data.request_id,
+          dharahilRequestId: data.request_id,
           expiresAt: data.expires_at,
           fullResponse: data,
         });
@@ -183,7 +183,7 @@ export class DharaHILClient {
       }
 
       logger.info("DharaHIL: Request submitted successfully", {
-        requestId: data.request_id,
+        dharahilRequestId: data.request_id,
         expiresAt: data.expires_at,
       });
 
@@ -217,7 +217,7 @@ export class DharaHILClient {
 
     if (!response.ok) {
       logger.error("DharaHIL: Failed to poll decision", {
-        requestId,
+        dharahilRequestId: requestId,
         status: response.status,
       });
       return null;
@@ -236,7 +236,7 @@ export class DharaHILClient {
     if (data.status === "PENDING") return null;
 
     logger.info("DharaHIL: Decision received", {
-      requestId,
+      dharahilRequestId: requestId,
       status: data.status,
       last_decision: data.last_decision,
     });
@@ -260,7 +260,7 @@ export class DharaHILClient {
     const dynamicTimeoutMs = expiresAtTime - now;
 
     logger.info("DharaHIL: Starting polling", {
-      requestId,
+      dharahilRequestId: requestId,
       expiresAt,
       timeoutMs: dynamicTimeoutMs,
       pollIntervalMs,
@@ -268,7 +268,7 @@ export class DharaHILClient {
 
     if (dynamicTimeoutMs <= 0) {
       logger.warn("DharaHIL: Request already expired", {
-        requestId,
+        dharahilRequestId: requestId,
         expiresAt,
       });
       return { action: "EXPIRED" };
@@ -284,11 +284,14 @@ export class DharaHILClient {
 
         // Still pending, wait before next poll
         logger.trace("DharaHIL: Still pending, continuing to poll", {
-          requestId,
+          dharahilRequestId: requestId,
         });
         await this.sleep(pollIntervalMs);
       } catch (error) {
-        logger.error("DharaHIL: Polling error", { requestId, error });
+        logger.error("DharaHIL: Polling error", {
+          dharahilRequestId: requestId,
+          error,
+        });
         // Continue polling on transient errors
         await this.sleep(pollIntervalMs);
       }
@@ -296,7 +299,7 @@ export class DharaHILClient {
 
     // Timeout reached
     logger.warn("DharaHIL: Polling timeout reached", {
-      requestId,
+      dharahilRequestId: requestId,
       timeoutMs: dynamicTimeoutMs,
     });
     return { action: "EXPIRED" };
