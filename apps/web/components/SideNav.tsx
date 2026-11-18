@@ -1,5 +1,6 @@
 "use client";
 
+import { SHOW_UPSTREAM_PROMOS } from "@/utils/upstream-promos";
 import { useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useQueryState } from "nuqs";
@@ -409,7 +410,9 @@ export function SideNav({
         <DesktopUpdateMenuItem />
         <SideNavMenu items={visibleBottomLinks} activeHref={path} />
 
-        <SideNavMenu items={getTheAppLinks} activeHref={path} />
+        {SHOW_UPSTREAM_PROMOS && (
+          <SideNavMenu items={getTheAppLinks} activeHref={path} />
+        )}
 
         {feedbackEnabled && (
           <SidebarMenu>

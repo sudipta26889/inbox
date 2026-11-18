@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { BasicLayout } from "@/components/layouts/BasicLayout";
 import {
   Section,
@@ -11,6 +12,7 @@ import {
 import { BlurFade } from "@/components/new-landing/common/BlurFade";
 import { StoreBadges } from "@/app/(landing)/app/StoreBadges";
 import { BRAND_NAME, getBrandTitle } from "@/utils/branding";
+import { SHOW_UPSTREAM_PROMOS } from "@/utils/upstream-promos";
 
 export const metadata: Metadata = {
   title: getBrandTitle("Get the app"),
@@ -19,6 +21,9 @@ export const metadata: Metadata = {
 };
 
 export default function AppPage() {
+  // The mobile and desktop apps are not shipped here.
+  if (!SHOW_UPSTREAM_PROMOS) redirect("/welcome-redirect");
+
   return (
     <BasicLayout>
       <Section className="mt-10 md:mt-20">

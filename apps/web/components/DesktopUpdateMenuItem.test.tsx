@@ -29,11 +29,20 @@ vi.mock("@/components/ui/sidebar", () => ({
     </button>
   ),
 }));
+// The menu item is off by default (the desktop app is not shipped). These tests
+// exercise it as if it were on; the last one checks the real default.
+const { mockPromos } = vi.hoisted(() => ({ mockPromos: { show: true } }));
+vi.mock("@/utils/upstream-promos", () => ({
+  get SHOW_UPSTREAM_PROMOS() {
+    return mockPromos.show;
+  },
+}));
 vi.mock("sonner", () => ({
   toast: Object.assign(vi.fn(), { dismiss: vi.fn() }),
 }));
 
 afterEach(() => {
+  mockPromos.show = true;
   cleanup();
   window.inboxZeroDesktop = undefined;
   vi.clearAllMocks();
@@ -105,5 +114,32 @@ describe("desktop update footer", () => {
     expect(
       screen.getByRole("button", { name: "Restart to update" }),
     ).toBeDefined();
+  });
+
+  it("renders nothing while the upstream promos switch is off, even for a ready update", () => {
+    mockPromos.show = false;
+    window.inboxZeroDesktop = {
+      startAuth: async () => {},
+      onUpdateStatus: (listener: (status: DesktopUpdateStatus) => void) => {
+        listener({ state: "ready", version: "1.2" });
+        return () => {};
+      },
+      installUpdate: vi.fn(),
+    };
+
+    render(<DesktopUpdateMenuItem />);
+
+    expect(
+      screen.queryByRole("button", { name: "Restart to update" }),
+    ).toBeNull();
+
+    // The same bridge with the switch on does show it.
+    cleanup();
+    mockPromos.show = true;
+    render(<DesktopUpdateMenuItem />);
+
+    expect(
+      screen.getByRole("button", { name: "Restart to update" }),
+    ).toBeTruthy();
   });
 });

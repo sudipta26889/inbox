@@ -7,6 +7,7 @@ import { LandingLink } from "@/components/new-landing/LandingLink";
 import { env } from "@/env";
 import { EXTENSION_URL } from "@/utils/config";
 import { BRAND_NAME, HAS_BRAND_KIT } from "@/utils/branding";
+import { SHOW_UPSTREAM_PROMOS } from "@/utils/upstream-promos";
 import { CookieSettingsButton } from "@/components/CookieConsent";
 
 type FooterLink = { name: MessageDescriptor; href: string; target?: string };
@@ -19,9 +20,17 @@ export const footerNavigation = {
       target: "_blank",
     },
     { name: msg`AI Email Assistant`, href: "/ai-email-assistant" },
-    { name: msg`Email App`, href: "/email-client" },
-    { name: msg`Mobile App`, href: "/mobile-app" },
-    { name: msg`Download`, href: "/download" },
+    // The email-client and mobile-app pages pitch apps that are not shipped here.
+    ...(SHOW_UPSTREAM_PROMOS
+      ? [
+          { name: msg`Email App`, href: "/email-client" },
+          { name: msg`Mobile App`, href: "/mobile-app" },
+        ]
+      : []),
+    // The desktop and mobile apps are not shipped here.
+    ...(SHOW_UPSTREAM_PROMOS
+      ? [{ name: msg`Download`, href: "/download" }]
+      : []),
     { name: msg`AI Chat for Slack & Telegram`, href: "/ai-assistant-chat" },
     { name: msg`Slack AI Assistant`, href: "/slack-integration" },
     { name: msg`Telegram AI Assistant`, href: "/telegram-integration" },

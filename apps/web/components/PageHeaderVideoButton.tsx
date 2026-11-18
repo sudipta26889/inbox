@@ -6,6 +6,7 @@ import { VideoPlayerDialog } from "@/components/VideoPlayerDialog";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogTrigger } from "@/components/ui/dialog";
 import { useVideoAnalytics } from "@/hooks/useVideoAnalytics";
+import { SHOW_UPSTREAM_PROMOS } from "@/utils/upstream-promos";
 
 type Video = {
   title: string;
@@ -13,7 +14,14 @@ type Video = {
   muxPlaybackId: string;
 };
 
+// The demo videos are upstream's recordings of upstream's product.
 export function PageHeaderVideoButton({ video }: { video: Video }) {
+  if (!SHOW_UPSTREAM_PROMOS) return null;
+
+  return <PageHeaderVideo video={video} />;
+}
+
+function PageHeaderVideo({ video }: { video: Video }) {
   const analytics = useVideoAnalytics({
     muxPlaybackId: video.muxPlaybackId,
     surface: "page_header",

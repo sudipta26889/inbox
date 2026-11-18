@@ -173,6 +173,101 @@ describe("strip guard", () => {
     expect(hits).toEqual([]);
   });
 
+  // Upstream's promotions for apps that are not shipped here, and demo videos
+  // of upstream's product, stay off behind one constant.
+  describe("upstream promos", () => {
+    const read = (path: string) => readFileSync(join(WEB_ROOT, path), "utf8");
+
+    it("the switch is off", () => {
+      expect(read("utils/upstream-promos.ts")).toMatch(
+        /export const SHOW_UPSTREAM_PROMOS = false;/,
+      );
+    });
+
+    it("the email-app announcement is shown only behind the switch", () => {
+      const source = read("utils/announcements.tsx");
+      const launch = source.slice(
+        source.indexOf('id: "email-client-launch"'),
+        source.indexOf("details: ["),
+      );
+
+      expect(launch).toMatch(/enabled: SHOW_UPSTREAM_PROMOS,/);
+    });
+
+    it('"Get the app" is rendered only behind the switch', () => {
+      const source = read("components/SideNav.tsx");
+
+      expect(source).toMatch(
+        /SHOW_UPSTREAM_PROMOS && \(\s*<SideNavMenu items=\{getTheAppLinks\}/,
+      );
+      expect(source.match(/items=\{getTheAppLinks\}/g)).toHaveLength(1);
+    });
+
+    it("the app download page redirects away", () => {
+      expect(read("app/(landing)/app/page.tsx")).toMatch(
+        /if \(!SHOW_UPSTREAM_PROMOS\) redirect\("\/welcome-redirect"\);/,
+      );
+    });
+
+    it('"Watch demo" renders nothing', () => {
+      expect(read("components/PageHeaderVideoButton.tsx")).toMatch(
+        /if \(!SHOW_UPSTREAM_PROMOS\) return null;/,
+      );
+    });
+
+    it("the footer's app links are listed only behind the switch", () => {
+      const source = read("app/(landing)/home/Footer.tsx");
+
+      expect(source).toMatch(
+        /SHOW_UPSTREAM_PROMOS\s*\?\s*\[\s*\{ name: msg`Email App`, href: "\/email-client" \},\s*\{ name: msg`Mobile App`, href: "\/mobile-app" \},\s*\]\s*:\s*\[\]/,
+      );
+      expect(source.match(/href: "\/email-client"/g)).toHaveLength(1);
+      expect(source.match(/href: "\/mobile-app"/g)).toHaveLength(1);
+    });
+
+    it("the onboarding mail step names no desktop or phone app and plays no upstream video", () => {
+      const source = read(
+        "app/(app)/[emailAccountId]/onboarding/StepMailApp.tsx",
+      );
+
+      expect(source).not.toMatch(/desktop|iphone|android|mobile/i);
+      expect(source).not.toMatch(
+        /AnnouncementVideo|EMAIL_CLIENT_LAUNCH_VIDEO_ID|playbackId/,
+      );
+    });
+
+    it("the footer's Download link is listed only behind the switch", () => {
+      const source = read("app/(landing)/home/Footer.tsx");
+
+      expect(source).toMatch(
+        /SHOW_UPSTREAM_PROMOS\s*\?\s*\[\{ name: msg`Download`, href: "\/download" \}\]\s*:\s*\[\]/,
+      );
+      expect(source.match(/href: "\/download"/g)).toHaveLength(1);
+    });
+
+    it("the desktop update menu item renders nothing", () => {
+      expect(read("components/DesktopUpdateMenuItem.tsx")).toMatch(
+        /if \(!SHOW_UPSTREAM_PROMOS\) return null;/,
+      );
+    });
+
+    it("any other file with the promo wording knows about the switch", () => {
+      const offenders = files
+        .filter((file) =>
+          /\b(Download the app|Get the app|Watch demo)\b/.test(
+            readFileSync(file, "utf8"),
+          ),
+        )
+        .filter(
+          (file) =>
+            !readFileSync(file, "utf8").includes("SHOW_UPSTREAM_PROMOS"),
+        )
+        .map((file) => relative(REPO_ROOT, file));
+
+      expect(offenders).toEqual([]);
+    });
+  });
+
   it("names the product Inbox by default", () => {
     const envSource = readFileSync(join(WEB_ROOT, "env.ts"), "utf8");
 

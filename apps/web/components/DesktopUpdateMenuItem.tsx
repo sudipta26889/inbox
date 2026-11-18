@@ -9,8 +9,16 @@ import {
 } from "@/components/ui/sidebar";
 import { useDesktopUpdateStatus } from "@/hooks/useDesktopUpdateStatus";
 import { getInboxZeroDesktopApp } from "@/utils/desktop-app";
+import { SHOW_UPSTREAM_PROMOS } from "@/utils/upstream-promos";
 
+// The desktop app is not shipped here.
 export function DesktopUpdateMenuItem() {
+  if (!SHOW_UPSTREAM_PROMOS) return null;
+
+  return <DesktopUpdateButton />;
+}
+
+function DesktopUpdateButton() {
   const { t } = useLingui();
   const status = useDesktopUpdateStatus();
   if (status?.state !== "ready") return null;

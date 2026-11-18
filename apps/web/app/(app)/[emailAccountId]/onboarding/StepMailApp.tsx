@@ -1,8 +1,7 @@
 "use client";
 
 import { useLingui } from "@lingui/react/macro";
-import { AnnouncementVideo } from "@/components/feature-announcements/AnnouncementVideo";
-import { EMAIL_CLIENT_LAUNCH_VIDEO_ID } from "@/utils/announcements";
+import { MailIcon } from "lucide-react";
 import { OnboardingFeatureStep } from "./OnboardingFeatureStep";
 
 export function StepMailApp({ onNext }: { onNext: () => void }) {
@@ -11,16 +10,12 @@ export function StepMailApp({ onNext }: { onNext: () => void }) {
   return (
     <OnboardingFeatureStep
       illustration={
-        <div className="w-[400px] max-w-[calc(100vw-2rem)]">
-          <AnnouncementVideo
-            playbackId={EMAIL_CLIENT_LAUNCH_VIDEO_ID}
-            thumbnailTime={1.5}
-            title={t`Meet the Inbox email app`}
-          />
+        <div className="flex size-32 items-center justify-center rounded-3xl bg-primary/10 text-primary">
+          <MailIcon className="size-16" strokeWidth={1.5} />
         </div>
       }
       title={t`Meet your new email app`}
-      description={t`Read and send email on web, desktop, and iPhone. Add the AI assistant anytime.`}
+      description={t`Read and send email right here in the web mail app. Add the AI assistant anytime.`}
       onNext={onNext}
     />
   );
