@@ -274,3 +274,32 @@ describe("TaskpilotClient.listLinks", () => {
     await expect(client.listLinks("p1", "issue-1")).resolves.toEqual([]);
   });
 });
+
+describe("TaskpilotClient base URL", () => {
+  // The default comes from TASKPILOT_API_BASE_URL, which the test setup points at
+  // a host that cannot be reached. Production's host is the env default only.
+  it("uses TASKPILOT_API_BASE_URL when no base URL is given", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse([]));
+
+    await new TaskpilotClient({
+      apiKey: "tk_test",
+      workspaceSlug: "acme",
+    }).listProjects();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://taskpilot.test/api/v1/workspaces/acme/projects/",
+      expect.anything(),
+    );
+  });
+
+  it("prefers a base URL passed in", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse([]));
+
+    await client.listProjects();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringMatching(/^https:\/\/taskpilot\.example\//),
+      expect.anything(),
+    );
+  });
+});

@@ -190,6 +190,11 @@ const parsedEnv = createEnv({
     OPENAI_COMPATIBLE_BASE_URL: z.string().optional(),
     LITELLM_BASE_URL: z.string().optional(),
 
+    // Empty counts as unset: deploy/stack.yml passes ${TASKPILOT_API_BASE_URL:-}.
+    TASKPILOT_API_BASE_URL: z.preprocess(
+      (value) => (value === "" ? undefined : value),
+      z.string().url().default("https://taskpilot-api.sudiptadhara.in"),
+    ),
     TASKPILOT_DECIDER_MODEL: z.string().default("kimi-k2.6"),
     // Used when the primary model times out (cold GPU). Should be a fast,
     // reliable non-reasoning model.

@@ -7,6 +7,12 @@ import { commitTask } from "@/utils/taskpilot/service";
 
 vi.mock("@/utils/prisma");
 
+// Indexing for cross-thread dedupe is fire-and-forget and talks to TaskPilot and
+// the embeddings service. It has its own tests; here it must not reach a host.
+vi.mock("@/utils/taskpilot/reindex", () => ({
+  reindexTask: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("@/utils/taskpilot/config", () => ({
   getTaskpilotConfigForUser: vi
     .fn()

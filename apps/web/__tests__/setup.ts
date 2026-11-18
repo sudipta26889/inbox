@@ -1,7 +1,10 @@
 import "@/__tests__/test-env";
 import { vi } from "vitest";
+import { installNoNetworkGuard } from "./no-network-guard";
 
 vi.mock("server-only", () => ({}));
+
+installNoNetworkGuard();
 
 // Mock next/server's after() to just run synchronously in tests
 vi.mock("next/server", async () => {
