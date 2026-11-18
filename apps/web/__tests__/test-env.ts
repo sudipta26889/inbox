@@ -19,6 +19,8 @@ setEnvDefault("EMAIL_ENCRYPT_SALT", "test-email-encrypt-salt");
 setEnvDefault("INTERNAL_API_KEY", "test-internal-api-key");
 setEnvDefault("DEFAULT_LLMS", "openrouter:openai/gpt-6-luna");
 setEnvDefault("NEXT_PUBLIC_BASE_URL", "http://localhost:3000");
+// A host the network guard allows: a test that forgets to stub reaches nothing.
+setEnvDefault("TASKPILOT_API_BASE_URL", "http://taskpilot.test");
 
 function setEnvDefault(key: string, value: string) {
   if (!process.env[key]) {

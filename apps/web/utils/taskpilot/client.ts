@@ -1,4 +1,5 @@
 import { createScopedLogger } from "@/utils/logger";
+import { env } from "@/env";
 import {
   TaskpilotAuthError,
   TaskpilotNotFoundError,
@@ -27,8 +28,6 @@ export interface TaskpilotClientOptions {
   workspaceSlug: string;
 }
 
-const DEFAULT_BASE_URL = "https://taskpilot-api.sudiptadhara.in";
-
 export class TaskpilotClient {
   private readonly apiKey: string;
   private readonly workspaceSlug: string;
@@ -37,7 +36,10 @@ export class TaskpilotClient {
   constructor(opts: TaskpilotClientOptions) {
     this.apiKey = opts.apiKey;
     this.workspaceSlug = opts.workspaceSlug;
-    this.baseUrl = (opts.baseUrl ?? DEFAULT_BASE_URL).replace(/\/$/, "");
+    this.baseUrl = (opts.baseUrl ?? env.TASKPILOT_API_BASE_URL).replace(
+      /\/$/,
+      "",
+    );
   }
 
   async listProjects(): Promise<Project[]> {
