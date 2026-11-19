@@ -24,9 +24,13 @@ import { sleep } from "@/utils/sleep";
 import { withQstashOrInternal } from "@/utils/qstash";
 import {
   claimPendingDigests,
+  DigestClaimLostError,
   getDigestClaimWhere,
+  hasLiveProcessingDigest,
   renewDigestClaim,
 } from "@/utils/digest/claim-pending-digests";
+import { createHash } from "node:crypto";
+import { SendNotApprovedError } from "@/utils/mail/send-approval";
 
 export const maxDuration = 60;
 
@@ -156,6 +160,14 @@ async function sendEmail({
       });
       return { success: true, message: "Digest schedule is not due yet" };
     }
+  }
+
+  if (await hasLiveProcessingDigest({ emailAccountId })) {
+    logger.info("Skipping digest send because a digest is awaiting approval");
+    return {
+      success: true,
+      message: "Digest is awaiting approval or in progress",
+    };
   }
 
   let digestClaim = await claimPendingDigests({ emailAccountId });
@@ -338,6 +350,15 @@ async function sendEmail({
       ruleNames: Object.fromEntries(ruleNameMap),
       itemsByRule: executedRulesByRule,
       logger,
+      operationId: `digest_${createHash("sha256")
+        .update([...digestClaim.digestIds].sort().join(","))
+        .digest("hex")}`,
+      // The approval can take an hour; send only if this run still owns the digest.
+      beforeSend: async () => {
+        const renewed = await renewDigestClaim(digestClaim);
+        if (!renewed) throw new DigestClaimLostError();
+        digestClaim = renewed;
+      },
     });
 
     logger.info("Digest sent");
@@ -381,6 +402,28 @@ async function sendEmail({
       }),
     ]);
   } catch (error) {
+    if (error instanceof DigestClaimLostError) {
+      logger.warn("Skipping digest send because the processing claim was lost");
+      return { success: true, message: "Digest processing claim was lost" };
+    }
+    if (error instanceof SendNotApprovedError && error.decision) {
+      logger.info("Digest declined by reviewer", { decision: error.decision });
+      await prisma.$transaction([
+        ...(!force && digestScheduleData && digestScheduleProgression
+          ? [
+              prisma.schedule.update({
+                where: { id: digestScheduleData.id, emailAccountId },
+                data: digestScheduleProgression,
+              }),
+            ]
+          : []),
+        prisma.digest.updateMany({
+          where: getDigestClaimWhere(digestClaim),
+          data: { status: DigestStatus.DECLINED },
+        }),
+      ]);
+      return { success: true, message: "Digest declined by reviewer" };
+    }
     await prisma.digest.updateMany({
       where: getDigestClaimWhere(digestClaim),
       data: {

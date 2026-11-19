@@ -12,6 +12,7 @@ import type { Logger } from "@/utils/logger";
 import { flushLoggerSafely } from "@/utils/logger-flush";
 import { isLocalBypassEmailAccount } from "@/utils/auth/local-bypass-email-account";
 import { createLocalBypassEmailProvider } from "@/utils/email/local-bypass-provider";
+import { SendNotApprovedError } from "@/utils/mail/send-approval";
 
 export async function createEmailProvider({
   emailAccountId,
@@ -142,6 +143,8 @@ function withProviderFailureLogging(
 async function logProviderOperationFailureSafely(
   input: ProviderOperationFailureLogInput,
 ) {
+  // A reviewer's "no" is a decision, not a provider failure.
+  if (input.error instanceof SendNotApprovedError) return;
   try {
     await logProviderOperationFailure(input);
   } catch (loggingError) {

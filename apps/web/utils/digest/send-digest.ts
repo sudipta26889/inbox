@@ -27,6 +27,8 @@ import {
 } from "@/utils/messaging/routes";
 import { isMessagingChannelOperational } from "@/utils/messaging/channel-validity";
 import prisma from "@/utils/prisma";
+import { DigestClaimLostError } from "@/utils/digest/claim-pending-digests";
+import { SendNotApprovedError } from "@/utils/mail/send-approval";
 
 type DigestItem = { from: string; subject: string; content: string };
 type ItemsByRule = Record<string, DigestItem[] | undefined>;
@@ -39,6 +41,8 @@ export async function sendDigest({
   ruleNames,
   itemsByRule,
   logger,
+  operationId,
+  beforeSend,
 }: {
   emailAccountId: string;
   userEmail: string;
@@ -47,6 +51,8 @@ export async function sendDigest({
   ruleNames: Record<string, string>;
   itemsByRule: ItemsByRule;
   logger: Logger;
+  operationId?: string;
+  beforeSend?: () => Promise<void>;
 }): Promise<void> {
   logger = logger.with({ emailAccountId, userEmail });
 
@@ -92,6 +98,8 @@ export async function sendDigest({
         ruleNames,
         itemsByRule,
         logger,
+        operationId,
+        beforeSend,
       }),
     );
   }
@@ -156,6 +164,16 @@ export async function sendDigest({
   const results = await Promise.allSettled(deliveryPromises);
   const failures = results.filter((r) => r.status === "rejected");
 
+  const claimLost = failures.find(
+    (f) => (f as PromiseRejectedResult).reason instanceof DigestClaimLostError,
+  );
+  if (claimLost) throw (claimLost as PromiseRejectedResult).reason;
+
+  const notApproved = failures.find(
+    (f) => (f as PromiseRejectedResult).reason instanceof SendNotApprovedError,
+  );
+  if (notApproved) throw (notApproved as PromiseRejectedResult).reason;
+
   if (failures.length > 0) {
     for (const failure of failures) {
       logger.error("Digest delivery channel failed", {
@@ -178,6 +196,8 @@ async function sendDigestViaEmail({
   ruleNames,
   itemsByRule,
   logger,
+  operationId,
+  beforeSend,
 }: {
   emailAccountId: string;
   userEmail: string;
@@ -187,6 +207,8 @@ async function sendDigestViaEmail({
   ruleNames: Record<string, string>;
   itemsByRule: ItemsByRule;
   logger: Logger;
+  operationId?: string;
+  beforeSend?: () => Promise<void>;
 }) {
   const emailProps: DigestEmailProps = {
     baseUrl: env.NEXT_PUBLIC_BASE_URL,
@@ -211,6 +233,8 @@ async function sendDigestViaEmail({
       }),
     renderHtml: () => render(DigestEmail(emailProps)),
     logger,
+    operationId,
+    beforeSend,
   });
 }
 
