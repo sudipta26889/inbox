@@ -2,12 +2,38 @@ import { Prisma } from "@/generated/prisma/client";
 import { DigestStatus } from "@/generated/prisma/enums";
 import prisma from "@/utils/prisma";
 
-const PROCESSING_LEASE_MS = 10 * 60 * 1000;
+// Outlives the DharaHIL card (about 60 minutes), so a digest waiting for a
+// human decision is not reclaimed by the next cron run.
+const PROCESSING_LEASE_MS = 75 * 60 * 1000;
 
 export type DigestClaim = {
   digestIds: string[];
   claimedAt: Date;
 };
+
+export class DigestClaimLostError extends Error {
+  constructor() {
+    super("Digest processing claim was lost");
+  }
+}
+
+export async function hasLiveProcessingDigest({
+  emailAccountId,
+  now = new Date(),
+}: {
+  emailAccountId: string;
+  now?: Date;
+}): Promise<boolean> {
+  const live = await prisma.digest.findFirst({
+    where: {
+      emailAccountId,
+      status: DigestStatus.PROCESSING,
+      updatedAt: { gte: new Date(now.getTime() - PROCESSING_LEASE_MS) },
+    },
+    select: { id: true },
+  });
+  return !!live;
+}
 
 export async function claimPendingDigests({
   emailAccountId,

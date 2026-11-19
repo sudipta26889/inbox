@@ -111,7 +111,18 @@ export type SendGate = {
 };
 
 /** A human said no, or the gate could not ask. Nothing was sent. */
-export class SendNotApprovedError extends SafeError {}
+export class SendNotApprovedError extends SafeError {
+  /** Set only when a human decided; unset for outages and other refusals. */
+  readonly decision?: "REJECTED" | "REVISE_REQUESTED" | "EXPIRED";
+
+  constructor(
+    safeMessage?: string,
+    decision?: "REJECTED" | "REVISE_REQUESTED" | "EXPIRED",
+  ) {
+    super(safeMessage);
+    this.decision = decision;
+  }
+}
 
 const issuedApprovals = new WeakSet<SendApproval>();
 
@@ -515,7 +526,10 @@ async function askReviewer(request: SendApprovalRequest): Promise<SendEdits> {
   });
 
   if (!dharahilClient.shouldProceed(decision)) {
-    throw new SendNotApprovedError(notApprovedMessage(decision));
+    throw new SendNotApprovedError(
+      notApprovedMessage(decision),
+      humanDecision(decision),
+    );
   }
 
   const { bodyHtml } = request;
@@ -613,6 +627,21 @@ function editsFrom(
 function editedHtml(edits: SendEdits) {
   if (edits.bodyHtml !== undefined) return edits.bodyHtml;
   if (edits.bodyText !== undefined) return textToHtmlParagraphs(edits.bodyText);
+}
+
+function humanDecision(
+  decision: DharaHILDecision,
+): SendNotApprovedError["decision"] {
+  switch (decision.action) {
+    case "REJECTED":
+    case "DENY":
+      return "REJECTED";
+    case "REVISE_REQUESTED":
+    case "EXPIRED":
+      return decision.action;
+    default:
+      return;
+  }
 }
 
 function notApprovedMessage(decision: DharaHILDecision) {
