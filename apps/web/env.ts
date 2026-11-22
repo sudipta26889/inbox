@@ -239,6 +239,12 @@ const parsedEnv = createEnv({
     CODEX_CLI_PATH: z.string().optional(),
 
     OPENAI_ZERO_DATA_RETENTION: booleanString.optional().default(false),
+    VOICE_PROVIDER: z.enum(["openai", "groq"]).optional(),
+    VOICE_STT_MODEL: z.string().optional(),
+    VOICE_TTS_MODEL: z.string().optional(),
+    VOICE_TTS_VOICE: z.string().optional(),
+    VOICE_LIVE_MODEL: z.string().optional(),
+    VOICE_LIVE_VOICE: z.string().optional(),
 
     // HTTP Redis speaks the Upstash REST protocol, including your own
     // serverless-redis-http proxy. Older self-hosted installs and Vercel KV
