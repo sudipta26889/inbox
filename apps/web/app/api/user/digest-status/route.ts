@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDigestDeliveryState } from "@/utils/digest/delivery-state";
+import { isMitraDigestConfigured } from "@/utils/digest/send-digest-mitra";
 import { getEstimatedDigestDeliveryAt } from "@/utils/digest/schedule";
 import { withEmailAccount } from "@/utils/middleware";
 import prisma from "@/utils/prisma";
@@ -22,6 +23,7 @@ async function getData({ emailAccountId }: { emailAccountId: string }) {
         email: true,
         timezone: true,
         digestSendEmail: true,
+        digestSendMitra: true,
         digestSchedule: {
           select: {
             id: true,
@@ -42,6 +44,8 @@ async function getData({ emailAccountId }: { emailAccountId: string }) {
     schedule: emailAccount.digestSchedule,
     delivery: {
       emailEnabled: emailAccount.digestSendEmail,
+      mitraEnabled: emailAccount.digestSendMitra,
+      mitraAvailable: isMitraDigestConfigured(),
       destinationEmail: emailAccount.email,
       timezone: emailAccount.timezone,
       estimatedNextDeliveryAt: getEstimatedDigestDeliveryAt(

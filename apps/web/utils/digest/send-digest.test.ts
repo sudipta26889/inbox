@@ -15,8 +15,16 @@ import { sendAutomationMessage } from "@/utils/automation-jobs/messaging";
 import { sendDigestEmail } from "@inboxzero/transactional-email";
 import { env } from "@/env";
 import { createEmailProvider } from "@/utils/email/provider";
+import {
+  isMitraDigestConfigured,
+  sendDigestToMitra,
+} from "@/utils/digest/send-digest-mitra";
 
 vi.mock("@/utils/prisma");
+vi.mock("@/utils/digest/send-digest-mitra", () => ({
+  isMitraDigestConfigured: vi.fn(),
+  sendDigestToMitra: vi.fn(),
+}));
 vi.mock("@/env", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/env")>();
   return { ...actual, env: { ...actual.env } };
@@ -176,6 +184,128 @@ describe("sendDigest", () => {
     (sendDigestToSlack as any).mockResolvedValue(undefined);
 
     await expect(sendDigest(baseArgs)).resolves.toBeUndefined();
+  });
+
+  describe("Mitra delivery", () => {
+    beforeEach(() => {
+      vi.mocked(isMitraDigestConfigured).mockReturnValue(true);
+      vi.mocked(sendDigestToMitra).mockResolvedValue(undefined);
+    });
+
+    it("sends one numbered plain-text digest to Mitra, without email or approval", async () => {
+      prisma.emailAccount.findUnique.mockResolvedValue({
+        digestSendEmail: false,
+        digestSendMitra: true,
+        timezone: "Asia/Kolkata",
+        account: { provider: "google" },
+      } as any);
+      prisma.messagingChannel.findMany.mockResolvedValue([]);
+
+      await sendDigest(baseArgs);
+
+      expect(sendDigestToMitra).toHaveBeenCalledTimes(1);
+      const call = vi.mocked(sendDigestToMitra).mock.calls[0][0];
+      expect(call.emailAccountId).toBe("email-account-1");
+      expect(call.dateKey).toBe("2026-04-21");
+      expect(call.text.split("\n")[0]).toBe("DIGEST 2026-04-21");
+      expect(call.text).toContain("1. Newsletters: Acme - Hello");
+      expect(sendDigestEmail).not.toHaveBeenCalled();
+      expect(sendEmailWithHtml).not.toHaveBeenCalled();
+    });
+
+    it("uses the account's timezone for the digest date", async () => {
+      prisma.emailAccount.findUnique.mockResolvedValue({
+        digestSendEmail: false,
+        digestSendMitra: true,
+        timezone: "Asia/Kolkata",
+        account: { provider: "google" },
+      } as any);
+      prisma.messagingChannel.findMany.mockResolvedValue([]);
+
+      await sendDigest({ ...baseArgs, date: new Date("2026-04-21T20:00:00Z") });
+
+      expect(vi.mocked(sendDigestToMitra).mock.calls[0][0].dateKey).toBe(
+        "2026-04-22",
+      );
+    });
+
+    it("makes no call when the switch is off", async () => {
+      prisma.emailAccount.findUnique.mockResolvedValue({
+        digestSendEmail: true,
+        digestSendMitra: false,
+        timezone: null,
+        account: { provider: "google" },
+      } as any);
+      prisma.messagingChannel.findMany.mockResolvedValue([]);
+
+      await sendDigest(baseArgs);
+
+      expect(sendDigestToMitra).not.toHaveBeenCalled();
+    });
+
+    it("skips with one warning when Mitra is not configured, other channels still send", async () => {
+      vi.mocked(isMitraDigestConfigured).mockReturnValue(false);
+      vi.spyOn(logger, "with").mockReturnValue(logger);
+      const warn = vi.spyOn(logger, "warn");
+      prisma.emailAccount.findUnique.mockResolvedValue({
+        digestSendEmail: true,
+        digestSendMitra: true,
+        timezone: null,
+        account: { provider: "google" },
+      } as any);
+      prisma.messagingChannel.findMany.mockResolvedValue([]);
+
+      await sendDigest(baseArgs);
+
+      expect(sendDigestToMitra).not.toHaveBeenCalled();
+      expect(sendDigestEmail).toHaveBeenCalledTimes(1);
+      expect(
+        warn.mock.calls.filter(([msg]) => /Mitra/.test(String(msg))),
+      ).toHaveLength(1);
+    });
+
+    it("fails the digest when Mitra is the only channel and not configured", async () => {
+      vi.mocked(isMitraDigestConfigured).mockReturnValue(false);
+      prisma.emailAccount.findUnique.mockResolvedValue({
+        digestSendEmail: false,
+        digestSendMitra: true,
+        timezone: null,
+        account: { provider: "google" },
+      } as any);
+      prisma.messagingChannel.findMany.mockResolvedValue([]);
+
+      await expect(sendDigest(baseArgs)).rejects.toThrow(
+        /No deliverable digest channels/,
+      );
+    });
+
+    it("counts the digest as delivered when Mitra succeeds and email fails", async () => {
+      prisma.emailAccount.findUnique.mockResolvedValue({
+        digestSendEmail: true,
+        digestSendMitra: true,
+        timezone: null,
+        account: { provider: "google" },
+      } as any);
+      prisma.messagingChannel.findMany.mockResolvedValue([]);
+      (sendDigestEmail as any).mockRejectedValue(new Error("email broke"));
+
+      await expect(sendDigest(baseArgs)).resolves.toBeUndefined();
+    });
+
+    it("throws when Mitra is the only channel and fails", async () => {
+      vi.mocked(sendDigestToMitra).mockRejectedValue(new Error("HTTP 503"));
+      prisma.emailAccount.findUnique.mockResolvedValue({
+        digestSendEmail: false,
+        digestSendMitra: true,
+        timezone: null,
+        account: { provider: "google" },
+      } as any);
+      prisma.messagingChannel.findMany.mockResolvedValue([]);
+
+      await expect(sendDigest(baseArgs)).rejects.toThrow(
+        /All digest delivery channels failed/,
+      );
+    });
   });
 
   it("skips Slack when the access token is missing", async () => {

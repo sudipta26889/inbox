@@ -46,6 +46,7 @@ async function getEmailAccount({
       followUpNeedsReplyDays: true,
       followUpAutoDraftEnabled: true,
       digestSendEmail: true,
+      digestSendMitra: true,
       mqttEnabled: true,
       mqttTopicSlug: true,
       mqttIncludeDetail: true,

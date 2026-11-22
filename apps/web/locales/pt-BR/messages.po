@@ -8819,6 +8819,10 @@ msgstr "ID da regra ausente na resposta"
 msgid "Missing rule update details"
 msgstr "Faltam detalhes da atualização da regra"
 
+#: app/(app)/[emailAccountId]/settings/DigestSettingsForm.tsx
+msgid "Mitra delivery is not set up on this server."
+msgstr "A entrega para o Mitra não está configurada neste servidor."
+
 #: app/(app)/[emailAccountId]/settings/ModelSection.tsx
 msgid "Model"
 msgstr "Modelo"
@@ -11761,6 +11765,10 @@ msgstr "Enviar briefing antes da reunião"
 #: app/(app)/[emailAccountId]/settings/DigestSettingsForm.tsx
 msgid "Send digest to email"
 msgstr "Enviar resumo por e-mail"
+
+#: app/(app)/[emailAccountId]/settings/DigestSettingsForm.tsx
+msgid "Send digest to Mitra (WhatsApp)"
+msgstr "Enviar o resumo para o Mitra (WhatsApp)"
 
 #: app/(app)/[emailAccountId]/assistant/AvailableActionsPanel.tsx
 #: app/(app)/[emailAccountId]/settings/McpSection.tsx
