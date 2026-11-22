@@ -128,7 +128,7 @@ describe("redis key prefix", () => {
       { member: "m1", score: 10 },
       { member: "m2", score: 20.5 },
     ]);
-    expect(client.zrange).toHaveBeenCalledWith("set", 0, 1, "WITHSCORES");
+    expect(client.zrange).toHaveBeenCalledWith("set", 0, "1", "WITHSCORES");
   });
 
   it("has no unreviewed raw ioredis client", () => {

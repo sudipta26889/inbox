@@ -212,7 +212,12 @@ export const redis = {
     start: number,
     stop: number,
   ): Promise<{ member: string; score: number }[]> {
-    const flat = await ioRedisClient.zrange(key, start, stop, "WITHSCORES");
+    const flat = await ioRedisClient.zrange(
+      key,
+      start,
+      String(stop),
+      "WITHSCORES",
+    );
     const entries: { member: string; score: number }[] = [];
     for (let i = 0; i < flat.length; i += 2) {
       entries.push({ member: flat[i], score: Number(flat[i + 1]) });
