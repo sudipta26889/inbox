@@ -136,4 +136,75 @@ describe("resolveVoiceRuntime", () => {
       VoiceUnavailableError,
     );
   });
+
+  describe("local speech through LiteLLM", () => {
+    const gateway = {
+      LITELLM_BASE_URL: "http://litellm.test:4000/v1",
+      LLM_API_KEY: "gw-key",
+    };
+
+    it("is the default when the gateway is configured, even with an OpenAI key", () => {
+      const config = resolveVoiceRuntime({
+        env: { ...gateway, OPENAI_API_KEY: "sk-test" },
+      });
+      expect(config.providerId).toBe("litellm");
+      expect(config.ttsVoice).toBe("af_heart");
+      expect(createVoiceProvider(config).id).toBe("litellm");
+    });
+
+    it("needs both the gateway URL and key", () => {
+      expect(
+        resolveVoiceRuntime({
+          env: { LITELLM_BASE_URL: gateway.LITELLM_BASE_URL },
+        }).providerId,
+      ).toBeNull();
+      expect(
+        resolveVoiceRuntime({ env: { LLM_API_KEY: "gw-key" } }).providerId,
+      ).toBeNull();
+    });
+
+    it("keeps an explicit provider choice", () => {
+      const config = resolveVoiceRuntime({
+        env: { ...gateway, VOICE_PROVIDER: "openai", OPENAI_API_KEY: "sk" },
+      });
+      expect(config.providerId).toBe("openai");
+      expect(config.ttsVoice).toBe("alloy");
+    });
+
+    it("uses configured models and voice", () => {
+      const config = resolveVoiceRuntime({
+        env: {
+          ...gateway,
+          VOICE_STT_MODEL: "whisper-small",
+          VOICE_TTS_MODEL: "tts-other",
+          VOICE_TTS_VOICE: "bf_emma",
+        },
+      });
+      expect(config).toMatchObject({
+        sttModel: "whisper-small",
+        ttsModel: "tts-other",
+        ttsVoice: "bf_emma",
+      });
+    });
+
+    it("offers dictation and speech, and live calls only when an OpenAI key exists", () => {
+      const local = toVoiceStatus(resolveVoiceRuntime({ env: gateway }));
+      expect(local).toMatchObject({
+        provider: "litellm",
+        transcribe: true,
+        synthesize: true,
+        live: false,
+      });
+
+      const withOpenAi = toVoiceStatus(
+        resolveVoiceRuntime({ env: { ...gateway, OPENAI_API_KEY: "sk-test" } }),
+      );
+      expect(withOpenAi.live).toBe(true);
+
+      const provider = createVoiceProvider(
+        resolveVoiceRuntime({ env: { ...gateway, OPENAI_API_KEY: "sk-test" } }),
+      );
+      expect(() => requireVoiceCapability(provider, "live")).not.toThrow();
+    });
+  });
 });

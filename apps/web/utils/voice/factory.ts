@@ -3,10 +3,12 @@ import type { UserAIFields } from "@/utils/llms/types";
 import { isVoiceProviderId, voiceCatalogEntry } from "@/utils/voice/catalog";
 import { VoiceUnavailableError } from "@/utils/voice/errors";
 import {
+  DEFAULT_LITELLM_TTS_VOICE,
   DEFAULT_OPENAI_LIVE_VOICE,
   DEFAULT_OPENAI_TTS_VOICE,
 } from "@/utils/voice/limits";
 import { GroqVoiceProvider } from "@/utils/voice/providers/groq";
+import { LiteLLMVoiceProvider } from "@/utils/voice/providers/litellm";
 import { OpenAIVoiceProvider } from "@/utils/voice/providers/openai";
 import type {
   VoiceProvider as VoiceProviderAdapter,
@@ -23,6 +25,8 @@ export type VoiceEnv = {
   VOICE_TTS_VOICE?: string;
   VOICE_LIVE_MODEL?: string;
   VOICE_LIVE_VOICE?: string;
+  LITELLM_BASE_URL?: string;
+  LLM_API_KEY?: string;
   OPENAI_API_KEY?: string;
   GROQ_API_KEY?: string;
 };
@@ -33,9 +37,12 @@ export function resolveVoiceRuntime(options: {
 }): VoiceRuntimeConfig {
   const openaiApiKey = resolveOpenAiApiKey(options.env, options.userAi);
   const groqApiKey = options.env.GROQ_API_KEY?.trim() || undefined;
+  const litellmBaseUrl = options.env.LITELLM_BASE_URL?.trim() || undefined;
+  const litellmApiKey = options.env.LLM_API_KEY?.trim() || undefined;
   const requested = options.env.VOICE_PROVIDER?.trim();
   const providerId = resolveProviderId({
     requested,
+    litellmConfigured: Boolean(litellmBaseUrl && litellmApiKey),
     openaiApiKey,
     groqApiKey,
   });
@@ -43,11 +50,17 @@ export function resolveVoiceRuntime(options: {
   return {
     enabled: options.env.NEXT_PUBLIC_VOICE_ENABLED !== false && !!providerId,
     providerId,
+    litellmBaseUrl,
+    litellmApiKey,
     openaiApiKey,
     groqApiKey,
     sttModel: options.env.VOICE_STT_MODEL?.trim() || undefined,
     ttsModel: options.env.VOICE_TTS_MODEL?.trim() || undefined,
-    ttsVoice: options.env.VOICE_TTS_VOICE?.trim() || DEFAULT_OPENAI_TTS_VOICE,
+    ttsVoice:
+      options.env.VOICE_TTS_VOICE?.trim() ||
+      (providerId === "litellm"
+        ? DEFAULT_LITELLM_TTS_VOICE
+        : DEFAULT_OPENAI_TTS_VOICE),
     liveModel: options.env.VOICE_LIVE_MODEL?.trim() || undefined,
     liveVoice:
       options.env.VOICE_LIVE_VOICE?.trim() || DEFAULT_OPENAI_LIVE_VOICE,
@@ -65,6 +78,28 @@ export function createVoiceProvider(
   }
 
   switch (config.providerId) {
+    case "litellm": {
+      if (!(config.litellmBaseUrl && config.litellmApiKey)) {
+        throw new VoiceUnavailableError(
+          "key",
+          "Set LITELLM_BASE_URL and LLM_API_KEY to use local voice.",
+        );
+      }
+      return new LiteLLMVoiceProvider({
+        baseUrl: config.litellmBaseUrl,
+        apiKey: config.litellmApiKey,
+        sttModel: config.sttModel,
+        ttsModel: config.ttsModel,
+        // The gateway has no realtime route, so live calls stay on OpenAI.
+        live: config.openaiApiKey
+          ? new OpenAIVoiceProvider({
+              apiKey: config.openaiApiKey,
+              liveModel: config.liveModel,
+              liveVoice: config.liveVoice,
+            })
+          : undefined,
+      });
+    }
     case "openai": {
       if (!config.openaiApiKey) {
         throw new VoiceUnavailableError(
@@ -104,15 +139,20 @@ export function toVoiceStatus(config: VoiceRuntimeConfig): VoiceStatus {
   const entry = voiceCatalogEntry(config.providerId);
   const provider = config.enabled ? config.providerId : null;
   const capabilities = entry?.capabilities;
+  const live = Boolean(
+    provider &&
+      capabilities?.live &&
+      (provider !== "litellm" || config.openaiApiKey),
+  );
   return {
     enabled: Boolean(provider),
     provider,
     providerName: entry?.name ?? null,
     transcribe: Boolean(provider && capabilities?.transcribe),
     synthesize: Boolean(provider && capabilities?.synthesize),
-    live: Boolean(provider && capabilities?.live),
+    live,
     ttsVoice: capabilities?.synthesize ? (config.ttsVoice ?? null) : null,
-    liveVoice: capabilities?.live ? (config.liveVoice ?? null) : null,
+    liveVoice: live ? (config.liveVoice ?? null) : null,
   };
 }
 
@@ -155,15 +195,19 @@ function resolveOpenAiApiKey(
 
 function resolveProviderId(options: {
   requested?: string;
+  litellmConfigured: boolean;
   openaiApiKey?: string;
   groqApiKey?: string;
 }): VoiceProviderId | null {
   if (options.requested) {
     if (!isVoiceProviderId(options.requested)) return null;
+    if (options.requested === "litellm" && !options.litellmConfigured)
+      return null;
     if (options.requested === "openai" && !options.openaiApiKey) return null;
     if (options.requested === "groq" && !options.groqApiKey) return null;
     return options.requested;
   }
+  if (options.litellmConfigured) return "litellm";
   if (options.openaiApiKey) return "openai";
   if (options.groqApiKey) return "groq";
   return null;

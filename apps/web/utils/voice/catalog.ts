@@ -2,6 +2,14 @@ import type { VoiceCatalogEntry, VoiceProviderId } from "@/utils/voice/types";
 
 export const VOICE_CATALOG: VoiceCatalogEntry[] = [
   {
+    id: "litellm",
+    name: "Local speech (LiteLLM)",
+    description:
+      "Dictation and spoken replies on local Whisper and Kokoro models. Live calls need an OpenAI key.",
+    // Live is true only when an OpenAI key is set; toVoiceStatus applies that.
+    capabilities: { transcribe: true, synthesize: true, live: true },
+  },
+  {
     id: "openai",
     name: "OpenAI",
     description:

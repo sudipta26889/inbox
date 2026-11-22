@@ -16,6 +16,8 @@ export function getVoiceRuntime(userAi?: UserAIFields | null) {
       VOICE_TTS_VOICE: env.VOICE_TTS_VOICE,
       VOICE_LIVE_MODEL: env.VOICE_LIVE_MODEL,
       VOICE_LIVE_VOICE: env.VOICE_LIVE_VOICE,
+      LITELLM_BASE_URL: env.LITELLM_BASE_URL,
+      LLM_API_KEY: env.LLM_API_KEY,
       OPENAI_API_KEY: env.OPENAI_API_KEY,
       GROQ_API_KEY: env.GROQ_API_KEY,
     },
