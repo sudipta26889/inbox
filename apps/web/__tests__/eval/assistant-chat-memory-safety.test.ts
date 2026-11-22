@@ -16,6 +16,7 @@ import { getEvalModels } from "@/__tests__/eval/model-catalog";
 import {
   describeEvalMatrix,
   shouldRunEvalTests,
+  getEvalTimeout,
 } from "@/__tests__/eval/models";
 import { createEvalReporter } from "@/__tests__/eval/reporter";
 import {
@@ -31,7 +32,7 @@ import type { getEmailAccount } from "@/__tests__/helpers";
 // Multi-model: EVAL_MODELS=all pnpm test-ai eval/assistant-chat-memory-safety
 
 const shouldRunEval = shouldRunEvalTests();
-const TIMEOUT = 240_000;
+const TIMEOUT = getEvalTimeout(240_000);
 const evalReporter = createEvalReporter({
   evalName: "assistant-chat-memory-safety",
 });

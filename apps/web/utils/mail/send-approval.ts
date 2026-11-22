@@ -2,8 +2,13 @@ import "server-only";
 import { createHash } from "node:crypto";
 import { type DharaHILDecision, dharahilClient } from "@/utils/dharahil/client";
 import { createScopedLogger } from "@/utils/logger";
+import { approvalSummary, displayNameOf } from "@/utils/dharahil/card-summary";
 import { isApprovalGateRequired } from "@/utils/dharahil/required";
-import { extractEmailAddress, extractEmailAddresses } from "@/utils/email";
+import {
+  extractEmailAddress,
+  extractEmailAddresses,
+  splitRecipientList,
+} from "@/utils/email";
 import { SafeError } from "@/utils/error";
 import prisma from "@/utils/prisma";
 import { redis } from "@/utils/redis";
@@ -508,7 +513,11 @@ async function askReviewer(request: SendApprovalRequest): Promise<SendEdits> {
       runId:
         request.operationId || request.threadId || `${operation}_${Date.now()}`,
       stepId: operation,
-      contextSummary: `${operation} from ${from} to ${to}${subject ? ` - Subject: ${subject}` : ""}${request.sendAt ? ` - at ${request.sendAt}` : ""}`,
+      contextSummary: approvalSummary({
+        what: request.isReply ? "a reply" : "an email",
+        preposition: "to",
+        name: displayNameOf(splitRecipientList(to)[0] ?? ""),
+      }),
       riskLevel: external ? "HIGH" : "MEDIUM",
       tags: ["email", provider, operation, external ? "external" : "internal"],
       idempotencyKey: request.operationId

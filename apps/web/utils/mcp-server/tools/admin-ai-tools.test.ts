@@ -18,20 +18,20 @@ function ctx(userId: string, scopes: string[] = ["admin"]): McpToolContext {
 describe("admin_ai_get_settings", () => {
   it("returns current provider, model, and allowed-providers list", async () => {
     prisma.user.findUnique.mockResolvedValue({
-      aiProvider: Provider.ANTHROPIC,
-      aiModel: "claude-4.7-sonnet",
+      aiProvider: Provider.LITELLM,
+      aiModel: "recursivesi/flint",
     } as never);
 
     const res = await adminAiGetSettings(ctx("user_1"), {});
 
     expect(res.ok).toBe(true);
     if (res.ok && res.data) {
-      expect(res.data.aiProvider).toBe(Provider.ANTHROPIC);
-      expect(res.data.aiModel).toBe("claude-4.7-sonnet");
-      expect(res.data.allowedProviders).toContain(Provider.ANTHROPIC);
+      expect(res.data.aiProvider).toBe(Provider.LITELLM);
+      expect(res.data.aiModel).toBe("recursivesi/flint");
+      expect(res.data.allowedProviders).toContain(Provider.LITELLM);
       expect(
         res.data.providerOptions.find(
-          (o: { value: string }) => o.value === Provider.ANTHROPIC,
+          (o: { value: string }) => o.value === Provider.LITELLM,
         ),
       ).toBeTruthy();
     }
@@ -82,22 +82,22 @@ describe("admin_ai_update_model", () => {
     prisma.user.updateMany.mockResolvedValue({ count: 1 } as never);
 
     const res = await adminAiUpdateModel(ctx("user_1"), {
-      aiProvider: Provider.ANTHROPIC,
-      aiModel: "claude-4.7-sonnet",
+      aiProvider: Provider.LITELLM,
+      aiModel: "recursivesi/flint",
     });
 
     expect(res.ok).toBe(true);
     if (res.ok && res.data) {
-      expect(res.data.aiProvider).toBe(Provider.ANTHROPIC);
-      expect(res.data.aiModel).toBe("claude-4.7-sonnet");
+      expect(res.data.aiProvider).toBe(Provider.LITELLM);
+      expect(res.data.aiModel).toBe("recursivesi/flint");
     }
 
     const call = prisma.user.updateMany.mock.calls[0]?.[0] as {
       data: Record<string, unknown>;
     };
     expect(call.data).toEqual({
-      aiProvider: Provider.ANTHROPIC,
-      aiModel: "claude-4.7-sonnet",
+      aiProvider: Provider.LITELLM,
+      aiModel: "recursivesi/flint",
     });
     expect(call.data).not.toHaveProperty("aiApiKey");
   });
@@ -112,8 +112,8 @@ describe("admin_ai_update_model", () => {
     ["credentials", "x"],
   ])("rejects payload containing %s with VALIDATION_ERROR + reason=api_key_field_rejected", async (field, value) => {
     const res = await adminAiUpdateModel(ctx("user_1"), {
-      aiProvider: Provider.ANTHROPIC,
-      aiModel: "claude-4.7-sonnet",
+      aiProvider: Provider.LITELLM,
+      aiModel: "recursivesi/flint",
       [field]: value,
     });
 
@@ -139,9 +139,19 @@ describe("admin_ai_update_model", () => {
     expect(prisma.user.updateMany).not.toHaveBeenCalled();
   });
 
-  it("rejects when aiModel is missing", async () => {
+  it("rejects a cloud provider with VALIDATION_ERROR", async () => {
     const res = await adminAiUpdateModel(ctx("user_1"), {
       aiProvider: Provider.ANTHROPIC,
+      aiModel: "claude-4.7-sonnet",
+    });
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error.code).toBe("VALIDATION_ERROR");
+    expect(prisma.user.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("rejects when aiModel is missing", async () => {
+    const res = await adminAiUpdateModel(ctx("user_1"), {
+      aiProvider: Provider.LITELLM,
     });
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.error.code).toBe("VALIDATION_ERROR");
@@ -173,8 +183,8 @@ describe("admin_ai_update_model", () => {
     prisma.user.updateMany.mockResolvedValue({ count: 0 } as never);
 
     const res = await adminAiUpdateModel(ctx("user_gone"), {
-      aiProvider: Provider.ANTHROPIC,
-      aiModel: "claude-4.7-sonnet",
+      aiProvider: Provider.LITELLM,
+      aiModel: "recursivesi/flint",
     });
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.error.code).toBe("NOT_FOUND");

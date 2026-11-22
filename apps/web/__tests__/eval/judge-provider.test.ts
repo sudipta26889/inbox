@@ -29,4 +29,16 @@ describe("getEvalJudgeUserAi", () => {
       aiApiKey: "test-key",
     });
   });
+
+  it("uses the LiteLLM key when the judge runs through LiteLLM", () => {
+    vi.stubEnv("EVAL_JUDGE_PROVIDER", "litellm");
+    vi.stubEnv("EVAL_JUDGE_MODEL", "recursivesi/flint");
+    vi.stubEnv("LLM_API_KEY", "test-key");
+
+    expect(getEvalJudgeUserAi()).toEqual({
+      aiProvider: "litellm",
+      aiModel: "recursivesi/flint",
+      aiApiKey: "test-key",
+    });
+  });
 });

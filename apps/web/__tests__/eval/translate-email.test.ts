@@ -3,6 +3,7 @@ import { judgeBinary } from "@/__tests__/eval/judge";
 import {
   describeEvalMatrix,
   shouldRunEvalTests,
+  getEvalTimeout,
 } from "@/__tests__/eval/models";
 import { createEvalReporter } from "@/__tests__/eval/reporter";
 import { aiTranslateEmails } from "@/utils/ai/translate-email";
@@ -10,7 +11,7 @@ import { aiTranslateEmails } from "@/utils/ai/translate-email";
 // pnpm --filter inbox-zero-ai test-ai __tests__/eval/translate-email.test.ts
 
 const shouldRunEval = shouldRunEvalTests();
-const TIMEOUT = 60_000;
+const TIMEOUT = getEvalTimeout(60_000);
 
 describe.runIf(shouldRunEval)("Eval: Translate Email", () => {
   const evalReporter = createEvalReporter({ evalName: "translate-email" });

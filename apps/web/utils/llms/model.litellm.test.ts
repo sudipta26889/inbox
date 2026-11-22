@@ -36,8 +36,22 @@ describe("LiteLLM provider", () => {
     expect(createOpenAICompatible).toHaveBeenCalledWith({
       name: "litellm",
       baseURL: "http://litellm.test/v1",
+      supportsStructuredOutputs: true,
       apiKey: "deployment-key",
     });
+  });
+
+  // Flint rejects response_format json_object with HTTP 400; the SDK sends
+  // json_schema only when the provider declares structured output support.
+  it("requests json_schema structured outputs from the gateway", () => {
+    getModel({ aiProvider: null, aiModel: null, aiApiKey: null });
+
+    expect(createOpenAICompatible).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "litellm",
+        supportsStructuredOutputs: true,
+      }),
+    );
   });
 
   it("keeps a user's saved LiteLLM model and virtual key", () => {

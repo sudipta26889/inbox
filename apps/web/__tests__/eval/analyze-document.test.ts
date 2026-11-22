@@ -2,6 +2,7 @@ import { afterAll, describe, expect, test } from "vitest";
 import {
   describeEvalMatrix,
   shouldRunEvalTests,
+  getEvalTimeout,
 } from "@/__tests__/eval/models";
 import { createEvalReporter } from "@/__tests__/eval/reporter";
 import { analyzeDocument } from "@/utils/ai/document-filing/analyze-document";
@@ -10,7 +11,7 @@ import { analyzeDocument } from "@/utils/ai/document-filing/analyze-document";
 // Multi-model: EVAL_MODELS=all pnpm test-ai eval/analyze-document
 
 const shouldRunEval = shouldRunEvalTests();
-const TIMEOUT = 30_000;
+const TIMEOUT = getEvalTimeout(30_000);
 
 const filingPrompt = `
 Only use the existing folders provided below.

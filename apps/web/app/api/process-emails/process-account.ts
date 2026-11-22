@@ -16,6 +16,13 @@ import { logErrorWithDedupe } from "@/utils/log-error-with-dedupe";
 import { GmailLabel } from "@/utils/gmail/label";
 import { getEmailProviderRateLimitState } from "@/utils/email/rate-limit";
 import { withMessageProcessingLock } from "@/utils/redis/message-processing";
+import {
+  forgetLlmRetry,
+  getLlmRetryEntries,
+  getLlmRetryMaxAgeMs,
+  rememberLlmRetry,
+} from "@/utils/redis/llm-retry";
+import { isLlmUnavailableError } from "@/utils/llms";
 import { processRecentSentMessages } from "./process-sent";
 
 const BATCH_SIZE = 50;
@@ -163,11 +170,14 @@ export async function processEmailsForAccount({
     let processed = 0;
     let skipped = 0;
 
-    for (const message of unprocessedMessages) {
+    // Same lock as the webhook, so an overlapping run processes it once.
+    // Any held lock is a skip here: polling never moves the history pointer.
+    const processMessage = async (
+      message: { id: string; threadId?: string | null },
+      isModelRetry = false,
+    ): Promise<"processed" | "skipped" | "failed"> => {
       const messageLogger = logger.with({ messageId: message.id });
       try {
-        // Same lock as the webhook, so an overlapping run processes it once.
-        // Any held lock is a skip here: polling never moves the history pointer.
         const result = await withMessageProcessingLock(
           { userEmail: validatedEmailAccount.email, messageId: message.id },
           () =>
@@ -176,20 +186,93 @@ export async function processEmailsForAccount({
                 messageId: message.id,
                 threadId: message.threadId ?? undefined,
               },
-              { ...processOptions, logger: messageLogger },
+              {
+                ...processOptions,
+                logger: messageLogger,
+                ...(isModelRetry ? { isModelRetry } : {}),
+              },
             ),
         );
 
         if (result.skipped) {
-          skipped += 1;
           messageLogger.info("Skipping. Message already being processed.");
-          continue;
+          return "skipped";
         }
-        processed += 1;
+        return "processed";
       } catch (error) {
-        skipped += 1;
         messageLogger.error("Failed to process message", { error });
+        if (isLlmUnavailableError(error)) {
+          await rememberLlmRetry({
+            emailAccountId: validatedEmailAccount.id,
+            messageId: message.id,
+            logger: messageLogger,
+          });
+        }
+        return "failed";
       }
+    };
+
+    // Read after the list, so a message this run fails on is not retried in it.
+    const retryCandidates = await getMessagesToRetry({
+      emailAccountId: validatedEmailAccount.id,
+      alreadyInRun: new Set(messages.map((m) => m.id)),
+      logger,
+    });
+
+    for (const message of unprocessedMessages) {
+      const outcome = await processMessage(message);
+      if (outcome === "processed") processed += 1;
+      else skipped += 1;
+    }
+
+    let retried = 0;
+    const retryReturned: string[] = [];
+    for (const message of retryCandidates) {
+      retried += 1;
+      const outcome = await processMessage({ id: message.messageId }, true);
+      if (outcome === "processed") retryReturned.push(message.messageId);
+      else skipped += 1;
+    }
+
+    // "Processed" only means the pipeline returned; an early return (no AI
+    // access, unsubscribed sender, ...) writes no ExecutedRule. Only mail with
+    // one counts as succeeded; the rest is forgotten and reported as dropped.
+    const retryRuleRows = retryReturned.length
+      ? await prisma.executedRule.findMany({
+          where: {
+            emailAccountId: validatedEmailAccount.id,
+            messageId: { in: retryReturned },
+          },
+          select: { messageId: true },
+        })
+      : [];
+    const retryHandled = new Set(retryRuleRows.map((row) => row.messageId));
+    const retrySucceededIds = retryReturned.filter((id) =>
+      retryHandled.has(id),
+    );
+    const retryDroppedIds = retryReturned.filter((id) => !retryHandled.has(id));
+    processed += retrySucceededIds.length;
+    skipped += retryDroppedIds.length;
+
+    if (retryReturned.length) {
+      await forgetLlmRetry({
+        emailAccountId: validatedEmailAccount.id,
+        messageIds: retryReturned,
+        logger,
+      });
+    }
+    if (retryDroppedIds.length) {
+      logger.warn(
+        "Retried mail returned with no ExecutedRule; no longer retrying",
+        { messageIds: retryDroppedIds },
+      );
+    }
+    if (retried) {
+      logger.info("Retried mail that failed while the model was offline", {
+        retried,
+        succeeded: retrySucceededIds.length,
+        dropped: retryDroppedIds.length,
+      });
     }
 
     if (!emailAccount.lastSyncedHistoryId) {
@@ -252,4 +335,57 @@ async function healNullHistoryPointer(
     where: { id: emailAccountId, lastSyncedHistoryId: null },
     data: { lastSyncedHistoryId: historyId },
   });
+}
+
+// Mail that failed because the model was offline, including mail read since.
+async function getMessagesToRetry({
+  emailAccountId,
+  alreadyInRun,
+  logger,
+}: {
+  emailAccountId: string;
+  alreadyInRun: Set<string>;
+  logger: Logger;
+}) {
+  const remembered = await getLlmRetryEntries({ emailAccountId, logger });
+  if (!remembered.length) return [];
+
+  const cutoff = Date.now() - getLlmRetryMaxAgeMs();
+  const expired = remembered.filter((entry) => entry.firstFailedAt < cutoff);
+  const fresh = remembered.filter(
+    (entry) =>
+      entry.firstFailedAt >= cutoff && !alreadyInRun.has(entry.messageId),
+  );
+
+  const alreadyHandled = fresh.length
+    ? await prisma.executedRule.findMany({
+        where: {
+          emailAccountId,
+          messageId: { in: fresh.map((entry) => entry.messageId) },
+        },
+        select: { messageId: true },
+      })
+    : [];
+  const handledIds = new Set(alreadyHandled.map((entry) => entry.messageId));
+
+  const dropIds = [
+    ...expired.map((entry) => entry.messageId),
+    ...[...handledIds],
+  ];
+  if (expired.length) {
+    logger.warn("Dropping mail that waited over 72 hours for the model", {
+      count: expired.length,
+    });
+  }
+  await forgetLlmRetry({ emailAccountId, messageIds: dropIds, logger });
+
+  const toRetry = fresh
+    .filter((entry) => !handledIds.has(entry.messageId))
+    .slice(0, BATCH_SIZE);
+  logger.info("Mail waiting for the model", {
+    remembered: remembered.length,
+    expired: expired.length,
+    toRetry: toRetry.length,
+  });
+  return toRetry;
 }

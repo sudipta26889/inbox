@@ -9,6 +9,7 @@ import {
 import {
   describeEvalMatrix,
   shouldRunEvalTests,
+  getEvalTimeout,
 } from "@/__tests__/eval/models";
 import { createEvalReporter } from "@/__tests__/eval/reporter";
 import {
@@ -24,7 +25,7 @@ import { createScopedLogger } from "@/utils/logger";
 // Multi-model: EVAL_MODELS=all pnpm --filter inbox-zero-ai test-ai __tests__/eval/assistant-chat-rule-diagnosis.test.ts
 
 const shouldRunEval = shouldRunEvalTests();
-const TIMEOUT = 120_000;
+const TIMEOUT = getEvalTimeout(120_000);
 const evalReporter = createEvalReporter({
   evalName: "assistant-chat-rule-diagnosis",
 });

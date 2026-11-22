@@ -10,6 +10,7 @@ import type {
   RecurrenceScope,
 } from "@/utils/calendar/event-manager-types";
 import { dharahilClient, type DharaHILDecision } from "@/utils/dharahil/client";
+import { approvalSummary } from "@/utils/dharahil/card-summary";
 import { isApprovalGateRequired } from "@/utils/dharahil/required";
 import {
   canonicalActionKey,
@@ -378,7 +379,7 @@ export async function createCalendarEvent(
         agentId: "inbox-calendar-provider",
         runId: context.userId,
         stepId: "create_event",
-        contextSummary: `Create calendar event: ${params.title} with ${params.attendees?.length || 0} attendees`,
+        contextSummary: approvalSummary({ what: "a calendar event" }),
         riskLevel: isExternal ? "HIGH" : "MEDIUM",
         tags: ["calendar", "google", isExternal ? "external" : "internal"],
         idempotencyKey: `calendar_${params.title}_${params.startTime}_${Date.now()}`,
@@ -576,7 +577,7 @@ export async function updateCalendarEvent(
         agentId: "inbox-calendar-provider",
         runId: context.userId,
         stepId: "update_event",
-        contextSummary: `Update calendar event ${eventId}${params.title ? `: ${params.title}` : ""}`,
+        contextSummary: approvalSummary({ what: "a calendar event update" }),
         riskLevel: "MEDIUM",
         tags: ["calendar", "google", "update"],
         idempotencyKey: `calendar_update_${eventId}_${Date.now()}`,
@@ -720,7 +721,7 @@ export async function deleteCalendarEvent(
         agentId: "inbox-calendar-provider",
         runId: context.userId,
         stepId: "delete_event",
-        contextSummary: `Delete calendar event ${eventId} (scope: ${params.scope ?? "all"})`,
+        contextSummary: approvalSummary({ what: "a calendar event deletion" }),
         riskLevel: "HIGH",
         tags: ["calendar", "google", "delete"],
         idempotencyKey: `calendar_delete_${eventId}_${Date.now()}`,
@@ -805,7 +806,7 @@ export async function respondToCalendarEvent(
         agentId: "inbox-calendar-provider",
         runId: context.userId,
         stepId: "respond_event",
-        contextSummary: `RSVP ${params.responseStatus} to calendar event ${eventId}${params.comment ? " with a comment to the organizer" : ""}`,
+        contextSummary: approvalSummary({ what: "a calendar event RSVP" }),
         riskLevel: "MEDIUM",
         tags: ["calendar", "rsvp"],
         idempotencyKey: `calendar_respond_${eventId}_${Date.now()}`,

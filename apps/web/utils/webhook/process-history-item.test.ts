@@ -155,6 +155,23 @@ describe("Provider Edge Cases", () => {
     }
   });
 
+  it("processes inbound mail older than 24 hours when it is a model retry", async () => {
+    const message = getMockParsedMessage({
+      internalDate: String(Date.now() - 48 * 60 * 60 * 1000),
+    });
+    await processHistoryItem(
+      { messageId: message.id, message },
+      {
+        ...baseOptions,
+        provider: createMockEmailProvider(),
+        hasAutomationRules: true,
+        hasAiAccess: true,
+        isModelRetry: true,
+      },
+    );
+    expect(runRules).toHaveBeenCalledTimes(1);
+  });
+
   it("still handles old filebot replies", async () => {
     const message = getMockParsedMessage({
       internalDate: String(Date.now() - 48 * 60 * 60 * 1000),
@@ -436,6 +453,36 @@ describe("Provider Edge Cases", () => {
           { ...baseOptions, provider },
         ),
       ).rejects.toThrow("fetch failed");
+    });
+  });
+
+  describe("Model unavailable", () => {
+    it("throws before running rules when sender categorization cannot reach the model", async () => {
+      const message = getMockParsedMessage({ labelIds: ["INBOX"] });
+      const provider = createMockEmailProvider();
+      vi.mocked(categorizeSender).mockRejectedValueOnce(
+        Object.assign(new Error("connect ECONNREFUSED"), {
+          code: "ECONNREFUSED",
+        }),
+      );
+
+      await expect(
+        processHistoryItem(
+          { messageId: message.id, message },
+          {
+            ...baseOptions,
+            provider,
+            hasAutomationRules: true,
+            hasAiAccess: true,
+            emailAccount: {
+              ...baseOptions.emailAccount,
+              autoCategorizeSenders: true,
+            },
+          },
+        ),
+      ).rejects.toThrow("ECONNREFUSED");
+
+      expect(runRules).not.toHaveBeenCalled();
     });
   });
 

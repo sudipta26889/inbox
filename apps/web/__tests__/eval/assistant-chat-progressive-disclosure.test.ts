@@ -3,6 +3,7 @@ import { afterAll, beforeEach, describe, expect, test, vi } from "vitest";
 import {
   describeEvalMatrix,
   shouldRunEvalTests,
+  getEvalTimeout,
 } from "@/__tests__/eval/models";
 import { createEvalReporter } from "@/__tests__/eval/reporter";
 import {
@@ -20,7 +21,7 @@ import type { getEmailAccount } from "@/__tests__/helpers";
 // Multi-model: EVAL_MODELS=all pnpm test-ai eval/assistant-chat-progressive-disclosure
 
 const shouldRunEval = shouldRunEvalTests();
-const TIMEOUT = 60_000;
+const TIMEOUT = getEvalTimeout(60_000);
 const evalReporter = createEvalReporter({
   evalName: "assistant-chat-progressive-disclosure",
 });

@@ -55,7 +55,7 @@ describe("updateAiSettingsAction", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     prisma.user.findUnique.mockResolvedValue({
-      aiProvider: Provider.OPEN_AI,
+      aiProvider: Provider.LITELLM,
       aiApiKey: "stored-api-key",
     } as Awaited<ReturnType<typeof prisma.user.findUnique>>);
     prisma.user.updateMany.mockResolvedValue({ count: 1 } as never);
@@ -64,14 +64,30 @@ describe("updateAiSettingsAction", () => {
     mockGenerateText.mockResolvedValue({ text: "OK" });
   });
 
-  it("rejects a model the provider does not recognize", async () => {
+  it.each([
+    Provider.OPEN_AI,
+    Provider.ANTHROPIC,
+    Provider.OPENROUTER,
+    Provider.GOOGLE,
+  ])("rejects the cloud provider %s, so personal data stays local", async (aiProvider) => {
+    const result = await updateAiSettingsAction({
+      aiProvider: aiProvider as never,
+      aiModel: "some-model",
+      aiApiKey: "new-api-key",
+    });
+
+    expect(result?.validationErrors).toBeTruthy();
+    expect(prisma.user.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("rejects a model the gateway does not recognize", async () => {
     mockGenerateText.mockRejectedValueOnce(
-      createApiCallError(404, "The model `gpt-typo` does not exist"),
+      createApiCallError(404, "The model `flint-typo` does not exist"),
     );
 
     const result = await updateAiSettingsAction({
-      aiProvider: Provider.OPEN_AI,
-      aiModel: "gpt-typo",
+      aiProvider: Provider.LITELLM,
+      aiModel: "flint-typo",
       aiApiKey: "new-api-key",
     });
 
@@ -79,29 +95,14 @@ describe("updateAiSettingsAction", () => {
     expect(prisma.user.updateMany).not.toHaveBeenCalled();
   });
 
-  it("rejects a model ID OpenRouter says is not valid", async () => {
-    mockGenerateText.mockRejectedValueOnce(
-      createApiCallError(400, "openai/gpt-typo is not a valid model ID"),
-    );
-
-    const result = await updateAiSettingsAction({
-      aiProvider: Provider.OPENROUTER,
-      aiModel: "openai/gpt-typo",
-      aiApiKey: "new-api-key",
-    });
-
-    expect(result?.serverError).toMatch(/model/i);
-    expect(prisma.user.updateMany).not.toHaveBeenCalled();
-  });
-
-  it("rejects an API key the provider does not accept", async () => {
+  it("rejects an API key the gateway does not accept", async () => {
     mockGenerateText.mockRejectedValueOnce(
       createApiCallError(401, "Incorrect API key provided"),
     );
 
     const result = await updateAiSettingsAction({
-      aiProvider: Provider.OPEN_AI,
-      aiModel: "gpt-5.1",
+      aiProvider: Provider.LITELLM,
+      aiModel: "recursivesi/flint",
       aiApiKey: "bad-api-key",
     });
 
@@ -115,8 +116,8 @@ describe("updateAiSettingsAction", () => {
     );
 
     const result = await updateAiSettingsAction({
-      aiProvider: Provider.OPEN_AI,
-      aiModel: "gpt-5.1",
+      aiProvider: Provider.LITELLM,
+      aiModel: "recursivesi/flint",
       aiApiKey: "new-api-key",
     });
 
@@ -126,24 +127,20 @@ describe("updateAiSettingsAction", () => {
 
   it("checks the model with the stored key when the form leaves it blank", async () => {
     await updateAiSettingsAction({
-      aiProvider: Provider.OPEN_AI,
-      aiModel: "gpt-5.1",
+      aiProvider: Provider.LITELLM,
+      aiModel: "recursivesi/flint",
       aiApiKey: undefined,
     });
 
     expect(getModel).toHaveBeenCalledWith(
       {
-        aiProvider: Provider.OPEN_AI,
-        aiModel: "gpt-5.1",
+        aiProvider: Provider.LITELLM,
+        aiModel: "recursivesi/flint",
         aiApiKey: "stored-api-key",
       },
       "default",
     );
     expect(mockGenerateText).toHaveBeenCalledTimes(1);
-    expect(mockGenerateText.mock.calls[0]?.[0]).toMatchObject({
-      model: { modelId: "gpt-5.1" },
-      providerOptions: { openai: expect.objectContaining({ store: false }) },
-    });
   });
 
   it("does not check the model when switching back to the default provider", async () => {
@@ -159,39 +156,31 @@ describe("updateAiSettingsAction", () => {
 
   it("keeps the stored API key when the provider is unchanged and the form leaves it blank", async () => {
     await updateAiSettingsAction({
-      aiProvider: Provider.OPEN_AI,
-      aiModel: "gpt-5.1",
+      aiProvider: Provider.LITELLM,
+      aiModel: "recursivesi/flint",
       aiApiKey: undefined,
     });
 
     expect(prisma.user.updateMany).toHaveBeenCalledWith({
       where: { id: "user-1" },
       data: {
-        aiProvider: Provider.OPEN_AI,
-        aiModel: "gpt-5.1",
+        aiProvider: Provider.LITELLM,
+        aiModel: "recursivesi/flint",
         aiApiKey: "stored-api-key",
       },
     });
     expect(clearSpecificErrorMessagesMock).toHaveBeenCalled();
   });
 
-  it("requires a new API key when switching providers", async () => {
-    const result = await updateAiSettingsAction({
-      aiProvider: Provider.ANTHROPIC,
-      aiModel: "claude-sonnet-4-5",
-      aiApiKey: undefined,
-    });
-
-    expect(result?.serverError).toBe(
-      "You must provide an API key for this provider",
-    );
-    expect(prisma.user.updateMany).not.toHaveBeenCalled();
-  });
-
   it("saves LiteLLM without a per-user key", async () => {
+    prisma.user.findUnique.mockResolvedValue({
+      aiProvider: null,
+      aiApiKey: null,
+    } as Awaited<ReturnType<typeof prisma.user.findUnique>>);
+
     const result = await updateAiSettingsAction({
       aiProvider: Provider.LITELLM,
-      aiModel: "deepseek-v4-flash",
+      aiModel: "recursivesi/flint",
       aiApiKey: undefined,
     });
 
@@ -200,7 +189,7 @@ describe("updateAiSettingsAction", () => {
       where: { id: "user-1" },
       data: {
         aiProvider: Provider.LITELLM,
-        aiModel: "deepseek-v4-flash",
+        aiModel: "recursivesi/flint",
         aiApiKey: null,
       },
     });
@@ -221,8 +210,8 @@ describe("updateAiSettingsAction", () => {
     mockEnv.NEXT_PUBLIC_AI_MODEL_SETTINGS_DISABLED = true;
 
     const result = await updateAiSettingsAction({
-      aiProvider: Provider.OPEN_AI,
-      aiModel: "gpt-5.1",
+      aiProvider: Provider.LITELLM,
+      aiModel: "recursivesi/flint",
       aiApiKey: "new-api-key",
     });
 

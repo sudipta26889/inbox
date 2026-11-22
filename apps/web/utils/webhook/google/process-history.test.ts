@@ -22,6 +22,7 @@ import { SystemType } from "@/generated/prisma/enums";
 import type { EmailProvider } from "@/utils/email/types";
 import { captureException, SafeError } from "@/utils/error";
 import { MessageInFlightError } from "@/utils/redis/message-processing";
+import { rememberLlmRetry } from "@/utils/redis/llm-retry";
 
 const logger = createTestLogger();
 
@@ -74,6 +75,10 @@ vi.mock("@/utils/redis/gmail-history-catch-up", () => ({
   markGmailHistoryCatchUp: vi.fn().mockResolvedValue(undefined),
   getGmailHistoryCatchUp: vi.fn().mockResolvedValue(null),
   clearGmailHistoryCatchUp: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("@/utils/redis/llm-retry", () => ({
+  rememberLlmRetry: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("@/utils/webhook/google/process-history-item", () => ({
@@ -614,6 +619,72 @@ describe("processHistoryForUser - 404 Handling", () => {
     expect(prisma.$executeRaw).toHaveBeenCalledTimes(1);
     expect(vi.mocked(prisma.$executeRaw).mock.calls[0]).toContain("1100");
     expect(captureException).not.toHaveBeenCalled();
+  });
+
+  describe("remembering mail the model could not process", () => {
+    async function runWithFailingItem(error: Error) {
+      const email = "user@test.com";
+      const emailAccount = {
+        id: "account-123",
+        email,
+        lastSyncedHistoryId: "1000",
+      };
+      vi.mocked(getWebhookEmailAccount).mockResolvedValue(emailAccount as any);
+      vi.mocked(validateWebhookAccount).mockResolvedValue({
+        success: true,
+        data: {
+          emailAccount: {
+            ...emailAccount,
+            account: {
+              access_token: "token",
+              refresh_token: "refresh",
+              expires_at: new Date(Date.now() + 3_600_000),
+            },
+            rules: [],
+          },
+          hasAutomationRules: false,
+          hasAiAccess: false,
+        },
+      } as any);
+      vi.mocked(getHistory).mockResolvedValue({
+        history: [
+          {
+            id: "1100",
+            messagesAdded: [
+              { message: { id: "m1", threadId: "t1", labelIds: ["INBOX"] } },
+            ],
+          },
+        ],
+      } as any);
+      vi.mocked(processHistoryItem).mockRejectedValueOnce(error);
+
+      await processHistoryForUser(
+        { emailAddress: email, historyId: 1100 },
+        {},
+        logger,
+      );
+    }
+
+    it("remembers a message that failed because the model was unavailable", async () => {
+      await runWithFailingItem(
+        Object.assign(new Error("connect ECONNREFUSED"), {
+          code: "ECONNREFUSED",
+        }),
+      );
+
+      expect(rememberLlmRetry).toHaveBeenCalledWith(
+        expect.objectContaining({
+          emailAccountId: "account-123",
+          messageId: "m1",
+        }),
+      );
+    });
+
+    it("does not remember a message that failed for another reason", async () => {
+      await runWithFailingItem(new Error("Something else broke"));
+
+      expect(rememberLlmRetry).not.toHaveBeenCalled();
+    });
   });
 
   it("uses BigInt math for large Gmail history IDs", async () => {

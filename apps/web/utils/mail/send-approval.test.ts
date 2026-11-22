@@ -211,12 +211,32 @@ describe("requireSendApproval sender", () => {
     ]);
   });
 
-  it("names the sender in the context summary", async () => {
+  it("names only the person on the card, never an address, subject or draft text", async () => {
+    await requireSendApproval({
+      ...request,
+      isReply: true,
+      to: "Jane Doe <jane@acme.com>",
+      subject: "Contract terms",
+      bodyText: "Here is the draft text",
+    });
+
+    const { context, toolArgs } = approvalArgs();
+    expect(context.contextSummary).toBe("Approve a reply to Jane Doe");
+    const cardFields = JSON.stringify([context.contextSummary, context.tags]);
+    expect(cardFields).not.toContain("jane@acme.com");
+    expect(cardFields).not.toContain("Contract terms");
+    expect(cardFields).not.toContain("draft text");
+    expect(toolArgs).toMatchObject({
+      to: "Jane Doe <jane@acme.com>",
+      subject: "Contract terms",
+      body: "Here is the draft text",
+    });
+  });
+
+  it("leaves the name out when the recipient has only an address", async () => {
     await requireSendApproval(request);
 
-    expect(approvalArgs().context.contextSummary).toBe(
-      "send_email from me@example.com to someone@example.com - Subject: hello",
-    );
+    expect(approvalArgs().context.contextSummary).toBe("Approve an email");
   });
 
   it("still asks for approval, from unknown, when the mailbox is not found", async () => {
@@ -226,7 +246,6 @@ describe("requireSendApproval sender", () => {
 
     expect(mockRunApprovalLoop).toHaveBeenCalledTimes(1);
     expect(approvalArgs().toolArgs.from).toBe("unknown");
-    expect(approvalArgs().context.contextSummary).toContain("from unknown to");
   });
 
   it("still asks for approval, from unknown, when there is no account id", async () => {

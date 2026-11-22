@@ -30,6 +30,7 @@ import {
 import type { SelectedAttachment } from "@/utils/attachments/source-schema";
 import { escapeHtml } from "@/utils/string";
 import { sanitizeAgentHtml } from "@/utils/mail/sanitize-agent-html";
+import { isLlmUnavailableError } from "@/utils/llms";
 
 const MODULE = "choose-args";
 
@@ -117,6 +118,9 @@ export async function getActionItemsWithAiArgs({
         drafted: !!draft,
       });
     } catch (error) {
+      // Continuing would record the rule as applied, so the poll never retries.
+      if (isLlmUnavailableError(error)) throw error;
+
       log.error("Failed to generate draft", {
         email: emailAccount.email,
         threadId: message.threadId,

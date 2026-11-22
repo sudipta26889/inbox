@@ -1723,12 +1723,12 @@ export const MCP_TOOLS: Record<string, McpToolDefinition> = {
         aiProvider: {
           type: "string",
           description:
-            "One of the allowed provider IDs returned by admin_ai_get_settings (e.g. 'anthropic', 'openai', 'litellm', or 'DEFAULT').",
+            "One of the allowed provider IDs returned by admin_ai_get_settings: 'litellm' (local models) or 'DEFAULT'.",
         },
         aiModel: {
           type: "string",
           description:
-            "Model name, e.g. 'claude-4.7-sonnet' or 'gpt-5.1'. Use '' when aiProvider is 'DEFAULT'.",
+            "Model name as the LiteLLM gateway knows it, e.g. 'recursivesi/flint'. Use '' when aiProvider is 'DEFAULT'.",
         },
       },
       required: ["aiProvider", "aiModel"],

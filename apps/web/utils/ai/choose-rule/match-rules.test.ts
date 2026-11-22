@@ -3110,6 +3110,9 @@ describe("findMatchingRules - decisionModel rule selection", () => {
   afterEach(() => {
     vi.mocked(getDecisionModelConfig).mockResolvedValue(null);
     vi.mocked(isDecisionFeatureLive).mockReturnValue(false);
+    // A rejection left on these would leak into later tests.
+    vi.mocked(decisionModelChooseRule).mockReset();
+    vi.mocked(aiChooseRule).mockReset();
   });
 
   it("still records the shadow rule choice when the LLM call fails", async () => {
@@ -3379,6 +3382,29 @@ describe("findMatchingRules - decisionModel rule selection", () => {
       { rule: aiRule, matchReasons: [{ type: ConditionType.AI }] },
     ]);
     expect(result.reasoning).toBe("LLM reason");
+  });
+
+  it("throws the LLM's error when the decision model and the LLM both fail", async () => {
+    vi.mocked(decisionModelChooseRule).mockRejectedValue(
+      new Error("connect ECONNREFUSED decision"),
+    );
+    vi.mocked(aiChooseRule).mockRejectedValue(
+      new Error("connect ECONNREFUSED llm"),
+    );
+
+    await expect(
+      findMatchingRules({
+        rules: [getAiRule()],
+        message: getMessage(),
+        emailAccount: getEmailAccount(),
+        provider,
+        modelType: "default",
+        logger,
+      }),
+    ).rejects.toThrow("ECONNREFUSED llm");
+
+    expect(decisionModelChooseRule).toHaveBeenCalledTimes(1);
+    expect(aiChooseRule).toHaveBeenCalledTimes(1);
   });
 
   it("falls back to the LLM path when the decision model throws", async () => {

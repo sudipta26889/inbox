@@ -3,6 +3,7 @@ import { getEmail } from "@/__tests__/helpers";
 import {
   describeEvalMatrix,
   shouldRunEvalTests,
+  getEvalTimeout,
 } from "@/__tests__/eval/models";
 import { judgeBinary } from "@/__tests__/eval/judge";
 import { createEvalReporter } from "@/__tests__/eval/reporter";
@@ -20,7 +21,7 @@ import { isDefined } from "@/utils/types";
 // Multi-model: EVAL_MODELS=all pnpm test-ai eval/reply-memory
 
 const shouldRunEval = shouldRunEvalTests();
-const TIMEOUT = 180_000;
+const TIMEOUT = getEvalTimeout(180_000);
 const evalReporter = createEvalReporter({ evalName: "reply-memory" });
 
 describe.runIf(shouldRunEval)("reply memory eval", () => {

@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { Attachment as MailAttachment } from "nodemailer/lib/mailer";
 import { PremiumTier } from "@/generated/prisma/enums";
 import type { Prisma } from "@/generated/prisma/client";
-import { createGenerateObject } from "@/utils/llms";
+import { createGenerateObject, isLlmUnavailableError } from "@/utils/llms";
 import { getModelForUseCase, LlmUseCase } from "@/utils/llms/use-cases";
 import { appendOllamaOnlySystemGuidance } from "@/utils/llms/ollama-guidance";
 import type { EmailAccountWithAI } from "@/utils/llms/types";
@@ -576,7 +576,8 @@ async function aiSelectRelevantAttachments({
 
   try {
     // createGenerateObject already wraps model retries/fallbacks; keep
-    // attachment selection non-fatal if the LLM still fails after that.
+    // attachment selection non-fatal if the LLM still fails after that,
+    // except when the model is unreachable (the catch rethrows it).
     const generateObject = createGenerateObject({
       emailAccount,
       label: "Draft attachment selection",
@@ -648,6 +649,8 @@ preview: ${candidate.preview || "No preview available"}
 
     return selectedAttachments;
   } catch (error) {
+    if (isLlmUnavailableError(error)) throw error;
+
     logger.warn("Failed to select draft attachments", {
       candidateCount: candidates.length,
       emailAccountId: emailAccount.id,

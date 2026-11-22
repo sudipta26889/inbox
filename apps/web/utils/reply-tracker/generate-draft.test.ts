@@ -1114,6 +1114,30 @@ reason: Matched the requested property packet
       }),
     );
   });
+
+  it("fails the draft when attachment selection hits a model outage", async () => {
+    vi.mocked(selectDraftAttachmentsForRule).mockRejectedValue(
+      Object.assign(new Error("connect ECONNREFUSED"), {
+        code: "ECONNREFUSED",
+      }),
+    );
+    vi.mocked(prisma.emailAccount.findUnique).mockResolvedValue({
+      includeReferralSignature: false,
+      signature: null,
+    } as any);
+
+    await expect(
+      fetchMessagesAndGenerateDraftWithConfidenceThreshold(
+        createMockEmailAccount(),
+        "thread-1",
+        createMockClient(),
+        createMockMessage(),
+        logger,
+        DraftReplyConfidence.ALL_EMAILS,
+        "rule-1",
+      ),
+    ).rejects.toThrow("ECONNREFUSED");
+  });
 });
 
 describe("fetchMessagesAndGenerateDraftWithConfidenceThreshold - who the user is", () => {

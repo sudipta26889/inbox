@@ -1,9 +1,11 @@
 import { afterAll, describe, expect, test } from "vitest";
+import { chooseRuleCases } from "@/__tests__/eval/choose-rule-cases";
 import { getEmail, getMockMessage } from "@/__tests__/helpers";
 import { colleagueWorkMailCases } from "@/__tests__/eval/colleague-work-mail-cases";
 import { createEvalReporter } from "@/__tests__/eval/reporter";
 import { SystemType } from "@/generated/prisma/enums";
 import { aiChooseRule } from "@/utils/ai/choose-rule/ai-choose-rule";
+import { DecisionUncertainError } from "@/utils/decision-model/decision-model";
 import { decisionModelChooseRule } from "@/utils/decision-model/choose-rule";
 import {
   CONVERSATION_TRACKING_INSTRUCTIONS,
@@ -17,6 +19,8 @@ import {
   decisionModelConfig,
   decisionModelEvalLogger,
   lunaEmailAccount,
+  recordDecisionCase,
+  runCalibrationCase,
   shouldRunDecisionModelEvals,
 } from "./helpers";
 
@@ -148,6 +152,11 @@ describe.runIf(shouldRunDecisionModelEvals)(
               ? "Undecided"
               : (result.rules[0]?.rule.name ?? "None");
           const pass = acceptable.includes(actual);
+          recordDecisionCase({
+            testName,
+            expected: acceptable.join(" | "),
+            actual: pass ? acceptable.join(" | ") : actual,
+          });
 
           reporter.record({
             testName,
@@ -157,6 +166,42 @@ describe.runIf(shouldRunDecisionModelEvals)(
             actual,
           });
           expect(pass, actual).toBe(true);
+        },
+        DECISION_MODEL_EVAL_TIMEOUT,
+      );
+    }
+
+    // Calibration over the LLM eval's labelled cases. Undecided or low
+    // confidence is recorded as uncertain; only a decided wrong rule fails.
+    for (const testCase of chooseRuleCases) {
+      const acceptable = testCase.expectedRule
+        ? [testCase.expectedRule].flat()
+        : ["None"];
+      const testName = `calibration: ${testCase.email.from} / ${testCase.email.subject} -> ${acceptable.join(" | ")}`;
+      test(
+        testName,
+        async () => {
+          await runCalibrationCase({
+            testName,
+            expected: acceptable.join(" | "),
+            run: async () => {
+              const result = await decisionModelChooseRule({
+                decisionModel: decisionModelConfig,
+                message: toParsedMessage(testCase.email),
+                emailAccount: lunaEmailAccount,
+                rules: defaultSystemRules,
+                classificationFeedback: null,
+                logger: decisionModelEvalLogger,
+              });
+              if (result.type === "undecided") {
+                throw new DecisionUncertainError(result.reason);
+              }
+              const actual = result.rules[0]?.rule.name ?? "None";
+              return acceptable.includes(actual)
+                ? acceptable.join(" | ")
+                : actual;
+            },
+          });
         },
         DECISION_MODEL_EVAL_TIMEOUT,
       );

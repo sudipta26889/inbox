@@ -201,6 +201,25 @@ export const redis = {
 
   // --- Sorted set operations ---
 
+  /** Adds the member only when it is new, so its first score is kept. */
+  async zaddNx(key: string, score: number, member: string): Promise<number> {
+    return ioRedisClient.zadd(key, "NX", score, member);
+  },
+
+  /** Lowest score first. */
+  async zrangeWithScores(
+    key: string,
+    start: number,
+    stop: number,
+  ): Promise<{ member: string; score: number }[]> {
+    const flat = await ioRedisClient.zrange(key, start, stop, "WITHSCORES");
+    const entries: { member: string; score: number }[] = [];
+    for (let i = 0; i < flat.length; i += 2) {
+      entries.push({ member: flat[i], score: Number(flat[i + 1]) });
+    }
+    return entries;
+  },
+
   async zrem(key: string, ...members: string[]): Promise<number> {
     return ioRedisClient.zrem(key, ...members);
   },

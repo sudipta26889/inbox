@@ -36,8 +36,8 @@ export const POST = withEmailAccount("voice/live/session", async (request) => {
   }
 
   try {
-    const runtime = getVoiceRuntime(user.user);
-    const provider = getConfiguredVoiceProvider(user.user);
+    const runtime = getVoiceRuntime();
+    const provider = getConfiguredVoiceProvider();
     const createLiveSession = requireVoiceCapability(provider, "live");
     request.logger.info("Creating live voice session", {
       historyCount: parsed.data.history?.length ?? 0,

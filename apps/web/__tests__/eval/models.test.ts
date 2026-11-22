@@ -4,7 +4,7 @@ import {
   getEmailAccountForModel,
   getEvalModels,
 } from "@/__tests__/eval/model-catalog";
-import { shouldRunEvalTests } from "@/__tests__/eval/models";
+import { getEvalTimeout, shouldRunEvalTests } from "@/__tests__/eval/models";
 
 const originalEnv = { ...process.env };
 
@@ -120,5 +120,27 @@ describe("shouldRunEvalTests", () => {
     process.env.LLM_API_KEY = undefined;
 
     expect(shouldRunEvalTests()).toBe(true);
+  });
+});
+
+describe("getEvalTimeout", () => {
+  it("returns the default when EVAL_TIMEOUT_MS is unset", () => {
+    delete process.env.EVAL_TIMEOUT_MS;
+    expect(getEvalTimeout(60_000)).toBe(60_000);
+  });
+
+  it("uses a valid EVAL_TIMEOUT_MS override", () => {
+    process.env.EVAL_TIMEOUT_MS = "240000";
+    expect(getEvalTimeout(60_000)).toBe(240_000);
+  });
+
+  it.each([
+    "",
+    "abc",
+    "0",
+    "-5",
+  ])("ignores the invalid override %j", (value) => {
+    process.env.EVAL_TIMEOUT_MS = value;
+    expect(getEvalTimeout(60_000)).toBe(60_000);
   });
 });

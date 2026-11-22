@@ -14,6 +14,7 @@ import {
 import {
   describeEvalMatrix,
   shouldRunEvalTests,
+  getEvalTimeout,
 } from "@/__tests__/eval/models";
 import { createEvalReporter } from "@/__tests__/eval/reporter";
 import {
@@ -48,7 +49,7 @@ const evalReporter = createEvalReporter({
   evalName: "assistant-chat-rule-suggestions",
 });
 const logger = createScopedLogger("eval-assistant-chat-rule-suggestions");
-const TIMEOUT = 120_000;
+const TIMEOUT = getEvalTimeout(120_000);
 
 const hoisted = vi.hoisted(() => ({
   mockCreateRule: vi.fn(),

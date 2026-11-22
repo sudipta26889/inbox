@@ -8,6 +8,7 @@ import { getEmail } from "@/__tests__/helpers";
 import {
   describeEvalMatrix,
   shouldRunEvalTests,
+  getEvalTimeout,
 } from "@/__tests__/eval/models";
 import { createEvalReporter } from "@/__tests__/eval/reporter";
 import {
@@ -19,7 +20,7 @@ import type { JudgeCriterion } from "@/__tests__/eval/judge";
 // EVAL_MODELS=gpt-6-luna,claude-haiku-5.5 EVAL_SAMPLES=5 pnpm test-ai eval/draft-reply-voice
 
 const shouldRunEval = shouldRunEvalTests();
-const TIMEOUT = 90_000;
+const TIMEOUT = getEvalTimeout(90_000);
 const SAMPLES = Number(process.env.EVAL_SAMPLES || 1);
 const FOUNDER_ABOUT = "Founder of Mailwise, an AI email assistant.";
 const TERSE_STYLE = `Typical Length: Very short, typically 1-2 sentences

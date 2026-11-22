@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  useCallback,
-  useState,
-  type ComponentProps,
-  type ReactNode,
-} from "react";
-import dynamic from "next/dynamic";
+import type { ComponentProps, ReactNode } from "react";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { AlertCircleIcon, Loader2Icon, MailIcon } from "lucide-react";
 import { latestShownMessage } from "@/app/(app)/[emailAccountId]/mail/latest-shown-message";
@@ -28,24 +22,9 @@ import { Button } from "@/components/ui/button";
 import type { EmailLabels } from "@/providers/email-label-types";
 import { useAccount } from "@/providers/EmailAccountProvider";
 import { useHiddenDraftMessageIds } from "@/hooks/useHiddenDraftMessageIds";
-import { extractEmailAddress, extractNameFromEmail } from "@/utils/email";
 import { PublisherDiscussion } from "@/components/team-comments/PublisherDiscussion";
 import type { OutgoingThreadMessage } from "@/utils/mail-engine/conversation-thread";
 import { getConversationSubject } from "@/utils/email/subject";
-
-const SenderContextPanel = dynamic(
-  () =>
-    import("@/app/(app)/[emailAccountId]/mail/SenderContextPanel").then(
-      (module) => module.SenderContextPanel,
-    ),
-  { ssr: false },
-);
-
-/**
- * Below this the reader would be squeezed too far by a pane beside it, so the
- * sender profile slides over the reader instead.
- */
-const INLINE_SENDER_CONTEXT_MIN_WIDTH = 880;
 
 export type ThreadReaderProps = {
   enableMessageNavigation: boolean;
@@ -127,12 +106,6 @@ export function ThreadReader({
   renderMessageMenu,
 }: ThreadReaderProps) {
   const { t } = useLingui();
-  const [senderContext, setSenderContext] = useState<{
-    messageId: string;
-    senderEmail: string;
-    senderName: string;
-  } | null>(null);
-  const [readerRef, readerWidth] = useElementWidth();
   const { emailAccountId } = useAccount();
   const hiddenDraftMessageIds = useHiddenDraftMessageIds(emailAccountId);
   const headerMessage =
@@ -230,7 +203,6 @@ export function ThreadReader({
 
   return (
     <MailReaderSurface
-      containerRef={readerRef}
       detailSelectionSettled={detailSelectionSettled}
       layout={layout}
       localAvailability={localAvailability}
@@ -248,21 +220,6 @@ export function ThreadReader({
           )}
         </Button>
       )}
-      sidePanel={
-        senderContext ? (
-          <SenderContextPanel
-            messageId={senderContext.messageId}
-            onClose={() => setSenderContext(null)}
-            senderEmail={senderContext.senderEmail}
-            senderName={senderContext.senderName}
-            variant={
-              readerWidth >= INLINE_SENDER_CONTEXT_MIN_WIDTH
-                ? "inline"
-                : "sheet"
-            }
-          />
-        ) : null
-      }
     >
       {messages.length > 0 ? (
         <EmailThread
@@ -277,15 +234,6 @@ export function ThreadReader({
           outgoing={localAvailability?.outgoing}
           sendOperationIds={localAvailability?.sendOperationIds}
           onMarkDone={onArchive}
-          onOpenSenderContext={(message) => {
-            const senderEmail = extractEmailAddress(message.headers.from);
-            setSenderContext({
-              messageId: message.id,
-              senderEmail,
-              senderName:
-                extractNameFromEmail(message.headers.from) || senderEmail,
-            });
-          }}
           refetch={refetch}
           onSendSuccess={onSendSuccess}
           onThreadDiscarded={
@@ -335,22 +283,4 @@ function ThreadReaderError({
       </Button>
     </>
   );
-}
-
-/**
- * A callback ref rather than an effect: the reader mounts its measured element
- * only once a thread is open, after the loading branch has come and gone.
- */
-function useElementWidth() {
-  const [width, setWidth] = useState(0);
-  const ref = useCallback((element: HTMLElement | null) => {
-    if (!element) return;
-    const observer = new ResizeObserver(([entry]) => {
-      setWidth(entry.contentRect.width);
-    });
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, []);
-
-  return [ref, width] as const;
 }

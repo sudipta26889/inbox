@@ -3,6 +3,7 @@ import { createTestLogger, getEmail, getRule } from "@/__tests__/helpers";
 import {
   describeEvalMatrix,
   shouldRunEvalTests,
+  getEvalTimeout,
 } from "@/__tests__/eval/models";
 import { createEvalReporter } from "@/__tests__/eval/reporter";
 import { aiChooseRule } from "@/utils/ai/choose-rule/ai-choose-rule";
@@ -14,7 +15,7 @@ import { isColdEmail } from "@/utils/cold-email/is-cold-email";
 // Multi-model: EVAL_MODELS=all pnpm test-ai eval/prompt-security-core-paths
 
 const shouldRunEval = shouldRunEvalTests();
-const TIMEOUT = 60_000;
+const TIMEOUT = getEvalTimeout(60_000);
 
 describe.runIf(shouldRunEval)("Eval: prompt security core paths", () => {
   const evalReporter = createEvalReporter({

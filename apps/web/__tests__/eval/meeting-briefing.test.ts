@@ -12,13 +12,6 @@ import { createScopedLogger } from "@/utils/logger";
 vi.mock("@/utils/ai/mcp/mcp-tools", () => ({
   createMcpToolsForAgent: async () => ({ tools: {}, cleanup: async () => {} }),
 }));
-vi.mock("@/utils/ai/web-search", () => ({
-  getWebSearchConfigForProvider: () => null,
-}));
-vi.mock("@/env", async (importOriginal) => {
-  const original = await importOriginal<typeof import("@/env")>();
-  return { env: { ...original.env, PERPLEXITY_API_KEY: undefined } };
-});
 
 const logger = createScopedLogger("eval-meeting-briefing");
 const reporter = createEvalReporter({ evalName: "meeting-briefing" });

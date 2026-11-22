@@ -8,6 +8,7 @@ import { getEmail } from "@/__tests__/helpers";
 import {
   describeEvalMatrix,
   shouldRunEvalTests,
+  getEvalTimeout,
 } from "@/__tests__/eval/models";
 import { createEvalReporter } from "@/__tests__/eval/reporter";
 import {
@@ -19,7 +20,7 @@ import type { JudgeCriterion } from "@/__tests__/eval/judge";
 // EVAL_SAMPLES=5 pnpm test-ai eval/draft-reply-aliases
 
 const shouldRunEval = shouldRunEvalTests();
-const TIMEOUT = 90_000;
+const TIMEOUT = getEvalTimeout(90_000);
 const SAMPLES = Number(process.env.EVAL_SAMPLES || 1);
 
 describe.runIf(shouldRunEval)("draft-reply aliases eval", () => {

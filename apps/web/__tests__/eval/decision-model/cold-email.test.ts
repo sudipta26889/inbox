@@ -1,4 +1,5 @@
 import { afterAll, describe, test } from "vitest";
+import { coldEmailCases } from "@/__tests__/eval/cold-email-cases";
 import { getEmail } from "@/__tests__/helpers";
 import { createEvalReporter } from "@/__tests__/eval/reporter";
 import { checkColdEmailWithLlm } from "@/utils/cold-email/is-cold-email";
@@ -9,6 +10,7 @@ import {
   decisionModelConfig,
   decisionModelEvalLogger,
   lunaEmailAccount,
+  runCalibrationCase,
   shouldRunDecisionModelEvals,
 } from "./helpers";
 
@@ -103,6 +105,33 @@ describe.runIf(shouldRunDecisionModelEvals)(
                 })
               ).isColdEmail,
             reporter,
+          });
+        },
+        DECISION_MODEL_EVAL_TIMEOUT,
+      );
+    }
+
+    // Calibration over the large labelled set: records the raw probability for
+    // every case; fails only on confidently wrong answers.
+    for (const testCase of coldEmailCases) {
+      if (testCase.expected === "either") continue;
+      const expected = testCase.expected;
+      test(
+        `calibration: ${testCase.name}`,
+        async () => {
+          await runCalibrationCase({
+            testName: `calibration: ${testCase.name}`,
+            expected,
+            run: async () =>
+              (
+                await decideColdEmail({
+                  config: decisionModelConfig,
+                  email: testCase.email,
+                  emailAccount: lunaEmailAccount,
+                  coldEmailRule: null,
+                  logger: decisionModelEvalLogger,
+                })
+              ).coldEmail,
           });
         },
         DECISION_MODEL_EVAL_TIMEOUT,

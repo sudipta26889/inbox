@@ -2,6 +2,7 @@ import { afterAll, describe, expect, test } from "vitest";
 import {
   describeEvalMatrix,
   shouldRunEvalTests,
+  getEvalTimeout,
 } from "@/__tests__/eval/models";
 import { createEvalReporter } from "@/__tests__/eval/reporter";
 import { aiParseFilingReply } from "@/utils/ai/document-filing/parse-filing-reply";
@@ -9,7 +10,7 @@ import { aiParseFilingReply } from "@/utils/ai/document-filing/parse-filing-repl
 // pnpm --filter inbox-zero-ai test-ai __tests__/eval/filing-reply.test.ts
 
 const shouldRunEval = shouldRunEvalTests();
-const TIMEOUT = 60_000;
+const TIMEOUT = getEvalTimeout(60_000);
 
 const filings = [
   { id: "filing-1", filename: "invoice.pdf", currentFolder: "Finance" },

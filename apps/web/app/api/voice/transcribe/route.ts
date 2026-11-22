@@ -34,7 +34,7 @@ export const POST = withEmailAccount("voice/transcribe", async (request) => {
   const audio = decodeAudioBase64(parsed.data.audioBase64);
 
   try {
-    const provider = getConfiguredVoiceProvider(user.user);
+    const provider = getConfiguredVoiceProvider();
     const transcribe = requireVoiceCapability(provider, "transcribe");
     request.logger.info("Transcribing voice", {
       bytes: audio.byteLength,

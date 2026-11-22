@@ -18,6 +18,7 @@ export type DharaHILAction =
 
 export interface DharaHILContext {
   agentId: string;
+  /** Shown on cloud cards: build it with `approvalSummary`, never from mail. */
   contextSummary: string;
   idempotencyKey?: string;
   metadata?: Record<string, string>;
@@ -105,13 +106,16 @@ export class DharaHILClient {
         environment: this.environment,
         tool_name: request.toolName,
         tool_args: request.toolArgs,
-        tool_args_redacted: request.toolArgs,
+        // DharaHIL hides a value only when it is exactly REDACTED, so every
+        // leaf is replaced. The full args (tool_args) stay in its own database
+        // and come back as approved_args.
+        tool_args_redacted: redactArgs(request.toolArgs),
         agent_id: request.context.agentId,
         run_id: request.context.runId,
         step_id: request.context.stepId || "step",
         context_summary: request.context.contextSummary,
         risk_level: request.context.riskLevel,
-        tags: request.context.tags || [],
+        tags: withRedactedTag(request.context.tags),
         idempotency_key:
           request.context.idempotencyKey || `${request.toolName}_${Date.now()}`,
         metadata: request.context.metadata || {},
@@ -384,6 +388,25 @@ export class DharaHILClient {
 
 // Singleton instance for global use
 export const dharahilClient = new DharaHILClient();
+
+const REDACTED = "***REDACTED***";
+
+// Same shape as the args with every value hidden. Numbers and booleans go too:
+// a size or flag can still say something about the mail. Only null stays.
+function redactArgs(value: unknown): unknown {
+  if (value === null || value === undefined) return null;
+  if (Array.isArray(value)) return value.map(redactArgs);
+  if (typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, inner]) => [key, redactArgs(inner)]),
+    );
+  }
+  return REDACTED;
+}
+
+function withRedactedTag(tags: string[] = []) {
+  return tags.includes("redacted") ? tags : [...tags, "redacted"];
+}
 
 /**
  * Map a polled gateway response onto DharaHILAction, on `status` alone.

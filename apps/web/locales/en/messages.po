@@ -1090,6 +1090,15 @@ msgstr "A summary of every call"
 msgid "a week"
 msgstr "a week"
 
+#: utils/action-display.tsx
+msgid "A2A notify"
+msgstr "A2A notify"
+
+#: app/(app)/[emailAccountId]/assistant/AvailableActionsPanel.tsx
+#: utils/action-display-messages.ts
+msgid "A2A Notify"
+msgstr "A2A Notify"
+
 #: app/(app)/settings/SettingsContent.tsx
 msgid "Account"
 msgstr "Account"
@@ -3344,10 +3353,6 @@ msgstr "Close email"
 msgid "Close mail setup"
 msgstr "Close mail setup"
 
-#: app/(app)/[emailAccountId]/mail/SenderContextPanel.tsx
-msgid "Close sender profile"
-msgstr "Close sender profile"
-
 #: app/(app)/[emailAccountId]/mail/ThreadRow.tsx
 msgid "Code copied"
 msgstr "Code copied"
@@ -3486,8 +3491,8 @@ msgstr "Configure delivery"
 
 #. placeholder {0}: getMessagingProviderName(channel.provider)
 #: app/(app)/[emailAccountId]/assistant/settings/ProactiveUpdatesSetting.tsx
-msgid "Configure when Inbox Zero sends scheduled summaries to {0}."
-msgstr "Configure when Inbox Zero sends scheduled summaries to {0}."
+msgid "Configure when Inbox sends scheduled summaries to {0}."
+msgstr "Configure when Inbox sends scheduled summaries to {0}."
 
 #: app/(app)/[emailAccountId]/assistant/settings/DigestSetting.tsx
 msgid "Configure when your digest emails are sent and which rules are included."
@@ -3654,10 +3659,6 @@ msgstr "Connected, but tools unavailable"
 #: app/(app)/[emailAccountId]/integrations/IntegrationRow.tsx
 msgid "Connected. {toolsCount, plural, one {# tool available.} other {# tools available.}}"
 msgstr "Connected. {toolsCount, plural, one {# tool available.} other {# tools available.}}"
-
-#: app/(app)/accounts/page.tsx
-msgid "Connecting or reconnecting a mailbox isn't available when you signed in with an email code. Sign in with Google or Microsoft and try again."
-msgstr "Connecting or reconnecting a mailbox isn't available when you signed in with an email code. Sign in with Google or Microsoft and try again."
 
 #: app/(app)/[emailAccountId]/calendars/ConnectCalendar.tsx
 #: app/(app)/[emailAccountId]/drive/ConnectDrive.tsx
@@ -3990,10 +3991,6 @@ msgstr "Couldn't enable auto archive for {senderName}"
 msgid "Couldn't fully reverse {0, plural, one {# conversation} other {# conversations}} that only partly changed. Check them and try again."
 msgstr "Couldn't fully reverse {0, plural, one {# conversation} other {# conversations}} that only partly changed. Check them and try again."
 
-#: app/(app)/[emailAccountId]/mail/SenderContextPanel.tsx
-msgid "Couldn't load public context"
-msgstr "Couldn't load public context"
-
 #: components/email-list/AttachmentPreview.tsx
 msgid "Couldn't load this attachment."
 msgstr "Couldn't load this attachment."
@@ -4058,10 +4055,6 @@ msgstr "Couldn't refresh search results. Showing previously loaded emails."
 #: app/(app)/[emailAccountId]/mail/MailShell.tsx
 msgid "Couldn't remove label"
 msgstr "Couldn't remove label"
-
-#: app/(app)/[emailAccountId]/mail/SenderContextPanel.tsx
-msgid "Couldn't research this sender right now."
-msgstr "Couldn't research this sender right now."
 
 #: app/(app)/[emailAccountId]/mail/use-thread-actions.ts
 msgid "Couldn't restore"
@@ -4132,6 +4125,10 @@ msgstr "Create a link people can use to book time on your calendar."
 #: app/(app)/[emailAccountId]/drive/AllowedFolders.tsx
 msgid "Create a new folder in your drive to organize your files."
 msgstr "Create a new folder in your drive to organize your files."
+
+#: app/(app)/[emailAccountId]/assistant/AvailableActionsPanel.tsx
+msgid "Create a TaskPilot task from this email — or, if the same thread already has a task, add the new message as a comment instead. Requires TaskPilot credentials in settings."
+msgstr "Create a TaskPilot task from this email — or, if the same thread already has a task, add the new message as a comment instead. Requires TaskPilot credentials in settings."
 
 #: app/(app)/[emailAccountId]/calendars/BookingLinksSection.tsx
 #: app/(app)/[emailAccountId]/calendars/CreateBookingLinkDialog.tsx
@@ -4475,8 +4472,8 @@ msgid "Delete this booking link permanently? This cannot be undone."
 msgstr "Delete this booking link permanently? This cannot be undone."
 
 #: app/(app)/[emailAccountId]/settings/DeleteSection.tsx
-msgid "Delete your Inbox Zero account?"
-msgstr "Delete your Inbox Zero account?"
+msgid "Delete your Inbox account?"
+msgstr "Delete your Inbox account?"
 
 #: app/(app)/[emailAccountId]/bulk-archive/BulkArchiveSettingsModal.tsx
 #: app/(app)/[emailAccountId]/stats/EmailActionsAnalytics.tsx
@@ -4834,8 +4831,8 @@ msgstr "Download message"
 
 #. placeholder {0}: status.version
 #: app/(app)/DesktopUpdateToast.tsx
-msgid "Downloading Inbox Zero {0}"
-msgstr "Downloading Inbox Zero {0}"
+msgid "Downloading Inbox {0}"
+msgstr "Downloading Inbox {0}"
 
 #: app/(app)/[emailAccountId]/compose/ComposeHeaderFields.tsx
 #: app/(app)/[emailAccountId]/mail/ThreadRow.tsx
@@ -5589,6 +5586,10 @@ msgstr "Error marking not cold email!"
 msgid "Error processing email from {0}: {1}"
 msgstr "Error processing email from {0}: {1}"
 
+#: app/(app)/accounts/ShareAccountDialog.tsx
+msgid "Error removing access"
+msgstr "Error removing access"
+
 #: app/(app)/[emailAccountId]/drive/use-folder-selection.ts
 msgid "Error removing folder"
 msgstr "Error removing folder"
@@ -5625,6 +5626,10 @@ msgstr "Error searching sent mail"
 #: components/InviteMemberModal.tsx
 msgid "Error sending invitations"
 msgstr "Error sending invitations"
+
+#: app/(app)/accounts/ShareAccountDialog.tsx
+msgid "Error sharing account"
+msgstr "Error sharing account"
 
 #: app/(app)/[emailAccountId]/drive/DriveSetup.tsx
 msgid "Error starting auto-filing"
@@ -6886,14 +6891,21 @@ msgstr "High confidence"
 msgid "History"
 msgstr "History"
 
+#: app/(app)/[emailAccountId]/assistant/AvailableActionsPanel.tsx
+#: app/(app)/settings/SettingsContent.tsx
+#: utils/action-display-messages.ts
+#: utils/action-display.tsx
+msgid "Home Assistant"
+msgstr "Home Assistant"
+
 #: app/(app)/[emailAccountId]/briefs/TimeDurationSetting.tsx
 #: app/(app)/[emailAccountId]/calendars/ConfigureBookingLinkDialog.tsx
 msgid "hours"
 msgstr "hours"
 
 #: app/(app)/[emailAccountId]/onboarding/StepHowYouHeard.tsx
-msgid "How did you hear about Inbox Zero?"
-msgstr "How did you hear about Inbox Zero?"
+msgid "How did you hear about Inbox?"
+msgstr "How did you hear about Inbox?"
 
 #: app/(app)/[emailAccountId]/mail/MailSetupPanel.tsx
 msgid "How do you want to read email?"
@@ -6932,12 +6944,12 @@ msgid "Hundreds more apps"
 msgstr "Hundreds more apps"
 
 #: app/(app)/[emailAccountId]/bulk-unsubscribe/share.ts
-msgid "I just unsubscribed from {senderCount, plural, one {# email list} other {# email lists}} with Inbox Zero — that's ~{yearly} fewer emails a year. {link}"
-msgstr "I just unsubscribed from {senderCount, plural, one {# email list} other {# email lists}} with Inbox Zero — that's ~{yearly} fewer emails a year. {link}"
+msgid "I just unsubscribed from {senderCount, plural, one {# email list} other {# email lists}} with Inbox — that's ~{yearly} fewer emails a year. {link}"
+msgstr "I just unsubscribed from {senderCount, plural, one {# email list} other {# email lists}} with Inbox — that's ~{yearly} fewer emails a year. {link}"
 
 #: app/(app)/[emailAccountId]/bulk-unsubscribe/share.ts
-msgid "I just unsubscribed from {senderCount, plural, one {# email list} other {# email lists}} with Inbox Zero. {link}"
-msgstr "I just unsubscribed from {senderCount, plural, one {# email list} other {# email lists}} with Inbox Zero. {link}"
+msgid "I just unsubscribed from {senderCount, plural, one {# email list} other {# email lists}} with Inbox. {link}"
+msgstr "I just unsubscribed from {senderCount, plural, one {# email list} other {# email lists}} with Inbox. {link}"
 
 #: app/(app)/[emailAccountId]/onboarding/illustrations/SplitInboxIllustration.tsx
 msgid "I put together a first pass at the roadmap and would love your eyes on it"
@@ -7327,20 +7339,20 @@ msgid "Inbox"
 msgstr "Inbox"
 
 #: app/(app)/ProviderRateLimitBanner.tsx
-msgid "Inbox Zero actions are temporarily paused until around <0>{retryAtLabel}</0>. This limit is enforced by {providerLabel}, and other apps connected to this mailbox can contribute to the same shared limit."
-msgstr "Inbox Zero actions are temporarily paused until around <0>{retryAtLabel}</0>. This limit is enforced by {providerLabel}, and other apps connected to this mailbox can contribute to the same shared limit."
+msgid "Inbox actions are temporarily paused until around <0>{retryAtLabel}</0>. This limit is enforced by {providerLabel}, and other apps connected to this mailbox can contribute to the same shared limit."
+msgstr "Inbox actions are temporarily paused until around <0>{retryAtLabel}</0>. This limit is enforced by {providerLabel}, and other apps connected to this mailbox can contribute to the same shared limit."
 
 #: app/(app)/[emailAccountId]/meetings/MeetingRecorderOnboarding.tsx
-msgid "Inbox Zero joins your calls, takes the notes, and drafts the follow-up email."
-msgstr "Inbox Zero joins your calls, takes the notes, and drafts the follow-up email."
+msgid "Inbox joins your calls, takes the notes, and drafts the follow-up email."
+msgstr "Inbox joins your calls, takes the notes, and drafts the follow-up email."
 
 #: app/(app)/[emailAccountId]/assistant/settings/SyncToExtensionSetting.tsx
-msgid "Inbox Zero Tabs extension not found. Install it first."
-msgstr "Inbox Zero Tabs extension not found. Install it first."
+msgid "Inbox Tabs extension not found. Install it first."
+msgstr "Inbox Tabs extension not found. Install it first."
 
 #: app/(app)/[emailAccountId]/channels/Channels.tsx
-msgid "Inbox Zero where you work."
-msgstr "Inbox Zero where you work."
+msgid "Inbox where you work."
+msgstr "Inbox where you work."
 
 #: app/(app)/[emailAccountId]/mail/ThreadRow.tsx
 msgid "Inbox: {label}"
@@ -7435,6 +7447,7 @@ msgstr "Integration connected"
 #: app/(app)/[emailAccountId]/briefs/IntegrationsSetting.tsx
 #: app/(app)/[emailAccountId]/integrations/page.tsx
 #: app/(app)/config/page.tsx
+#: app/(app)/settings/SettingsContent.tsx
 #: components/SideNav.tsx
 msgid "Integrations"
 msgstr "Integrations"
@@ -7559,8 +7572,8 @@ msgid "Join Early Access"
 msgstr "Join Early Access"
 
 #: components/ReferralDialog.tsx
-msgid "Join Inbox Zero with my referral link"
-msgstr "Join Inbox Zero with my referral link"
+msgid "Join Inbox with my referral link"
+msgstr "Join Inbox with my referral link"
 
 #: app/(app)/organization/[organizationId]/Members.tsx
 msgid "Joined at: {joinedAt}"
@@ -8639,10 +8652,6 @@ msgid "Median Response Time"
 msgstr "Median Response Time"
 
 #: app/(app)/[emailAccountId]/onboarding/StepMailApp.tsx
-msgid "Meet the Inbox Zero email app"
-msgstr "Meet the Inbox Zero email app"
-
-#: app/(app)/[emailAccountId]/onboarding/StepMailApp.tsx
 msgid "Meet your new email app"
 msgstr "Meet your new email app"
 
@@ -9214,10 +9223,6 @@ msgstr "No channels found."
 msgid "No cold emails!"
 msgstr "No cold emails!"
 
-#: app/(app)/[emailAccountId]/mail/SenderContextPanel.tsx
-msgid "No confident public professional profile was found."
-msgstr "No confident public professional profile was found."
-
 #: app/(app)/[emailAccountId]/assistant/ActionSteps.tsx
 msgid "No connected destinations"
 msgstr "No connected destinations"
@@ -9452,10 +9457,6 @@ msgstr "No plan"
 msgid "No previous chats found"
 msgstr "No previous chats found"
 
-#: app/(app)/[emailAccountId]/mail/SenderContextPanel.tsx
-msgid "No public context"
-msgstr "No public context"
-
 #: app/(app)/[emailAccountId]/drive/FilingActivity.tsx
 msgid "No recently filed documents."
 msgstr "No recently filed documents."
@@ -9463,6 +9464,10 @@ msgstr "No recently filed documents."
 #: app/(app)/[emailAccountId]/mail/ScheduledEmailList.tsx
 msgid "No recipient"
 msgstr "No recipient"
+
+#: app/(app)/[emailAccountId]/assistant/ResultDisplay.tsx
+msgid "No remote agent accepted the A2A notification."
+msgstr "No remote agent accepted the A2A notification."
 
 #: app/(app)/[emailAccountId]/stats/ResponseTimeAnalytics.tsx
 msgid "No response time data available for this period."
@@ -9956,8 +9961,8 @@ msgid "Open this conversation from <0>Discussions</0>."
 msgstr "Open this conversation from <0>Discussions</0>."
 
 #: app/(app)/early-access/page.tsx
-msgid "Open your inbox in the Inbox Zero mail client."
-msgstr "Open your inbox in the Inbox Zero mail client."
+msgid "Open your inbox in the Inbox mail client."
+msgstr "Open your inbox in the Inbox mail client."
 
 #: components/email-list/SentMessageOpenStatus.tsx
 msgid "Opened {firstOpened}"
@@ -10157,6 +10162,10 @@ msgstr "Pending Invitations ({0})"
 msgid "Pending..."
 msgstr "Pending..."
 
+#: app/(app)/accounts/ShareAccountDialog.tsx
+msgid "People you share with get full access to this account from their own login. They must have signed in at least once."
+msgstr "People you share with get full access to this account from their own login. They must have signed in at least once."
+
 #: app/(app)/[emailAccountId]/settings/ResetAnalyticsSection.tsx
 msgid "Permanently delete all analytics"
 msgstr "Permanently delete all analytics"
@@ -10298,10 +10307,6 @@ msgstr "Pop out draft"
 #: app/(app)/premium/Pricing.tsx
 msgid "Popular"
 msgstr "Popular"
-
-#: app/(app)/[emailAccountId]/mail/SenderContextPanel.tsx
-msgid "Possible match"
-msgstr "Possible match"
 
 #: components/team-comments/CommentComposer.tsx
 msgid "Post comment"
@@ -10497,29 +10502,13 @@ msgstr "Prompt"
 msgid "Provider"
 msgstr "Provider"
 
-#: app/(app)/accounts/page.tsx
-msgid "Provider sign-in required"
-msgstr "Provider sign-in required"
-
 #: app/(app)/[emailAccountId]/assistant/FixWithChat.tsx
 msgid "Providing an explanation helps the AI understand your intent better"
 msgstr "Providing an explanation helps the AI understand your intent better"
 
-#: app/(app)/[emailAccountId]/mail/SenderContextPanel.tsx
-msgid "Public context is temporarily unavailable. Try again shortly."
-msgstr "Public context is temporarily unavailable. Try again shortly."
-
 #: app/(app)/[emailAccountId]/assistant/knowledge/DraftDocsSites.tsx
 msgid "Public docs the assistant can look things up in when drafting replies. Only pages under these URLs are read."
 msgstr "Public docs the assistant can look things up in when drafting replies. Only pages under these URLs are read."
-
-#: app/(app)/[emailAccountId]/mail/SenderContextPanel.tsx
-msgid "Public profiles are not researched for personal email addresses."
-msgstr "Public profiles are not researched for personal email addresses."
-
-#: app/(app)/[emailAccountId]/mail/SenderContextPanel.tsx
-msgid "Public sources"
-msgstr "Public sources"
 
 #: app/(app)/[emailAccountId]/onboarding/illustrations/SplitInboxIllustration.tsx
 msgid "Q3 planning: can you review?"
@@ -10592,8 +10581,8 @@ msgid "Read and send email from every account in one fast inbox"
 msgstr "Read and send email from every account in one fast inbox"
 
 #: app/(app)/[emailAccountId]/onboarding/StepMailApp.tsx
-msgid "Read and send email on web, desktop, and iPhone. Add the AI assistant anytime."
-msgstr "Read and send email on web, desktop, and iPhone. Add the AI assistant anytime."
+msgid "Read and send email right here in the web mail app. Add the AI assistant anytime."
+msgstr "Read and send email right here in the web mail app. Add the AI assistant anytime."
 
 #: components/assistant-chat/tools.tsx
 msgid "Read Email"
@@ -10888,6 +10877,11 @@ msgstr "Remove {name} label"
 msgid "Remove {url}"
 msgstr "Remove {url}"
 
+#. placeholder {0}: user.email
+#: app/(app)/accounts/ShareAccountDialog.tsx
+msgid "Remove access for {0}"
+msgstr "Remove access for {0}"
+
 #: app/(app)/[emailAccountId]/assistant/ActionSteps.tsx
 #: app/(app)/organization/[organizationId]/rules/OrgActionSteps.tsx
 msgid "Remove action"
@@ -10957,8 +10951,8 @@ msgid "Removes this tab. Your mail isn't changed."
 msgstr "Removes this tab. Your mail isn't changed."
 
 #: app/(app)/[emailAccountId]/settings/DeleteSection.tsx
-msgid "Removes your Inbox Zero data. Your emails aren't affected."
-msgstr "Removes your Inbox Zero data. Your emails aren't affected."
+msgid "Removes your Inbox data. Your emails aren't affected."
+msgstr "Removes your Inbox data. Your emails aren't affected."
 
 #: components/assistant-chat/tools.tsx
 msgid "Removing labels"
@@ -11124,8 +11118,8 @@ msgid "Restore compose"
 msgstr "Restore compose"
 
 #: app/(app)/[emailAccountId]/settings/ResetLabelColorsSection.tsx
-msgid "Restore the default colors for Inbox Zero labels like To Reply and Newsletter"
-msgstr "Restore the default colors for Inbox Zero labels like To Reply and Newsletter"
+msgid "Restore the default colors for Inbox labels like To Reply and Newsletter"
+msgstr "Restore the default colors for Inbox labels like To Reply and Newsletter"
 
 #: app/(app)/[emailAccountId]/bulk-unsubscribe/common.tsx
 msgid "Resubscribe"
@@ -11810,6 +11804,10 @@ msgid "Send later date and time"
 msgstr "Send later date and time"
 
 #: app/(app)/[emailAccountId]/assistant/AvailableActionsPanel.tsx
+msgid "Send notification to remote A2A agent"
+msgstr "Send notification to remote A2A agent"
+
+#: app/(app)/[emailAccountId]/assistant/AvailableActionsPanel.tsx
 msgid "Send replies"
 msgstr "Send replies"
 
@@ -11835,8 +11833,8 @@ msgstr "Send the digest email"
 
 #: app/(app)/[emailAccountId]/channels/Channels.tsx
 #: app/(app)/[emailAccountId]/settings/ConnectedAppsSection.tsx
-msgid "Send this command in a direct message with the Inbox Zero bot on {providerName}. The code is one-time use and expires in 10 minutes."
-msgstr "Send this command in a direct message with the Inbox Zero bot on {providerName}. The code is one-time use and expires in 10 minutes."
+msgid "Send this command in a direct message with the Inbox bot on {providerName}. The code is one-time use and expires in 10 minutes."
+msgstr "Send this command in a direct message with the Inbox bot on {providerName}. The code is one-time use and expires in 10 minutes."
 
 #: app/(app)/[emailAccountId]/assistant/ActionSteps.tsx
 msgid "Send to"
@@ -11897,10 +11895,6 @@ msgstr "Sender kept"
 #: app/(app)/[emailAccountId]/bulk-unsubscribe/hooks.ts
 msgid "Sender moved to review"
 msgstr "Sender moved to review"
-
-#: app/(app)/[emailAccountId]/mail/SenderContextPanel.tsx
-msgid "Sender profile"
-msgstr "Sender profile"
 
 #: app/(app)/[emailAccountId]/bulk-archive/BulkArchiveProgress.tsx
 #: app/(app)/[emailAccountId]/bulk-unsubscribe/ArchiveProgress.tsx
@@ -12126,18 +12120,24 @@ msgstr "Setup"
 msgid "Setup incomplete"
 msgstr "Setup incomplete"
 
+#: app/(app)/accounts/ShareAccountDialog.tsx
 #: components/ReferralDialog.tsx
 #: components/team-comments/ShareConversationDialog.tsx
 msgid "Share"
 msgstr "Share"
+
+#. placeholder {0}: emailAccount.email
+#: app/(app)/accounts/ShareAccountDialog.tsx
+msgid "Share {0}"
+msgstr "Share {0}"
 
 #: components/team-comments/ShareConversationDialog.tsx
 msgid "Share conversation"
 msgstr "Share conversation"
 
 #: components/ReferralDialog.tsx
-msgid "Share Inbox Zero with friends and get a free month for each friend who completes their trial"
-msgstr "Share Inbox Zero with friends and get a free month for each friend who completes their trial"
+msgid "Share Inbox with friends and get a free month for each friend who completes their trial"
+msgstr "Share Inbox with friends and get a free month for each friend who completes their trial"
 
 #: app/(app)/[emailAccountId]/bulk-unsubscribe/UnsubscribeCelebrationDialog.tsx
 msgid "Share on LinkedIn"
@@ -12171,6 +12171,14 @@ msgstr "Shared conversation"
 #: components/team-comments/ConversationParticipants.tsx
 msgid "Shared participants"
 msgstr "Shared participants"
+
+#: app/(app)/accounts/ShareAccountDialog.tsx
+msgid "Shared with {email}"
+msgstr "Shared with {email}"
+
+#: app/(app)/accounts/page.tsx
+msgid "Shared with you"
+msgstr "Shared with you"
 
 #: components/team-comments/ConversationDiscussion.tsx
 msgid "Sharing started"
@@ -12259,8 +12267,8 @@ msgstr "Showing the split on screen"
 
 #. placeholder {0}: previewSenders.length
 #: app/(app)/[emailAccountId]/onboarding/StepBulkUnsubscribe.tsx
-msgid "Showing your top {0}. We'll keep spotting more as you use Inbox Zero."
-msgstr "Showing your top {0}. We'll keep spotting more as you use Inbox Zero."
+msgid "Showing your top {0}. We'll keep spotting more as you use Inbox."
+msgstr "Showing your top {0}. We'll keep spotting more as you use Inbox."
 
 #. placeholder {0}: data.email
 #: app/(app)/settings/EmailOtpSection.tsx
@@ -12748,8 +12756,8 @@ msgid "Sync to browser extension"
 msgstr "Sync to browser extension"
 
 #: app/(app)/[emailAccountId]/assistant/settings/SyncToExtensionSetting.tsx
-msgid "Sync your rules to the Inbox Zero Tabs browser extension. Each label rule becomes a tab in Gmail."
-msgstr "Sync your rules to the Inbox Zero Tabs browser extension. Each label rule becomes a tab in Gmail."
+msgid "Sync your rules to the Inbox Tabs browser extension. Each label rule becomes a tab in Gmail."
+msgstr "Sync your rules to the Inbox Tabs browser extension. Each label rule becomes a tab in Gmail."
 
 #: app/(app)/[emailAccountId]/assistant/settings/SyncToExtensionSetting.tsx
 msgid "Synced tabs to extension: {summary}"
@@ -12766,6 +12774,11 @@ msgstr "Syncing your mail…"
 #: utils/mcp/tool-specs-messages.ts
 msgid "Task"
 msgstr "Task"
+
+#: app/(app)/[emailAccountId]/assistant/AvailableActionsPanel.tsx
+#: utils/action-display.tsx
+msgid "TaskPilot"
+msgstr "TaskPilot"
 
 #: components/assistant-chat/overview.tsx
 msgid "Teach me how to handle your incoming emails for you"
@@ -12873,6 +12886,14 @@ msgstr "That matches:"
 msgid "That's {emailCount, plural, one {# email} other {# emails}} you won't get again."
 msgstr "That's {emailCount, plural, one {# email} other {# emails}} you won't get again."
 
+#: app/(app)/[emailAccountId]/assistant/ResultDisplay.tsx
+msgid "The A2A notification could not be sent because no remote agent is configured."
+msgstr "The A2A notification could not be sent because no remote agent is configured."
+
+#: app/(app)/[emailAccountId]/assistant/ResultDisplay.tsx
+msgid "The A2A notification could not be sent."
+msgstr "The A2A notification could not be sent."
+
 #: app/(app)/accounts/page.tsx
 msgid "The account was deleted. Sign out to finish removing its mail from this device."
 msgstr "The account was deleted. Sign out to finish removing its mail from this device."
@@ -12900,6 +12921,18 @@ msgstr "The drafts will appear in your inbox, written in your tone.<0/>Our AI le
 #: app/(app)/accounts/page.tsx
 msgid "The email account has been deleted successfully."
 msgstr "The email account has been deleted successfully."
+
+#: app/(app)/[emailAccountId]/assistant/ResultDisplay.tsx
+msgid "The Home Assistant action could not be completed."
+msgstr "The Home Assistant action could not be completed."
+
+#: app/(app)/[emailAccountId]/assistant/ResultDisplay.tsx
+msgid "The Home Assistant action failed. Check the Home Assistant connection in settings."
+msgstr "The Home Assistant action failed. Check the Home Assistant connection in settings."
+
+#: app/(app)/[emailAccountId]/assistant/ResultDisplay.tsx
+msgid "The Home Assistant action needs an integration type."
+msgstr "The Home Assistant action needs an integration type."
 
 #: app/(app)/[emailAccountId]/compose/ComposeEmailForm.tsx
 msgid "The image could not be read."
@@ -12984,8 +13017,8 @@ msgid "The split has been deleted."
 msgstr "The split has been deleted."
 
 #: app/(app)/[emailAccountId]/meetings/MeetingDetail.tsx
-msgid "The summary and transcript will be permanently deleted from Inbox Zero. Recap emails already sent and follow-up drafts in your mailbox will remain."
-msgstr "The summary and transcript will be permanently deleted from Inbox Zero. Recap emails already sent and follow-up drafts in your mailbox will remain."
+msgid "The summary and transcript will be permanently deleted from Inbox. Recap emails already sent and follow-up drafts in your mailbox will remain."
+msgstr "The summary and transcript will be permanently deleted from Inbox. Recap emails already sent and follow-up drafts in your mailbox will remain."
 
 #: app/(app)/[emailAccountId]/meetings/MeetingDetail.tsx
 msgid "The summary is still being written."
@@ -13222,8 +13255,8 @@ msgid "This member has not allowed org admin analytics."
 msgstr "This member has not allowed org admin analytics."
 
 #: app/(app)/[emailAccountId]/settings/DeleteSection.tsx
-msgid "This permanently deletes your Inbox Zero data and disconnects {connectedEmailList}. Your emails aren't affected."
-msgstr "This permanently deletes your Inbox Zero data and disconnects {connectedEmailList}. Your emails aren't affected."
+msgid "This permanently deletes your Inbox data and disconnects {connectedEmailList}. Your emails aren't affected."
+msgstr "This permanently deletes your Inbox data and disconnects {connectedEmailList}. Your emails aren't affected."
 
 #: app/(app)/[emailAccountId]/cold-email-blocker/TestRules.tsx
 msgid "This person has previously emailed you. This is not a cold email!"
@@ -13553,6 +13586,10 @@ msgstr "Triage"
 msgid "Trials can process up to {0} past emails at a time."
 msgstr "Trials can process up to {0} past emails at a time."
 
+#: app/(app)/[emailAccountId]/assistant/AvailableActionsPanel.tsx
+msgid "Trigger Home Assistant automations, publish to MQTT, or control smart home devices"
+msgstr "Trigger Home Assistant automations, publish to MQTT, or control smart home devices"
+
 #: components/CommandK.tsx
 msgid "Try a date like tomorrow at 3pm."
 msgstr "Try a date like tomorrow at 3pm."
@@ -13561,7 +13598,6 @@ msgstr "Try a date like tomorrow at 3pm."
 msgid "Try a different filter or date range."
 msgstr "Try a different filter or date range."
 
-#: app/(app)/[emailAccountId]/mail/SenderContextPanel.tsx
 #: app/(app)/[emailAccountId]/mail/ThreadReader.tsx
 msgid "Try again"
 msgstr "Try again"
@@ -13616,8 +13652,8 @@ msgid "Turn on the {0} split"
 msgstr "Turn on the {0} split"
 
 #: app/(app)/[emailAccountId]/assistant/settings/MultiRuleSetting.tsx
-msgid "Turning this off stops the AI from intentionally choosing multiple custom rules for one email. Inbox Zero can still apply more than one rule in a few special cases."
-msgstr "Turning this off stops the AI from intentionally choosing multiple custom rules for one email. Inbox Zero can still apply more than one rule in a few special cases."
+msgid "Turning this off stops the AI from intentionally choosing multiple custom rules for one email. Inbox can still apply more than one rule in a few special cases."
+msgstr "Turning this off stops the AI from intentionally choosing multiple custom rules for one email. Inbox can still apply more than one rule in a few special cases."
 
 #: utils/automation-jobs/defaults.ts
 msgid "Twice daily"
@@ -14047,8 +14083,8 @@ msgid "Use label"
 msgstr "Use label"
 
 #: components/ReferralDialog.tsx
-msgid "Use my referral link to get started with Inbox Zero!"
-msgstr "Use my referral link to get started with Inbox Zero!"
+msgid "Use my referral link to get started with Inbox!"
+msgstr "Use my referral link to get started with Inbox!"
 
 #: app/(app)/[emailAccountId]/assistant/RuleStep.tsx
 msgid "Use prompt"
@@ -14076,8 +14112,8 @@ msgid "Used to draft replies in your voice."
 msgstr "Used to draft replies in your voice."
 
 #: app/(app)/[emailAccountId]/calendars/BookingLinksSection.tsx
-msgid "Using Inbox Zero booking link"
-msgstr "Using Inbox Zero booking link"
+msgid "Using Inbox booking link"
+msgstr "Using Inbox booking link"
 
 #: app/(app)/[emailAccountId]/settings/DigestSettingsForm.tsx
 msgid "Usually sent within 5 minutes."
@@ -14205,11 +14241,6 @@ msgstr "View usage statistics"
 #: app/(app)/[emailAccountId]/assistant/settings/FollowUpRemindersSetting.tsx
 msgid "View your follow-ups in Gmail."
 msgstr "View your follow-ups in Gmail."
-
-#. placeholder {0}: company.name
-#: app/(app)/[emailAccountId]/mail/SenderContextPanel.tsx
-msgid "Visit {0}"
-msgstr "Visit {0}"
 
 #: app/(app)/[emailAccountId]/bulk-unsubscribe/ResubscribeDialog.tsx
 msgid "Visit the sender's website and manually resubscribe."
@@ -14379,8 +14410,8 @@ msgid "We'll file attachments from your emails into your {driveName}.<0/>Just te
 msgstr "We'll file attachments from your emails into your {driveName}.<0/>Just tell us where and how."
 
 #: app/(app)/[emailAccountId]/onboarding/StepBulkUnsubscribe.tsx
-msgid "We'll keep spotting more as you use Inbox Zero."
-msgstr "We'll keep spotting more as you use Inbox Zero."
+msgid "We'll keep spotting more as you use Inbox."
+msgstr "We'll keep spotting more as you use Inbox."
 
 #: components/InviteMemberModal.tsx
 msgid "We'll send each teammate an email with a link to join your organization. The link expires in two weeks."
@@ -14409,10 +14440,6 @@ msgstr "We're still connecting to {displayName}. Refresh in a moment to see the 
 #: app/(app)/[emailAccountId]/onboarding/StepCustomRules.tsx
 msgid "We've set up the basics, but that's just the beginning. Your AI assistant can handle any email workflow you'd give to a human."
 msgstr "We've set up the basics, but that's just the beginning. Your AI assistant can handle any email workflow you'd give to a human."
-
-#: app/(app)/[emailAccountId]/mail/SenderContextPanel.tsx
-msgid "Web search is not configured for this account."
-msgstr "Web search is not configured for this account."
 
 #: components/PlanBadge.tsx
 msgid "Webhook"
@@ -14737,8 +14764,8 @@ msgid "You cancelled the authorization. Connect again whenever you're ready."
 msgstr "You cancelled the authorization. Connect again whenever you're ready."
 
 #: components/EndTrialButton.tsx
-msgid "You do not need to do this to keep using Inbox Zero. Your trial already includes every paid feature and runs free until {trialEndDate}, when the same charge happens automatically."
-msgstr "You do not need to do this to keep using Inbox Zero. Your trial already includes every paid feature and runs free until {trialEndDate}, when the same charge happens automatically."
+msgid "You do not need to do this to keep using Inbox. Your trial already includes every paid feature and runs free until {trialEndDate}, when the same charge happens automatically."
+msgstr "You do not need to do this to keep using Inbox. Your trial already includes every paid feature and runs free until {trialEndDate}, when the same charge happens automatically."
 
 #: app/(app)/[emailAccountId]/assistant/ProcessRules.tsx
 msgid "You don't have any AI rules set up. The test won't match anything. Please create AI rules first."

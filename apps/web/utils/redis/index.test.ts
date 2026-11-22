@@ -11,6 +11,7 @@ const client = vi.hoisted(() => ({
   exists: vi.fn(),
   set: vi.fn(),
   hincrbyfloat: vi.fn(),
+  zrange: vi.fn(),
   options: {} as Record<string, unknown>,
 }));
 
@@ -118,6 +119,16 @@ describe("redis key prefix", () => {
     client.hincrbyfloat.mockResolvedValue("1.5");
 
     await expect(redis.hincrbyfloat("usage", "cost", 0.5)).resolves.toBe(1.5);
+  });
+
+  it("pairs sorted-set members with their scores", async () => {
+    client.zrange.mockResolvedValue(["m1", "10", "m2", "20.5"]);
+
+    await expect(redis.zrangeWithScores("set", 0, 1)).resolves.toEqual([
+      { member: "m1", score: 10 },
+      { member: "m2", score: 20.5 },
+    ]);
+    expect(client.zrange).toHaveBeenCalledWith("set", 0, 1, "WITHSCORES");
   });
 
   it("has no unreviewed raw ioredis client", () => {

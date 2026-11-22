@@ -1450,6 +1450,61 @@ function getResolvedModelKey({ provider, modelName }: ResolvedModel): string {
   return `${provider}:${modelName}`;
 }
 
+/**
+ * The model could not be reached or failed on its side (connection refused,
+ * 5xx, timeout or abort), so the same request is worth retrying later.
+ */
+export function isLlmUnavailableError(error: unknown): boolean {
+  const category = getLlmFallbackFailureCategory(error);
+  return (
+    category === "network" ||
+    category === "server_error" ||
+    isTimeoutOrAbort(error) ||
+    isGatewayOrLocalServerFailure(error) ||
+    isEmptyAnswerCutOffByLength(error)
+  );
+}
+
+// A reasoning model that spends its whole token budget thinking returns
+// nothing; the same request can succeed on a later attempt.
+function isEmptyAnswerCutOffByLength(error: unknown): boolean {
+  const last = RetryError.isInstance(error) ? error.lastError : error;
+  const unwrapped = (last as { error?: unknown })?.error ?? last;
+  return (
+    NoObjectGeneratedError.isInstance(unwrapped) &&
+    unwrapped.finishReason === "length" &&
+    !unwrapped.text?.trim()
+  );
+}
+
+// LiteLLM wraps LM Studio failures (overloaded, unloading, model not loaded)
+// as 400 or 404 with this marker; the same request works once it recovers.
+function isGatewayOrLocalServerFailure(error: unknown): boolean {
+  if (isStructuredOutputValidationError(error)) return false;
+
+  const last = RetryError.isInstance(error) ? error.lastError : error;
+  const apiError = (last as { error?: unknown })?.error ?? last;
+  if (!APICallError.isInstance(apiError)) return false;
+
+  if (apiError.isRetryable) return true;
+  if (apiError.statusCode === 408 || apiError.statusCode === 429) return true;
+  return (
+    (apiError.statusCode === 400 || apiError.statusCode === 404) &&
+    apiError.message.includes("Lm_studioException")
+  );
+}
+
+function isTimeoutOrAbort(error: unknown): boolean {
+  let current: unknown = RetryError.isInstance(error) ? error.lastError : error;
+  for (let depth = 0; depth < 4 && current instanceof Error; depth++) {
+    if (current.name === "AbortError" || current.name === "TimeoutError") {
+      return true;
+    }
+    current = current.cause;
+  }
+  return false;
+}
+
 function getLlmFallbackFailureCategory(
   error: unknown,
 ): LlmFallbackFailureCategory {

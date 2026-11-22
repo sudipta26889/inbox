@@ -35,6 +35,8 @@ import {
   getGmailHistoryCatchUp,
   markGmailHistoryCatchUp,
 } from "@/utils/redis/gmail-history-catch-up";
+import { isLlmUnavailableError } from "@/utils/llms";
+import { rememberLlmRetry } from "@/utils/redis/llm-retry";
 import type { Logger } from "@/utils/logger";
 import type { gmail_v1 } from "@googleapis/gmail";
 
@@ -366,6 +368,16 @@ async function processHistory(
             reason: providerIssue.reason,
           });
           return false;
+        }
+        // The cursor moves on, so remember the message: the poll retries it
+        // even if it is read before the model is back.
+        const failedMessageId = event.item.message?.id;
+        if (failedMessageId && isLlmUnavailableError(error)) {
+          await rememberLlmRetry({
+            emailAccountId,
+            messageId: failedMessageId,
+            logger: log,
+          });
         }
         captureException(error, {
           userEmail,

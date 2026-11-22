@@ -31,8 +31,8 @@ export const POST = withEmailAccount("voice/speak", async (request) => {
   }
 
   try {
-    const runtime = getVoiceRuntime(user.user);
-    const provider = getConfiguredVoiceProvider(user.user);
+    const runtime = getVoiceRuntime();
+    const provider = getConfiguredVoiceProvider();
     const synthesize = requireVoiceCapability(provider, "synthesize");
     const utterance =
       toUtterances(parsed.data.text)[0] ?? parsed.data.text.trim();

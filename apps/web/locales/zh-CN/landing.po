@@ -540,8 +540,8 @@ msgid "Get started in minutes"
 msgstr "几分钟即可上手"
 
 #: components/new-landing/sections/BulkUnsubscribe.tsx
-msgid "Get to Inbox Zero fast.<0/>Bulk unsubscribe from emails you never read."
-msgstr "快速实现 Inbox Zero。<0/>批量退订你从不阅读的邮件。"
+msgid "Get to Inbox fast.<0/>Bulk unsubscribe from emails you never read."
+msgstr ""
 
 #: app/(landing)/home/Footer.tsx
 msgid "GitHub"
@@ -572,8 +572,8 @@ msgid "How can I request a feature?"
 msgstr "我该如何请求新功能？"
 
 #: components/new-landing/sections/Testimonials.tsx
-msgid "I came across Inbox Zero while actively looking to hire a VA to manage my emails but after trying the tool, it turned out to be a complete game changer."
-msgstr "我当时正想雇一位虚拟助理来管理我的邮件，偶然发现了 Inbox Zero，试用之后发现它彻底改变了我的工作方式。"
+msgid "I came across Inbox while actively looking to hire a VA to manage my emails but after trying the tool, it turned out to be a complete game changer."
+msgstr ""
 
 #: components/new-landing/sections/Testimonials.tsx
 msgid "I love the flexibility and customization options, and it's the first thing in forever that's gotten my inbox under control. Thank you!"
@@ -584,12 +584,12 @@ msgid "I was mostly hoping to turn my email inbox into less of the mess that it 
 msgstr "我主要是希望让我的收件箱不那么乱。邮件被淹没后，我一直在漏掉本该做的任务。到目前为止它确实帮了大忙。"
 
 #: components/new-landing/sections/Testimonials.tsx
-msgid "I'm an executive who was drowning in hundreds of daily emails and heavily dependent on my EA for email management. What I love most about Inbox Zero is how it seamlessly replaced that entire function—the smart automation, prioritization, and organization features work like having a dedicated email assistant built right into my workflow."
-msgstr "我是一名高管，曾被每天数百封邮件淹没，邮件管理严重依赖我的行政助理。我最喜欢 Inbox Zero 的地方，是它无缝取代了这整项职能——智能自动化、优先级排序和整理功能就像把一位专属邮件助理直接融入了我的工作流。"
+msgid "I'm an executive who was drowning in hundreds of daily emails and heavily dependent on my EA for email management. What I love most about Inbox is how it seamlessly replaced that entire function—the smart automation, prioritization, and organization features work like having a dedicated email assistant built right into my workflow."
+msgstr ""
 
 #: app/(landing)/home/HeroVideoDialog.tsx
-msgid "Inbox Zero product video"
-msgstr "Inbox Zero 产品视频"
+msgid "Inbox product video"
+msgstr ""
 
 #: app/(landing)/home/Footer.tsx
 #: components/new-landing/sections/Footer.tsx
@@ -682,8 +682,8 @@ msgid "Marketing"
 msgstr "Marketing"
 
 #: components/new-landing/sections/EmailClient.tsx
-msgid "Meet the Inbox Zero email app"
-msgstr "认识 Inbox Zero 邮件应用"
+msgid "Meet the Inbox email app"
+msgstr ""
 
 #: app/(landing)/home/HomePage.tsx
 msgid "Meet your AI email assistant that *actually* works"
@@ -718,8 +718,8 @@ msgid "Need SSO, SCIM, on-premise deployment, or a dedicated account manager?"
 msgstr "需要 SSO、SCIM、本地部署或专属客户经理吗？"
 
 #: app/(landing)/home/HomePage.tsx
-msgid "New: Inbox Zero Mail app →"
-msgstr "新品：Inbox Zero Mail 应用 →"
+msgid "New: Inbox Mail app →"
+msgstr ""
 
 #: components/new-landing/sections/StartedInMinutes.tsx
 msgid "Newsletter"
@@ -789,10 +789,13 @@ msgstr "播放产品演示视频"
 msgid "Popular"
 msgstr "热门"
 
-#: app/(landing)/home/Footer.tsx
 #: components/new-landing/sections/Footer.tsx
-msgid "Powered by <0>Inbox Zero</0>"
-msgstr "由 <0>Inbox Zero</0> 提供支持"
+msgid "Powered by <0>Inbox</0>"
+msgstr ""
+
+#: app/(landing)/home/Footer.tsx
+msgid "Powered by <0>open source</0>"
+msgstr ""
 
 #: components/new-landing/sections/StartedInMinutes.tsx
 msgid "Pre-drafted replies"
@@ -1183,8 +1186,8 @@ msgid "Your AI executive assistant to reach inbox zero fast. Automate emails, bu
 msgstr "你的 AI 行政助理，助你快速实现 inbox zero。自动化邮件、批量退订、拦截陌生推销邮件，并提供数据分析。开源"
 
 #: components/new-landing/sections/Awards.tsx
-msgid "Your data stays private — no AI training, no funny business. We’re fully certified for top-tier security, and you can even self-host Inbox Zero if you want total control."
-msgstr "你的数据保持私密——不用于 AI 训练，绝无猫腻。我们已获得顶级安全认证，如果你想完全掌控，甚至可以自行托管 Inbox Zero。"
+msgid "Your data stays private — no AI training, no funny business. We’re fully certified for top-tier security, and you can even self-host Inbox if you want total control."
+msgstr ""
 
 #: components/new-landing/sections/ManageFromAnywhere.tsx
 msgid "Your inbox, wherever you work"

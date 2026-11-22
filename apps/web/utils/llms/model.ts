@@ -337,6 +337,7 @@ function selectModel(
       const litellm = createOpenAICompatible({
         name: "litellm",
         baseURL: env.LITELLM_BASE_URL || "http://localhost:4000/v1",
+        supportsStructuredOutputs: true,
         apiKey: resolveApiKey(aiApiKey, undefined),
       });
       return {

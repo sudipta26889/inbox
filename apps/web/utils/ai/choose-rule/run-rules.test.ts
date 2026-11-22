@@ -826,6 +826,52 @@ describe("runRules draft attribution persistence", () => {
   });
 });
 
+describe("runRules when the model is unavailable", () => {
+  const connectionError = Object.assign(new Error("connect ECONNREFUSED"), {
+    code: "ECONNREFUSED",
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("throws without writing an ExecutedRule when generating the actions fails", async () => {
+    const draftRule = createRule("draft-rule", null, [
+      getAction({ id: "draft-action-1", type: ActionType.DRAFT_EMAIL }),
+    ]);
+    mockMatchingRules([{ rule: draftRule, matchReasons: [] }]);
+    prisma.executedRule.findFirst.mockResolvedValue(null);
+    vi.mocked(getActionItemsWithAiArgs).mockRejectedValue(connectionError);
+    mockExecutedRuleCreate({ rule: draftRule, actionItems: [] });
+
+    await expect(runRulesWithDefaults({ rules: [draftRule] })).rejects.toThrow(
+      "ECONNREFUSED",
+    );
+
+    expect(executeAct).not.toHaveBeenCalled();
+    expect(prisma.executedRule.create).not.toHaveBeenCalled();
+  });
+
+  it("throws without writing an ExecutedRule when the conversation status call fails", async () => {
+    const conversationRule = createRule(
+      CONVERSATION_TRACKING_META_RULE_ID,
+      null,
+      [],
+    );
+    mockMatchingRules([{ rule: conversationRule, matchReasons: [] }]);
+    prisma.executedRule.findFirst.mockResolvedValue(null);
+    vi.mocked(determineConversationStatus).mockRejectedValue(connectionError);
+
+    await expect(
+      runRulesWithDefaults({
+        rules: [createRule("to-reply", SystemType.TO_REPLY, [])],
+      }),
+    ).rejects.toThrow("ECONNREFUSED");
+
+    expect(prisma.executedRule.create).not.toHaveBeenCalled();
+  });
+});
+
 describe("runRules saved delays on actions that can't be delayed", () => {
   beforeEach(() => {
     vi.clearAllMocks();

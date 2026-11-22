@@ -35,17 +35,9 @@ export type SaveEmailUpdateSettingsBody = z.infer<
 
 export const saveAiSettingsBody = z
   .object({
-    aiProvider: z.enum([
-      DEFAULT_PROVIDER,
-      Provider.ANTHROPIC,
-      Provider.OPEN_AI,
-      Provider.AZURE,
-      Provider.GOOGLE,
-      Provider.GROQ,
-      Provider.CEREBRAS,
-      Provider.OPENROUTER,
-      Provider.LITELLM,
-    ]),
+    // Mail is personal data: a saved model may only be the deployment default
+    // or the local models behind LiteLLM, never a cloud provider.
+    aiProvider: z.enum([DEFAULT_PROVIDER, Provider.LITELLM]),
     aiModel: z.string(),
     aiApiKey: z.string().optional(),
   })

@@ -2,6 +2,7 @@ import { describe, test, expect, afterAll } from "vitest";
 import {
   describeEvalMatrix,
   shouldRunEvalTests,
+  getEvalTimeout,
 } from "@/__tests__/eval/models";
 import { createEvalReporter } from "@/__tests__/eval/reporter";
 import { aiCategorizeSender } from "@/utils/ai/categorize-sender/ai-categorize-single-sender";
@@ -11,7 +12,7 @@ import { defaultCategory } from "@/utils/categories";
 // Multi-model: EVAL_MODELS=all pnpm test-ai eval/categorize-senders
 
 const shouldRunEval = shouldRunEvalTests();
-const TIMEOUT = 60_000;
+const TIMEOUT = getEvalTimeout(60_000);
 
 // Enabled categories: Newsletter, Marketing, Receipt, Notification, Other
 //

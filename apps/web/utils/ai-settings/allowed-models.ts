@@ -6,21 +6,13 @@ import {
 
 /**
  * The set of provider IDs accepted by `admin_ai_update_model`.
- * Mirrors `saveAiSettingsBody.aiProvider` in `settings.validation.ts` but
- * intentionally excludes provider+model combinations that cannot be configured
- * without an API key the MCP client can't supply.
+ * Same as `saveAiSettingsBody.aiProvider` in `settings.validation.ts`: mail is
+ * personal data, so only the deployment default or the local models behind
+ * LiteLLM may be saved, never a cloud provider.
  */
 export const ALLOWED_AI_PROVIDERS = [
   DEFAULT_PROVIDER,
-  Provider.ANTHROPIC,
-  Provider.OPEN_AI,
-  Provider.AZURE,
-  Provider.GOOGLE,
-  Provider.GROQ,
-  Provider.OPENROUTER,
-  Provider.AI_GATEWAY,
   Provider.LITELLM,
-  Provider.OLLAMA,
 ] as const;
 
 export type AllowedAiProvider = (typeof ALLOWED_AI_PROVIDERS)[number];

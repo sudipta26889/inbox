@@ -9,7 +9,7 @@ import {
   summarizeRecordedToolCalls,
   type RecordedToolCall,
 } from "@/__tests__/eval/assistant-chat-eval-utils";
-import { shouldRunEvalTests } from "@/__tests__/eval/models";
+import { shouldRunEvalTests, getEvalTimeout } from "@/__tests__/eval/models";
 import { judgeEvalOutput } from "@/__tests__/eval/semantic-judge";
 import { getMockMessage } from "@/__tests__/helpers";
 import type { getEmailAccount } from "@/__tests__/helpers";
@@ -18,7 +18,7 @@ import prisma from "@/utils/__mocks__/prisma";
 import { createScopedLogger } from "@/utils/logger";
 
 export const shouldRunEval = shouldRunEvalTests();
-export const TIMEOUT = 120_000;
+export const TIMEOUT = getEvalTimeout(120_000);
 const logger = createScopedLogger("eval-assistant-chat-inbox-workflows");
 const forbiddenMicrosoftQueryOperators = [
   "is:",

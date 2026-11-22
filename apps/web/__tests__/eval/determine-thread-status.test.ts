@@ -3,6 +3,7 @@ import { getEmail } from "@/__tests__/helpers";
 import {
   describeEvalMatrix,
   shouldRunEvalTests,
+  getEvalTimeout,
 } from "@/__tests__/eval/models";
 import { createEvalReporter } from "@/__tests__/eval/reporter";
 import { SystemType } from "@/generated/prisma/enums";
@@ -11,7 +12,7 @@ import { aiDetermineThreadStatus } from "@/utils/ai/reply/determine-thread-statu
 // pnpm test-ai eval/determine-thread-status
 
 const shouldRunEval = shouldRunEvalTests();
-const TIMEOUT = 60_000;
+const TIMEOUT = getEvalTimeout(60_000);
 
 describe.runIf(shouldRunEval)("Eval: determine thread status", () => {
   const evalReporter = createEvalReporter({

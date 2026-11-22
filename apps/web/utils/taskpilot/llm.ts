@@ -174,7 +174,11 @@ async function callOnce<T>(
       body: JSON.stringify({
         model: input.model,
         max_tokens: input.maxTokens,
-        temperature: 0,
+        // At temperature 0 Flint can loop in its reasoning and return nothing;
+        // these are the model card's sampling values.
+        ...(isFlint(input.model)
+          ? { temperature: 1.0, top_p: 0.95 }
+          : { temperature: 0 }),
         ...(modelSupportsReasoning(input.model)
           ? { reasoning_effort: input.effort }
           : {}),
@@ -191,10 +195,19 @@ async function callOnce<T>(
     const body = (await res.json()) as {
       choices?: Array<{
         message?: { content?: string; reasoning_content?: string };
+        finish_reason?: string;
       }>;
       usage?: { prompt_tokens?: number; completion_tokens?: number };
     };
     const content = body.choices?.[0]?.message?.content ?? "";
+    // The token budget went on reasoning: there is no answer to parse.
+    if (!content.trim() && body.choices?.[0]?.finish_reason === "length") {
+      return {
+        kind: "timeout",
+        errorMsg: "LLM returned no answer (cut off by length)",
+        usage: null,
+      };
+    }
     const reasoning = body.choices?.[0]?.message?.reasoning_content;
     if (reasoning) {
       logger.trace("llm reasoning_content", { length: reasoning.length });
@@ -221,6 +234,10 @@ async function callOnce<T>(
   } finally {
     clearTimeout(timer);
   }
+}
+
+function isFlint(model: string): boolean {
+  return model === "recursivesi/flint";
 }
 
 function stripThink(content: string): string {

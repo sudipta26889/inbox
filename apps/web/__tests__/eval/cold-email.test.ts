@@ -13,6 +13,7 @@ import { PREVIOUS_DEFAULT_COLD_EMAIL_PROMPT } from "@/__tests__/eval/cold-email-
 import {
   describeEvalMatrix,
   shouldRunEvalTests,
+  getEvalTimeout,
 } from "@/__tests__/eval/models";
 import { createEvalReporter } from "@/__tests__/eval/reporter";
 import { isColdEmail } from "@/utils/cold-email/is-cold-email";
@@ -27,7 +28,7 @@ import { isColdEmail } from "@/utils/cold-email/is-cold-email";
 //              (recorded for comparison only, never fails the suite)
 
 const shouldRunEval = shouldRunEvalTests();
-const TIMEOUT = 180_000;
+const TIMEOUT = getEvalTimeout(180_000);
 const logger = createScopedLogger("eval-cold-email");
 
 // Every sender is a stranger: the eval measures the AI step, not prior-contact short-circuits.
