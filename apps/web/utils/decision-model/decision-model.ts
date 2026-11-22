@@ -66,6 +66,7 @@ const DECISION_INPUT_MAX_TOKENS = 3500;
 const CONTEXT_EXCEEDED_MESSAGE = "exceeds the 4096-token context";
 
 export const INPUT_TOO_LONG_REASON = "input too long for the decision model";
+export const UNSUPPORTED_REASON = "multi-rule selection is decided by the LLM";
 
 /** The request would not fit the decision model's context window. */
 export class DecisionInputTooLongError extends Error {
@@ -253,13 +254,13 @@ export async function runDecisionModel({
 }
 
 /**
- * Routes one decision between the decision model (Jev) and the LLM, and
+ * Routes one decision between the decision model and the LLM, and
  * records every run in DecisionModelRun.
  *
  * - No decision model for this account → LLM, unchanged, nothing recorded.
- * - Shadow (default) → the LLM decides; Jev runs in parallel and both answers
- *   are recorded. Jev never affects the result or adds latency.
- * - Live (feature in DECISION_MODEL_LIVE) → Jev decides. An uncertain answer
+ * - Shadow (default) → the LLM decides; the decision model runs in parallel and both answers
+ *   are recorded. It never affects the result or adds latency.
+ * - Live (feature in DECISION_MODEL_LIVE) → the decision model decides. An uncertain answer
  *   escalates to DECISION_ESCALATION_MODEL; any other failure falls back to the
  *   account's own model. Unless DECISION_LIVE_AUDIT=false, the LLM also checks
  *   each live decision afterwards and the agreement is recorded.
@@ -338,7 +339,9 @@ export async function runDecisionModelOrFallback<T>({
           outcome: "llm-error",
           jevResult: run.ok ? run.result : undefined,
           error: `LLM: ${getLoggableError(llmError).message}${
-            run.ok ? "" : ` | Jev: ${getLoggableError(run.error).message}`
+            run.ok
+              ? ""
+              : ` | Decision model: ${getLoggableError(run.error).message}`
           }`,
         }),
       );

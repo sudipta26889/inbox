@@ -5,6 +5,7 @@ import {
   INPUT_TOO_LONG_REASON,
   isDecisionInputTooLong,
   runDecisionModel,
+  UNSUPPORTED_REASON,
 } from "@/utils/decision-model/decision-model";
 import { getEmailForLLM } from "@/utils/get-email-from-message";
 import type { EmailAccountWithAI } from "@/utils/llms/types";
@@ -64,12 +65,10 @@ export async function decisionModelChooseRule<T extends RuleCandidate>({
 }): Promise<DecisionRuleSelection<T>> {
   const logger = parentLogger.with({ module: MODULE });
 
-  // Secondary rules can overlap the primary rule, and JEV did not reliably
+  // Secondary rules can overlap the primary rule, and the decision model did not reliably
   // separate those from explicit negative instructions in evals.
   if (shouldSelectMultipleRules({ rules, emailAccount })) {
-    throw new Error(
-      "Decision model does not support multi-rule selection; use the LLM path",
-    );
+    return { type: "undecided", reason: UNSUPPORTED_REASON };
   }
 
   const { criteria, rulesByKey } = buildCriteria(rules);

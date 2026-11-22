@@ -2,7 +2,10 @@ import { ScheduledActionStatus } from "@/generated/prisma/enums";
 import prisma from "@/utils/prisma";
 import type { ActionItem } from "@/utils/ai/types";
 import { createScopedLogger } from "@/utils/logger";
-import { canActionBeDelayed } from "@/utils/delayed-actions";
+import {
+  canActionBeDelayed,
+  canActionBeScheduled,
+} from "@/utils/delayed-actions";
 import { env } from "@/env";
 import { getCronSecretHeader } from "@/utils/cron";
 import { getInternalApiUrl } from "@/utils/internal-api";
@@ -35,7 +38,7 @@ export async function createScheduledAction({
   emailAccountId: string;
   scheduledFor: Date;
 }) {
-  if (!canActionBeDelayed(actionItem.type)) {
+  if (!canActionBeScheduled(actionItem.type)) {
     throw new Error(
       `Action type ${actionItem.type} is not supported for delayed execution`,
     );

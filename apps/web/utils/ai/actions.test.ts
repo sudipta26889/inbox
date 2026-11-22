@@ -18,6 +18,7 @@ import { handlePreviousDraftDeletion } from "@/utils/ai/choose-rule/draft-manage
 import { sendColdEmailNotification } from "@/utils/cold-email/send-notification";
 import type { ParsedMessage } from "@/utils/types";
 import prisma from "@/utils/prisma";
+import { createScheduledAction } from "@/utils/scheduled-actions/scheduler";
 import { callMcpTool } from "@/utils/mcp/call-tool";
 import { createTestLogger } from "@/__tests__/helpers";
 import { executeHomeAssistantAction } from "@/utils/home-assistant";
@@ -94,8 +95,13 @@ vi.mock("@/utils/a2a-client", async (importOriginal) => ({
   sendA2aMessage: vi.fn().mockResolvedValue({ taskId: "task-1" }),
 }));
 
+vi.mock("@/utils/scheduled-actions/scheduler", () => ({
+  createScheduledAction: vi.fn().mockResolvedValue({ id: "scheduled-1" }),
+}));
+
 vi.mock("@/utils/prisma", () => ({
   default: {
+    scheduledAction: { count: vi.fn().mockResolvedValue(0) },
     executedAction: {
       update: vi.fn().mockResolvedValue({}),
     },
@@ -547,6 +553,87 @@ describe("runActionFunction", () => {
     );
   });
 
+  describe("when every remote agent fails", () => {
+    const executedRule = {
+      id: "executed-rule-1",
+      threadId: "thread-1",
+      emailAccountId: "account-1",
+      ruleId: "rule-1",
+    } as any;
+
+    function notify() {
+      return runActionFunction({
+        client: createMockEmailProvider(),
+        email,
+        action: { id: "action-1", type: ActionType.A2A_NOTIFY },
+        emailAccount,
+        executedRule,
+        logger,
+      });
+    }
+
+    beforeEach(() => {
+      vi.mocked(getRemoteAgentUrls).mockReturnValue(["http://mitra.test"]);
+      vi.mocked(sendA2aMessage).mockRejectedValue(new Error("timed out"));
+      vi.mocked(prisma.scheduledAction.count).mockResolvedValue(0);
+      vi.mocked(createScheduledAction).mockClear();
+    });
+
+    it("schedules one retry of just that action 45 minutes later and still reports the failure", async () => {
+      const before = Date.now();
+      const result = await notify();
+
+      expect(result).toEqual({
+        success: false,
+        errorCode: "ALL_AGENTS_FAILED",
+      });
+      expect(createScheduledAction).toHaveBeenCalledTimes(1);
+      const call = vi.mocked(createScheduledAction).mock.calls[0][0];
+      expect(call).toMatchObject({
+        executedRuleId: "executed-rule-1",
+        messageId: "message-1",
+        threadId: "thread-1",
+        emailAccountId: "account-1",
+        actionItem: expect.objectContaining({
+          type: ActionType.A2A_NOTIFY,
+          delayInMinutes: 45,
+        }),
+      });
+      expect(call.scheduledFor.getTime() - before).toBeGreaterThanOrEqual(
+        45 * 60_000 - 1000,
+      );
+      expect(call.scheduledFor.getTime() - before).toBeLessThan(46 * 60_000);
+    });
+
+    it("does not retry a second time", async () => {
+      vi.mocked(prisma.scheduledAction.count).mockResolvedValue(1);
+
+      const result = await notify();
+
+      expect(result).toEqual({
+        success: false,
+        errorCode: "ALL_AGENTS_FAILED",
+      });
+      expect(createScheduledAction).not.toHaveBeenCalled();
+    });
+
+    it("does not retry when a peer accepted the message", async () => {
+      vi.mocked(sendA2aMessage).mockResolvedValue({ taskId: "t" } as any);
+      expect(await notify()).toEqual({ success: true });
+      expect(createScheduledAction).not.toHaveBeenCalled();
+    });
+
+    it("still reports the failure when scheduling the retry fails", async () => {
+      vi.mocked(createScheduledAction).mockRejectedValueOnce(
+        new Error("db down"),
+      );
+      expect(await notify()).toEqual({
+        success: false,
+        errorCode: "ALL_AGENTS_FAILED",
+      });
+    });
+  });
+
   it("fails A2A_NOTIFY actions when no remote agent is configured", async () => {
     vi.mocked(getRemoteAgentUrls).mockReturnValue([]);
 
@@ -561,6 +648,7 @@ describe("runActionFunction", () => {
 
     expect(result).toEqual({ success: false, errorCode: "NO_AGENT_URL" });
     expect(sendA2aMessage).not.toHaveBeenCalled();
+    expect(createScheduledAction).not.toHaveBeenCalled();
   });
 
   it("marks notify messaging actions failed when missing a channel id", async () => {

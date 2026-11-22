@@ -52,6 +52,7 @@ import {
   INPUT_TOO_LONG_REASON,
   isDecisionFeatureLive,
   recordDecisionModelRun,
+  UNSUPPORTED_REASON,
 } from "@/utils/decision-model/decision-model";
 import { isConversationStatusType } from "@/utils/reply-tracker/conversation-status-config";
 import { getClassificationFeedback } from "@/utils/rule/classification-feedback";
@@ -231,7 +232,7 @@ export async function findMatchingRules({
         run.ok && run.selection.type === "rules" ? run.selection : null;
       const errors = [
         llm.ok ? null : `LLM: ${getErrorMessage(llm.error)}`,
-        run.ok ? null : `Jev: ${getErrorMessage(run.error)}`,
+        run.ok ? null : `Decision model: ${getErrorMessage(run.error)}`,
       ].filter(Boolean);
       return recordDecisionModelRun({
         emailAccountId: emailAccount.id,
@@ -242,15 +243,7 @@ export async function findMatchingRules({
         latencyMs: Date.now() - shadowStartedAt,
         outcome: !llm.ok
           ? "llm-error"
-          : !run.ok
-            ? "error"
-            : run.selection.reason === INPUT_TOO_LONG_REASON
-              ? "too_long"
-              : !decided
-                ? "uncertain"
-                : getPrimaryRuleId(decided) === getPrimaryRuleId(llm.result)
-                  ? "agree"
-                  : "disagree",
+          : getShadowOutcome({ run, decided, llmResult: llm.result }),
         jevResult: run.ok ? summarizeRuleChoice(run.selection) : undefined,
         llmResult: llm.ok ? summarizeRuleChoice(llm.result) : undefined,
         error: errors.length ? errors.join(" | ") : undefined,
@@ -1167,4 +1160,29 @@ function summarizeRuleChoice(result: {
 
 function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Non-Error rejection";
+}
+
+const SHADOW_OUTCOME_BY_REASON: Record<string, string> = {
+  [INPUT_TOO_LONG_REASON]: "too_long",
+  [UNSUPPORTED_REASON]: "unsupported",
+};
+
+function getShadowOutcome({
+  run,
+  decided,
+  llmResult,
+}: {
+  run:
+    | { ok: true; selection: { type: string; reason: string } }
+    | { ok: false; error: unknown };
+  decided: Parameters<typeof getPrimaryRuleId>[0] | null;
+  llmResult: RuleChoice;
+}) {
+  if (!run.ok) return "error";
+  const byReason = SHADOW_OUTCOME_BY_REASON[run.selection.reason];
+  if (byReason) return byReason;
+  if (!decided) return "uncertain";
+  return getPrimaryRuleId(decided) === getPrimaryRuleId(llmResult)
+    ? "agree"
+    : "disagree";
 }
