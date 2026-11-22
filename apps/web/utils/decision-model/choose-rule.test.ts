@@ -4,13 +4,20 @@ import {
   getEmailAccount,
   getMockMessage,
 } from "@/__tests__/helpers";
+import {
+  DecisionInputTooLongError,
+  INPUT_TOO_LONG_REASON,
+} from "@/utils/decision-model/decision-model";
 import { CONVERSATION_TRACKING_META_RULE_ID } from "@/utils/reply-tracker/conversation-status-config";
 import { getRuleConfig } from "@/utils/rule/consts";
 import type { ParsedMessage } from "@/utils/types";
 
 const runDecisionModelMock = vi.hoisted(() => vi.fn());
 
-vi.mock("@/utils/decision-model/decision-model", () => ({
+vi.mock("@/utils/decision-model/decision-model", async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import("@/utils/decision-model/decision-model")
+  >()),
   runDecisionModel: runDecisionModelMock,
 }));
 
@@ -135,10 +142,49 @@ describe("decisionModelChooseRule", () => {
           ownerAction: "removed rule",
         },
       ],
-      candidateRules: [
-        { name: "Newsletter", instructions: "Newsletters" },
-        { name: "Receipts", instructions: "Receipts and invoices" },
+    });
+  });
+
+  it("sends each rule's text once, in the criteria and not in the state", async () => {
+    mockAnswer("None");
+    await chooseRule({
+      rules: [
+        { id: "a", name: "Alpha", instructions: "UNIQUE-ALPHA-TEXT" },
+        { id: "b", name: "Beta", instructions: "UNIQUE-BETA-TEXT" },
       ],
+    });
+
+    const request = getRequest();
+    expect(request.state).not.toHaveProperty("candidateRules");
+    expect(JSON.stringify(request.state)).not.toContain("UNIQUE-ALPHA-TEXT");
+    const sent = JSON.stringify({
+      state: request.state,
+      questions: request.questions,
+    });
+    expect(sent.match(/UNIQUE-ALPHA-TEXT/g)).toHaveLength(1);
+    expect(sent.match(/UNIQUE-BETA-TEXT/g)).toHaveLength(1);
+    expect(request.questions[CHOICE_KEY].criteria.Alpha).toBe(
+      "UNIQUE-ALPHA-TEXT",
+    );
+  });
+
+  it("defers to the LLM path when the input is too long for the decision model", async () => {
+    runDecisionModelMock.mockRejectedValue(new DecisionInputTooLongError(4200));
+
+    expect(await chooseRule()).toEqual({
+      type: "undecided",
+      reason: INPUT_TOO_LONG_REASON,
+    });
+  });
+
+  it("treats the gateway's context-window rejection the same way", async () => {
+    runDecisionModelMock.mockRejectedValue(
+      new Error("decision input exceeds the 4096-token context"),
+    );
+
+    expect(await chooseRule()).toEqual({
+      type: "undecided",
+      reason: INPUT_TOO_LONG_REASON,
     });
   });
 

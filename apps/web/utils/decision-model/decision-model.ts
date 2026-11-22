@@ -61,6 +61,42 @@ export class DecisionUncertainError extends Error {
   }
 }
 
+// local/decision rejects input over its 4,096-token window, so stay well under.
+const DECISION_INPUT_MAX_TOKENS = 3500;
+const CONTEXT_EXCEEDED_MESSAGE = "exceeds the 4096-token context";
+
+export const INPUT_TOO_LONG_REASON = "input too long for the decision model";
+
+/** The request would not fit the decision model's context window. */
+export class DecisionInputTooLongError extends Error {
+  readonly estimatedTokens: number;
+
+  constructor(estimatedTokens: number) {
+    super(INPUT_TOO_LONG_REASON);
+    this.name = "DecisionInputTooLongError";
+    this.estimatedTokens = estimatedTokens;
+  }
+}
+
+/** Our own guard, or the gateway's 400 for a request that got past it. */
+export function isDecisionInputTooLong(error: unknown) {
+  if (error instanceof DecisionInputTooLongError) return true;
+  if (!(error instanceof Error)) return false;
+  const body = (error as { responseBody?: unknown }).responseBody;
+  return (
+    error.message.includes(CONTEXT_EXCEEDED_MESSAGE) ||
+    (typeof body === "string" && body.includes(CONTEXT_EXCEEDED_MESSAGE))
+  );
+}
+
+// An estimate, not a tokenizer: about 4 characters per token.
+function estimateTokens(...parts: unknown[]) {
+  return Math.ceil(
+    parts.reduce<number>((sum, part) => sum + JSON.stringify(part).length, 0) /
+      4,
+  );
+}
+
 // 0.95: on TaskPilot's 398 labelled items every Jev answer at >= 0.95 was right.
 export function getDecisionMinConfidence() {
   return env.DECISION_MIN_CONFIDENCE ?? 0.95;
@@ -147,6 +183,16 @@ export async function runDecisionModel({
     userId: emailAccount.userId,
     emailAccountId: emailAccount.id,
   });
+
+  const estimatedTokens = estimateTokens(request.prompt, request.instructions);
+  if (estimatedTokens > DECISION_INPUT_MAX_TOKENS) {
+    logger.info("Decision input too long for the decision model", {
+      label,
+      estimatedTokens,
+      limit: DECISION_INPUT_MAX_TOKENS,
+    });
+    throw new DecisionInputTooLongError(estimatedTokens);
+  }
 
   const result = await experimental_decide({
     model: config.model,
@@ -310,7 +356,9 @@ export async function runDecisionModelOrFallback<T>({
             : "disagree"
           : run.error instanceof DecisionUncertainError
             ? "uncertain"
-            : "error",
+            : isDecisionInputTooLong(run.error)
+              ? "too_long"
+              : "error",
         jevResult: run.ok ? run.result : undefined,
         llmResult,
         error: run.ok ? undefined : getLoggableError(run.error).message,
@@ -334,14 +382,17 @@ export async function runDecisionModelOrFallback<T>({
       return escalated;
     }
 
-    logger.warn("Decision model failed, falling back to LLM", {
-      error: getLoggableError(error),
-      feature,
-    });
+    const tooLong = isDecisionInputTooLong(error);
+    if (!tooLong) {
+      logger.warn("Decision model failed, falling back to LLM", {
+        error: getLoggableError(error),
+        feature,
+      });
+    }
     const llmResult = await fallback(emailAccount);
     await record({
       mode: "live",
-      outcome: "fallback",
+      outcome: tooLong ? "too_long" : "fallback",
       llmResult,
       error: getLoggableError(error).message,
     });

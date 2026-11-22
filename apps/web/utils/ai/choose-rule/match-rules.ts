@@ -49,6 +49,7 @@ import {
 import { decisionModelChooseRule } from "@/utils/decision-model/choose-rule";
 import {
   getDecisionModelConfig,
+  INPUT_TOO_LONG_REASON,
   isDecisionFeatureLive,
   recordDecisionModelRun,
 } from "@/utils/decision-model/decision-model";
@@ -243,11 +244,13 @@ export async function findMatchingRules({
           ? "llm-error"
           : !run.ok
             ? "error"
-            : !decided
-              ? "uncertain"
-              : getPrimaryRuleId(decided) === getPrimaryRuleId(llm.result)
-                ? "agree"
-                : "disagree",
+            : run.selection.reason === INPUT_TOO_LONG_REASON
+              ? "too_long"
+              : !decided
+                ? "uncertain"
+                : getPrimaryRuleId(decided) === getPrimaryRuleId(llm.result)
+                  ? "agree"
+                  : "disagree",
         jevResult: run.ok ? summarizeRuleChoice(run.selection) : undefined,
         llmResult: llm.ok ? summarizeRuleChoice(llm.result) : undefined,
         error: errors.length ? errors.join(" | ") : undefined,

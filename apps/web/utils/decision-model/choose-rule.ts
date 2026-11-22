@@ -2,6 +2,8 @@ import { SystemType } from "@/generated/prisma/enums";
 import { shouldSelectMultipleRules } from "@/utils/ai/choose-rule/ai-choose-rule";
 import {
   type DecisionModelConfig,
+  INPUT_TOO_LONG_REASON,
+  isDecisionInputTooLong,
   runDecisionModel,
 } from "@/utils/decision-model/decision-model";
 import { getEmailForLLM } from "@/utils/get-email-from-message";
@@ -72,28 +74,29 @@ export async function decisionModelChooseRule<T extends RuleCandidate>({
 
   const { criteria, rulesByKey } = buildCriteria(rules);
 
-  const res = await runDecisionModel({
-    config: decisionModel,
-    emailAccount,
-    state: buildState({
-      message,
+  let res: Awaited<ReturnType<typeof runDecisionModel>>;
+  try {
+    res = await runDecisionModel({
+      config: decisionModel,
       emailAccount,
-      classificationFeedback,
-      candidateRules: [...rulesByKey].map(([name, rule]) => ({
-        name,
-        instructions: getRuleCriterion(rule),
-      })),
-    }),
-    questions: {
-      [CHOICE_QUESTION_KEY]: {
-        type: "choice",
-        instructions: QUESTION,
-        criteria,
+      // The rule texts travel once, as the criteria of the choice.
+      state: buildState({ message, emailAccount, classificationFeedback }),
+      questions: {
+        [CHOICE_QUESTION_KEY]: {
+          type: "choice",
+          instructions: QUESTION,
+          criteria,
+        },
       },
-    },
-    label: "Choose rule",
-    logger,
-  });
+      label: "Choose rule",
+      logger,
+    });
+  } catch (error) {
+    if (isDecisionInputTooLong(error)) {
+      return { type: "undecided", reason: INPUT_TOO_LONG_REASON };
+    }
+    throw error;
+  }
 
   const answer = res.answers[CHOICE_QUESTION_KEY];
   if (answer?.type !== "choice") {
@@ -256,12 +259,10 @@ function buildState({
   message,
   emailAccount,
   classificationFeedback,
-  candidateRules,
 }: {
   message: ParsedMessage;
   emailAccount: EmailAccountWithAI;
   classificationFeedback: ClassificationFeedbackItem[] | null;
-  candidateRules: { name: string; instructions: string }[];
 }) {
   const email = getEmailForLLM(message, {
     maxLength: EMAIL_CONTENT_MAX_LENGTH,
@@ -291,6 +292,5 @@ function buildState({
         ownerAction:
           item.eventType === "LABEL_ADDED" ? "applied rule" : "removed rule",
       })) ?? [],
-    candidateRules,
   };
 }
