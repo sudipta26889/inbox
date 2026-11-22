@@ -59,6 +59,7 @@ vi.mock("@/utils/rule/classification-feedback", () => ({
 }));
 vi.mock("@/utils/decision-model/decision-model", () => ({
   getDecisionModelConfig: vi.fn().mockResolvedValue(null),
+  INPUT_TOO_LONG_REASON: "input too long for the decision model",
   isDecisionFeatureLive: vi.fn().mockReturnValue(false),
   recordDecisionModelRun: vi.fn(),
 }));
@@ -3180,6 +3181,38 @@ describe("findMatchingRules - decisionModel rule selection", () => {
           feature: "choose-rule",
           mode: "shadow",
           outcome: "agree",
+        }),
+      ),
+    );
+  });
+
+  it("records a shadow decision that was too long for the model as too_long", async () => {
+    vi.mocked(isDecisionFeatureLive).mockReturnValue(false);
+    const aiRule = getAiRule();
+    vi.mocked(decisionModelChooseRule).mockResolvedValue({
+      type: "undecided",
+      reason: "input too long for the decision model",
+    });
+    vi.mocked(aiChooseRule).mockResolvedValue({
+      rules: [{ rule: aiRule }],
+      reason: "LLM reason",
+    });
+
+    await findMatchingRules({
+      rules: [aiRule],
+      message: getMessage(),
+      emailAccount: getEmailAccount(),
+      provider,
+      modelType: "default",
+      logger,
+    });
+
+    await vi.waitFor(() =>
+      expect(recordDecisionModelRun).toHaveBeenCalledWith(
+        expect.objectContaining({
+          feature: "choose-rule",
+          mode: "shadow",
+          outcome: "too_long",
         }),
       ),
     );

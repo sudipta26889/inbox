@@ -24,6 +24,7 @@ import { Experimental_DecisionMockModelV4 } from "ai/test";
 import prisma from "@/utils/__mocks__/prisma";
 import { saveAiUsage } from "@/utils/usage";
 import {
+  DecisionInputTooLongError,
   DecisionUncertainError,
   getDecisionModelConfig,
   runDecisionModel,
@@ -160,6 +161,38 @@ describe("runDecisionModel", () => {
       }),
     ).rejects.toThrow("blocked by your account settings");
     expect(doDecide).not.toHaveBeenCalled();
+  });
+
+  it("does not call the provider when the request is estimated over 3,500 tokens", async () => {
+    await expect(
+      runDecisionModel({
+        config,
+        emailAccount: getEmailAccount(),
+        state: { content: "word ".repeat(3000) },
+        questions: appliesQuestion,
+        label: "test",
+        logger,
+      }),
+    ).rejects.toBeInstanceOf(DecisionInputTooLongError);
+    expect(doDecide).not.toHaveBeenCalled();
+  });
+
+  it("sends a request estimated under the budget", async () => {
+    doDecide.mockResolvedValue({
+      answers: { applies: { type: "boolean", probability: 0.9 } },
+      usage: { inputTokens: 10, outputTokens: 1 },
+      warnings: [],
+      response: { id: "r", modelId: "m", timestamp: new Date() },
+    } as never);
+    await runDecisionModel({
+      config,
+      emailAccount: getEmailAccount(),
+      state: { content: "short" },
+      questions: appliesQuestion,
+      label: "test",
+      logger,
+    });
+    expect(doDecide).toHaveBeenCalledTimes(1);
   });
 
   it("sends redacted state to the provider under a REDACT policy", async () => {
@@ -445,6 +478,49 @@ describe("runDecisionModelOrFallback", () => {
     expect(recorded()).toEqual([
       expect.objectContaining({ mode: "live", outcome: "fallback" }),
     ]);
+  });
+
+  it("live: an input too long for the model falls back and is recorded as too_long", async () => {
+    envMock.DECISION_MODEL_LIVE = "thread-status";
+    const fallback = vi.fn(async () => "llm");
+
+    const result = await route(async () => {
+      throw new DecisionInputTooLongError(5000);
+    }, fallback);
+
+    expect(result).toBe("llm");
+    expect(recorded()).toEqual([
+      expect.objectContaining({ mode: "live", outcome: "too_long" }),
+    ]);
+  });
+
+  it("live: the gateway's context-window rejection is recorded as too_long", async () => {
+    envMock.DECISION_MODEL_LIVE = "thread-status";
+
+    await route(
+      async () => {
+        throw new Error("decision input exceeds the 4096-token context");
+      },
+      async () => "llm",
+    );
+
+    expect(recorded()).toEqual([
+      expect.objectContaining({ outcome: "too_long" }),
+    ]);
+  });
+
+  it("shadow: an input too long for the model is recorded as too_long", async () => {
+    await route(
+      async () => {
+        throw new DecisionInputTooLongError(5000);
+      },
+      async () => "llm",
+    );
+    await vi.waitFor(() =>
+      expect(recorded()).toEqual([
+        expect.objectContaining({ mode: "shadow", outcome: "too_long" }),
+      ]),
+    );
   });
 
   it("a feature not listed in DECISION_MODEL_LIVE stays in shadow", async () => {
