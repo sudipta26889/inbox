@@ -9,6 +9,7 @@ import { judgeMultiple } from "@/__tests__/eval/judge";
 import {
   describeEvalMatrix,
   shouldRunEvalTests,
+  getEvalTimeout,
 } from "@/__tests__/eval/models";
 import { getEvalJudgeUserAi } from "@/__tests__/eval/judge-provider";
 import { createEvalReporter } from "@/__tests__/eval/reporter";
@@ -20,7 +21,7 @@ import {
 // pnpm test-ai eval/draft-reply
 
 const shouldRunEval = shouldRunEvalTests();
-const TIMEOUT = 90_000;
+const TIMEOUT = getEvalTimeout(90_000);
 
 describe.runIf(shouldRunEval)("draft-reply eval", () => {
   const evalReporter = createEvalReporter({ evalName: "draft-reply" });

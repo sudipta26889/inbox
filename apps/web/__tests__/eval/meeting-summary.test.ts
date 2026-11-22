@@ -2,6 +2,7 @@ import { afterAll, describe, expect, test } from "vitest";
 import {
   describeEvalMatrix,
   shouldRunEvalTests,
+  getEvalTimeout,
 } from "@/__tests__/eval/models";
 import { createEvalReporter } from "@/__tests__/eval/reporter";
 import {
@@ -22,7 +23,7 @@ import {
 // pnpm test-ai eval/meeting-summary
 
 const shouldRunEval = shouldRunEvalTests();
-const TIMEOUT = 90_000;
+const TIMEOUT = getEvalTimeout(90_000);
 
 describe.runIf(shouldRunEval)("meeting-summary eval", () => {
   const evalReporter = createEvalReporter({ evalName: "meeting-summary" });

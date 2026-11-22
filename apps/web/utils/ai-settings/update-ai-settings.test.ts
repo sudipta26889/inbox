@@ -12,11 +12,11 @@ describe("updateAiSettings", () => {
 
     const result = await updateAiSettings(
       { userId: "user_1" },
-      { aiProvider: Provider.ANTHROPIC, aiModel: "claude-4.7-sonnet" },
+      { aiProvider: Provider.LITELLM, aiModel: "recursivesi/flint" },
     );
 
-    expect(result.aiProvider).toBe(Provider.ANTHROPIC);
-    expect(result.aiModel).toBe("claude-4.7-sonnet");
+    expect(result.aiProvider).toBe(Provider.LITELLM);
+    expect(result.aiModel).toBe("recursivesi/flint");
 
     const call = prisma.user.updateMany.mock.calls[0]?.[0] as {
       where: { id: string };
@@ -24,8 +24,8 @@ describe("updateAiSettings", () => {
     };
     expect(call.where).toEqual({ id: "user_1" });
     expect(call.data).toEqual({
-      aiProvider: Provider.ANTHROPIC,
-      aiModel: "claude-4.7-sonnet",
+      aiProvider: Provider.LITELLM,
+      aiModel: "recursivesi/flint",
     });
   });
 
@@ -67,7 +67,7 @@ describe("updateAiSettings", () => {
 
     await updateAiSettings(
       { userId: "user_1" },
-      { aiProvider: Provider.ANTHROPIC, aiModel: "claude-4.7-sonnet" },
+      { aiProvider: Provider.LITELLM, aiModel: "recursivesi/flint" },
     );
 
     const call = prisma.user.updateMany.mock.calls[0]?.[0] as {
@@ -87,13 +87,26 @@ describe("updateAiSettings", () => {
     expect(prisma.user.updateMany).not.toHaveBeenCalled();
   });
 
+  it.each([
+    Provider.ANTHROPIC,
+    Provider.OPEN_AI,
+    Provider.OPENROUTER,
+    Provider.OLLAMA,
+  ])("throws ValidationError for the non-local provider %s", async (aiProvider) => {
+    await expect(
+      updateAiSettings({ userId: "user_1" }, { aiProvider, aiModel: "x" }),
+    ).rejects.toBeInstanceOf(ValidationError);
+
+    expect(prisma.user.updateMany).not.toHaveBeenCalled();
+  });
+
   it("throws NotFoundError when the user does not exist", async () => {
     prisma.user.updateMany.mockResolvedValue({ count: 0 } as never);
 
     await expect(
       updateAiSettings(
         { userId: "missing_user" },
-        { aiProvider: Provider.ANTHROPIC, aiModel: "claude-4.7-sonnet" },
+        { aiProvider: Provider.LITELLM, aiModel: "recursivesi/flint" },
       ),
     ).rejects.toBeInstanceOf(NotFoundError);
   });

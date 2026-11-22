@@ -8,6 +8,12 @@ import {
 import type { EmailAccountWithAI } from "@/utils/llms/types";
 import { Provider } from "@/utils/llms/config";
 
+/** EVAL_TIMEOUT_MS lets slow shared models (a queued local model) run with a longer per-test timeout. */
+export function getEvalTimeout(defaultMs: number): number {
+  const override = Number(process.env.EVAL_TIMEOUT_MS);
+  return Number.isFinite(override) && override > 0 ? override : defaultMs;
+}
+
 export function shouldRunEvalTests(): boolean {
   if (process.env.RUN_AI_TESTS !== "true") return false;
 

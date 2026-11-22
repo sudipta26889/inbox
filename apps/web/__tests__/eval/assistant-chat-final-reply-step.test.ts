@@ -3,6 +3,7 @@ import { afterAll, describe, expect, test, vi } from "vitest";
 import {
   describeEvalMatrix,
   shouldRunEvalTests,
+  getEvalTimeout,
 } from "@/__tests__/eval/models";
 import { createEvalReporter } from "@/__tests__/eval/reporter";
 import {
@@ -19,7 +20,7 @@ import { LlmUseCase } from "@/utils/llms/use-cases";
 
 vi.mock("server-only", () => ({}));
 
-const TIMEOUT = 90_000;
+const TIMEOUT = getEvalTimeout(90_000);
 
 const evalReporter = createEvalReporter({
   evalName: "assistant-chat-final-reply-step",

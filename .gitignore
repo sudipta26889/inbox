@@ -114,6 +114,7 @@ qa/browser-flows/results/*
 
 # eval reports
 eval-results/
+apps/web/__tests__/eval/.results/
 
 .agent-worktrees/
 .context/

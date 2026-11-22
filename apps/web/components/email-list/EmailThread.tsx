@@ -51,7 +51,6 @@ export function EmailThread({
   topRightComponent,
   onSendSuccess,
   onMarkDone,
-  onOpenSenderContext,
   onThreadDiscarded,
   withHeader,
   renderToolbar,
@@ -75,7 +74,6 @@ export function EmailThread({
     repliedThreadId: string,
   ) => void;
   onMarkDone?: () => void;
-  onOpenSenderContext?: (message: ThreadMessage) => void;
   /** The conversation's only message was a draft, and it has been discarded. */
   onThreadDiscarded?: () => void;
   withHeader?: boolean;
@@ -517,7 +515,6 @@ export function EmailThread({
                   );
                   setSelectedMessageId(undefined);
                 }}
-                onOpenSenderContext={onOpenSenderContext}
                 onMarkDone={onMarkDone}
                 onDraftDiscarded={
                   isDraftOnlyConversation ? onThreadDiscarded : undefined

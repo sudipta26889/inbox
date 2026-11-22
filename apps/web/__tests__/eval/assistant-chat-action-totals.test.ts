@@ -8,7 +8,7 @@ import {
   captureAssistantChatTrace,
   summarizeRecordedToolCalls,
 } from "@/__tests__/eval/assistant-chat-eval-utils";
-import { describeEvalMatrix } from "@/__tests__/eval/models";
+import { describeEvalMatrix, getEvalTimeout } from "@/__tests__/eval/models";
 import { createEvalReporter } from "@/__tests__/eval/reporter";
 import {
   formatSemanticJudgeActual,
@@ -20,7 +20,7 @@ import { createScopedLogger } from "@/utils/logger";
 // pnpm --filter inbox-zero-ai test-ai __tests__/eval/assistant-chat-action-totals.test.ts
 // Multi-model: EVAL_MODELS=all pnpm --filter inbox-zero-ai test-ai __tests__/eval/assistant-chat-action-totals.test.ts
 
-const TIMEOUT = 300_000;
+const TIMEOUT = getEvalTimeout(300_000);
 const logger = createScopedLogger("eval-assistant-chat-action-totals");
 const evalReporter = createEvalReporter({
   evalName: "assistant-chat-action-totals",

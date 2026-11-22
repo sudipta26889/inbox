@@ -155,6 +155,39 @@ describe("requestApprovalViaDharaHIL", () => {
     expect(mockPrisma.a2aApproval.update).not.toHaveBeenCalled();
   });
 
+  it("puts only a one-line summary on the card, never the user's address or the task's content, and sends the full input", async () => {
+    mockPrisma.a2aTask.findUnique.mockResolvedValue({
+      ...mockTask,
+      skill: "email.send",
+      input: {
+        to: ["Jane Doe <jane@acme.com>"],
+        subject: "Contract terms",
+        body: "Draft text",
+      },
+    });
+    mockBeforeExecute.mockResolvedValue({
+      action: "ALLOW",
+      request_id: null,
+      expires_at: undefined,
+      status: "auto_allowed",
+    } as any);
+
+    await requestApprovalViaDharaHIL("task-internal-1");
+
+    const { context, toolArgs } = mockBeforeExecute.mock.calls[0][0];
+    expect(context.contextSummary).toBe("Approve an email to Jane Doe");
+    const cardFields = JSON.stringify([context.contextSummary, context.tags]);
+    expect(cardFields).not.toContain("jane@acme.com");
+    expect(cardFields).not.toContain("user@example.com");
+    expect(cardFields).not.toContain("Contract terms");
+    expect(cardFields).not.toContain("Draft text");
+    expect(toolArgs).toMatchObject({
+      to: ["Jane Doe <jane@acme.com>"],
+      subject: "Contract terms",
+      body: "Draft text",
+    });
+  });
+
   it("still stores dharahilRequestId and expiresAt for a normal deferred response", async () => {
     const expiresAt = "2026-09-08T00:00:00.000Z";
     mockBeforeExecute.mockResolvedValue({

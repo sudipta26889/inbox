@@ -540,8 +540,8 @@ msgid "Get started in minutes"
 msgstr "Empieza en minutos"
 
 #: components/new-landing/sections/BulkUnsubscribe.tsx
-msgid "Get to Inbox Zero fast.<0/>Bulk unsubscribe from emails you never read."
-msgstr "Llega a Inbox Zero rápido.<0/>Cancela en bloque las suscripciones a correos que nunca lees."
+msgid "Get to Inbox fast.<0/>Bulk unsubscribe from emails you never read."
+msgstr ""
 
 #: app/(landing)/home/Footer.tsx
 msgid "GitHub"
@@ -572,8 +572,8 @@ msgid "How can I request a feature?"
 msgstr "¿Cómo puedo solicitar una funcionalidad?"
 
 #: components/new-landing/sections/Testimonials.tsx
-msgid "I came across Inbox Zero while actively looking to hire a VA to manage my emails but after trying the tool, it turned out to be a complete game changer."
-msgstr "Descubrí Inbox Zero mientras buscaba contratar a un asistente virtual para gestionar mis correos, pero después de probar la herramienta, resultó ser un cambio radical."
+msgid "I came across Inbox while actively looking to hire a VA to manage my emails but after trying the tool, it turned out to be a complete game changer."
+msgstr ""
 
 #: components/new-landing/sections/Testimonials.tsx
 msgid "I love the flexibility and customization options, and it's the first thing in forever that's gotten my inbox under control. Thank you!"
@@ -584,12 +584,12 @@ msgid "I was mostly hoping to turn my email inbox into less of the mess that it 
 msgstr "Sobre todo esperaba que mi bandeja de entrada dejara de ser el caos que es. Se me escapaban tareas pendientes porque los correos quedaban enterrados. Hasta ahora me ha ayudado muchísimo."
 
 #: components/new-landing/sections/Testimonials.tsx
-msgid "I'm an executive who was drowning in hundreds of daily emails and heavily dependent on my EA for email management. What I love most about Inbox Zero is how it seamlessly replaced that entire function—the smart automation, prioritization, and organization features work like having a dedicated email assistant built right into my workflow."
-msgstr "Soy un directivo que se ahogaba en cientos de correos diarios y dependía muchísimo de mi asistente ejecutiva para gestionarlos. Lo que más me gusta de Inbox Zero es cómo ha sustituido toda esa función sin fricciones: la automatización inteligente, la priorización y la organización funcionan como tener un asistente de correo dedicado integrado en mi flujo de trabajo."
+msgid "I'm an executive who was drowning in hundreds of daily emails and heavily dependent on my EA for email management. What I love most about Inbox is how it seamlessly replaced that entire function—the smart automation, prioritization, and organization features work like having a dedicated email assistant built right into my workflow."
+msgstr ""
 
 #: app/(landing)/home/HeroVideoDialog.tsx
-msgid "Inbox Zero product video"
-msgstr "Vídeo del producto Inbox Zero"
+msgid "Inbox product video"
+msgstr ""
 
 #: app/(landing)/home/Footer.tsx
 #: components/new-landing/sections/Footer.tsx
@@ -682,8 +682,8 @@ msgid "Marketing"
 msgstr "Marketing"
 
 #: components/new-landing/sections/EmailClient.tsx
-msgid "Meet the Inbox Zero email app"
-msgstr "Conoce la app de correo de Inbox Zero"
+msgid "Meet the Inbox email app"
+msgstr ""
 
 #: app/(landing)/home/HomePage.tsx
 msgid "Meet your AI email assistant that *actually* works"
@@ -718,8 +718,8 @@ msgid "Need SSO, SCIM, on-premise deployment, or a dedicated account manager?"
 msgstr "¿Necesitas SSO, SCIM, despliegue on-premise o un gestor de cuenta dedicado?"
 
 #: app/(landing)/home/HomePage.tsx
-msgid "New: Inbox Zero Mail app →"
-msgstr "Nuevo: app Inbox Zero Mail →"
+msgid "New: Inbox Mail app →"
+msgstr ""
 
 #: components/new-landing/sections/StartedInMinutes.tsx
 msgid "Newsletter"
@@ -789,10 +789,13 @@ msgstr "Reproducir vídeo de demostración del producto"
 msgid "Popular"
 msgstr "Popular"
 
-#: app/(landing)/home/Footer.tsx
 #: components/new-landing/sections/Footer.tsx
-msgid "Powered by <0>Inbox Zero</0>"
-msgstr "Con la tecnología de <0>Inbox Zero</0>"
+msgid "Powered by <0>Inbox</0>"
+msgstr ""
+
+#: app/(landing)/home/Footer.tsx
+msgid "Powered by <0>open source</0>"
+msgstr ""
 
 #: components/new-landing/sections/StartedInMinutes.tsx
 msgid "Pre-drafted replies"
@@ -1183,8 +1186,8 @@ msgid "Your AI executive assistant to reach inbox zero fast. Automate emails, bu
 msgstr "Tu asistente ejecutivo con IA para llegar a inbox zero rápido. Automatiza correos, cancela suscripciones en bloque, bloquea correos en frío y consulta estadísticas. Código abierto"
 
 #: components/new-landing/sections/Awards.tsx
-msgid "Your data stays private — no AI training, no funny business. We’re fully certified for top-tier security, and you can even self-host Inbox Zero if you want total control."
-msgstr "Tus datos siguen siendo privados: sin entrenar IA con ellos, sin trucos. Contamos con certificaciones de seguridad de primer nivel, e incluso puedes alojar Inbox Zero tú mismo si quieres control total."
+msgid "Your data stays private — no AI training, no funny business. We’re fully certified for top-tier security, and you can even self-host Inbox if you want total control."
+msgstr ""
 
 #: components/new-landing/sections/ManageFromAnywhere.tsx
 msgid "Your inbox, wherever you work"

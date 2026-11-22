@@ -85,6 +85,90 @@ describe("dharahilClient.runApprovalLoop — immediate decisions", () => {
   });
 });
 
+describe("dharahilClient.beforeExecute — what leaves for the cloud card", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: () =>
+        Promise.resolve({
+          request_id: "req-1",
+          expires_at: "2099-01-01T00:00:00Z",
+          status: "PENDING",
+        }),
+    });
+  });
+
+  it("redacts every string leaf of tool_args_redacted, tags it, and sends tool_args in full", async () => {
+    const toolArgs = {
+      from: "me@example.com",
+      to: "Jane Doe <jane@acme.com>",
+      subject: "Contract terms",
+      body: "Here is the draft text",
+      attachments: [{ filename: "deal.pdf", size: 3 }],
+      nested: { cc: ["a@b.com", "c@d.com"], note: null, flag: true },
+      isReply: true,
+    };
+    const original = structuredClone(toolArgs);
+
+    await dharahilClient.beforeExecute({
+      toolName: "send_email",
+      toolArgs,
+      context: {
+        agentId: "test",
+        runId: "r1",
+        contextSummary: "Approve a reply to Jane Doe",
+        riskLevel: "MEDIUM",
+        tags: ["email", "gmail", "send_email", "external"],
+        idempotencyKey: "k1",
+      },
+    });
+
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.tool_args).toEqual(original);
+    expect(toolArgs).toEqual(original);
+    expect(body.tool_args_redacted).toEqual({
+      from: "***REDACTED***",
+      to: "***REDACTED***",
+      subject: "***REDACTED***",
+      body: "***REDACTED***",
+      attachments: [{ filename: "***REDACTED***", size: "***REDACTED***" }],
+      nested: {
+        cc: ["***REDACTED***", "***REDACTED***"],
+        note: null,
+        flag: "***REDACTED***",
+      },
+      isReply: "***REDACTED***",
+    });
+    expect(body.tags).toEqual([
+      "email",
+      "gmail",
+      "send_email",
+      "external",
+      "redacted",
+    ]);
+    expect(body.context_summary).toBe("Approve a reply to Jane Doe");
+  });
+
+  it("adds the redacted tag once", async () => {
+    await dharahilClient.beforeExecute({
+      toolName: "x",
+      toolArgs: {},
+      context: {
+        agentId: "t",
+        runId: "r",
+        contextSummary: "s",
+        riskLevel: "LOW",
+        tags: ["redacted"],
+      },
+    });
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.tags).toEqual(["redacted"]);
+  });
+});
+
 describe("dharahilClient.fetchDecision", () => {
   beforeEach(() => {
     vi.clearAllMocks();

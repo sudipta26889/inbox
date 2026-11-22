@@ -4,6 +4,7 @@ import { AttachmentSourceType } from "@/generated/prisma/enums";
 import {
   describeEvalMatrix,
   shouldRunEvalTests,
+  getEvalTimeout,
 } from "@/__tests__/eval/models";
 import { createEvalReporter } from "@/__tests__/eval/reporter";
 import prisma from "@/utils/__mocks__/prisma";
@@ -24,7 +25,7 @@ vi.mock("@/utils/drive/provider", () => ({
 }));
 
 const shouldRunEval = shouldRunEvalTests();
-const TIMEOUT = 60_000;
+const TIMEOUT = getEvalTimeout(60_000);
 const evalReporter = createEvalReporter({ evalName: "draft-attachments" });
 const logger = createScopedLogger("eval-draft-attachments");
 const recentDate = new Date(Date.now() + 24 * 60 * 60 * 1000);

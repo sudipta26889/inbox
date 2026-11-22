@@ -930,6 +930,32 @@ describe("DharaHIL approval gate content", () => {
     expect(dharahilContext.metadata.has_external_attendees).toBe("true");
     expect(dharahilContext.riskLevel).toBe("HIGH");
   });
+
+  it("keeps the title, attendees and address off the card but sends them in tool_args", async () => {
+    setDharahilEnabled(true);
+    provider.createEvent = vi.fn().mockResolvedValue({
+      id: "evt-1",
+      title: "Acquisition talks",
+      startTime: new Date(),
+      endTime: new Date(),
+      attendees: [],
+    });
+
+    await createCalendarEvent(context, {
+      title: "Acquisition talks",
+      startTime: "2026-09-02T14:00:00",
+      endTime: "2026-09-02T15:00:00",
+      attendees: ["outsider@other.com"],
+    });
+
+    const [{ context: dharahilContext, toolArgs }] = (
+      dharahilClient.runApprovalLoop as ReturnType<typeof vi.fn>
+    ).mock.calls[0];
+    expect(dharahilContext.contextSummary).toBe("Approve a calendar event");
+    expect(JSON.stringify(dharahilContext.tags)).not.toContain("other.com");
+    expect(toolArgs.title).toBe("Acquisition talks");
+    expect(toolArgs.attendees).toEqual(["outsider@other.com"]);
+  });
 });
 
 describe("respond_to_calendar_event approval gate", () => {

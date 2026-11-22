@@ -540,8 +540,8 @@ msgid "Get started in minutes"
 msgstr "몇 분 만에 시작하세요"
 
 #: components/new-landing/sections/BulkUnsubscribe.tsx
-msgid "Get to Inbox Zero fast.<0/>Bulk unsubscribe from emails you never read."
-msgstr "인박스 제로를 빠르게 달성하세요.<0/>읽지 않는 이메일은 일괄 구독 취소하세요."
+msgid "Get to Inbox fast.<0/>Bulk unsubscribe from emails you never read."
+msgstr ""
 
 #: app/(landing)/home/Footer.tsx
 msgid "GitHub"
@@ -572,8 +572,8 @@ msgid "How can I request a feature?"
 msgstr "기능은 어떻게 요청하나요?"
 
 #: components/new-landing/sections/Testimonials.tsx
-msgid "I came across Inbox Zero while actively looking to hire a VA to manage my emails but after trying the tool, it turned out to be a complete game changer."
-msgstr "이메일을 관리해 줄 가상 비서를 구하던 중 Inbox Zero를 알게 되었는데, 써 보니 완전히 판도를 바꿔 놓는 도구였어요."
+msgid "I came across Inbox while actively looking to hire a VA to manage my emails but after trying the tool, it turned out to be a complete game changer."
+msgstr ""
 
 #: components/new-landing/sections/Testimonials.tsx
 msgid "I love the flexibility and customization options, and it's the first thing in forever that's gotten my inbox under control. Thank you!"
@@ -584,12 +584,12 @@ msgid "I was mostly hoping to turn my email inbox into less of the mess that it 
 msgstr "엉망이던 받은편지함을 조금이라도 정리하고 싶었어요. 이메일이 묻히면서 해야 할 일을 계속 놓치고 있었거든요. 지금까지는 정말 큰 도움이 되고 있어요."
 
 #: components/new-landing/sections/Testimonials.tsx
-msgid "I'm an executive who was drowning in hundreds of daily emails and heavily dependent on my EA for email management. What I love most about Inbox Zero is how it seamlessly replaced that entire function—the smart automation, prioritization, and organization features work like having a dedicated email assistant built right into my workflow."
-msgstr "저는 매일 수백 통의 이메일에 파묻혀 이메일 관리를 비서에게 크게 의존하던 임원이에요. Inbox Zero에서 가장 마음에 드는 점은 그 역할을 매끄럽게 대체해 준다는 거예요. 똑똑한 자동화, 우선순위 지정, 정리 기능이 업무 흐름 속에 전담 이메일 비서를 둔 것처럼 작동해요."
+msgid "I'm an executive who was drowning in hundreds of daily emails and heavily dependent on my EA for email management. What I love most about Inbox is how it seamlessly replaced that entire function—the smart automation, prioritization, and organization features work like having a dedicated email assistant built right into my workflow."
+msgstr ""
 
 #: app/(landing)/home/HeroVideoDialog.tsx
-msgid "Inbox Zero product video"
-msgstr "Inbox Zero 제품 영상"
+msgid "Inbox product video"
+msgstr ""
 
 #: app/(landing)/home/Footer.tsx
 #: components/new-landing/sections/Footer.tsx
@@ -682,8 +682,8 @@ msgid "Marketing"
 msgstr "Marketing"
 
 #: components/new-landing/sections/EmailClient.tsx
-msgid "Meet the Inbox Zero email app"
-msgstr "Inbox Zero 이메일 앱을 만나보세요"
+msgid "Meet the Inbox email app"
+msgstr ""
 
 #: app/(landing)/home/HomePage.tsx
 msgid "Meet your AI email assistant that *actually* works"
@@ -718,8 +718,8 @@ msgid "Need SSO, SCIM, on-premise deployment, or a dedicated account manager?"
 msgstr "SSO, SCIM, 온프레미스 배포 또는 전담 계정 매니저가 필요하신가요?"
 
 #: app/(landing)/home/HomePage.tsx
-msgid "New: Inbox Zero Mail app →"
-msgstr "신규: Inbox Zero Mail 앱 →"
+msgid "New: Inbox Mail app →"
+msgstr ""
 
 #: components/new-landing/sections/StartedInMinutes.tsx
 msgid "Newsletter"
@@ -789,10 +789,13 @@ msgstr "제품 데모 영상 재생"
 msgid "Popular"
 msgstr "인기"
 
-#: app/(landing)/home/Footer.tsx
 #: components/new-landing/sections/Footer.tsx
-msgid "Powered by <0>Inbox Zero</0>"
-msgstr "<0>Inbox Zero</0> 제공"
+msgid "Powered by <0>Inbox</0>"
+msgstr ""
+
+#: app/(landing)/home/Footer.tsx
+msgid "Powered by <0>open source</0>"
+msgstr ""
 
 #: components/new-landing/sections/StartedInMinutes.tsx
 msgid "Pre-drafted replies"
@@ -1183,8 +1186,8 @@ msgid "Your AI executive assistant to reach inbox zero fast. Automate emails, bu
 msgstr "인박스 제로를 빠르게 달성하게 해 주는 AI 임원 비서. 이메일 자동화, 일괄 구독 취소, 콜드 이메일 차단, 분석까지. 오픈 소스"
 
 #: components/new-landing/sections/Awards.tsx
-msgid "Your data stays private — no AI training, no funny business. We’re fully certified for top-tier security, and you can even self-host Inbox Zero if you want total control."
-msgstr "데이터는 비공개로 유지돼요. AI 학습에 사용하지 않으며 꼼수도 없어요. 최고 수준의 보안 인증을 모두 갖췄고, 완전한 통제를 원한다면 Inbox Zero를 직접 호스팅할 수도 있어요."
+msgid "Your data stays private — no AI training, no funny business. We’re fully certified for top-tier security, and you can even self-host Inbox if you want total control."
+msgstr ""
 
 #: components/new-landing/sections/ManageFromAnywhere.tsx
 msgid "Your inbox, wherever you work"

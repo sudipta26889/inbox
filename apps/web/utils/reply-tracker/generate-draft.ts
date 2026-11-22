@@ -28,6 +28,7 @@ import { DraftReplyConfidence } from "@/generated/prisma/enums";
 import { meetsDraftReplyConfidenceRequirement } from "@/utils/ai/reply/draft-confidence";
 import type { DraftAttribution } from "@/utils/ai/reply/draft-attribution";
 import { selectDraftAttachmentsForRule } from "@/utils/attachments/draft-attachments";
+import { isLlmUnavailableError } from "@/utils/llms";
 import type { SelectedAttachment } from "@/utils/attachments/source-schema";
 import { getReplyMemoriesForPrompt } from "@/utils/ai/reply/reply-memory";
 import type { DraftContextMetadata } from "@/utils/ai/reply/draft-context-metadata";
@@ -246,6 +247,9 @@ async function generateDraftContent(
         emailContent: lastMessageContent,
         logger,
       }).catch((error) => {
+        // A draft written during an outage would be recorded as final.
+        if (isLlmUnavailableError(error)) throw error;
+
         logger.error("Failed to select draft attachments", {
           error,
           ruleId: selectedRuleId,

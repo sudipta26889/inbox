@@ -9,6 +9,7 @@ import {
 import {
   describeEvalMatrix,
   shouldRunEvalTests,
+  getEvalTimeout,
 } from "@/__tests__/eval/models";
 import { createEvalReporter } from "@/__tests__/eval/reporter";
 import type { getEmailAccount } from "@/__tests__/helpers";
@@ -19,7 +20,7 @@ import { createScopedLogger } from "@/utils/logger";
 // Multi-model: EVAL_MODELS=all pnpm test-ai eval/assistant-chat-label-management
 
 const shouldRunEval = shouldRunEvalTests();
-const TIMEOUT = 60_000;
+const TIMEOUT = getEvalTimeout(60_000);
 const evalReporter = createEvalReporter({
   evalName: "assistant-chat-label-management",
 });

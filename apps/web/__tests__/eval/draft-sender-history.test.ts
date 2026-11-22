@@ -5,6 +5,7 @@ import { getEvalJudgeUserAi } from "@/__tests__/eval/judge-provider";
 import {
   describeEvalMatrix,
   shouldRunEvalTests,
+  getEvalTimeout,
 } from "@/__tests__/eval/models";
 import { createEvalReporter } from "@/__tests__/eval/reporter";
 import type { EmailProvider, EmailThread } from "@/utils/email/types";
@@ -72,7 +73,7 @@ vi.mock("@/utils/meeting-recorder/reply-context", () => ({
 }));
 
 const shouldRunEval = shouldRunEvalTests();
-const TIMEOUT = 120_000;
+const TIMEOUT = getEvalTimeout(120_000);
 const logger = createTestLogger();
 const SENDER = "Dana Weller <dana@northfield-supply.example>";
 const DELIVERY_DATE = daysFromNow(10);

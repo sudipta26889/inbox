@@ -8,6 +8,12 @@ import { getEmailProviderRateLimitState } from "@/utils/email/rate-limit";
 import { processHistoryItem } from "@/utils/webhook/process-history-item";
 import { withMessageProcessingLock } from "@/utils/redis/message-processing";
 import { captureException } from "@/utils/error";
+import {
+  forgetLlmRetry,
+  getLlmRetryEntries,
+  getLlmRetryMaxAgeMs,
+  rememberLlmRetry,
+} from "@/utils/redis/llm-retry";
 
 const logger = createScopedLogger("test");
 
@@ -65,6 +71,12 @@ vi.mock("@/utils/prisma", () => ({
   },
 }));
 
+vi.mock("@/utils/redis/llm-retry", () => ({
+  rememberLlmRetry: vi.fn().mockResolvedValue(undefined),
+  getLlmRetryEntries: vi.fn().mockResolvedValue([]),
+  forgetLlmRetry: vi.fn().mockResolvedValue(undefined),
+  getLlmRetryMaxAgeMs: vi.fn(() => 72 * 60 * 60 * 1000),
+}));
 vi.mock("@/utils/webhook/validate-webhook-account", () => ({
   validateWebhookAccount: vi.fn(),
   webhookEmailAccountSelect: {},
@@ -200,5 +212,190 @@ describe("processEmailsForAccount - Gmail pointer", () => {
 
     expect(result).toEqual({ success: false });
     expect(captureException).not.toHaveBeenCalled();
+  });
+
+  describe("mail that failed while the model was offline", () => {
+    const HOUR = 60 * 60 * 1000;
+    const connectionError = Object.assign(new Error("connect ECONNREFUSED"), {
+      code: "ECONNREFUSED",
+    });
+
+    beforeEach(() => {
+      mockAccount("1001");
+      listMessages.mockResolvedValue({ data: { messages: [] } });
+    });
+
+    function remember(entries: { messageId: string; ageHours: number }[]) {
+      vi.mocked(getLlmRetryEntries).mockResolvedValue(
+        entries.map(({ messageId, ageHours }) => ({
+          messageId,
+          firstFailedAt: Date.now() - ageHours * HOUR,
+        })),
+      );
+    }
+
+    it("remembers an unread message the model could not process", async () => {
+      listMessages.mockResolvedValue({
+        data: { messages: [{ id: "m1", threadId: "t1" }] },
+      });
+      vi.mocked(processHistoryItem).mockRejectedValueOnce(connectionError);
+
+      await processEmailsForAccount({ emailAccountId: ACCOUNT_ID, logger });
+
+      expect(rememberLlmRetry).toHaveBeenCalledWith(
+        expect.objectContaining({
+          emailAccountId: ACCOUNT_ID,
+          messageId: "m1",
+        }),
+      );
+    });
+
+    it("does not remember an unread message that failed for another reason", async () => {
+      listMessages.mockResolvedValue({
+        data: { messages: [{ id: "m1", threadId: "t1" }] },
+      });
+      vi.mocked(processHistoryItem).mockRejectedValueOnce(
+        new Error("Something else broke"),
+      );
+
+      await processEmailsForAccount({ emailAccountId: ACCOUNT_ID, logger });
+
+      expect(rememberLlmRetry).not.toHaveBeenCalled();
+    });
+
+    it("processes a remembered message that was read since, and forgets it", async () => {
+      remember([{ messageId: "read-1", ageHours: 2 }]);
+
+      await processEmailsForAccount({ emailAccountId: ACCOUNT_ID, logger });
+
+      expect(processHistoryItem).toHaveBeenCalledWith(
+        expect.objectContaining({ messageId: "read-1" }),
+        expect.anything(),
+      );
+      expect(forgetLlmRetry).toHaveBeenCalledWith(
+        expect.objectContaining({ messageIds: ["read-1"] }),
+      );
+    });
+
+    it("keeps a remembered message when the model is still offline", async () => {
+      remember([{ messageId: "read-1", ageHours: 2 }]);
+      vi.mocked(processHistoryItem).mockRejectedValueOnce(connectionError);
+
+      await processEmailsForAccount({ emailAccountId: ACCOUNT_ID, logger });
+
+      expect(processHistoryItem).toHaveBeenCalledTimes(1);
+      expect(forgetLlmRetry).not.toHaveBeenCalledWith(
+        expect.objectContaining({ messageIds: ["read-1"] }),
+      );
+    });
+
+    it("retries a 30 hour old message, past the webhook's 24 hour age guard", async () => {
+      remember([{ messageId: "weekend-1", ageHours: 30 }]);
+
+      await processEmailsForAccount({ emailAccountId: ACCOUNT_ID, logger });
+
+      expect(processHistoryItem).toHaveBeenCalledWith(
+        expect.objectContaining({ messageId: "weekend-1" }),
+        expect.objectContaining({ isModelRetry: true }),
+      );
+    });
+
+    it("does not bypass the age guard for unread mail", async () => {
+      listMessages.mockResolvedValue({
+        data: { messages: [{ id: "m1", threadId: "t1" }] },
+      });
+
+      await processEmailsForAccount({ emailAccountId: ACCOUNT_ID, logger });
+
+      expect(processHistoryItem).toHaveBeenCalledWith(
+        expect.objectContaining({ messageId: "m1" }),
+        expect.not.objectContaining({ isModelRetry: true }),
+      );
+    });
+
+    it("counts a retry as succeeded only when an ExecutedRule now exists", async () => {
+      const log = {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+        trace: vi.fn(),
+        with: () => log,
+      } as any;
+      remember([
+        { messageId: "ok-1", ageHours: 2 },
+        { messageId: "silent-1", ageHours: 2 },
+      ]);
+      // 1st call is the pre-retry lookup, 2nd the unread lookup (skipped when
+      // nothing is unread), then the post-retry lookup.
+      vi.mocked(prisma.executedRule.findMany)
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ messageId: "ok-1" }] as any);
+
+      const result = await processEmailsForAccount({
+        emailAccountId: ACCOUNT_ID,
+        logger: log,
+      });
+
+      expect(log.info).toHaveBeenCalledWith(
+        "Retried mail that failed while the model was offline",
+        expect.objectContaining({ retried: 2, succeeded: 1, dropped: 1 }),
+      );
+      expect(log.warn).toHaveBeenCalledWith(
+        expect.stringContaining("no ExecutedRule"),
+        expect.objectContaining({ messageIds: ["silent-1"] }),
+      );
+      expect(result.processed).toBe(1);
+      expect(forgetLlmRetry).toHaveBeenCalledWith(
+        expect.objectContaining({ messageIds: ["ok-1", "silent-1"] }),
+      );
+    });
+
+    it("drops entries older than 72 hours without processing them", async () => {
+      remember([{ messageId: "old-1", ageHours: 73 }]);
+
+      await processEmailsForAccount({ emailAccountId: ACCOUNT_ID, logger });
+
+      expect(processHistoryItem).not.toHaveBeenCalled();
+      expect(forgetLlmRetry).toHaveBeenCalledWith(
+        expect.objectContaining({ messageIds: ["old-1"] }),
+      );
+    });
+
+    it("keeps retrying entries inside a longer configured window", async () => {
+      vi.mocked(getLlmRetryMaxAgeMs).mockReturnValueOnce(120 * HOUR);
+      remember([{ messageId: "long-1", ageHours: 100 }]);
+
+      await processEmailsForAccount({ emailAccountId: ACCOUNT_ID, logger });
+
+      expect(processHistoryItem).toHaveBeenCalledWith(
+        expect.objectContaining({ messageId: "long-1" }),
+        expect.objectContaining({ isModelRetry: true }),
+      );
+    });
+
+    it("removes an entry that already has an ExecutedRule, unprocessed", async () => {
+      remember([{ messageId: "done-1", ageHours: 2 }]);
+      vi.mocked(prisma.executedRule.findMany).mockResolvedValueOnce([
+        { messageId: "done-1" },
+      ] as any);
+
+      await processEmailsForAccount({ emailAccountId: ACCOUNT_ID, logger });
+
+      expect(processHistoryItem).not.toHaveBeenCalled();
+      expect(forgetLlmRetry).toHaveBeenCalledWith(
+        expect.objectContaining({ messageIds: ["done-1"] }),
+      );
+    });
+
+    it("does not process a remembered message twice when it is also unread", async () => {
+      listMessages.mockResolvedValue({
+        data: { messages: [{ id: "m1", threadId: "t1" }] },
+      });
+      remember([{ messageId: "m1", ageHours: 2 }]);
+
+      await processEmailsForAccount({ emailAccountId: ACCOUNT_ID, logger });
+
+      expect(processHistoryItem).toHaveBeenCalledTimes(1);
+    });
   });
 });

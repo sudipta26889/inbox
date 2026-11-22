@@ -54,6 +54,9 @@ export type SharedProcessHistoryOptions = {
     > &
     Partial<Pick<EmailAccount, "autoLearnPatterns">>;
   logger: Logger;
+  // The poll retrying mail that waited for the model. Only this skips the age
+  // guard: the webhook and the unread poll must not run rules on stale mail.
+  isModelRetry?: boolean;
 };
 
 export async function processHistoryItem(
@@ -163,7 +166,10 @@ export async function processHistoryItem(
     const receivedAt = internalDateToDate(parsedMessage.internalDate, {
       fallbackToNow: false,
     });
-    if (Date.now() - receivedAt.getTime() > MAX_WEBHOOK_MESSAGE_AGE_MS) {
+    if (
+      !options.isModelRetry &&
+      Date.now() - receivedAt.getTime() > MAX_WEBHOOK_MESSAGE_AGE_MS
+    ) {
       logger.info("Skipping. Message too old.");
       return;
     }

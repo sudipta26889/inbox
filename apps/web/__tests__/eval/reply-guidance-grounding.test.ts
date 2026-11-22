@@ -11,6 +11,7 @@ import type { ParsedMessage } from "@/utils/types";
 import {
   describeEvalMatrix,
   shouldRunEvalTests,
+  getEvalTimeout,
 } from "@/__tests__/eval/models";
 import { createEvalReporter } from "@/__tests__/eval/reporter";
 import {
@@ -23,7 +24,7 @@ import {
 vi.mock("server-only", () => ({}));
 
 const shouldRunEval = shouldRunEvalTests();
-const TIMEOUT = 90_000;
+const TIMEOUT = getEvalTimeout(90_000);
 
 describe.runIf(shouldRunEval)("reply guidance grounding eval", () => {
   const evalReporter = createEvalReporter({

@@ -140,6 +140,55 @@ describe("callDecider", () => {
     expect(r.errorMsg).toMatch(/schema/i);
   });
 
+  const callInput = {
+    effort: "low" as const,
+    maxTokens: 1000,
+    timeoutMs: 5000,
+    system: "s",
+    user: "u",
+    schema: TestSchema,
+  };
+
+  function sentBody(call: number) {
+    return JSON.parse((globalThis.fetch as any).mock.calls[call][1].body);
+  }
+
+  it("samples Flint at temperature 1.0 and top_p 0.95", async () => {
+    (globalThis.fetch as any).mockResolvedValueOnce(
+      makeResponse({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({ action: "IGNORE", reason: "x" }),
+            },
+          },
+        ],
+      }),
+    );
+
+    await callDecider({ ...callInput, model: "recursivesi/flint" });
+
+    expect(sentBody(0)).toMatchObject({ temperature: 1.0, top_p: 0.95 });
+  });
+
+  it("treats an empty reply cut off by length as a failure, not an answer", async () => {
+    const emptyLength = () =>
+      makeResponse({
+        choices: [{ message: { content: "" }, finish_reason: "length" }],
+      });
+    (globalThis.fetch as any)
+      .mockResolvedValueOnce(emptyLength())
+      .mockResolvedValueOnce(emptyLength());
+
+    const r = await callDecider({ ...callInput, model: "recursivesi/flint" });
+
+    expect(r.parsed).toBeNull();
+    expect(r.errorMsg).toMatch(/timeout|length/i);
+    // retried once like a timeout, not sent a schema-error follow-up
+    expect((globalThis.fetch as any).mock.calls.length).toBe(2);
+    expect(sentBody(1).messages).toHaveLength(sentBody(0).messages.length);
+  });
+
   it("returns parsed=null + errorMsg on HTTP error", async () => {
     (globalThis.fetch as any).mockResolvedValueOnce(
       new Response("nope", { status: 500 }),

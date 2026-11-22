@@ -6,6 +6,7 @@ import prisma from "@/utils/prisma";
 import { A2aTaskState } from "@/generated/prisma/enums";
 import { approveTask, rejectTask } from "./task-executor";
 import { publishPendingApprovalsUpdate } from "./protocol-handler";
+import { approvalSummary, displayNameOf } from "@/utils/dharahil/card-summary";
 import { isApprovalGateRequired } from "@/utils/dharahil/required";
 
 const logger = createScopedLogger("a2a-dharahil");
@@ -68,11 +69,7 @@ export async function requestApprovalViaDharaHIL(
   const riskLevel = determineRiskLevel(task.skill, task.input);
 
   // Create context summary
-  const contextSummary = createContextSummary(
-    task.skill,
-    task.input,
-    task.user.email || "unknown",
-  );
+  const contextSummary = createContextSummary(task.skill, task.input);
 
   // Prepare DharaHIL request
   const request = {
@@ -484,36 +481,24 @@ function isExternalDomain(email: string): boolean {
   return !internalDomains.some((internal) => domain.endsWith(internal));
 }
 
-/**
- * Create human-readable context summary
- */
-function createContextSummary(
-  skill: string,
-  input: any,
-  userEmail: string,
-): string {
+// Shown on cloud cards, so it names the skill and at most a display name;
+// the reviewer reads the details on the dashboard.
+function createContextSummary(skill: string, input: any): string {
   switch (skill) {
-    case "calendar.create_event": {
-      const attendeeCount = input.attendees?.length || 0;
-      const hasExternal =
-        input.attendees?.some((email: string) => isExternalDomain(email)) ||
-        false;
-      return `Create calendar event: "${input.title}" with ${attendeeCount} attendee(s) ${hasExternal ? "(EXTERNAL)" : "(internal)"} - Requested by ${userEmail}`;
-    }
+    case "calendar.create_event":
+      return approvalSummary({ what: "a calendar event" });
 
-    case "email.send": {
-      const toExternal = isExternalDomain(input.to?.[0] || "");
-      return `Send email to ${input.to?.join(", ")} ${toExternal ? "(EXTERNAL)" : "(internal)"} - Subject: "${input.subject}" - Requested by ${userEmail}`;
-    }
-
-    case "calendar.search":
-      return `Search calendar events from ${input.startDate} to ${input.endDate} - Requested by ${userEmail}`;
-
-    case "email.search":
-      return `Search emails: "${input.query}" (max ${input.maxResults || 10} results) - Requested by ${userEmail}`;
+    case "email.send":
+      return approvalSummary({
+        what: "an email",
+        preposition: "to",
+        name: displayNameOf(
+          typeof input?.to?.[0] === "string" ? input.to[0] : "",
+        ),
+      });
 
     default:
-      return `Execute skill "${skill}" - Requested by ${userEmail}`;
+      return approvalSummary({ what: `a ${skill} request` });
   }
 }
 

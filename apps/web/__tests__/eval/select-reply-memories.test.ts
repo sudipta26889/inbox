@@ -6,6 +6,7 @@ import {
 import {
   describeEvalMatrix,
   shouldRunEvalTests,
+  getEvalTimeout,
 } from "@/__tests__/eval/models";
 import { createEvalReporter } from "@/__tests__/eval/reporter";
 import { createScopedLogger } from "@/utils/logger";
@@ -15,7 +16,7 @@ import { aiSelectRelevantReplyMemories } from "@/utils/ai/reply/select-reply-mem
 // Multi-model: EVAL_MODELS=all pnpm test-ai eval/select-reply-memories
 
 const shouldRunEval = shouldRunEvalTests();
-const TIMEOUT = 60_000;
+const TIMEOUT = getEvalTimeout(60_000);
 const evalReporter = createEvalReporter({ evalName: "select-reply-memories" });
 const logger = createScopedLogger("eval-select-reply-memories");
 

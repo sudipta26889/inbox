@@ -1,3 +1,4 @@
+import { getEvalTimeout } from "@/__tests__/eval/models";
 import { afterAll, describe, expect, test } from "vitest";
 import { createEvalReporter } from "@/__tests__/eval/reporter";
 import { createGenerateText } from "@/utils/llms";
@@ -8,7 +9,7 @@ import { getModel } from "@/utils/llms/model";
 
 const PRIMARY_MODEL = "qa/definitely-unavailable-model-3110";
 const FALLBACK_MODEL = "google/gemini-3.1-flash-lite-preview";
-const TIMEOUT = 30_000;
+const TIMEOUT = getEvalTimeout(30_000);
 const isAiTest = process.env.RUN_AI_TESTS === "true";
 
 describe.runIf(isAiTest)("Eval: unavailable LLM model fallback", () => {

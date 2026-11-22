@@ -2,6 +2,7 @@ import { afterAll, describe, expect, test } from "vitest";
 import {
   describeEvalMatrix,
   shouldRunEvalTests,
+  getEvalTimeout,
 } from "@/__tests__/eval/models";
 import { createEvalReporter } from "@/__tests__/eval/reporter";
 import { aiCheckUnsubscribePageState } from "@/utils/ai/senders/unsubscribe-page";
@@ -10,7 +11,7 @@ import { aiCheckUnsubscribePageState } from "@/utils/ai/senders/unsubscribe-page
 // Multi-model: EVAL_MODELS=all pnpm test-ai eval/unsubscribe-page-state
 
 const shouldRunEval = shouldRunEvalTests();
-const TIMEOUT = 30_000;
+const TIMEOUT = getEvalTimeout(30_000);
 
 const CASES: Array<{
   name: string;

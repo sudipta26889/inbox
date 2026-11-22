@@ -183,7 +183,6 @@ const parsedEnv = createEnv({
     CEREBRAS_API_KEY: z.string().optional(),
     OPENROUTER_API_KEY: z.string().optional(),
     AI_GATEWAY_API_KEY: z.string().optional(),
-    PERPLEXITY_API_KEY: z.string().optional(),
     OLLAMA_BASE_URL: z.string().optional(),
     OLLAMA_MODEL: z.string().optional(),
     LOCAL_LLM_THINKING: z.enum(["off", "on", "auto"]).default("auto"),
@@ -195,11 +194,11 @@ const parsedEnv = createEnv({
       (value) => (value === "" ? undefined : value),
       z.string().url().default("https://taskpilot-api.sudiptadhara.in"),
     ),
-    TASKPILOT_DECIDER_MODEL: z.string().default("kimi-k2.6"),
+    TASKPILOT_DECIDER_MODEL: z.string().default("recursivesi/flint"),
     // Used when the primary model times out (cold GPU). Should be a fast,
     // reliable non-reasoning model.
     TASKPILOT_DECIDER_FALLBACK_MODEL: z.string().optional(),
-    TASKPILOT_FIELDS_MODEL: z.string().default("kimi-k2.6"),
+    TASKPILOT_FIELDS_MODEL: z.string().default("recursivesi/flint"),
     TASKPILOT_DECIDER_REASONING_EFFORT: z
       .enum(["low", "medium", "high"])
       .default("medium"),
@@ -438,6 +437,9 @@ const parsedEnv = createEnv({
     // A live feature uses the decision model's answer only at or above this
     // confidence; below it the escalation model decides. Default 0.95.
     DECISION_MIN_CONFIDENCE: z.coerce.number().min(0.5).max(1).optional(),
+    // How long mail that failed while the model was offline keeps being
+    // retried. Default 72; the Redis queue lives 24 hours longer.
+    LLM_RETRY_MAX_AGE_HOURS: z.coerce.number().int().min(1).optional(),
     // "false" stops the LLM from double-checking live decisions.
     DECISION_LIVE_AUDIT: z.enum(["true", "false"]).optional(),
     TYPESAFE_API_KEY: z.string().optional(),

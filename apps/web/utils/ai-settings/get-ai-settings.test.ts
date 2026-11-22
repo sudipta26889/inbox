@@ -23,14 +23,14 @@ describe("getAiSettings", () => {
 
   it("returns the configured provider and model", async () => {
     prisma.user.findUnique.mockResolvedValue({
-      aiProvider: Provider.ANTHROPIC,
-      aiModel: "claude-4.7-sonnet",
+      aiProvider: Provider.LITELLM,
+      aiModel: "recursivesi/flint",
     } as never);
 
     const result = await getAiSettings({ userId: "user_2" });
 
-    expect(result.aiProvider).toBe(Provider.ANTHROPIC);
-    expect(result.aiModel).toBe("claude-4.7-sonnet");
+    expect(result.aiProvider).toBe(Provider.LITELLM);
+    expect(result.aiModel).toBe("recursivesi/flint");
   });
 
   it("never returns aiApiKey, even when one is stored", async () => {

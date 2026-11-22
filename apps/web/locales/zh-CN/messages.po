@@ -1090,6 +1090,15 @@ msgstr "每次通话的摘要"
 msgid "a week"
 msgstr "一周"
 
+#: utils/action-display.tsx
+msgid "A2A notify"
+msgstr ""
+
+#: app/(app)/[emailAccountId]/assistant/AvailableActionsPanel.tsx
+#: utils/action-display-messages.ts
+msgid "A2A Notify"
+msgstr ""
+
 #: app/(app)/settings/SettingsContent.tsx
 msgid "Account"
 msgstr "账号"
@@ -3344,10 +3353,6 @@ msgstr "关闭邮件"
 msgid "Close mail setup"
 msgstr "关闭邮件设置"
 
-#: app/(app)/[emailAccountId]/mail/SenderContextPanel.tsx
-msgid "Close sender profile"
-msgstr "关闭发件人资料"
-
 #: app/(app)/[emailAccountId]/mail/ThreadRow.tsx
 msgid "Code copied"
 msgstr "代码已复制"
@@ -3486,8 +3491,8 @@ msgstr "配置送达方式"
 
 #. placeholder {0}: getMessagingProviderName(channel.provider)
 #: app/(app)/[emailAccountId]/assistant/settings/ProactiveUpdatesSetting.tsx
-msgid "Configure when Inbox Zero sends scheduled summaries to {0}."
-msgstr "配置 Inbox Zero 向 {0} 发送定时摘要的时间。"
+msgid "Configure when Inbox sends scheduled summaries to {0}."
+msgstr ""
 
 #: app/(app)/[emailAccountId]/assistant/settings/DigestSetting.tsx
 msgid "Configure when your digest emails are sent and which rules are included."
@@ -3654,10 +3659,6 @@ msgstr "已连接，但工具不可用"
 #: app/(app)/[emailAccountId]/integrations/IntegrationRow.tsx
 msgid "Connected. {toolsCount, plural, one {# tool available.} other {# tools available.}}"
 msgstr "已连接。{toolsCount, plural, other {有 # 个工具可用。}}"
-
-#: app/(app)/accounts/page.tsx
-msgid "Connecting or reconnecting a mailbox isn't available when you signed in with an email code. Sign in with Google or Microsoft and try again."
-msgstr "使用邮箱验证码登录时，无法连接或重新连接邮箱。请使用 Google 或 Microsoft 登录后重试。"
 
 #: app/(app)/[emailAccountId]/calendars/ConnectCalendar.tsx
 #: app/(app)/[emailAccountId]/drive/ConnectDrive.tsx
@@ -3990,10 +3991,6 @@ msgstr "无法为 {senderName} 开启自动归档"
 msgid "Couldn't fully reverse {0, plural, one {# conversation} other {# conversations}} that only partly changed. Check them and try again."
 msgstr "无法完全还原 {0, plural, other {# 个仅部分更改的对话}}。请检查后重试。"
 
-#: app/(app)/[emailAccountId]/mail/SenderContextPanel.tsx
-msgid "Couldn't load public context"
-msgstr "无法加载公开背景信息"
-
 #: components/email-list/AttachmentPreview.tsx
 msgid "Couldn't load this attachment."
 msgstr "无法加载此附件。"
@@ -4058,10 +4055,6 @@ msgstr "无法刷新搜索结果。显示的是之前已加载的邮件。"
 #: app/(app)/[emailAccountId]/mail/MailShell.tsx
 msgid "Couldn't remove label"
 msgstr "无法移除标签"
-
-#: app/(app)/[emailAccountId]/mail/SenderContextPanel.tsx
-msgid "Couldn't research this sender right now."
-msgstr "目前无法调查此发件人。"
 
 #: app/(app)/[emailAccountId]/mail/use-thread-actions.ts
 msgid "Couldn't restore"
@@ -4132,6 +4125,10 @@ msgstr "创建一个链接，让他人可以在你的日历上预约时间。"
 #: app/(app)/[emailAccountId]/drive/AllowedFolders.tsx
 msgid "Create a new folder in your drive to organize your files."
 msgstr "在你的云盘中创建新文件夹来整理文件。"
+
+#: app/(app)/[emailAccountId]/assistant/AvailableActionsPanel.tsx
+msgid "Create a TaskPilot task from this email — or, if the same thread already has a task, add the new message as a comment instead. Requires TaskPilot credentials in settings."
+msgstr ""
 
 #: app/(app)/[emailAccountId]/calendars/BookingLinksSection.tsx
 #: app/(app)/[emailAccountId]/calendars/CreateBookingLinkDialog.tsx
@@ -4475,8 +4472,8 @@ msgid "Delete this booking link permanently? This cannot be undone."
 msgstr "永久删除此预约链接？此操作无法撤销。"
 
 #: app/(app)/[emailAccountId]/settings/DeleteSection.tsx
-msgid "Delete your Inbox Zero account?"
-msgstr "删除你的 Inbox Zero 账号？"
+msgid "Delete your Inbox account?"
+msgstr ""
 
 #: app/(app)/[emailAccountId]/bulk-archive/BulkArchiveSettingsModal.tsx
 #: app/(app)/[emailAccountId]/stats/EmailActionsAnalytics.tsx
@@ -4834,8 +4831,8 @@ msgstr "下载邮件"
 
 #. placeholder {0}: status.version
 #: app/(app)/DesktopUpdateToast.tsx
-msgid "Downloading Inbox Zero {0}"
-msgstr "正在下载 Inbox Zero {0}"
+msgid "Downloading Inbox {0}"
+msgstr ""
 
 #: app/(app)/[emailAccountId]/compose/ComposeHeaderFields.tsx
 #: app/(app)/[emailAccountId]/mail/ThreadRow.tsx
@@ -5589,6 +5586,10 @@ msgstr "标记为非冷邮件时出错！"
 msgid "Error processing email from {0}: {1}"
 msgstr "处理来自 {0} 的邮件时出错：{1}"
 
+#: app/(app)/accounts/ShareAccountDialog.tsx
+msgid "Error removing access"
+msgstr ""
+
 #: app/(app)/[emailAccountId]/drive/use-folder-selection.ts
 msgid "Error removing folder"
 msgstr "移除文件夹时出错"
@@ -5625,6 +5626,10 @@ msgstr "搜索已发送邮件时出错"
 #: components/InviteMemberModal.tsx
 msgid "Error sending invitations"
 msgstr "发送邀请时出错"
+
+#: app/(app)/accounts/ShareAccountDialog.tsx
+msgid "Error sharing account"
+msgstr ""
 
 #: app/(app)/[emailAccountId]/drive/DriveSetup.tsx
 msgid "Error starting auto-filing"
@@ -6886,14 +6891,21 @@ msgstr "高置信度"
 msgid "History"
 msgstr "历史记录"
 
+#: app/(app)/[emailAccountId]/assistant/AvailableActionsPanel.tsx
+#: app/(app)/settings/SettingsContent.tsx
+#: utils/action-display-messages.ts
+#: utils/action-display.tsx
+msgid "Home Assistant"
+msgstr ""
+
 #: app/(app)/[emailAccountId]/briefs/TimeDurationSetting.tsx
 #: app/(app)/[emailAccountId]/calendars/ConfigureBookingLinkDialog.tsx
 msgid "hours"
 msgstr "小时"
 
 #: app/(app)/[emailAccountId]/onboarding/StepHowYouHeard.tsx
-msgid "How did you hear about Inbox Zero?"
-msgstr "你是如何得知 Inbox Zero 的？"
+msgid "How did you hear about Inbox?"
+msgstr ""
 
 #: app/(app)/[emailAccountId]/mail/MailSetupPanel.tsx
 msgid "How do you want to read email?"
@@ -6932,12 +6944,12 @@ msgid "Hundreds more apps"
 msgstr "还有数百个应用"
 
 #: app/(app)/[emailAccountId]/bulk-unsubscribe/share.ts
-msgid "I just unsubscribed from {senderCount, plural, one {# email list} other {# email lists}} with Inbox Zero — that's ~{yearly} fewer emails a year. {link}"
-msgstr "我刚用 Inbox Zero 退订了 {senderCount, plural, other {# 个邮件列表}}，一年能少收约 {yearly} 封邮件。{link}"
+msgid "I just unsubscribed from {senderCount, plural, one {# email list} other {# email lists}} with Inbox — that's ~{yearly} fewer emails a year. {link}"
+msgstr ""
 
 #: app/(app)/[emailAccountId]/bulk-unsubscribe/share.ts
-msgid "I just unsubscribed from {senderCount, plural, one {# email list} other {# email lists}} with Inbox Zero. {link}"
-msgstr "我刚用 Inbox Zero 退订了 {senderCount, plural, other {# 个邮件列表}}。{link}"
+msgid "I just unsubscribed from {senderCount, plural, one {# email list} other {# email lists}} with Inbox. {link}"
+msgstr ""
 
 #: app/(app)/[emailAccountId]/onboarding/illustrations/SplitInboxIllustration.tsx
 msgid "I put together a first pass at the roadmap and would love your eyes on it"
@@ -7327,20 +7339,20 @@ msgid "Inbox"
 msgstr "收件箱"
 
 #: app/(app)/ProviderRateLimitBanner.tsx
-msgid "Inbox Zero actions are temporarily paused until around <0>{retryAtLabel}</0>. This limit is enforced by {providerLabel}, and other apps connected to this mailbox can contribute to the same shared limit."
-msgstr "Inbox Zero 的操作已暂时暂停，预计到 <0>{retryAtLabel}</0> 左右恢复。此限制由 {providerLabel} 施加，连接到此邮箱的其他应用也会占用同一个共享额度。"
+msgid "Inbox actions are temporarily paused until around <0>{retryAtLabel}</0>. This limit is enforced by {providerLabel}, and other apps connected to this mailbox can contribute to the same shared limit."
+msgstr ""
 
 #: app/(app)/[emailAccountId]/meetings/MeetingRecorderOnboarding.tsx
-msgid "Inbox Zero joins your calls, takes the notes, and drafts the follow-up email."
-msgstr "Inbox Zero 加入你的通话、记录笔记，并起草跟进邮件。"
+msgid "Inbox joins your calls, takes the notes, and drafts the follow-up email."
+msgstr ""
 
 #: app/(app)/[emailAccountId]/assistant/settings/SyncToExtensionSetting.tsx
-msgid "Inbox Zero Tabs extension not found. Install it first."
-msgstr "未找到 Inbox Zero Tabs 扩展程序。请先安装。"
+msgid "Inbox Tabs extension not found. Install it first."
+msgstr ""
 
 #: app/(app)/[emailAccountId]/channels/Channels.tsx
-msgid "Inbox Zero where you work."
-msgstr "Inbox Zero，随你工作的地方。"
+msgid "Inbox where you work."
+msgstr ""
 
 #: app/(app)/[emailAccountId]/mail/ThreadRow.tsx
 msgid "Inbox: {label}"
@@ -7435,6 +7447,7 @@ msgstr "集成已连接"
 #: app/(app)/[emailAccountId]/briefs/IntegrationsSetting.tsx
 #: app/(app)/[emailAccountId]/integrations/page.tsx
 #: app/(app)/config/page.tsx
+#: app/(app)/settings/SettingsContent.tsx
 #: components/SideNav.tsx
 msgid "Integrations"
 msgstr "集成"
@@ -7559,8 +7572,8 @@ msgid "Join Early Access"
 msgstr "加入抢先体验"
 
 #: components/ReferralDialog.tsx
-msgid "Join Inbox Zero with my referral link"
-msgstr "通过我的推荐链接加入 Inbox Zero"
+msgid "Join Inbox with my referral link"
+msgstr ""
 
 #: app/(app)/organization/[organizationId]/Members.tsx
 msgid "Joined at: {joinedAt}"
@@ -8639,10 +8652,6 @@ msgid "Median Response Time"
 msgstr "响应时间中位数"
 
 #: app/(app)/[emailAccountId]/onboarding/StepMailApp.tsx
-msgid "Meet the Inbox Zero email app"
-msgstr "认识一下 Inbox Zero 邮件应用"
-
-#: app/(app)/[emailAccountId]/onboarding/StepMailApp.tsx
 msgid "Meet your new email app"
 msgstr "认识你的全新邮件应用"
 
@@ -9214,10 +9223,6 @@ msgstr "未找到频道。"
 msgid "No cold emails!"
 msgstr "没有冷邮件！"
 
-#: app/(app)/[emailAccountId]/mail/SenderContextPanel.tsx
-msgid "No confident public professional profile was found."
-msgstr "未找到可信的公开职业资料。"
-
 #: app/(app)/[emailAccountId]/assistant/ActionSteps.tsx
 msgid "No connected destinations"
 msgstr "没有已连接的目的地"
@@ -9452,10 +9457,6 @@ msgstr "无套餐"
 msgid "No previous chats found"
 msgstr "未找到以往的聊天"
 
-#: app/(app)/[emailAccountId]/mail/SenderContextPanel.tsx
-msgid "No public context"
-msgstr "无公开背景信息"
-
 #: app/(app)/[emailAccountId]/drive/FilingActivity.tsx
 msgid "No recently filed documents."
 msgstr "最近没有已归档的文档。"
@@ -9463,6 +9464,10 @@ msgstr "最近没有已归档的文档。"
 #: app/(app)/[emailAccountId]/mail/ScheduledEmailList.tsx
 msgid "No recipient"
 msgstr "无收件人"
+
+#: app/(app)/[emailAccountId]/assistant/ResultDisplay.tsx
+msgid "No remote agent accepted the A2A notification."
+msgstr ""
 
 #: app/(app)/[emailAccountId]/stats/ResponseTimeAnalytics.tsx
 msgid "No response time data available for this period."
@@ -9956,8 +9961,8 @@ msgid "Open this conversation from <0>Discussions</0>."
 msgstr "从<0>讨论</0>中打开此对话。"
 
 #: app/(app)/early-access/page.tsx
-msgid "Open your inbox in the Inbox Zero mail client."
-msgstr "在 Inbox Zero 邮件客户端中打开你的收件箱。"
+msgid "Open your inbox in the Inbox mail client."
+msgstr ""
 
 #: components/email-list/SentMessageOpenStatus.tsx
 msgid "Opened {firstOpened}"
@@ -10157,6 +10162,10 @@ msgstr "待处理的邀请（{0}）"
 msgid "Pending..."
 msgstr "待处理..."
 
+#: app/(app)/accounts/ShareAccountDialog.tsx
+msgid "People you share with get full access to this account from their own login. They must have signed in at least once."
+msgstr ""
+
 #: app/(app)/[emailAccountId]/settings/ResetAnalyticsSection.tsx
 msgid "Permanently delete all analytics"
 msgstr "永久删除所有分析数据"
@@ -10298,10 +10307,6 @@ msgstr "弹出草稿窗口"
 #: app/(app)/premium/Pricing.tsx
 msgid "Popular"
 msgstr "热门"
-
-#: app/(app)/[emailAccountId]/mail/SenderContextPanel.tsx
-msgid "Possible match"
-msgstr "可能匹配"
 
 #: components/team-comments/CommentComposer.tsx
 msgid "Post comment"
@@ -10497,29 +10502,13 @@ msgstr "提示词"
 msgid "Provider"
 msgstr "服务商"
 
-#: app/(app)/accounts/page.tsx
-msgid "Provider sign-in required"
-msgstr "需要服务商登录"
-
 #: app/(app)/[emailAccountId]/assistant/FixWithChat.tsx
 msgid "Providing an explanation helps the AI understand your intent better"
 msgstr "提供说明有助于 AI 更好地理解你的意图"
 
-#: app/(app)/[emailAccountId]/mail/SenderContextPanel.tsx
-msgid "Public context is temporarily unavailable. Try again shortly."
-msgstr "公开背景信息暂时不可用。请稍后再试。"
-
 #: app/(app)/[emailAccountId]/assistant/knowledge/DraftDocsSites.tsx
 msgid "Public docs the assistant can look things up in when drafting replies. Only pages under these URLs are read."
 msgstr "助手起草回复时可查阅的公开文档。只会读取这些 URL 下的页面。"
-
-#: app/(app)/[emailAccountId]/mail/SenderContextPanel.tsx
-msgid "Public profiles are not researched for personal email addresses."
-msgstr "不会对个人邮箱地址进行公开资料调研。"
-
-#: app/(app)/[emailAccountId]/mail/SenderContextPanel.tsx
-msgid "Public sources"
-msgstr "公开来源"
 
 #: app/(app)/[emailAccountId]/onboarding/illustrations/SplitInboxIllustration.tsx
 msgid "Q3 planning: can you review?"
@@ -10592,8 +10581,8 @@ msgid "Read and send email from every account in one fast inbox"
 msgstr "在一个快速收件箱中阅读和发送所有账号的邮件"
 
 #: app/(app)/[emailAccountId]/onboarding/StepMailApp.tsx
-msgid "Read and send email on web, desktop, and iPhone. Add the AI assistant anytime."
-msgstr "在网页、桌面端和 iPhone 上阅读和发送邮件。随时添加 AI 助手。"
+msgid "Read and send email right here in the web mail app. Add the AI assistant anytime."
+msgstr ""
 
 #: components/assistant-chat/tools.tsx
 msgid "Read Email"
@@ -10888,6 +10877,11 @@ msgstr "移除标签 {name}"
 msgid "Remove {url}"
 msgstr "移除 {url}"
 
+#. placeholder {0}: user.email
+#: app/(app)/accounts/ShareAccountDialog.tsx
+msgid "Remove access for {0}"
+msgstr ""
+
 #: app/(app)/[emailAccountId]/assistant/ActionSteps.tsx
 #: app/(app)/organization/[organizationId]/rules/OrgActionSteps.tsx
 msgid "Remove action"
@@ -10957,8 +10951,8 @@ msgid "Removes this tab. Your mail isn't changed."
 msgstr "移除此标签页。你的邮件不会有任何变化。"
 
 #: app/(app)/[emailAccountId]/settings/DeleteSection.tsx
-msgid "Removes your Inbox Zero data. Your emails aren't affected."
-msgstr "移除你的 Inbox Zero 数据。你的邮件不受影响。"
+msgid "Removes your Inbox data. Your emails aren't affected."
+msgstr ""
 
 #: components/assistant-chat/tools.tsx
 msgid "Removing labels"
@@ -11124,8 +11118,8 @@ msgid "Restore compose"
 msgstr "恢复撰写内容"
 
 #: app/(app)/[emailAccountId]/settings/ResetLabelColorsSection.tsx
-msgid "Restore the default colors for Inbox Zero labels like To Reply and Newsletter"
-msgstr "恢复 Inbox Zero 标签（如 To Reply 和 Newsletter）的默认颜色"
+msgid "Restore the default colors for Inbox labels like To Reply and Newsletter"
+msgstr ""
 
 #: app/(app)/[emailAccountId]/bulk-unsubscribe/common.tsx
 msgid "Resubscribe"
@@ -11810,6 +11804,10 @@ msgid "Send later date and time"
 msgstr "稍后发送的日期和时间"
 
 #: app/(app)/[emailAccountId]/assistant/AvailableActionsPanel.tsx
+msgid "Send notification to remote A2A agent"
+msgstr ""
+
+#: app/(app)/[emailAccountId]/assistant/AvailableActionsPanel.tsx
 msgid "Send replies"
 msgstr "发送回复"
 
@@ -11835,8 +11833,8 @@ msgstr "发送摘要邮件"
 
 #: app/(app)/[emailAccountId]/channels/Channels.tsx
 #: app/(app)/[emailAccountId]/settings/ConnectedAppsSection.tsx
-msgid "Send this command in a direct message with the Inbox Zero bot on {providerName}. The code is one-time use and expires in 10 minutes."
-msgstr "在 {providerName} 上，通过私信向 Inbox Zero 机器人发送此命令。该验证码仅可使用一次，10 分钟后过期。"
+msgid "Send this command in a direct message with the Inbox bot on {providerName}. The code is one-time use and expires in 10 minutes."
+msgstr ""
 
 #: app/(app)/[emailAccountId]/assistant/ActionSteps.tsx
 msgid "Send to"
@@ -11897,10 +11895,6 @@ msgstr "已保留发件人"
 #: app/(app)/[emailAccountId]/bulk-unsubscribe/hooks.ts
 msgid "Sender moved to review"
 msgstr "发件人已移至待审核"
-
-#: app/(app)/[emailAccountId]/mail/SenderContextPanel.tsx
-msgid "Sender profile"
-msgstr "发件人资料"
 
 #: app/(app)/[emailAccountId]/bulk-archive/BulkArchiveProgress.tsx
 #: app/(app)/[emailAccountId]/bulk-unsubscribe/ArchiveProgress.tsx
@@ -12126,18 +12120,24 @@ msgstr "设置"
 msgid "Setup incomplete"
 msgstr "设置未完成"
 
+#: app/(app)/accounts/ShareAccountDialog.tsx
 #: components/ReferralDialog.tsx
 #: components/team-comments/ShareConversationDialog.tsx
 msgid "Share"
 msgstr "分享"
+
+#. placeholder {0}: emailAccount.email
+#: app/(app)/accounts/ShareAccountDialog.tsx
+msgid "Share {0}"
+msgstr ""
 
 #: components/team-comments/ShareConversationDialog.tsx
 msgid "Share conversation"
 msgstr "分享会话"
 
 #: components/ReferralDialog.tsx
-msgid "Share Inbox Zero with friends and get a free month for each friend who completes their trial"
-msgstr "与朋友分享 Inbox Zero，每有一位朋友完成试用，你就能获得一个月免费使用"
+msgid "Share Inbox with friends and get a free month for each friend who completes their trial"
+msgstr ""
 
 #: app/(app)/[emailAccountId]/bulk-unsubscribe/UnsubscribeCelebrationDialog.tsx
 msgid "Share on LinkedIn"
@@ -12171,6 +12171,14 @@ msgstr "已分享的会话"
 #: components/team-comments/ConversationParticipants.tsx
 msgid "Shared participants"
 msgstr "共享参与者"
+
+#: app/(app)/accounts/ShareAccountDialog.tsx
+msgid "Shared with {email}"
+msgstr ""
+
+#: app/(app)/accounts/page.tsx
+msgid "Shared with you"
+msgstr ""
 
 #: components/team-comments/ConversationDiscussion.tsx
 msgid "Sharing started"
@@ -12259,8 +12267,8 @@ msgstr "正在屏幕上显示该分栏"
 
 #. placeholder {0}: previewSenders.length
 #: app/(app)/[emailAccountId]/onboarding/StepBulkUnsubscribe.tsx
-msgid "Showing your top {0}. We'll keep spotting more as you use Inbox Zero."
-msgstr "显示你的前 {0} 位。随着你使用 Inbox Zero，我们会继续发现更多。"
+msgid "Showing your top {0}. We'll keep spotting more as you use Inbox."
+msgstr ""
 
 #. placeholder {0}: data.email
 #: app/(app)/settings/EmailOtpSection.tsx
@@ -12748,8 +12756,8 @@ msgid "Sync to browser extension"
 msgstr "同步到浏览器扩展程序"
 
 #: app/(app)/[emailAccountId]/assistant/settings/SyncToExtensionSetting.tsx
-msgid "Sync your rules to the Inbox Zero Tabs browser extension. Each label rule becomes a tab in Gmail."
-msgstr "将你的规则同步到 Inbox Zero Tabs 浏览器扩展程序。每条标签规则都会成为 Gmail 中的一个标签页。"
+msgid "Sync your rules to the Inbox Tabs browser extension. Each label rule becomes a tab in Gmail."
+msgstr ""
 
 #: app/(app)/[emailAccountId]/assistant/settings/SyncToExtensionSetting.tsx
 msgid "Synced tabs to extension: {summary}"
@@ -12766,6 +12774,11 @@ msgstr "正在同步你的邮件…"
 #: utils/mcp/tool-specs-messages.ts
 msgid "Task"
 msgstr "任务"
+
+#: app/(app)/[emailAccountId]/assistant/AvailableActionsPanel.tsx
+#: utils/action-display.tsx
+msgid "TaskPilot"
+msgstr ""
 
 #: components/assistant-chat/overview.tsx
 msgid "Teach me how to handle your incoming emails for you"
@@ -12873,6 +12886,14 @@ msgstr "匹配内容："
 msgid "That's {emailCount, plural, one {# email} other {# emails}} you won't get again."
 msgstr "这样你就不会再收到 {emailCount, plural, other {# 封邮件}}了。"
 
+#: app/(app)/[emailAccountId]/assistant/ResultDisplay.tsx
+msgid "The A2A notification could not be sent because no remote agent is configured."
+msgstr ""
+
+#: app/(app)/[emailAccountId]/assistant/ResultDisplay.tsx
+msgid "The A2A notification could not be sent."
+msgstr ""
+
 #: app/(app)/accounts/page.tsx
 msgid "The account was deleted. Sign out to finish removing its mail from this device."
 msgstr "账号已删除。请退出登录，以完成从此设备上移除其邮件。"
@@ -12900,6 +12921,18 @@ msgstr "草稿将以你的语气风格出现在收件箱中。<0/>我们的 AI �
 #: app/(app)/accounts/page.tsx
 msgid "The email account has been deleted successfully."
 msgstr "邮箱账号已成功删除。"
+
+#: app/(app)/[emailAccountId]/assistant/ResultDisplay.tsx
+msgid "The Home Assistant action could not be completed."
+msgstr ""
+
+#: app/(app)/[emailAccountId]/assistant/ResultDisplay.tsx
+msgid "The Home Assistant action failed. Check the Home Assistant connection in settings."
+msgstr ""
+
+#: app/(app)/[emailAccountId]/assistant/ResultDisplay.tsx
+msgid "The Home Assistant action needs an integration type."
+msgstr ""
 
 #: app/(app)/[emailAccountId]/compose/ComposeEmailForm.tsx
 msgid "The image could not be read."
@@ -12984,8 +13017,8 @@ msgid "The split has been deleted."
 msgstr "分栏已删除。"
 
 #: app/(app)/[emailAccountId]/meetings/MeetingDetail.tsx
-msgid "The summary and transcript will be permanently deleted from Inbox Zero. Recap emails already sent and follow-up drafts in your mailbox will remain."
-msgstr "摘要和文字记录将从 Inbox Zero 中永久删除。已发送的回顾邮件和你邮箱中的跟进草稿将予以保留。"
+msgid "The summary and transcript will be permanently deleted from Inbox. Recap emails already sent and follow-up drafts in your mailbox will remain."
+msgstr ""
 
 #: app/(app)/[emailAccountId]/meetings/MeetingDetail.tsx
 msgid "The summary is still being written."
@@ -13222,8 +13255,8 @@ msgid "This member has not allowed org admin analytics."
 msgstr "该成员未允许组织管理员查看其分析数据。"
 
 #: app/(app)/[emailAccountId]/settings/DeleteSection.tsx
-msgid "This permanently deletes your Inbox Zero data and disconnects {connectedEmailList}. Your emails aren't affected."
-msgstr "这将永久删除你的 Inbox Zero 数据，并断开 {connectedEmailList}。你的邮件不受影响。"
+msgid "This permanently deletes your Inbox data and disconnects {connectedEmailList}. Your emails aren't affected."
+msgstr ""
 
 #: app/(app)/[emailAccountId]/cold-email-blocker/TestRules.tsx
 msgid "This person has previously emailed you. This is not a cold email!"
@@ -13553,6 +13586,10 @@ msgstr "分流"
 msgid "Trials can process up to {0} past emails at a time."
 msgstr "试用期内一次最多可处理 {0} 封过往邮件。"
 
+#: app/(app)/[emailAccountId]/assistant/AvailableActionsPanel.tsx
+msgid "Trigger Home Assistant automations, publish to MQTT, or control smart home devices"
+msgstr ""
+
 #: components/CommandK.tsx
 msgid "Try a date like tomorrow at 3pm."
 msgstr "试试像“明天下午 3 点”这样的日期。"
@@ -13561,7 +13598,6 @@ msgstr "试试像“明天下午 3 点”这样的日期。"
 msgid "Try a different filter or date range."
 msgstr "试试其他筛选条件或日期范围。"
 
-#: app/(app)/[emailAccountId]/mail/SenderContextPanel.tsx
 #: app/(app)/[emailAccountId]/mail/ThreadReader.tsx
 msgid "Try again"
 msgstr "重试"
@@ -13616,8 +13652,8 @@ msgid "Turn on the {0} split"
 msgstr "开启 {0} 分栏"
 
 #: app/(app)/[emailAccountId]/assistant/settings/MultiRuleSetting.tsx
-msgid "Turning this off stops the AI from intentionally choosing multiple custom rules for one email. Inbox Zero can still apply more than one rule in a few special cases."
-msgstr "关闭后，AI 将不再有意为一封邮件选择多条自定义规则。在少数特殊情况下，Inbox Zero 仍可能应用多条规则。"
+msgid "Turning this off stops the AI from intentionally choosing multiple custom rules for one email. Inbox can still apply more than one rule in a few special cases."
+msgstr ""
 
 #: utils/automation-jobs/defaults.ts
 msgid "Twice daily"
@@ -14047,8 +14083,8 @@ msgid "Use label"
 msgstr "使用标签"
 
 #: components/ReferralDialog.tsx
-msgid "Use my referral link to get started with Inbox Zero!"
-msgstr "使用我的推荐链接，开始使用 Inbox Zero！"
+msgid "Use my referral link to get started with Inbox!"
+msgstr ""
 
 #: app/(app)/[emailAccountId]/assistant/RuleStep.tsx
 msgid "Use prompt"
@@ -14076,8 +14112,8 @@ msgid "Used to draft replies in your voice."
 msgstr "用于以你的口吻起草回复。"
 
 #: app/(app)/[emailAccountId]/calendars/BookingLinksSection.tsx
-msgid "Using Inbox Zero booking link"
-msgstr "正在使用 Inbox Zero 预约链接"
+msgid "Using Inbox booking link"
+msgstr ""
 
 #: app/(app)/[emailAccountId]/settings/DigestSettingsForm.tsx
 msgid "Usually sent within 5 minutes."
@@ -14205,11 +14241,6 @@ msgstr "查看用量统计"
 #: app/(app)/[emailAccountId]/assistant/settings/FollowUpRemindersSetting.tsx
 msgid "View your follow-ups in Gmail."
 msgstr "在 Gmail 中查看你的跟进。"
-
-#. placeholder {0}: company.name
-#: app/(app)/[emailAccountId]/mail/SenderContextPanel.tsx
-msgid "Visit {0}"
-msgstr "访问 {0}"
 
 #: app/(app)/[emailAccountId]/bulk-unsubscribe/ResubscribeDialog.tsx
 msgid "Visit the sender's website and manually resubscribe."
@@ -14379,8 +14410,8 @@ msgid "We'll file attachments from your emails into your {driveName}.<0/>Just te
 msgstr "我们会将你邮件中的附件归档到你的 {driveName}。<0/>只需告诉我们归档到哪里、怎么归档。"
 
 #: app/(app)/[emailAccountId]/onboarding/StepBulkUnsubscribe.tsx
-msgid "We'll keep spotting more as you use Inbox Zero."
-msgstr "随着你使用 Inbox Zero，我们会继续发现更多。"
+msgid "We'll keep spotting more as you use Inbox."
+msgstr ""
 
 #: components/InviteMemberModal.tsx
 msgid "We'll send each teammate an email with a link to join your organization. The link expires in two weeks."
@@ -14409,10 +14440,6 @@ msgstr "我们仍在连接 {displayName}。请稍后刷新以查看最新状态�
 #: app/(app)/[emailAccountId]/onboarding/StepCustomRules.tsx
 msgid "We've set up the basics, but that's just the beginning. Your AI assistant can handle any email workflow you'd give to a human."
 msgstr "我们已完成基础设置，但这仅仅是开始。你的 AI 助手可以处理任何你会交给真人处理的邮件工作流。"
-
-#: app/(app)/[emailAccountId]/mail/SenderContextPanel.tsx
-msgid "Web search is not configured for this account."
-msgstr "此账号未配置网页搜索。"
 
 #: components/PlanBadge.tsx
 msgid "Webhook"
@@ -14737,8 +14764,8 @@ msgid "You cancelled the authorization. Connect again whenever you're ready."
 msgstr "你已取消授权。准备好后可随时重新连接。"
 
 #: components/EndTrialButton.tsx
-msgid "You do not need to do this to keep using Inbox Zero. Your trial already includes every paid feature and runs free until {trialEndDate}, when the same charge happens automatically."
-msgstr "你无需这样做也能继续使用 Inbox Zero。你的试用已包含所有付费功能，并免费运行至 {trialEndDate}，届时将自动扣除同样的费用。"
+msgid "You do not need to do this to keep using Inbox. Your trial already includes every paid feature and runs free until {trialEndDate}, when the same charge happens automatically."
+msgstr ""
 
 #: app/(app)/[emailAccountId]/assistant/ProcessRules.tsx
 msgid "You don't have any AI rules set up. The test won't match anything. Please create AI rules first."

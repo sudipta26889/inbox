@@ -9,6 +9,7 @@ import {
 import {
   describeEvalMatrix,
   shouldRunEvalTests,
+  getEvalTimeout,
 } from "@/__tests__/eval/models";
 import {
   formatSemanticJudgeActual,
@@ -25,7 +26,7 @@ import type { getEmailAccount } from "@/__tests__/helpers";
 // Multi-model: EVAL_MODELS=all pnpm --filter inbox-zero-ai test-ai __tests__/eval/assistant-chat-microsoft-search-feedback.test.ts
 
 const shouldRunEval = shouldRunEvalTests();
-const TIMEOUT = 120_000;
+const TIMEOUT = getEvalTimeout(120_000);
 const evalReporter = createEvalReporter({
   evalName: "assistant-chat-microsoft-search-feedback",
 });

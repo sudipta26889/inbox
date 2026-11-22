@@ -8,7 +8,6 @@ import {
   ReplyIcon,
   ChevronsUpDownIcon,
   ChevronsDownUpIcon,
-  UserSearchIcon,
 } from "lucide-react";
 import { Tooltip } from "@/components/Tooltip";
 import {
@@ -80,7 +79,6 @@ export function EmailMessage({
   onSendSuccess,
   onMarkDone,
   onDraftDiscarded,
-  onOpenSenderContext,
   hasDraft = false,
   selected,
   onSelect,
@@ -119,7 +117,6 @@ export function EmailMessage({
    * parents for which that discard empties the conversation.
    */
   onDraftDiscarded?: () => void;
-  onOpenSenderContext?: (message: ThreadMessage) => void;
   hasDraft?: boolean;
   selected?: boolean;
   onSelect?: () => void;
@@ -369,7 +366,6 @@ export function EmailMessage({
         message={message}
         menu={menu}
         onForward={onForward}
-        onOpenSenderContext={onOpenSenderContext}
         onReply={onReply}
         onReplyAll={onReplyAll}
         onToggle={onToggle}
@@ -514,7 +510,6 @@ function MessageHeader({
   onReply,
   onReplyAll,
   onForward,
-  onOpenSenderContext,
   onToggle,
   onToggleKeyDown,
   hasDraft,
@@ -529,7 +524,6 @@ function MessageHeader({
   onReply: () => void;
   onReplyAll: () => void;
   onForward: () => void;
-  onOpenSenderContext?: (message: ThreadMessage) => void;
   onToggle?: () => void;
   onToggleKeyDown: React.KeyboardEventHandler<HTMLElement>;
   hasDraft: boolean;
@@ -556,11 +550,6 @@ function MessageHeader({
     userEmail,
     t`me`,
   );
-  const canResearchSender =
-    Boolean(onOpenSenderContext) &&
-    !isSent &&
-    Boolean(senderEmail) &&
-    !isSameEmailAddress(senderEmail, userEmail);
   // A reply already keeps the CC list, so reply all only adds the other To
   // recipients. Replies to the user's own mail already go to everyone.
   const canReplyAll =
@@ -620,68 +609,50 @@ function MessageHeader({
       )}
     >
       {expanded ? (
-        <>
-          {showDetails ? (
-            // Not one big toggle like the summary, so addresses stay
-            // selectable and a click inside doesn't collapse the message.
-            // biome-ignore lint/a11y/useKeyWithClickEvents: the button inside toggles from the keyboard
-            <div
-              className="flex min-w-0 flex-1 cursor-auto items-start gap-2"
-              onClick={(event) => event.stopPropagation()}
-            >
-              {avatar}
-              <EmailDetails message={message}>
-                <Button
-                  aria-expanded
-                  aria-label="Hide details"
-                  onClick={toggleDetails}
-                  size="iconXs"
-                  variant="ghostMuted"
-                >
-                  <ChevronsDownUpIcon className="size-3.5" />
-                </Button>
-              </EmailDetails>
-            </div>
-          ) : (
-            <button
-              aria-expanded={false}
-              aria-label="Show details"
-              className="group/details flex min-w-0 items-center gap-2 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              onClick={toggleDetails}
-              type="button"
-            >
-              {avatar}
-              <span className={senderNameClassName}>{senderName}</span>
-              {recipients && (
-                <span className="hidden min-w-0 shrink-[999] truncate text-muted-foreground text-sm sm:block">
-                  <Trans>
-                    to{" "}
-                    <span className="font-medium text-foreground">
-                      {recipients}
-                    </span>
-                  </Trans>
-                </span>
-              )}
-              <ChevronsUpDownIcon className="size-3.5 shrink-0 text-muted-foreground transition-opacity group-hover/message:opacity-100 group-focus-visible/details:opacity-100 sm:opacity-0" />
-            </button>
-          )}
-          {canResearchSender && (
-            <Tooltip content="View public profile">
+        showDetails ? (
+          // Not one big toggle like the summary, so addresses stay
+          // selectable and a click inside doesn't collapse the message.
+          // biome-ignore lint/a11y/useKeyWithClickEvents: the button inside toggles from the keyboard
+          <div
+            className="flex min-w-0 flex-1 cursor-auto items-start gap-2"
+            onClick={(event) => event.stopPropagation()}
+          >
+            {avatar}
+            <EmailDetails message={message}>
               <Button
-                aria-label={`View public profile for ${senderName}`}
-                className="transition-opacity focus-visible:opacity-100 group-hover/message:opacity-100 sm:opacity-0"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onOpenSenderContext?.(message);
-                }}
+                aria-expanded
+                aria-label="Hide details"
+                onClick={toggleDetails}
                 size="iconXs"
                 variant="ghostMuted"
               >
-                <UserSearchIcon className="size-3.5" />
+                <ChevronsDownUpIcon className="size-3.5" />
               </Button>
-            </Tooltip>
-          )}
-        </>
+            </EmailDetails>
+          </div>
+        ) : (
+          <button
+            aria-expanded={false}
+            aria-label="Show details"
+            className="group/details flex min-w-0 items-center gap-2 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={toggleDetails}
+            type="button"
+          >
+            {avatar}
+            <span className={senderNameClassName}>{senderName}</span>
+            {recipients && (
+              <span className="hidden min-w-0 shrink-[999] truncate text-muted-foreground text-sm sm:block">
+                <Trans>
+                  to{" "}
+                  <span className="font-medium text-foreground">
+                    {recipients}
+                  </span>
+                </Trans>
+              </span>
+            )}
+            <ChevronsUpDownIcon className="size-3.5 shrink-0 text-muted-foreground transition-opacity group-hover/message:opacity-100 group-focus-visible/details:opacity-100 sm:opacity-0" />
+          </button>
+        )
       ) : (
         <>
           {avatar}

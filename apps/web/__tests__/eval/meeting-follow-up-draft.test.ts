@@ -2,6 +2,7 @@ import { afterAll, describe, expect, test } from "vitest";
 import {
   describeEvalMatrix,
   shouldRunEvalTests,
+  getEvalTimeout,
 } from "@/__tests__/eval/models";
 import { createEvalReporter } from "@/__tests__/eval/reporter";
 import {
@@ -18,7 +19,7 @@ import type { MeetingSummary } from "@/utils/ai/meeting-recorder/summarize-meeti
 // pnpm test-ai eval/meeting-follow-up-draft
 
 const shouldRunEval = shouldRunEvalTests();
-const TIMEOUT = 90_000;
+const TIMEOUT = getEvalTimeout(90_000);
 const EVAL_CURRENT_DATE = new Date("2026-07-01T12:00:00.000Z");
 
 const ROLLOUT_SUMMARY: MeetingSummary = {
