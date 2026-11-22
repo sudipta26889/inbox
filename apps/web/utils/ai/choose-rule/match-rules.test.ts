@@ -60,6 +60,7 @@ vi.mock("@/utils/rule/classification-feedback", () => ({
 vi.mock("@/utils/decision-model/decision-model", () => ({
   getDecisionModelConfig: vi.fn().mockResolvedValue(null),
   INPUT_TOO_LONG_REASON: "input too long for the decision model",
+  UNSUPPORTED_REASON: "multi-rule selection is decided by the LLM",
   isDecisionFeatureLive: vi.fn().mockReturnValue(false),
   recordDecisionModelRun: vi.fn(),
 }));
@@ -3213,6 +3214,38 @@ describe("findMatchingRules - decisionModel rule selection", () => {
           feature: "choose-rule",
           mode: "shadow",
           outcome: "too_long",
+        }),
+      ),
+    );
+  });
+
+  it("records a shadow decision for a multi-rule account as unsupported, not an error", async () => {
+    vi.mocked(isDecisionFeatureLive).mockReturnValue(false);
+    const aiRule = getAiRule();
+    vi.mocked(decisionModelChooseRule).mockResolvedValue({
+      type: "undecided",
+      reason: "multi-rule selection is decided by the LLM",
+    });
+    vi.mocked(aiChooseRule).mockResolvedValue({
+      rules: [{ rule: aiRule }],
+      reason: "LLM reason",
+    });
+
+    await findMatchingRules({
+      rules: [aiRule],
+      message: getMessage(),
+      emailAccount: getEmailAccount(),
+      provider,
+      modelType: "default",
+      logger,
+    });
+
+    await vi.waitFor(() =>
+      expect(recordDecisionModelRun).toHaveBeenCalledWith(
+        expect.objectContaining({
+          feature: "choose-rule",
+          outcome: "unsupported",
+          error: undefined,
         }),
       ),
     );

@@ -7,6 +7,7 @@ import {
 import {
   DecisionInputTooLongError,
   INPUT_TOO_LONG_REASON,
+  UNSUPPORTED_REASON,
 } from "@/utils/decision-model/decision-model";
 import { CONVERSATION_TRACKING_META_RULE_ID } from "@/utils/reply-tracker/conversation-status-config";
 import { getRuleConfig } from "@/utils/rule/consts";
@@ -189,11 +190,11 @@ describe("decisionModelChooseRule", () => {
   });
 
   it("leaves multi-rule selection on the LLM path", async () => {
-    await expect(
-      chooseRule({
+    expect(
+      await chooseRule({
         emailAccount: getEmailAccount({ multiRuleSelectionEnabled: true }),
       }),
-    ).rejects.toThrow("does not support multi-rule selection");
+    ).toEqual({ type: "undecided", reason: UNSUPPORTED_REASON });
     expect(runDecisionModelMock).not.toHaveBeenCalled();
   });
 

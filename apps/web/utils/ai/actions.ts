@@ -1,4 +1,5 @@
 import { after } from "next/server";
+import { addMinutes } from "date-fns";
 import { ActionType, MessagingMessageStatus } from "@/generated/prisma/enums";
 import type { Prisma } from "@/generated/prisma/client";
 import type { Logger } from "@/utils/logger";
@@ -25,6 +26,7 @@ import {
 } from "@/utils/email";
 import { captureException, getErrorMessage } from "@/utils/error";
 import { env } from "@/env";
+import { createScheduledAction } from "@/utils/scheduled-actions/scheduler";
 import { ensureEmailSendingEnabled } from "@/utils/mail";
 import { isDeleteEmailActionEnabled } from "@/utils/delete-email-action";
 import { callMcpTool } from "@/utils/mcp/call-tool";
@@ -854,6 +856,7 @@ const home_assistant: ActionFunction<{
 
 const a2a_notify: ActionFunction<Record<string, unknown>> = async ({
   email,
+  emailAccount,
   executedRule,
   logger,
 }) => {
@@ -893,11 +896,59 @@ const a2a_notify: ActionFunction<Record<string, unknown>> = async ({
     logger.error("All A2A notifications failed", {
       agentCount: agentUrls.length,
     });
+    await scheduleA2aNotifyRetry({ email, executedRule, emailAccount, logger });
     return { success: false, errorCode: "ALL_AGENTS_FAILED" };
   }
 
   return { success: true };
 };
+
+const A2A_NOTIFY_RETRY_DELAY_MINUTES = 45;
+
+// A peer that is busy or waiting on its own model can answer long after our
+// timeout. One later retry through the scheduled-action path; if that fails
+// too the action stays failed. Not knowable whether the first attempt reached
+// the peer after all, so the retry can duplicate it: the payload carries
+// message_id for the peer to dedupe on.
+async function scheduleA2aNotifyRetry({
+  email,
+  executedRule,
+  emailAccount,
+  logger,
+}: {
+  email: EmailForAction;
+  executedRule: ExecutedRuleForAction;
+  emailAccount: ActionExecutionEmailAccount;
+  logger: Logger;
+}) {
+  try {
+    const alreadyScheduled = await prisma.scheduledAction.count({
+      where: {
+        executedRuleId: executedRule.id,
+        actionType: ActionType.A2A_NOTIFY,
+      },
+    });
+    if (alreadyScheduled > 0) return;
+
+    await createScheduledAction({
+      executedRuleId: executedRule.id,
+      actionItem: {
+        id: executedRule.id,
+        type: ActionType.A2A_NOTIFY,
+        delayInMinutes: A2A_NOTIFY_RETRY_DELAY_MINUTES,
+      },
+      messageId: email.id,
+      threadId: email.threadId,
+      emailAccountId: emailAccount.id,
+      scheduledFor: addMinutes(new Date(), A2A_NOTIFY_RETRY_DELAY_MINUTES),
+    });
+    logger.info("Scheduled one retry of the A2A notification", {
+      delayMinutes: A2A_NOTIFY_RETRY_DELAY_MINUTES,
+    });
+  } catch (error) {
+    logger.warn("Failed to schedule the A2A notification retry", { error });
+  }
+}
 
 async function lazyUpdateActionLabelId({
   labelName,
