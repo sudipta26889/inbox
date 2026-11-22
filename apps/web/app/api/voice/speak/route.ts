@@ -12,7 +12,7 @@ import {
 } from "@/utils/voice/runtime";
 import { speakVoiceBody } from "@/utils/voice/validation";
 
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 export const POST = withEmailAccount("voice/speak", async (request) => {
   const { emailAccountId } = request.auth;

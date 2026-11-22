@@ -1,4 +1,5 @@
 export const VoiceProviderId = {
+  LITELLM: "litellm",
   OPENAI: "openai",
   GROQ: "groq",
 } as const;
@@ -67,6 +68,8 @@ export type VoiceProvider = {
 export type VoiceRuntimeConfig = {
   enabled: boolean;
   providerId: VoiceProviderId | null;
+  litellmBaseUrl?: string;
+  litellmApiKey?: string;
   openaiApiKey?: string;
   groqApiKey?: string;
   sttModel?: string;
