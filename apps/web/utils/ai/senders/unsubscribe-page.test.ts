@@ -12,15 +12,18 @@ vi.mock("@/utils/llms", () => ({
   createGenerateObject: mockCreateGenerateObject,
 }));
 
-vi.mock("@/utils/llms/model", () => ({
-  getModel: vi.fn(() => ({
+// The unsubscribe page check is an interactive use case, which resolves
+// through getInteractiveModel.
+vi.mock("@/utils/llms/model", () => {
+  const getModel = vi.fn(() => ({
     provider: "openai",
     modelName: "test-model",
     model: {},
     providerOptions: undefined,
     fallbackModels: [],
-  })),
-}));
+  }));
+  return { getModel, getInteractiveModel: getModel };
+});
 
 describe("aiCheckUnsubscribePageState", () => {
   beforeEach(() => {

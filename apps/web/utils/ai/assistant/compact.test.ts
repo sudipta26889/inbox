@@ -14,8 +14,11 @@ const {
   mockGetModel: vi.fn(),
 }));
 
+// Compaction and memory extraction are interactive use cases, which resolve
+// through getInteractiveModel.
 vi.mock("@/utils/llms/model", () => ({
   getModel: mockGetModel,
+  getInteractiveModel: mockGetModel,
 }));
 
 vi.mock("@/utils/llms", () => ({
