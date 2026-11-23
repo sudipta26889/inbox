@@ -29,6 +29,11 @@ import { isMessagingChannelOperational } from "@/utils/messaging/channel-validit
 import prisma from "@/utils/prisma";
 import { DigestClaimLostError } from "@/utils/digest/claim-pending-digests";
 import { SendNotApprovedError } from "@/utils/mail/send-approval";
+import { buildMitraDigestText } from "@/utils/digest/mitra-digest-text";
+import {
+  isMitraDigestConfigured,
+  sendDigestToMitra,
+} from "@/utils/digest/send-digest-mitra";
 
 type DigestItem = { from: string; subject: string; content: string };
 type ItemsByRule = Record<string, DigestItem[] | undefined>;
@@ -60,11 +65,20 @@ export async function sendDigest({
     where: { id: emailAccountId },
     select: {
       digestSendEmail: true,
+      digestSendMitra: true,
+      timezone: true,
       account: { select: { provider: true } },
     },
   });
 
   const sendEmail = emailAccount?.digestSendEmail ?? true;
+  const wantsMitra = emailAccount?.digestSendMitra ?? false;
+  const sendMitra = wantsMitra && isMitraDigestConfigured();
+  if (wantsMitra && !sendMitra) {
+    logger.warn(
+      "Skipping digest delivery to Mitra: MITRA_OWNER_A2A_URL or MITRA_OWNER_A2A_TOKEN is not set",
+    );
+  }
 
   const channels = await prisma.messagingChannel.findMany({
     where: {
@@ -100,6 +114,19 @@ export async function sendDigest({
         logger,
         operationId,
         beforeSend,
+      }),
+    );
+  }
+
+  if (sendMitra) {
+    // Not through DharaHIL: approval belongs to the email path only.
+    const dateKey = formatDateKey(date, emailAccount?.timezone);
+    deliveryPromises.push(
+      sendDigestToMitra({
+        emailAccountId,
+        dateKey,
+        text: buildMitraDigestText({ dateKey, ruleNames, itemsByRule }),
+        logger,
       }),
     );
   }
@@ -149,9 +176,9 @@ export async function sendDigest({
   }
 
   if (deliveryPromises.length === 0) {
-    if (channels.length > 0) {
-      // Email is off and every configured messaging channel was skipped
-      // (non-operational or missing credentials). Throw so the caller
+    if (channels.length > 0 || (wantsMitra && !sendMitra)) {
+      // Email is off and every configured channel (messaging or Mitra) was
+      // skipped (non-operational or missing credentials). Throw so the caller
       // doesn't mark the digest SENT and redact its items.
       throw new Error(
         "No deliverable digest channels: email delivery is disabled and all configured messaging channels are non-operational",
@@ -308,6 +335,19 @@ async function sendDigestViaMessagingApp({
   });
 
   logger.info("Digest sent to messaging app", { provider: channel.provider });
+}
+
+function formatDateKey(date: Date, timeZone?: string | null) {
+  try {
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: timeZone || "UTC",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(date);
+  } catch {
+    return date.toISOString().slice(0, 10);
+  }
 }
 
 function formatDigestText({

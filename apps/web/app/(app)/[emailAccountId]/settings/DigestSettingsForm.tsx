@@ -19,7 +19,10 @@ import { useRules } from "@/hooks/useRules";
 import { useEmailAccountFull } from "@/hooks/useEmailAccountFull";
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import { prefixPath } from "@/utils/path";
-import { updateDigestEmailDeliveryAction } from "@/utils/actions/messaging-channels";
+import {
+  updateDigestEmailDeliveryAction,
+  updateDigestMitraDeliveryAction,
+} from "@/utils/actions/messaging-channels";
 import {
   updateDigestItemsAction,
   updateDigestScheduleAction,
@@ -475,6 +478,25 @@ function DigestDeliveryChannels({
     },
   );
 
+  const { execute: executeMitra } = useAction(
+    updateDigestMitraDeliveryAction.bind(null, emailAccountId),
+    {
+      onSuccess: () => {
+        toastSuccess({ description: t`Settings saved` });
+        mutate();
+        mutateDigestStatus();
+      },
+      onError: (error) => {
+        toastError({
+          description:
+            getActionErrorMessage(error.error) ?? t`Failed to update`,
+        });
+      },
+    },
+  );
+
+  const mitraAvailable = digestStatus?.delivery.mitraAvailable ?? false;
+
   return (
     <div className="space-y-2 pt-2">
       <div className="flex items-center justify-between gap-3">
@@ -488,6 +510,22 @@ function DigestDeliveryChannels({
           onChange={(sendEmail) => execute({ sendEmail })}
         />
       </div>
+      <div className="flex items-center justify-between gap-3">
+        <Label>
+          <Trans>Send digest to Mitra (WhatsApp)</Trans>
+        </Label>
+        <Toggle
+          name="digestSendMitra"
+          enabled={account?.digestSendMitra ?? false}
+          disabled={isLoading || !mitraAvailable}
+          onChange={(sendMitra) => executeMitra({ sendMitra })}
+        />
+      </div>
+      {digestStatus && !mitraAvailable && (
+        <MutedText>
+          <Trans>Mitra delivery is not set up on this server.</Trans>
+        </MutedText>
+      )}
       <DigestDeliveryActivity digestStatus={digestStatus} />
       {showChannelsHint && (
         <MutedText>

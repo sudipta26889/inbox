@@ -8819,6 +8819,10 @@ msgstr "Regel-ID ontbreekt in het antwoord"
 msgid "Missing rule update details"
 msgstr "Gegevens voor het bijwerken van de regel ontbreken"
 
+#: app/(app)/[emailAccountId]/settings/DigestSettingsForm.tsx
+msgid "Mitra delivery is not set up on this server."
+msgstr "Levering aan Mitra is op deze server niet ingesteld."
+
 #: app/(app)/[emailAccountId]/settings/ModelSection.tsx
 msgid "Model"
 msgstr "Model"
@@ -11761,6 +11765,10 @@ msgstr "Briefing vóór de vergadering verzenden"
 #: app/(app)/[emailAccountId]/settings/DigestSettingsForm.tsx
 msgid "Send digest to email"
 msgstr "Samenvatting naar e-mail sturen"
+
+#: app/(app)/[emailAccountId]/settings/DigestSettingsForm.tsx
+msgid "Send digest to Mitra (WhatsApp)"
+msgstr "Samenvatting naar Mitra (WhatsApp) sturen"
 
 #: app/(app)/[emailAccountId]/assistant/AvailableActionsPanel.tsx
 #: app/(app)/[emailAccountId]/settings/McpSection.tsx

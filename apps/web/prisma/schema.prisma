@@ -242,6 +242,7 @@ model EmailAccount {
   followUpAutoDraftEnabled  Boolean @default(false)
 
   digestSendEmail     Boolean   @default(true)
+  digestSendMitra     Boolean   @default(false)
   digestSchedule      Schedule?
   learnedWritingStyle String?
 

@@ -449,6 +449,10 @@ const parsedEnv = createEnv({
     // A2A outbound agent notifications (Mitra). Comma-separated base URLs.
     A2A_REMOTE_AGENTS: z.string().optional(),
     A2A_REMOTE_AGENT_TOKEN: z.string().optional(),
+    // Mitra's owner-intake endpoint for the daily digest (WhatsApp). Both
+    // must be set, otherwise the "Send digest to Mitra" switch is unavailable.
+    MITRA_OWNER_A2A_URL: z.string().optional(),
+    MITRA_OWNER_A2A_TOKEN: z.string().optional(),
     // "true" sends every non-noise email's analysis to A2A_REMOTE_AGENTS (Mitra),
     // not only emails whose rule has an A2A_NOTIFY action.
     A2A_FANOUT_ALL_EMAILS: z.enum(["true", "false"]).optional(),

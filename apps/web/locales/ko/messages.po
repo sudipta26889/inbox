@@ -8819,6 +8819,10 @@ msgstr "응답에 규칙 ID가 없어요"
 msgid "Missing rule update details"
 msgstr "규칙 업데이트 정보가 없어요"
 
+#: app/(app)/[emailAccountId]/settings/DigestSettingsForm.tsx
+msgid "Mitra delivery is not set up on this server."
+msgstr "이 서버에는 Mitra 전송이 설정되어 있지 않습니다."
+
 #: app/(app)/[emailAccountId]/settings/ModelSection.tsx
 msgid "Model"
 msgstr "모델"
@@ -11761,6 +11765,10 @@ msgstr "회의 전에 브리핑 보내기"
 #: app/(app)/[emailAccountId]/settings/DigestSettingsForm.tsx
 msgid "Send digest to email"
 msgstr "요약을 이메일로 보내기"
+
+#: app/(app)/[emailAccountId]/settings/DigestSettingsForm.tsx
+msgid "Send digest to Mitra (WhatsApp)"
+msgstr "다이제스트를 Mitra(WhatsApp)로 보내기"
 
 #: app/(app)/[emailAccountId]/assistant/AvailableActionsPanel.tsx
 #: app/(app)/[emailAccountId]/settings/McpSection.tsx

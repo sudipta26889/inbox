@@ -6,6 +6,7 @@ import {
   updateMessagingFeatureRouteBody,
   updateMeetingBriefsEmailDeliveryBody,
   updateDigestEmailDeliveryBody,
+  updateDigestMitraDeliveryBody,
   disconnectChannelBody,
   linkSlackWorkspaceBody,
   createMessagingLinkCodeBody,
@@ -173,6 +174,16 @@ export const updateDigestEmailDeliveryAction = actionClient
       });
     },
   );
+
+export const updateDigestMitraDeliveryAction = actionClient
+  .metadata({ name: "updateDigestMitraDelivery" })
+  .inputSchema(updateDigestMitraDeliveryBody)
+  .action(async ({ ctx: { emailAccountId }, parsedInput: { sendMitra } }) => {
+    await prisma.emailAccount.update({
+      where: { id: emailAccountId },
+      data: { digestSendMitra: sendMitra },
+    });
+  });
 
 export const disconnectChannelAction = actionClient
   .metadata({ name: "disconnectChannel" })

@@ -34,6 +34,10 @@ export const updateDigestEmailDeliveryBody = z.object({
   sendEmail: z.boolean(),
 });
 
+export const updateDigestMitraDeliveryBody = z.object({
+  sendMitra: z.boolean(),
+});
+
 export const disconnectChannelBody = z.object({
   channelId: z.string().min(1),
 });

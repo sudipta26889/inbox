@@ -8819,6 +8819,10 @@ msgstr "响应中缺少规则 ID"
 msgid "Missing rule update details"
 msgstr "缺少规则更新详情"
 
+#: app/(app)/[emailAccountId]/settings/DigestSettingsForm.tsx
+msgid "Mitra delivery is not set up on this server."
+msgstr "此服务器未设置 Mitra 投递。"
+
 #: app/(app)/[emailAccountId]/settings/ModelSection.tsx
 msgid "Model"
 msgstr "模型"
@@ -11761,6 +11765,10 @@ msgstr "会议前发送简报"
 #: app/(app)/[emailAccountId]/settings/DigestSettingsForm.tsx
 msgid "Send digest to email"
 msgstr "将摘要发送到邮箱"
+
+#: app/(app)/[emailAccountId]/settings/DigestSettingsForm.tsx
+msgid "Send digest to Mitra (WhatsApp)"
+msgstr "将摘要发送到 Mitra（WhatsApp）"
 
 #: app/(app)/[emailAccountId]/assistant/AvailableActionsPanel.tsx
 #: app/(app)/[emailAccountId]/settings/McpSection.tsx
