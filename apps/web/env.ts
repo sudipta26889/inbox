@@ -456,6 +456,12 @@ const parsedEnv = createEnv({
     // must be set, otherwise the "Send digest to Mitra" switch is unavailable.
     MITRA_OWNER_A2A_URL: z.string().optional(),
     MITRA_OWNER_A2A_TOKEN: z.string().optional(),
+    // AI SDK traces go to Overmind only when both are set.
+    OVERMIND_API_URL: z.string().optional(),
+    OVERMIND_API_KEY: z.string().optional(),
+    // "1" also sends prompts and outputs on those traces. Anything else,
+    // including blank, sends metadata only (model, timings, tokens, label).
+    OVERMIND_TRACE_CONTENT: z.string().optional(),
     // "true" sends every non-noise email's analysis to A2A_REMOTE_AGENTS (Mitra),
     // not only emails whose rule has an A2A_NOTIFY action.
     A2A_FANOUT_ALL_EMAILS: z.enum(["true", "false"]).optional(),

@@ -58,6 +58,10 @@ import {
 } from "@/utils/llms/model";
 import { getModelForUseCase, type LlmUseCase } from "@/utils/llms/use-cases";
 import {
+  getOvermindTelemetry,
+  isOvermindTraceContentEnabled,
+} from "@/utils/llms/overmind-telemetry";
+import {
   FLINT_MAX_OUTPUT_TOKENS,
   FlintBusyError,
   isFlintModel,
@@ -2201,49 +2205,70 @@ function buildLlmTelemetry({
   modelName: string;
 }) {
   const posthogClient = getPosthogLlmClient();
-  if (!posthogClient) return commonOptions.telemetry;
+  const overmindTelemetry = getOvermindTelemetry();
+  if (!posthogClient && !overmindTelemetry) return commonOptions.telemetry;
 
-  const llmEvalsEnabled = isPosthogLlmEvalApproved(userEmail);
+  const llmEvalsEnabled = posthogClient
+    ? isPosthogLlmEvalApproved(userEmail)
+    : false;
+  // Overmind only sees prompts and outputs when its content switch is on. The
+  // switch does not touch PostHog: its own privacyMode still follows
+  // llmEvalsEnabled.
+  const recordContent =
+    llmEvalsEnabled || (!!overmindTelemetry && isOvermindTraceContentEnabled());
   let capturedInput: unknown;
+
+  // Per-call integrations replace any registered globally, so Overmind is
+  // attached here and nothing is registered process-wide.
+  const posthogIntegration = posthogClient
+    ? {
+        onStart(event: unknown) {
+          capturedInput = getTelemetryPrompt(event);
+        },
+        onEnd(event: unknown) {
+          return captureAiGeneration(posthogClient, {
+            distinctId: userEmail,
+            provider,
+            model: modelName,
+            input: capturedInput ?? null,
+            output: getTelemetryOutput(event),
+            usage: toPosthogTokenUsage(event),
+            privacyMode: !llmEvalsEnabled,
+            stopReason: getTelemetryFinishReason(event),
+            properties: {
+              label,
+              $ai_span_name: label,
+              provider,
+              model: modelName,
+              emailAccountId,
+              llmEvalsEnabled,
+              ...(userId ? { userId } : {}),
+            },
+            onError: (error) => {
+              logger.error("Failed to capture PostHog AI generation", {
+                error,
+                label,
+              });
+            },
+          });
+        },
+      }
+    : undefined;
 
   return {
     ...commonOptions.telemetry,
     functionId: label,
-    recordInputs: llmEvalsEnabled,
-    recordOutputs: llmEvalsEnabled,
-    integrations: {
-      onStart(event: unknown) {
-        capturedInput = getTelemetryPrompt(event);
-      },
-      onEnd(event: unknown) {
-        return captureAiGeneration(posthogClient, {
-          distinctId: userEmail,
-          provider,
-          model: modelName,
-          input: capturedInput ?? null,
-          output: getTelemetryOutput(event),
-          usage: toPosthogTokenUsage(event),
-          privacyMode: !llmEvalsEnabled,
-          stopReason: getTelemetryFinishReason(event),
-          properties: {
-            label,
-            $ai_span_name: label,
-            provider,
-            model: modelName,
-            emailAccountId,
-            llmEvalsEnabled,
-            ...(userId ? { userId } : {}),
-          },
-          onError: (error) => {
-            logger.error("Failed to capture PostHog AI generation", {
-              error,
-              label,
-            });
-          },
-        });
-      },
-    },
+    recordInputs: recordContent,
+    recordOutputs: recordContent,
+    // A single object when only PostHog is on, as before.
+    integrations: overmindTelemetry
+      ? [posthogIntegration, overmindTelemetry].filter(isDefined)
+      : posthogIntegration,
   };
+}
+
+function isDefined<T>(value: T | undefined): value is T {
+  return value !== undefined;
 }
 
 function getTelemetryPrompt(event: unknown) {
