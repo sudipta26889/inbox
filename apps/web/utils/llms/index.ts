@@ -58,6 +58,12 @@ import {
 } from "@/utils/llms/model";
 import { getModelForUseCase, type LlmUseCase } from "@/utils/llms/use-cases";
 import {
+  FLINT_MAX_OUTPUT_TOKENS,
+  FlintBusyError,
+  isFlintModel,
+  withFlintStream,
+} from "@/utils/llms/flint-stream";
+import {
   buildCachedSystemMessages,
   getSystemCacheProviderOptions,
 } from "@/utils/llms/caching";
@@ -362,24 +368,35 @@ export function createGenerateText({
         bridged,
       });
 
-      const result = await generateText(
-        {
-          ...protectedRequestOptions,
-          ...(bridged.tools ? { tools: bridged.tools } : {}),
-          ...commonOptions,
-          telemetry: buildLlmTelemetry({
-            userEmail: emailAccount.email,
-            userId: emailAccount.userId,
-            emailAccountId: emailAccount.id,
-            label,
-            provider: candidate.provider,
-            modelName: candidate.modelName,
-          }),
-          providerOptions,
-          model: bridged.model,
-        },
-        ...restArgs,
-      );
+      const result = await withFlintStream({
+        modelName: candidate.modelName,
+        interactive: effectiveModelOptions.interactive,
+        label,
+        logger,
+        run: () =>
+          generateText(
+            {
+              ...protectedRequestOptions,
+              ...(bridged.tools ? { tools: bridged.tools } : {}),
+              ...commonOptions,
+              ...getFlintOutputCap(
+                candidate.modelName,
+                protectedRequestOptions.maxOutputTokens,
+              ),
+              telemetry: buildLlmTelemetry({
+                userEmail: emailAccount.email,
+                userId: emailAccount.userId,
+                emailAccountId: emailAccount.id,
+                label,
+                provider: candidate.provider,
+                modelName: candidate.modelName,
+              }),
+              providerOptions,
+              model: bridged.model,
+            },
+            ...restArgs,
+          ),
+      });
 
       if (result.usage) {
         await saveUsageWithMetadata({
@@ -422,6 +439,8 @@ export function createGenerateText({
         );
       } catch (error) {
         if (error instanceof SafeError) throw error;
+        // Not a failure: the caller defers the request (see isLlmUnavailableError).
+        if (isFlintBusyError(error)) throw error;
 
         if (nextCandidate && shouldFallbackToNextModel(error)) {
           logger.warn("LLM call failed, trying fallback model", {
@@ -577,6 +596,10 @@ export function createGenerateObject({
         },
         ...protectedOptions,
         ...commonOptions,
+        ...getFlintOutputCap(
+          candidate.modelName,
+          (protectedOptions as { maxOutputTokens?: number }).maxOutputTokens,
+        ),
         telemetry: buildLlmTelemetry({
           userEmail: emailAccount.email,
           userId: emailAccount.userId,
@@ -595,7 +618,13 @@ export function createGenerateObject({
       let result: GenerateObjectResult<RESULT>;
 
       try {
-        result = await generateObject<SCHEMA, OUTPUT, RESULT>(request);
+        result = await withFlintStream({
+          modelName: candidate.modelName,
+          interactive: effectiveModelOptions.interactive,
+          label,
+          logger,
+          run: () => generateObject<SCHEMA, OUTPUT, RESULT>(request),
+        });
       } catch (error) {
         if (
           NoObjectGeneratedError.isInstance(error) &&
@@ -699,6 +728,8 @@ export function createGenerateObject({
         return result;
       } catch (error) {
         if (error instanceof SafeError) throw error;
+        // Not a failure: the caller defers the request (see isLlmUnavailableError).
+        if (isFlintBusyError(error)) throw error;
 
         attachLlmRepairMetadata(
           error,
@@ -1324,7 +1355,9 @@ async function getCostControlledModelOptions({
   emailAccountId?: string;
   label: string;
 }): Promise<SelectModel> {
-  if (label === "assistant-chat") {
+  // Interactive calls already run on their own model; the cost guard must not
+  // move them onto a slower one.
+  if (label === "assistant-chat" || modelOptions.interactive) {
     return modelOptions;
   }
 
@@ -1455,6 +1488,8 @@ function getResolvedModelKey({ provider, modelName }: ResolvedModel): string {
  * 5xx, timeout or abort), so the same request is worth retrying later.
  */
 export function isLlmUnavailableError(error: unknown): boolean {
+  if (isFlintBusyError(error)) return true;
+
   const category = getLlmFallbackFailureCategory(error);
   return (
     category === "network" ||
@@ -1463,6 +1498,21 @@ export function isLlmUnavailableError(error: unknown): boolean {
     isGatewayOrLocalServerFailure(error) ||
     isEmptyAnswerCutOffByLength(error)
   );
+}
+
+function isFlintBusyError(error: unknown): boolean {
+  const last = RetryError.isInstance(error) ? error.lastError : error;
+  const unwrapped = (last as { error?: unknown })?.error ?? last;
+  return unwrapped instanceof FlintBusyError;
+}
+
+function getFlintOutputCap(
+  modelName: string,
+  maxOutputTokens: number | undefined,
+): { maxOutputTokens?: number } {
+  return isFlintModel(modelName) && maxOutputTokens === undefined
+    ? { maxOutputTokens: FLINT_MAX_OUTPUT_TOKENS }
+    : {};
 }
 
 // A reasoning model that spends its whole token budget thinking returns

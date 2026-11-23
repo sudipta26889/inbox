@@ -120,6 +120,9 @@ const parsedEnv = createEnv({
     CHAT_LLMS: llmsEnv(legacyLlmsEnv.CHAT_LLMS), // Ordered provider:model chain for chat model plus fallbacks
     NANO_LLMS: llmsEnv(legacyLlmsEnv.NANO_LLMS), // Ordered provider:model chain for nano model plus fallbacks
     DRAFT_LLMS: llmsEnv(legacyLlmsEnv.DRAFT_LLMS), // Ordered provider:model chain for draft model plus fallbacks
+    // provider:model for work a person waits on (chat, reports, translate...);
+    // those use cases bypass the saved account model. Blank = litellm:gpt-oss-20b.
+    INTERACTIVE_LLMS: z.string().optional(),
     CHAT_OPENROUTER_PROVIDERS: z.string().optional(), // Comma-separated list of OpenRouter providers for chat (e.g., "Google Vertex,Anthropic")
     DEFAULT_OPENROUTER_PROVIDERS: z.string().optional(), // Comma-separated list of OpenRouter providers for default model (e.g., "Google Vertex,Anthropic")
     ECONOMY_OPENROUTER_PROVIDERS: z.string().optional(), // Comma-separated list of OpenRouter providers for economy model (e.g., "Google Vertex,Anthropic")

@@ -6,6 +6,7 @@ import {
 } from "ai";
 import { describe, expect, it, vi } from "vitest";
 import { isLlmUnavailableError } from "./index";
+import { FlintBusyError } from "./flint-stream";
 
 vi.mock("@/env", () => ({
   env: { NODE_ENV: "test", NANO_LLMS: "", EMAIL_ENCRYPT_SALT: "test-salt" },
@@ -154,6 +155,21 @@ describe("isLlmUnavailableError", () => {
         new TypeValidationError({ value: {}, cause: new Error("bad shape") }),
       ),
     ).toBe(false);
+  });
+
+  it("is true when the Flint stream is busy, also wrapped by a retry error", () => {
+    const busy = new FlintBusyError();
+
+    expect(isLlmUnavailableError(busy)).toBe(true);
+    expect(
+      isLlmUnavailableError(
+        new RetryError({
+          message: "Failed after 3 attempts",
+          reason: "maxRetriesExceeded",
+          errors: [busy],
+        }),
+      ),
+    ).toBe(true);
   });
 
   it("is false for an ordinary error", () => {

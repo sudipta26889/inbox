@@ -52,6 +52,7 @@ services:
       ECONOMY_LLMS: ${ECONOMY_LLMS:-}
       CHAT_LLMS: ${CHAT_LLMS:-}
       NANO_LLMS: ${NANO_LLMS:-}
+      INTERACTIVE_LLMS: ${INTERACTIVE_LLMS:-}
       DRAFT_LLMS: ${DRAFT_LLMS:-}
       DHARAHIL_API_KEY: ${DHARAHIL_API_KEY:?set DHARAHIL_API_KEY so production sends are gated}
       DIRECT_URL: ${DIRECT_URL:-}

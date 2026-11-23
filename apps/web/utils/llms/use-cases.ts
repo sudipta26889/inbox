@@ -1,4 +1,9 @@
-import { getModel, type ModelType, type SelectModel } from "@/utils/llms/model";
+import {
+  getInteractiveModel,
+  getModel,
+  type ModelType,
+  type SelectModel,
+} from "@/utils/llms/model";
 import type { UserAIFields } from "@/utils/llms/types";
 
 export const LlmUseCase = {
@@ -94,9 +99,37 @@ export const LLM_USE_CASE_MODEL_TYPES = {
   [LlmUseCase.WritingStyleAnalysis]: "default",
 } as const satisfies Record<LlmUseCase, ModelType>;
 
+// A person starts these and waits for the answer. Everything else is batch:
+// it runs on the saved model, one slow call at a time (see flint-stream.ts).
+export const INTERACTIVE_USE_CASES: ReadonlySet<LlmUseCase> = new Set([
+  LlmUseCase.AssistantChat,
+  LlmUseCase.CategorizeSendersBulk,
+  LlmUseCase.ChatCompaction,
+  LlmUseCase.ChatMemoryExtraction,
+  LlmUseCase.ComposeAutocomplete,
+  LlmUseCase.EmailReportActionableRecommendations,
+  LlmUseCase.EmailReportEmailBehavior,
+  LlmUseCase.EmailReportExecutiveSummary,
+  LlmUseCase.EmailReportLabelAnalysis,
+  LlmUseCase.EmailReportResponsePatterns,
+  LlmUseCase.EmailReportSummaryGeneration,
+  LlmUseCase.EmailReportUserPersona,
+  LlmUseCase.PersonaAnalysis,
+  LlmUseCase.PromptToRules,
+  LlmUseCase.PromptToSplit,
+  LlmUseCase.Summarise,
+  LlmUseCase.TranslateEmail,
+  LlmUseCase.UnsubscribePageState,
+  LlmUseCase.WritingStyleAnalysis,
+]);
+
 export function getModelForUseCase(
   userAi: UserAIFields,
   useCase: LlmUseCase,
 ): SelectModel {
-  return getModel(userAi, LLM_USE_CASE_MODEL_TYPES[useCase]);
+  const modelType = LLM_USE_CASE_MODEL_TYPES[useCase];
+
+  return INTERACTIVE_USE_CASES.has(useCase)
+    ? getInteractiveModel(modelType)
+    : getModel(userAi, modelType);
 }

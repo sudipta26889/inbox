@@ -1,9 +1,14 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Provider } from "./config";
 import { getModel } from "./model";
 import type { SelectModel } from "./model";
 import type { UserAIFields } from "./types";
-import { getModelForUseCase, LlmUseCase } from "./use-cases";
+import {
+  getModelForUseCase,
+  INTERACTIVE_USE_CASES,
+  LlmUseCase,
+} from "./use-cases";
+import { env } from "@/env";
 
 vi.mock("@ai-sdk/openai", () => ({
   createOpenAI: vi.fn(() => (model: string) => ({ model })),
@@ -104,9 +109,7 @@ describe("LLM use cases", () => {
 
   it.each([
     [LlmUseCase.CategorizeSender, "default"],
-    [LlmUseCase.CategorizeSendersBulk, "economy"],
     [LlmUseCase.BulkInboxActionFilter, "economy"],
-    [LlmUseCase.AssistantChat, "chat"],
     [LlmUseCase.DraftReply, "draft"],
   ] as const)("delegates %s to getModel with the matching role", (useCase, modelType) => {
     const userAi = defaultUserAi();
@@ -114,6 +117,119 @@ describe("LLM use cases", () => {
     expect(modelSnapshot(getModelForUseCase(userAi, useCase))).toEqual(
       modelSnapshot(getModel(userAi, modelType)),
     );
+  });
+
+  describe("interactive and batch routing", () => {
+    // Production sets no role lists, so a saved keyless LiteLLM model applies.
+    const roleLists = [
+      "DEFAULT_LLMS",
+      "ECONOMY_LLMS",
+      "CHAT_LLMS",
+      "DRAFT_LLMS",
+    ] as const;
+    const savedRoleLists: Partial<Record<(typeof roleLists)[number], string>> =
+      {};
+
+    beforeEach(() => {
+      for (const key of roleLists) {
+        savedRoleLists[key] = env[key];
+        (env as Record<string, unknown>)[key] = undefined;
+      }
+    });
+
+    afterEach(() => {
+      for (const key of roleLists) {
+        (env as Record<string, unknown>)[key] = savedRoleLists[key];
+      }
+    });
+
+    const flintUser = (aiApiKey: string | null = null) =>
+      defaultUserAi({
+        aiProvider: Provider.LITELLM,
+        aiModel: "recursivesi/flint",
+        aiApiKey,
+      });
+
+    const interactiveUseCases = [
+      LlmUseCase.AssistantChat,
+      LlmUseCase.ChatCompaction,
+      LlmUseCase.ChatMemoryExtraction,
+      LlmUseCase.ComposeAutocomplete,
+      LlmUseCase.TranslateEmail,
+      LlmUseCase.Summarise,
+      LlmUseCase.PromptToRules,
+      LlmUseCase.PromptToSplit,
+      LlmUseCase.UnsubscribePageState,
+      LlmUseCase.PersonaAnalysis,
+      LlmUseCase.WritingStyleAnalysis,
+      LlmUseCase.EmailReportActionableRecommendations,
+      LlmUseCase.EmailReportEmailBehavior,
+      LlmUseCase.EmailReportExecutiveSummary,
+      LlmUseCase.EmailReportLabelAnalysis,
+      LlmUseCase.EmailReportResponsePatterns,
+      LlmUseCase.EmailReportSummaryGeneration,
+      LlmUseCase.EmailReportUserPersona,
+      LlmUseCase.CategorizeSendersBulk,
+    ];
+
+    it("lists exactly the use cases in the design as interactive", () => {
+      expect([...INTERACTIVE_USE_CASES].sort()).toEqual(
+        [...interactiveUseCases].sort(),
+      );
+    });
+
+    it.each(
+      interactiveUseCases,
+    )("%s leaves Flint for gpt-oss-20b, with or without a saved key", (useCase) => {
+      for (const userAi of [flintUser(), flintUser("sk-user-key")]) {
+        const model = getModelForUseCase(userAi, useCase);
+
+        expect(model.provider).toBe(Provider.LITELLM);
+        expect(model.modelName).toBe("gpt-oss-20b");
+        expect(model.interactive).toBe(true);
+        expect(model.fallbackModels).toEqual([]);
+      }
+    });
+
+    it("takes the interactive model from INTERACTIVE_LLMS", () => {
+      env.INTERACTIVE_LLMS = "litellm:other-local";
+      try {
+        expect(
+          getModelForUseCase(flintUser(), LlmUseCase.AssistantChat).modelName,
+        ).toBe("other-local");
+      } finally {
+        env.INTERACTIVE_LLMS = undefined;
+      }
+    });
+
+    it("falls back to the default when INTERACTIVE_LLMS is empty", () => {
+      env.INTERACTIVE_LLMS = "";
+      try {
+        expect(
+          getModelForUseCase(flintUser(), LlmUseCase.AssistantChat).modelName,
+        ).toBe("gpt-oss-20b");
+      } finally {
+        env.INTERACTIVE_LLMS = undefined;
+      }
+    });
+
+    it.each(
+      Object.values(LlmUseCase).filter(
+        (useCase) => !interactiveUseCases.includes(useCase),
+      ),
+    )("%s stays on the saved Flint model and is not interactive", (useCase) => {
+      const model = getModelForUseCase(flintUser(), useCase);
+
+      expect(model.modelName).toBe("recursivesi/flint");
+      expect(model.interactive).toBeFalsy();
+    });
+
+    it("a direct getModel caller stays on Flint", () => {
+      const model = getModel(flintUser(), "economy");
+
+      expect(model.modelName).toBe("recursivesi/flint");
+      expect(model.interactive).toBeFalsy();
+    });
   });
 });
 
