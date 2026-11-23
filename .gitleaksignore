@@ -1,2 +1,19 @@
-08fcb6c39092d80eb12d15e08c66f64800731871:apps/web/scripts/emulator/README.md:generic-api-key:234
-dccf30f87b6af5500e86665fa622bc7e0ef6bd6f:apps/web/ee/billing/apple/local-testing.ts:private-key:8
+# Known historical gitleaks findings, already in the public history (before 2026-11-22).
+# Checked 2026-11-22: none of these values is in use in any stack, container or secret file;
+# the example/doc values are not real keys. Listed so the pre-push hook only blocks NEW findings.
+# One fingerprint per line: commit:file:rule:line. Never add a finding here without that check.
+57dec35ce0cfa4c6d26c16429334389e96a311f9:.claude/.docs/dharahil-human-in-loop-integration.md:generic-api-key:80
+64c47826a9ec5597dba7735831d2c94fc108bf73:docker-compose.prod.yml.bak-landns-20260727-204646:generic-api-key:30
+82cb73312d9aebb5bfbcffa612b5f765ced3d178:apps/web/public/docs/a2a-openapi.yaml:generic-api-key:387
+82cb73312d9aebb5bfbcffa612b5f765ced3d178:apps/web/public/docs/a2a-openapi.yaml:generic-api-key:395
+8df5a7ca520a638ae566fa09fcf8bbada40dcf72:.claude/temp/dharahil-integration-email-calendar-inbox.md:curl-auth-header:55
+8df5a7ca520a638ae566fa09fcf8bbada40dcf72:.claude/temp/dharahil-integration-email-calendar-inbox.md:generic-api-key:17
+8df5a7ca520a638ae566fa09fcf8bbada40dcf72:.claude/temp/dharahil-integration-email-calendar-inbox.md:generic-api-key:37
+8df5a7ca520a638ae566fa09fcf8bbada40dcf72:.claude/temp/dharahil-integration-email-calendar-inbox.md:generic-api-key:56
+8e863ffa1eed10ea02493fe549ca730112cbdf24:.claude/plans/a2a-protocol-implementation.md:curl-auth-header:607
+8e863ffa1eed10ea02493fe549ca730112cbdf24:.claude/plans/a2a-protocol-implementation.md:generic-api-key:594
+8e863ffa1eed10ea02493fe549ca730112cbdf24:.claude/plans/a2a-protocol-implementation.md:private-key:3603
+8e863ffa1eed10ea02493fe549ca730112cbdf24:.claude/status/phase-4-dharahil-integration-complete.md:generic-api-key:285
+8e863ffa1eed10ea02493fe549ca730112cbdf24:apps/web/public/docs/a2a-openapi.yaml:generic-api-key:387
+8e863ffa1eed10ea02493fe549ca730112cbdf24:apps/web/public/docs/a2a-openapi.yaml:generic-api-key:395
+d2469f2e15231ee3cd3a22a9815393d5bd75d35b:docker-compose.prod.yml:generic-api-key:30
