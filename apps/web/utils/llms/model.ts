@@ -48,7 +48,11 @@ export type ResolvedModel = {
 export type SelectModel = ResolvedModel & {
   fallbackModels: ResolvedModel[];
   hasUserApiKey: boolean;
+  /** A person is waiting: never queued behind, nor moved onto, the batch model. */
+  interactive?: boolean;
 };
+
+const DEFAULT_INTERACTIVE_LLM = "litellm:gpt-oss-20b";
 
 type AiGatewayProviderOptions = {
   google?: GoogleLanguageModelOptions;
@@ -90,6 +94,37 @@ export function getModel(
   });
 
   return { ...primaryModel, fallbackModels, hasUserApiKey: !!userAi.aiApiKey };
+}
+
+/**
+ * The model for use cases a person waits on. It ignores the saved account
+ * model and its key, so a slow batch model never serves an interactive call.
+ */
+export function getInteractiveModel(modelType: ModelType): SelectModel {
+  const [entry] = parseModelListConfig(
+    env.INTERACTIVE_LLMS?.trim() || DEFAULT_INTERACTIVE_LLM,
+  );
+  if (!entry?.modelName) {
+    throw new Error("INTERACTIVE_LLMS needs a provider:model entry");
+  }
+
+  const primaryModel = selectModel(
+    { aiProvider: entry.provider, aiModel: entry.modelName, aiApiKey: null },
+    modelType,
+  );
+
+  logger.info("Using interactive model", {
+    modelType,
+    provider: primaryModel.provider,
+    model: primaryModel.modelName,
+  });
+
+  return {
+    ...primaryModel,
+    fallbackModels: [],
+    hasUserApiKey: false,
+    interactive: true,
+  };
 }
 
 // Fork (sudipta_main) rule: a user's saved provider wins whether or not they
