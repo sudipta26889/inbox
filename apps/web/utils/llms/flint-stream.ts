@@ -9,8 +9,15 @@ export const FLINT_MAX_OUTPUT_TOKENS = 8192;
 export const FLINT_MAX_WAIT_MS = 30 * 60 * 1000;
 
 // All production model calls run in the single web process, so an in-process
-// queue is enough to keep one call in flight.
-const flintQueue = new PQueue({ concurrency: 1 });
+// queue is enough to keep one call in flight. Created on the first Flint call:
+// PQueue is an EventTarget, which fails to construct in the jsdom test
+// environment that imports this module indirectly.
+let flintQueue: PQueue | undefined;
+
+function getFlintQueue() {
+  flintQueue ??= new PQueue({ concurrency: 1 });
+  return flintQueue;
+}
 
 /**
  * The call waited too long for its turn. Thrown so the caller treats the
@@ -59,7 +66,7 @@ export async function withFlintStream<T>({
     // p-queue skips a task whose signal aborts before it starts and rejects
     // with the signal's reason; once started the timer is gone, so the run
     // itself has no cap.
-    return (await flintQueue.add(
+    return (await getFlintQueue().add(
       async () => {
         clearTimeout(waitTimer);
         const startedAt = Date.now();
